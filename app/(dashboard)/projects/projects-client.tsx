@@ -1,0 +1,255 @@
+"use client"
+
+import { useState, useMemo } from "react"
+import Link from "next/link"
+import { Plus, FolderKanban, ChevronRight, Search, X } from "lucide-react"
+import { StatusBadge } from "@/components/kronex/status-badge"
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export type ProjectRow = {
+  id: string
+  title: string
+  description: string | null
+  status: string
+  members: { id: string; user: { name: string; image: string | null } }[]
+  tasks: { status: string; progress: number }[]
+  _count: { tasks: number; risks: number }
+}
+
+// ─── Filter config ────────────────────────────────────────────────────────────
+
+type FilterKey = "ALL" | "PLANNING" | "IN_PROGRESS" | "ON_HOLD" | "GO_LIVE" | "COMPLETED" | "FUTURE_ANALYSIS"
+
+const FILTERS: { key: FilterKey; label: string; statuses: string[]; color: string }[] = [
+  { key: "ALL",             label: "Todos",           statuses: [],                                          color: "#2463FF" },
+  { key: "PLANNING",        label: "Planejamento",    statuses: ["PLANNING"],                                color: "#64748B" },
+  { key: "IN_PROGRESS",     label: "Em Andamento",    statuses: ["IN_PROGRESS", "PILOT", "RAMP_UP"],         color: "#10B981" },
+  { key: "ON_HOLD",         label: "Em Validação",    statuses: ["ON_HOLD"],                                 color: "#8B5CF6" },
+  { key: "GO_LIVE",         label: "Go Live",         statuses: ["GO_LIVE", "POST_GOLIVE"],                  color: "#059669" },
+  { key: "COMPLETED",       label: "Concluído",       statuses: ["COMPLETED"],                               color: "#6D28D9" },
+  { key: "FUTURE_ANALYSIS", label: "Análise Futura",  statuses: ["FUTURE_ANALYSIS"],                        color: "#9333EA" },
+]
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function avg(arr: number[]) {
+  return arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export function ProjectsClient({ projects }: { projects: ProjectRow[] }) {
+  const [activeFilter, setActiveFilter] = useState<FilterKey>("ALL")
+  const [search, setSearch] = useState("")
+
+  const filtered = useMemo(() => {
+    const filter = FILTERS.find((f) => f.key === activeFilter)!
+    return projects.filter((p) => {
+      const matchesStatus = filter.statuses.length === 0 || filter.statuses.includes(p.status)
+      const q = search.trim().toLowerCase()
+      const matchesSearch = !q || p.title.toLowerCase().includes(q) || (p.description ?? "").toLowerCase().includes(q)
+      return matchesStatus && matchesSearch
+    })
+  }, [projects, activeFilter, search])
+
+  return (
+    <>
+      {/* Filter + action bar */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar projeto..."
+              className="pl-8 pr-8 h-8 text-xs rounded-xl border border-slate-200 bg-white outline-none focus:border-[#7B2FBE] transition-colors w-52"
+            />
+            {search && (
+              <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                <X className="w-3 h-3 text-slate-400" />
+              </button>
+            )}
+          </div>
+
+          {/* Filter chips */}
+          <div className="flex gap-1.5 flex-wrap">
+            {FILTERS.map((f) => {
+              const isActive = activeFilter === f.key
+              const count = f.statuses.length === 0
+                ? projects.length
+                : projects.filter((p) => f.statuses.includes(p.status)).length
+              return (
+                <button
+                  key={f.key}
+                  onClick={() => setActiveFilter(f.key)}
+                  className="px-3 h-8 text-xs font-semibold rounded-xl border transition-all"
+                  style={isActive ? {
+                    background: `${f.color}15`,
+                    color: f.color,
+                    borderColor: `${f.color}40`,
+                  } : {
+                    background: "#ffffff",
+                    color: "#64748B",
+                    borderColor: "#E2E8F0",
+                  }}
+                >
+                  {f.label}
+                  <span
+                    className="ml-1.5 text-[9px] font-black px-1 py-0.5 rounded-full"
+                    style={{
+                      background: isActive ? `${f.color}20` : "#F1F5F9",
+                      color: isActive ? f.color : "#94A3B8",
+                    }}
+                  >
+                    {count}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <Link
+          href="/projects/new"
+          className="inline-flex items-center gap-2 px-4 h-9 text-sm font-bold rounded-xl text-white hover:opacity-90 active:scale-[0.98] transition-all"
+          style={{
+            background: "linear-gradient(135deg, #7B2FBE, #9333EA, #A855F7)",
+            boxShadow: "0 4px 16px rgba(123,47,190,0.35)",
+          }}
+        >
+          <Plus className="w-4 h-4" />
+          Novo Projeto
+        </Link>
+      </div>
+
+      {/* Project list */}
+      <div
+        className="bg-white rounded-2xl overflow-hidden"
+        style={{
+          border: "1px solid #E2E8F0",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(15,23,42,0.05)",
+        }}
+      >
+        {/* Table header */}
+        <div
+          className="grid grid-cols-[2.5fr_1fr_1fr_1fr_auto] items-center px-5 py-3.5"
+          style={{ borderBottom: "1px solid #F1F5F9", background: "#FAFBFC" }}
+        >
+          {["Projeto", "Status", "Equipe", "Progresso", ""].map((h) => (
+            <span key={h} className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{h}</span>
+          ))}
+        </div>
+
+        {filtered.length === 0 ? (
+          <div className="p-16 text-center">
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4"
+              style={{ background: "linear-gradient(135deg, rgba(0,196,224,0.1), rgba(36,99,255,0.1), rgba(139,47,255,0.1))", border: "1px solid rgba(36,99,255,0.15)" }}>
+              <FolderKanban className="w-6 h-6 text-[#2463FF]" />
+            </div>
+            <p className="font-bold text-slate-700 mb-1">Nenhum projeto encontrado</p>
+            <p className="text-sm text-slate-400">
+              {search ? "Tente outro termo de busca" : "Nenhum projeto neste filtro"}
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-50">
+            {filtered.map((project) => {
+              const tasksDone  = project.tasks.filter((t) => t.status === "COMPLETED").length
+              const tasksTotal = project.tasks.length
+              const progress   = tasksTotal > 0
+                ? avg(project.tasks.map((t) => t.progress))
+                : (project.status === "COMPLETED" ? 100 : project.status === "PLANNING" ? 0 : null)
+
+              return (
+                <Link
+                  key={project.id}
+                  href={`/projects/${project.id}`}
+                  className="grid grid-cols-[2.5fr_1fr_1fr_1fr_auto] items-center px-5 py-4 hover:bg-slate-50/80 transition-colors group"
+                >
+                  {/* Name */}
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className="w-1 h-10 rounded-full shrink-0"
+                      style={{ background: "linear-gradient(to bottom, #00C4E0, #8B2FFF)" }}
+                    />
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-[#0F172A] group-hover:text-[#2463FF] transition-colors line-clamp-1">
+                        {project.title}
+                      </p>
+                      {project.description && (
+                        <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">
+                          {project.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Status */}
+                  <StatusBadge status={project.status} size="sm" />
+
+                  {/* Team */}
+                  <div className="flex -space-x-1.5">
+                    {project.members.slice(0, 4).map((m) => (
+                      <div
+                        key={m.id}
+                        title={m.user.name}
+                        className="w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-[9px] font-bold text-white shrink-0"
+                        style={{ background: "linear-gradient(135deg, #2463FF, #8B2FFF)" }}
+                      >
+                        {m.user.name?.charAt(0).toUpperCase()}
+                      </div>
+                    ))}
+                    {project.members.length > 4 && (
+                      <div className="w-7 h-7 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[9px] font-bold text-slate-500">
+                        +{project.members.length - 4}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Progress */}
+                  <div className="pr-4">
+                    {progress !== null ? (
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-slate-400">
+                            {tasksTotal > 0 ? `${tasksDone}/${tasksTotal}` : ""}
+                          </span>
+                          <span className="text-[10px] font-bold text-[#0F172A]">{progress}%</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                          <div
+                            className="h-full rounded-full progress-shine"
+                            style={{
+                              width: `${progress}%`,
+                              background: progress === 100
+                                ? "linear-gradient(90deg, #059669, #10B981)"
+                                : "linear-gradient(90deg, #00C4E0, #2463FF)",
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-300">—</span>
+                    )}
+                  </div>
+
+                  <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-[#2463FF] group-hover:translate-x-0.5 transition-all" />
+                </Link>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Count footer */}
+      {filtered.length > 0 && (
+        <p className="text-xs text-slate-400 text-center">
+          Exibindo {filtered.length} de {projects.length} projetos
+        </p>
+      )}
+    </>
+  )
+}

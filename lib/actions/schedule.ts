@@ -1,0 +1,153 @@
+"use server"
+
+import { db } from "@/lib/db"
+import { auth } from "@/auth"
+import { revalidatePath } from "next/cache"
+
+export type TaskInput = {
+  projectId: string
+  wbsAreaId?: string | null
+  parentId?: string | null
+  title: string
+  description?: string | null
+  responsibleId?: string | null
+  startDate?: string | null
+  endDate?: string | null
+  status?: string
+  progress?: number
+  dependencies?: string[]
+  order?: number
+}
+
+const INCLUDE = {
+  responsible: { select: { id: true, name: true } },
+  wbsArea: { select: { id: true, name: true, color: true } },
+  _count: { select: { comments: true, attachments: true } },
+} as const
+
+function serialize(t: {
+  id: string; projectId: string; wbsAreaId: string | null; parentId: string | null
+  title: string; description: string | null; responsibleId: string | null
+  startDate: Date | null; endDate: Date | null; completedAt: Date | null
+  status: string; riskStatus: string; progress: number; order: number
+  dependencies: string | null; createdAt: Date; updatedAt: Date
+  responsible: { id: string; name: string } | null
+  wbsArea: { id: string; name: string; color: string | null } | null
+  _count: { comments: number; attachments: number }
+}) {
+  return {
+    ...t,
+    startDate: t.startDate?.toISOString() ?? null,
+    endDate: t.endDate?.toISOString() ?? null,
+    completedAt: t.completedAt?.toISOString() ?? null,
+    createdAt: t.createdAt.toISOString(),
+    updatedAt: t.updatedAt.toISOString(),
+    dependencies: t.dependencies ? (JSON.parse(t.dependencies) as string[]) : ([] as string[]),
+  }
+}
+
+export async function createTask(data: TaskInput) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+
+  const maxOrder = await db.scheduleTask.aggregate({
+    _max: { order: true },
+    where: { projectId: data.projectId, parentId: data.parentId ?? null },
+  })
+
+  const task = await db.scheduleTask.create({
+    data: {
+      projectId: data.projectId,
+      wbsAreaId: data.wbsAreaId || null,
+      parentId: data.parentId || null,
+      title: data.title,
+      description: data.description || null,
+      responsibleId: data.responsibleId || null,
+      startDate: data.startDate ? new Date(data.startDate) : null,
+      endDate: data.endDate ? new Date(data.endDate) : null,
+      status: (data.status ?? "PLANNING") as never,
+      progress: data.progress ?? 0,
+      dependencies: data.dependencies?.length ? JSON.stringify(data.dependencies) : null,
+      order: (maxOrder._max.order ?? -1) + 1,
+    },
+    include: INCLUDE,
+  })
+
+  revalidatePath(`/projects/${data.projectId}/schedule`)
+  return serialize(task)
+}
+
+export async function updateTask(id: string, projectId: string, data: Partial<TaskInput>) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+
+  const task = await db.scheduleTask.update({
+    where: { id },
+    data: {
+      ...(data.title !== undefined && { title: data.title }),
+      ...(data.description !== undefined && { description: data.description }),
+      ...(data.wbsAreaId !== undefined && { wbsAreaId: data.wbsAreaId }),
+      ...(data.responsibleId !== undefined && { responsibleId: data.responsibleId }),
+      ...(data.parentId !== undefined && { parentId: data.parentId }),
+      ...(data.startDate !== undefined && { startDate: data.startDate ? new Date(data.startDate) : null }),
+      ...(data.endDate !== undefined && { endDate: data.endDate ? new Date(data.endDate) : null }),
+      ...(data.status !== undefined && { status: data.status as never }),
+      ...(data.progress !== undefined && { progress: data.progress }),
+      ...(data.dependencies !== undefined && {
+        dependencies: data.dependencies?.length ? JSON.stringify(data.dependencies) : null,
+      }),
+      ...(data.order !== undefined && { order: data.order }),
+    },
+    include: INCLUDE,
+  })
+
+  revalidatePath(`/projects/${projectId}/schedule`)
+  return serialize(task)
+}
+
+export async function deleteTask(id: string, projectId: string) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+  await db.scheduleTask.deleteMany({ where: { parentId: id } })
+  await db.scheduleTask.delete({ where: { id } })
+  revalidatePath(`/projects/${projectId}/schedule`)
+}
+
+export type AttachmentUpload = {
+  fileName: string
+  fileUrl:  string
+  fileType: string
+  fileSize: number
+}
+
+export async function getTaskAttachments(taskId: string) {
+  return db.attachment.findMany({
+    where: { taskId },
+    orderBy: { uploadedAt: "desc" },
+    select: { id: true, fileName: true, fileUrl: true, fileType: true, fileSize: true },
+  })
+}
+
+export async function addTaskAttachments(taskId: string, projectId: string, attachments: AttachmentUpload[]) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+
+  for (const att of attachments) {
+    await db.attachment.create({
+      data: { taskId, fileName: att.fileName, fileUrl: att.fileUrl, fileType: att.fileType, fileSize: att.fileSize },
+    })
+  }
+
+  revalidatePath(`/projects/${projectId}/schedule`)
+}
+
+export async function createArea(projectId: string, name: string, color: string) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+  const maxOrder = await db.wbsArea.aggregate({ _max: { order: true }, where: { projectId } })
+  const area = await db.wbsArea.create({
+    data: { projectId, name, color, order: (maxOrder._max.order ?? -1) + 1 },
+  })
+  revalidatePath(`/projects/${projectId}/schedule`)
+  return area
+}

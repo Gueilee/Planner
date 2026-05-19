@@ -30,8 +30,24 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files — NEVER commit real credentials
 .env*
+
+# SQLite database — contains real data, NEVER commit
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Uploads — handled per environment
+/public/uploads/
+
+# Logs and temp
+dev-log.txt
+*.log
+
+# OS
+Thumbs.db
 
 # vercel
 .vercel
@@ -39,3 +55,5 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+/lib/generated/prisma
