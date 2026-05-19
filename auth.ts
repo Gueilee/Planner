@@ -1,8 +1,17 @@
 import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials"
-import { db } from "@/lib/db"
+import { createClient } from "@libsql/client"
 import bcrypt from "bcryptjs"
 import { UserRole } from "@/lib/generated/prisma/enums"
+
+function getTursoClient() {
+  const rawUrl    = process.env.DATABASE_URL ?? "file:./dev.db"
+  const authToken = process.env.TURSO_AUTH_TOKEN
+  const url = rawUrl.startsWith("libsql://")
+    ? rawUrl.replace("libsql://", "https://")
+    : rawUrl
+  return createClient({ url, authToken })
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: process.env.AUTH_SECRET,
@@ -22,26 +31,33 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         try {
           if (!credentials?.email || !credentials?.password) return null
 
-          const user = await db.user.findUnique({
-            where: { email: credentials.email as string },
+          const turso = getTursoClient()
+          const result = await turso.execute({
+            sql:  `SELECT id, name, email, password, role, department, image, active
+                   FROM "User" WHERE email = ? LIMIT 1`,
+            args: [credentials.email as string],
           })
+          await turso.close()
 
-          if (!user || !user.active) return null
+          if (result.rows.length === 0) return null
+
+          const row = result.rows[0]
+          if (!row.active) return null
 
           const passwordMatch = await bcrypt.compare(
             credentials.password as string,
-            user.password
+            row.password as string
           )
 
           if (!passwordMatch) return null
 
           return {
-            id:         user.id,
-            name:       user.name,
-            email:      user.email,
-            role:       user.role,
-            department: user.department,
-            image:      user.image,
+            id:         row.id         as string,
+            name:       row.name       as string,
+            email:      row.email      as string,
+            role:       row.role       as UserRole,
+            department: row.department as string | null,
+            image:      row.image      as string | null,
           }
         } catch (err) {
           console.error("[auth] authorize error:", err)
