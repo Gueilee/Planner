@@ -1,19 +1,18 @@
 import { PrismaClient } from "@/lib/generated/prisma/client"
 import { PrismaLibSql } from "@prisma/adapter-libsql"
-import { createClient } from "@libsql/client"
 
 function createPrismaClient() {
   const rawUrl    = process.env.DATABASE_URL ?? "file:./dev.db"
   const authToken = process.env.TURSO_AUTH_TOKEN
 
-  // libsql:// uses WebSocket which may not work in serverless — use https:// instead
+  // Prisma v7 adapter factory pattern: pass config directly, not a pre-created client.
+  // libsql:// (WebSocket) → https:// (HTTP) for Vercel serverless compatibility.
   const url = rawUrl.startsWith("libsql://")
     ? rawUrl.replace("libsql://", "https://")
     : rawUrl
 
-  const libsql  = createClient({ url, authToken })
-  const adapter = new PrismaLibSql(libsql as any)
-  return new PrismaClient({ adapter } as any)
+  const adapter = new PrismaLibSql({ url, authToken })
+  return new PrismaClient({ adapter })
 }
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient }
