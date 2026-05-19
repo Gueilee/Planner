@@ -8,9 +8,11 @@ import { PrismaClient } from "../lib/generated/prisma/client"
 import { PrismaLibSql } from "@prisma/adapter-libsql"
 import { ProjectStatus } from "../lib/generated/prisma/enums"
 
-const dbUrl = process.env.DATABASE_URL ?? "file:./dev.db"
-const adapter = new PrismaLibSql({ url: dbUrl })
-const db = new PrismaClient({ adapter } as any)
+const rawUrl    = process.env.DATABASE_URL ?? "file:./dev.db"
+const authToken = process.env.TURSO_AUTH_TOKEN
+const dbUrl = rawUrl.startsWith("libsql://") ? rawUrl.replace("libsql://", "https://") : rawUrl
+const adapter = new PrismaLibSql({ url: dbUrl, authToken })
+const db = new PrismaClient({ adapter })
 
 async function upsertProject(
   id: string,

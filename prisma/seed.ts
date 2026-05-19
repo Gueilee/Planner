@@ -4,9 +4,11 @@ import { PrismaLibSql } from "@prisma/adapter-libsql"
 import { UserRole, ProjectStatus } from "../lib/generated/prisma/enums"
 import bcrypt from "bcryptjs"
 
-const dbUrl = process.env.DATABASE_URL ?? "file:./dev.db"
-const adapter = new PrismaLibSql({ url: dbUrl })
-const db = new PrismaClient({ adapter } as any)
+const rawUrl    = process.env.DATABASE_URL ?? "file:./dev.db"
+const authToken = process.env.TURSO_AUTH_TOKEN
+const dbUrl = rawUrl.startsWith("libsql://") ? rawUrl.replace("libsql://", "https://") : rawUrl
+const adapter = new PrismaLibSql({ url: dbUrl, authToken })
+const db = new PrismaClient({ adapter })
 
 function pStatus(s: string): ProjectStatus {
   if (s === "EM ANDAMENTO")    return ProjectStatus.IN_PROGRESS
