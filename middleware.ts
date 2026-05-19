@@ -7,9 +7,15 @@ export default async function middleware(req: NextRequest) {
   const { nextUrl } = req
   const isPublic = PUBLIC_ROUTES.some((r) => nextUrl.pathname.startsWith(r))
 
+  // NextAuth v5 changed the cookie name from "next-auth.session-token" (v4)
+  // to "authjs.session-token" (v5), prefixed with "__Secure-" on HTTPS.
+  const useSecure = nextUrl.protocol === "https:"
+  const cookieName = `${useSecure ? "__Secure-" : ""}authjs.session-token`
+
   const token = await getToken({
     req,
     secret: process.env.AUTH_SECRET,
+    cookieName,
   })
 
   if (!token && !isPublic) {
