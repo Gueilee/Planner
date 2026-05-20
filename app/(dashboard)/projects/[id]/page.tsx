@@ -5,6 +5,7 @@ import { Header } from "@/components/layout/header"
 import { StatusBadge } from "@/components/kronex/status-badge"
 import { StatusActions } from "./status-actions"
 import { ReportStatusWidget } from "./report-status-widget"
+import { ProjectEditModal } from "./project-edit-modal"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
   ArrowLeft, Users, Calendar, AlertTriangle, CheckCircle2,
@@ -143,6 +144,24 @@ export default async function ProjectDetailPage({
                   )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  {/* Edit button — always visible */}
+                  <ProjectEditModal
+                    project={{
+                      id,
+                      title:         project.title,
+                      description:   project.description,
+                      scope:         project.scope,
+                      origin:        project.origin,
+                      budget:        project.budget,
+                      economy:       project.economy,
+                      expectedStart: project.expectedStart,
+                      expectedEnd:   project.expectedEnd,
+                      actualStart:   project.actualStart,
+                      actualEnd:     project.actualEnd,
+                      goLiveDate:    project.goLiveDate,
+                    }}
+                  />
+
                   {/* PLANNING */}
                   {project.status === "PLANNING" && (
                     <>

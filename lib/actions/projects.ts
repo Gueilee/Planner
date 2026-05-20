@@ -21,27 +21,45 @@ export async function updateProjectStatus(id: string, status: ProjectStatus) {
 }
 
 export async function updateProjectDetails(id: string, data: {
-  description?: string
-  actualStart?: string
-  actualEnd?: string
-  goLiveDate?: string
-  roadmapYear?: number
+  title?:          string
+  description?:    string
+  scope?:          string
+  origin?:         string
+  budget?:         number | null
+  economy?:        number | null
+  expectedStart?:  string | null
+  expectedEnd?:    string | null
+  actualStart?:    string | null
+  actualEnd?:      string | null
+  goLiveDate?:     string | null
+  roadmapYear?:    number
   roadmapQuarter?: number
 }) {
   const session = await auth()
   if (!session?.user) throw new Error("Não autorizado")
 
+  const toDate = (v: string | null | undefined) =>
+    v === null ? null : v ? new Date(v) : undefined
+
   await db.project.update({
     where: { id },
     data: {
-      description:   data.description,
-      actualStart:   data.actualStart  ? new Date(data.actualStart)  : undefined,
-      actualEnd:     data.actualEnd    ? new Date(data.actualEnd)     : undefined,
-      goLiveDate:    data.goLiveDate   ? new Date(data.goLiveDate)    : undefined,
-      roadmapYear:   data.roadmapYear,
-      roadmapQuarter:data.roadmapQuarter,
+      title:          data.title         || undefined,
+      description:    data.description   ?? undefined,
+      scope:          data.scope         ?? undefined,
+      origin:         data.origin        ?? undefined,
+      budget:         data.budget        !== undefined ? data.budget  : undefined,
+      economy:        data.economy       !== undefined ? data.economy : undefined,
+      expectedStart:  toDate(data.expectedStart),
+      expectedEnd:    toDate(data.expectedEnd),
+      actualStart:    toDate(data.actualStart),
+      actualEnd:      toDate(data.actualEnd),
+      goLiveDate:     toDate(data.goLiveDate),
+      roadmapYear:    data.roadmapYear,
+      roadmapQuarter: data.roadmapQuarter,
     },
   })
+  revalidatePath(`/projects`)
   revalidatePath(`/projects/${id}`)
 }
 
