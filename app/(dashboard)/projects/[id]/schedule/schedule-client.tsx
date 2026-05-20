@@ -14,6 +14,7 @@ import {
   ArrowLeft, Plus, ChevronRight, ChevronDown, Pencil, Trash2,
   Loader2, X, Check, CalendarDays, AlertTriangle, Layers,
   List, BarChart2, Search, FolderOpen, Paperclip,
+  Link2, Lock, ArrowRight,
 } from "lucide-react"
 import {
   createTask, updateTask, deleteTask, createArea,
@@ -243,13 +244,34 @@ function TaskForm({ mode, initial, areas, members, allTasks, onSave, onDelete, o
 
   // ─────────────────────────────────────────────────────────────────────────
 
+  const [depSearch, setDepSearch] = useState("")
+
   const upd = <K extends keyof typeof form>(k: K, v: typeof form[K]) =>
     setForm((f) => ({ ...f, [k]: v }))
 
-  const toggleDep = (id: string) =>
-    upd("dependencies", form.dependencies.includes(id)
-      ? form.dependencies.filter((d) => d !== id)
-      : [...form.dependencies, id])
+  function toggleDep(id: string) {
+    setForm((f) => {
+      const newDeps = f.dependencies.includes(id)
+        ? f.dependencies.filter((d) => d !== id)
+        : [...f.dependencies, id]
+      // Auto-calculate start date from latest predecessor end date + 1 day
+      let newForm: typeof f = { ...f, dependencies: newDeps }
+      if (newDeps.length > 0) {
+        const endDates = newDeps
+          .map((depId) => allTasks.find((t) => t.id === depId)?.endDate)
+          .filter((d): d is string => Boolean(d))
+          .sort()
+        const latestEnd = endDates.at(-1)
+        if (latestEnd) {
+          const suggested = format(addDays(parseISO(latestEnd), 1), "yyyy-MM-dd")
+          if (!f.startDate || suggested > f.startDate) {
+            newForm = { ...newForm, startDate: suggested }
+          }
+        }
+      }
+      return newForm
+    })
+  }
 
   function handleSubmit() {
     if (!form.title.trim()) return
@@ -424,25 +446,145 @@ function TaskForm({ mode, initial, areas, members, allTasks, onSave, onDelete, o
           <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFiles} />
         </div>
 
-        {allTasks.filter((t) => t.id !== initial.id && !t.parentId).length > 0 && (
-          <div>
-            <label className={labelCls}>Dependências</label>
-            <div className="space-y-1 max-h-40 overflow-y-auto rounded-xl border border-slate-200 p-2">
-              {allTasks.filter((t) => t.id !== initial.id && !t.parentId).map((t) => {
-                const sel = form.dependencies.includes(t.id)
-                return (
-                  <button key={t.id} onClick={() => toggleDep(t.id)}
-                    className={`flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-left text-xs transition-all ${sel ? "bg-violet-50 text-[#7B2FBE]" : "hover:bg-slate-50 text-slate-600"}`}>
-                    <div className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${sel ? "bg-[#7B2FBE] border-[#7B2FBE]" : "border-slate-300"}`}>
-                      {sel && <Check className="w-2.5 h-2.5 text-white" />}
+        {/* ── Predecessoras (Dependências) ── */}
+        {(() => {
+          const candidatos = allTasks.filter((t) => t.id !== initial.id && !t.parentId)
+          const selecionadas = candidatos.filter((t) => form.dependencies.includes(t.id))
+          const disponiveis = candidatos
+            .filter((t) => !form.dependencies.includes(t.id))
+            .filter((t) => !depSearch || t.title.toLowerCase().includes(depSearch.toLowerCase()))
+          const successors = allTasks.filter((t) => t.id !== initial.id && t.dependencies.includes(initial.id ?? ""))
+          if (candidatos.length === 0 && successors.length === 0) return null
+          return (
+            <div className="rounded-2xl overflow-hidden" style={{ border: "1.5px solid #E0E7FF" }}>
+              {/* Header */}
+              <div className="flex items-center justify-between px-3 py-2.5"
+                style={{ background: "linear-gradient(135deg,#EEF2FF,#F5F3FF)" }}>
+                <div className="flex items-center gap-2">
+                  <Link2 className="w-3.5 h-3.5 text-[#6366F1]" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-[#4338CA]">Predecessoras</span>
+                </div>
+                <span className="text-[9px] text-indigo-400 font-medium">Ajusta início automaticamente</span>
+              </div>
+
+              <div className="p-3 space-y-3 bg-white">
+
+                {/* Selecionadas */}
+                {selecionadas.length > 0 && (
+                  <div className="space-y-1.5">
+                    {selecionadas.map((dep) => {
+                      const cfg = STATUS_CFG[dep.status]
+                      const violation = dep.endDate && form.startDate && dep.endDate >= form.startDate
+                      return (
+                        <div key={dep.id}
+                          className="flex items-center gap-2 px-3 py-2 rounded-xl transition-all"
+                          style={{
+                            background: violation ? "#FFFBEB" : "#F0FDF4",
+                            border: `1px solid ${violation ? "#FDE68A" : "#BBF7D0"}`,
+                          }}>
+                          <ArrowRight className="w-3 h-3 shrink-0" style={{ color: violation ? "#F59E0B" : "#16A34A" }} />
+                          <span className="flex-1 text-xs font-semibold truncate" style={{ color: violation ? "#92400E" : "#166534" }}>
+                            {dep.title}
+                          </span>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0"
+                            style={{ background: cfg?.bg, color: cfg?.color }}>
+                            {cfg?.label}
+                          </span>
+                          {dep.endDate && (
+                            <span className="text-[9px] font-mono shrink-0" style={{ color: violation ? "#B45309" : "#4ADE80" }}>
+                              até {fmtDate(dep.endDate)}
+                            </span>
+                          )}
+                          {violation && (
+                            <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+                          )}
+                          <button onClick={() => toggleDep(dep.id)}
+                            className="text-slate-300 hover:text-red-400 transition-colors shrink-0">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )
+                    })}
+                    {/* Auto-date hint */}
+                    {form.startDate && (
+                      <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg"
+                        style={{ background: "#EFF6FF", border: "1px solid #BFDBFE" }}>
+                        <CalendarDays className="w-3 h-3 text-blue-400 shrink-0" />
+                        <span className="text-[9px] text-blue-600 font-medium">
+                          Início ajustado para <strong>{fmtDate(form.startDate)}</strong>
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Buscar para adicionar */}
+                {candidatos.length > selecionadas.length && (
+                  <div>
+                    <div className="relative mb-2">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-300" />
+                      <input
+                        value={depSearch}
+                        onChange={(e) => setDepSearch(e.target.value)}
+                        placeholder="Buscar atividade predecessora..."
+                        className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl outline-none transition-colors"
+                        style={{ border: "1.5px solid #E2E8F0", background: "#F8FAFC" }}
+                        onFocus={(e) => (e.target.style.borderColor = "#818CF8")}
+                        onBlur={(e) => (e.target.style.borderColor = "#E2E8F0")}
+                      />
                     </div>
-                    <span className="truncate">{t.title}</span>
-                  </button>
-                )
-              })}
+                    <div className="space-y-0.5 max-h-36 overflow-y-auto">
+                      {disponiveis.length === 0 ? (
+                        <p className="text-center text-[10px] text-slate-300 py-3">
+                          {depSearch ? "Nenhuma atividade encontrada" : "Todas as atividades já foram selecionadas"}
+                        </p>
+                      ) : (
+                        disponiveis.map((dep) => {
+                          const cfg = STATUS_CFG[dep.status]
+                          return (
+                            <button key={dep.id} onClick={() => toggleDep(dep.id)}
+                              className="flex items-center gap-2 w-full px-2.5 py-2 rounded-xl text-left transition-all hover:bg-indigo-50 group">
+                              <div className="w-5 h-5 rounded-lg flex items-center justify-center shrink-0 border border-dashed border-slate-200 group-hover:border-indigo-300 group-hover:bg-indigo-100 transition-all">
+                                <Plus className="w-2.5 h-2.5 text-slate-300 group-hover:text-indigo-500" />
+                              </div>
+                              <span className="flex-1 text-xs text-slate-600 truncate group-hover:text-indigo-700 font-medium">
+                                {dep.title}
+                              </span>
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0"
+                                style={{ background: cfg?.bg, color: cfg?.color }}>
+                                {cfg?.label}
+                              </span>
+                              {dep.endDate && (
+                                <span className="text-[9px] font-mono text-slate-400 shrink-0">{fmtDate(dep.endDate)}</span>
+                              )}
+                            </button>
+                          )
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Sucessoras (read-only) */}
+                {successors.length > 0 && (
+                  <div className="pt-2" style={{ borderTop: "1px dashed #E2E8F0" }}>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5">
+                      Sucessoras ({successors.length}) — dependem desta
+                    </p>
+                    <div className="space-y-1">
+                      {successors.map((s) => (
+                        <div key={s.id} className="flex items-center gap-2 px-2 py-1 rounded-lg bg-slate-50">
+                          <ArrowRight className="w-3 h-3 text-slate-300 shrink-0" />
+                          <span className="text-[10px] text-slate-500 truncate">{s.title}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )
+        })()}
       </div>
 
       <div className="px-5 py-4 border-t border-slate-100 flex items-center gap-2">
@@ -984,6 +1126,14 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                 const isHov  = hoveredId === t.id
                 const cfg    = STATUS_CFG[t.status]
                 const isTarefa = depth > 0
+                const depViolation = t.dependencies.some((depId) => {
+                  const dep = tasks.find((x) => x.id === depId)
+                  return dep?.endDate && t.startDate && dep.endDate >= t.startDate
+                })
+                const isBlocked = !isDone && t.dependencies.some((depId) => {
+                  const dep = tasks.find((x) => x.id === depId)
+                  return dep && dep.status !== "COMPLETED"
+                })
 
                 return (
                   <div
@@ -1064,7 +1214,8 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
 
                     {/* Name */}
                     <div className="flex-1 flex items-center gap-1.5 min-w-0 cursor-pointer px-1 py-1" onClick={() => openEdit(t)}>
-                      {isLate && <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />}
+                      {isLate    && <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />}
+                      {isBlocked && !isLate && <Lock className="w-3 h-3 text-slate-300 shrink-0" />}
                       <span className={`text-xs truncate ${
                         isDone         ? "line-through text-slate-400"
                         : isTarefa     ? "text-slate-500 font-medium"
@@ -1072,7 +1223,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                       }`}>
                         {t.title}
                       </span>
-                      {/* Type badge — always visible */}
+                      {/* Type badge */}
                       <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full font-bold" style={
                         isTarefa
                           ? { background: "#EDE9FE", color: "#7C3AED" }
@@ -1080,6 +1231,20 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                       }>
                         {isTarefa ? "Tarefa" : "Atividade"}
                       </span>
+                      {/* Dependency chip */}
+                      {t.dependencies.length > 0 && (
+                        <span
+                          className="shrink-0 flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                          title={`${t.dependencies.length} predecessora(s)`}
+                          style={depViolation
+                            ? { background: "#FEF3C7", color: "#B45309", border: "1px solid #FCD34D" }
+                            : { background: "#EEF2FF", color: "#4338CA", border: "1px solid #C7D2FE" }
+                          }
+                        >
+                          <Link2 className="w-2.5 h-2.5" />
+                          {t.dependencies.length}
+                        </span>
+                      )}
                       {t._count.comments   > 0 && <span className="text-[9px] text-slate-300 shrink-0">💬</span>}
                       {t._count.attachments > 0 && <span className="text-[9px] text-slate-300 shrink-0">📎</span>}
                     </div>
