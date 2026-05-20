@@ -21,6 +21,8 @@ import {
   getTaskAttachments, addTaskAttachments,
   type AttachmentUpload,
 } from "@/lib/actions/schedule"
+import { isHoliday, isWeekend as isWknd, getHolidayName, nextWorkingDay } from "@/lib/working-days"
+import { WorkingDayPicker } from "@/components/working-day-picker"
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -263,7 +265,7 @@ function TaskForm({ mode, initial, areas, members, allTasks, onSave, onDelete, o
           .sort()
         const latestEnd = endDates.at(-1)
         if (latestEnd) {
-          const suggested = format(addDays(parseISO(latestEnd), 1), "yyyy-MM-dd")
+          const suggested = nextWorkingDay(latestEnd)
           if (!f.startDate || suggested > f.startDate) {
             newForm = { ...newForm, startDate: suggested }
           }
@@ -359,11 +361,21 @@ function TaskForm({ mode, initial, areas, members, allTasks, onSave, onDelete, o
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelCls}>Data Inicial</label>
-            <input type="date" value={form.startDate} onChange={(e) => upd("startDate", e.target.value)} className={inputCls} />
+            <WorkingDayPicker
+              value={form.startDate}
+              onChange={(v) => upd("startDate", v)}
+              placeholder="dd/mm/aaaa"
+              className={inputCls}
+            />
           </div>
           <div>
             <label className={labelCls}>Data Final</label>
-            <input type="date" value={form.endDate} onChange={(e) => upd("endDate", e.target.value)} className={inputCls} />
+            <WorkingDayPicker
+              value={form.endDate}
+              onChange={(v) => upd("endDate", v)}
+              placeholder="dd/mm/aaaa"
+              className={inputCls}
+            />
           </div>
         </div>
 
@@ -709,16 +721,25 @@ function GanttHeader({ ganttStart, ganttEnd, dayWidth, zoom }: {
       <div style={{ position: "absolute", top: 32, left: 0, right: 0, height: 32, background: "#1E293B", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
         {zoom === "day" ? (
           Array.from({ length: differenceInDays(ganttEnd, ganttStart) + 1 }).map((_, i) => {
-            const d = addDays(ganttStart, i)
+            const d    = addDays(ganttStart, i)
+            const ds   = format(d, "yyyy-MM-dd")
             const isWE = isSaturday(d) || isSunday(d)
+            const isHol = !isWE && isHoliday(ds)
+            const holName = isHol ? getHolidayName(ds) : null
             return (
-              <div key={i} style={{ position: "absolute", left: i * dayWidth, width: dayWidth, height: 32, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", borderRight: "1px solid rgba(255,255,255,0.04)", background: isWE ? "rgba(255,255,255,0.04)" : "transparent" }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: isWE ? "rgba(248,250,252,0.35)" : "rgba(248,250,252,0.55)" }}>
+              <div key={i} title={holName ?? undefined} style={{
+                position: "absolute", left: i * dayWidth, width: dayWidth, height: 32,
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                borderRight: "1px solid rgba(255,255,255,0.04)",
+                background: isHol ? "rgba(249,115,22,0.18)" : isWE ? "rgba(255,255,255,0.04)" : "transparent",
+              }}>
+                <span style={{ fontSize: 9, fontWeight: 700, color: isHol ? "rgba(249,115,22,0.90)" : isWE ? "rgba(248,250,252,0.35)" : "rgba(248,250,252,0.55)" }}>
                   {format(d, "EEE", { locale: ptBR }).slice(0, 1).toUpperCase()}
                 </span>
-                <span style={{ fontSize: 10, fontWeight: 600, color: isWE ? "rgba(248,250,252,0.30)" : "rgba(248,250,252,0.70)" }}>
+                <span style={{ fontSize: 10, fontWeight: isHol ? 800 : 600, color: isHol ? "rgba(249,115,22,1)" : isWE ? "rgba(248,250,252,0.30)" : "rgba(248,250,252,0.70)" }}>
                   {format(d, "d")}
                 </span>
+                {isHol && <div style={{ width: 3, height: 3, borderRadius: "50%", background: "#F97316" }} />}
               </div>
             )
           })
@@ -1446,9 +1467,18 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                     return <div key={m.toISOString()} style={{ position: "absolute", top: 0, bottom: 0, left: x, width: 1, background: "rgba(226,232,240,0.7)", pointerEvents: "none" }} />
                   })}
                   {zoom === "day" && Array.from({ length: totalDays }).map((_, i) => {
-                    const d = addDays(ganttStart, i)
-                    if (!isSaturday(d) && !isSunday(d)) return null
-                    return <div key={i} style={{ position: "absolute", top: 0, bottom: 0, left: i * dayWidth, width: dayWidth, background: "rgba(241,245,249,0.60)", pointerEvents: "none" }} />
+                    const d   = addDays(ganttStart, i)
+                    const ds  = format(d, "yyyy-MM-dd")
+                    const isWE  = isSaturday(d) || isSunday(d)
+                    const isHol = !isWE && isHoliday(ds)
+                    if (!isWE && !isHol) return null
+                    return (
+                      <div key={i} style={{
+                        position: "absolute", top: 0, bottom: 0, left: i * dayWidth, width: dayWidth,
+                        background: isHol ? "rgba(249,115,22,0.07)" : "rgba(241,245,249,0.60)",
+                        pointerEvents: "none",
+                      }} />
+                    )
                   })}
                   {todayX >= 0 && todayX <= ganttWidth && (
                     <div style={{ position: "absolute", top: 0, bottom: 0, left: todayX, width: 2, background: "#EF4444", opacity: 0.7, zIndex: 6, pointerEvents: "none" }}>
