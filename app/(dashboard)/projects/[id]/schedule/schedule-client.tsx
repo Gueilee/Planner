@@ -688,8 +688,8 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
 
   // ── CRUD ─────────────────────────────────────────────────────────────────
 
-  function openAdd(parentId?: string) {
-    setPanel({ mode: "add", task: { projectId: project.id, parentId: parentId ?? null } })
+  function openAdd(parentId?: string, wbsAreaId?: string) {
+    setPanel({ mode: "add", task: { projectId: project.id, parentId: parentId ?? null, wbsAreaId: wbsAreaId ?? null } })
   }
   function openEdit(t: Task) { setPanel({ mode: "edit", task: t }) }
 
@@ -891,13 +891,13 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
           {/* Table header */}
           <div className="flex items-center shrink-0 border-b border-slate-100 bg-[#0F172A]" style={{ height: 44 }}>
             <div style={{ width: 72 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest pl-4">EAP</div>
+            <div style={{ width: 60 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Ações</div>
             <div className="flex-1 text-[10px] font-black text-white/40 uppercase tracking-widest px-2">Nome da Atividade</div>
             <div style={{ width: 140 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Status</div>
             <div style={{ width: 140 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest px-3">Responsável</div>
             <div style={{ width: 80 }}  className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Início</div>
             <div style={{ width: 80 }}  className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Fim</div>
             <div style={{ width: 96 }}  className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Progresso</div>
-            <div style={{ width: 88 }} />
           </div>
 
           {/* Rows */}
@@ -918,17 +918,40 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                   return (
                     <div
                       key={`area-${row.id}`}
-                      className="flex items-center gap-0 border-b border-slate-100 cursor-pointer select-none group transition-colors"
+                      className="flex items-center gap-0 border-b border-slate-100 select-none group transition-colors"
                       style={{ borderLeft: `4px solid ${row.color ?? "#CBD5E1"}`, background: "#F8FAFC", minHeight: 44 }}
-                      onClick={() => toggleArea(row.id)}
                     >
-                      <div style={{ width: 68 }} className="flex items-center justify-end gap-1.5 pr-2">
+                      {/* EAP + collapse toggle */}
+                      <div
+                        style={{ width: 72 }}
+                        className="flex items-center justify-end gap-1 pr-2 shrink-0 cursor-pointer"
+                        onClick={() => toggleArea(row.id)}
+                      >
                         <span className="text-[10px] font-mono font-bold text-slate-400">{row.eap}</span>
                         {isExp
                           ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                           : <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
                       </div>
-                      <div className="flex-1 flex items-center gap-2.5 px-2 min-w-0">
+
+                      {/* Inline actions for area */}
+                      <div style={{ width: 60 }} className="flex items-center justify-center gap-0.5 shrink-0">
+                        {row.id !== "__ungrouped__" && (
+                          <button
+                            onClick={() => openAdd(undefined, row.id)}
+                            title="Nova atividade nesta área"
+                            className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
+                            style={{ background: "#DCFCE7", color: "#16A34A" }}
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Area name — clickable to expand */}
+                      <div
+                        className="flex-1 flex items-center gap-2.5 px-2 min-w-0 cursor-pointer"
+                        onClick={() => toggleArea(row.id)}
+                      >
                         <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: row.color ?? "#CBD5E1" }} />
                         <span className="font-black text-[#0F172A] text-sm truncate">{row.name}</span>
                         <span className="text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0" style={{ background: "#EDE9FE", color: "#7C3AED" }}>Módulo</span>
@@ -949,7 +972,6 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                           </div>
                         )}
                       </div>
-                      <div style={{ width: 88 }} />
                     </div>
                   )
                 }
@@ -986,6 +1008,36 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                     {/* EAP */}
                     <div style={{ width: 72 }} className="shrink-0 flex items-center justify-end pr-2">
                       <span className="text-[10px] font-mono text-slate-300">{eap}</span>
+                    </div>
+
+                    {/* Inline action buttons — always visible, between EAP and name */}
+                    <div style={{ width: 60 }} className="flex items-center justify-center gap-0.5 shrink-0">
+                      {!isTarefa && (
+                        <button
+                          onClick={() => openAdd(t.id)}
+                          title="Nova tarefa"
+                          className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
+                          style={{ background: "#DCFCE7", color: "#16A34A" }}
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => openEdit(t)}
+                        title="Editar"
+                        className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
+                        style={{ background: "#FEF9C3", color: "#CA8A04" }}
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(t.id)}
+                        title="Excluir"
+                        className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
+                        style={{ background: "#FEE2E2", color: "#DC2626" }}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
                     </div>
 
                     {/* Tree indent spacer for subtasks */}
@@ -1080,27 +1132,6 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                       </div>
                     </div>
 
-                    {/* Actions */}
-                    <div style={{ width: 88 }} className="flex items-center gap-0.5 px-2 shrink-0">
-                      <button onClick={() => openEdit(t)}
-                        style={{ opacity: isHov ? 1 : 0, transition: "opacity 0.15s" }}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-[#7B2FBE] hover:bg-violet-50 transition-all">
-                        <Pencil className="w-3 h-3" />
-                      </button>
-                      {/* Add tarefa — always faintly visible on Atividade rows */}
-                      {!isTarefa && (
-                        <button onClick={() => openAdd(t.id)} title="Adicionar tarefa"
-                          style={{ opacity: isHov ? 1 : 0.25, transition: "opacity 0.15s" }}
-                          className="p-1.5 rounded-lg text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 transition-all">
-                          <Plus className="w-3 h-3" />
-                        </button>
-                      )}
-                      <button onClick={() => handleDelete(t.id)}
-                        style={{ opacity: isHov ? 1 : 0, transition: "opacity 0.15s" }}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-50 transition-all">
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    </div>
                   </div>
                 )
               })
