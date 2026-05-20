@@ -10,7 +10,7 @@ import {
   Users, Calendar, TrendingUp, AlertTriangle,
   CheckCircle2, Clock, ArrowLeft, Zap, Shield,
   CircleDot, CheckCheck, ListTodo, ArrowRight,
-  Play, Search, BarChart3,
+  Play, Search, BarChart3, RefreshCw, MapPin,
 } from "lucide-react"
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -43,7 +43,9 @@ export type ProjectSlideData = {
   lastCheckpoint: {
     date: string
     title: string
+    location: string | null
     highlights: string | null
+    decisions: string | null
     nextSteps: string[]
   } | null
   wbsAreas: { name: string; color: string | null; total: number; done: number; pct: number }[]
@@ -918,6 +920,53 @@ function ProjectSlide({ data, index, total }: { data: ProjectSlideData; index: n
               </div>
             </GlassPanel>
 
+            {/* Último Checkpoint */}
+            {data.lastCheckpoint && (
+              <GlassPanel accent="#2563EB" style={{ padding: "10px 12px", flexShrink: 0 }}>
+                <RSH
+                  label="Último Checkpoint"
+                  right={
+                    <div className="flex items-center gap-1.5">
+                      <RefreshCw style={{ width: 9, height: 9, color: "#60A5FA" }} />
+                      <span className="text-[9px] font-semibold" style={{ color: "#60A5FA" }}>
+                        {format(new Date(data.lastCheckpoint.date), "dd/MM/yyyy", { locale: ptBR })}
+                      </span>
+                    </div>
+                  }
+                />
+                <div className="space-y-1.5">
+                  {data.lastCheckpoint.location && (
+                    <div className="flex items-center gap-1.5">
+                      <MapPin style={{ width: 10, height: 10, color: "#60A5FA", flexShrink: 0 }} />
+                      <span className="text-[10px]" style={{ color: "rgba(150,185,255,0.60)" }}>
+                        {data.lastCheckpoint.location}
+                      </span>
+                    </div>
+                  )}
+                  {data.lastCheckpoint.highlights && (
+                    <div>
+                      <p className="text-[8px] font-black uppercase tracking-widest mb-0.5" style={{ color: "rgba(96,165,250,0.45)" }}>
+                        Pauta
+                      </p>
+                      <p className="text-[10px] leading-snug line-clamp-2" style={{ color: "rgba(180,210,255,0.70)" }}>
+                        {data.lastCheckpoint.highlights}
+                      </p>
+                    </div>
+                  )}
+                  {data.lastCheckpoint.decisions && (
+                    <div>
+                      <p className="text-[8px] font-black uppercase tracking-widest mb-0.5" style={{ color: "rgba(96,165,250,0.45)" }}>
+                        Decisões
+                      </p>
+                      <p className="text-[10px] leading-snug line-clamp-2" style={{ color: "rgba(180,210,255,0.70)" }}>
+                        {data.lastCheckpoint.decisions}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </GlassPanel>
+            )}
+
             {/* Riscos e Problemas — unified table sorted by severity */}
             <GlassPanel style={{ padding: "10px 12px", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
               <RSH
@@ -985,14 +1034,6 @@ function ProjectSlide({ data, index, total }: { data: ProjectSlideData; index: n
                   transition: "width 1.3s cubic-bezier(0.22,1,0.36,1)",
                 }} />
               </div>
-              {data.lastCheckpoint?.highlights && (
-                <>
-                  <p className="text-[9px] font-bold uppercase tracking-wider mb-1" style={{ color: "rgba(150,185,255,0.35)" }}>Comentários</p>
-                  <p className="text-[11px] leading-relaxed line-clamp-3" style={{ color: "rgba(180,210,255,0.55)" }}>
-                    {data.lastCheckpoint.highlights}
-                  </p>
-                </>
-              )}
             </GlassPanel>
 
           </div>

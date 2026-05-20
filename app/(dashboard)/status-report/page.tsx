@@ -47,6 +47,7 @@ export default async function StatusReportPage() {
         select: {
           date:        true,
           title:       true,
+          location:    true,
           content:     true,
           decisions:   true,
           nextActions: true,
@@ -128,7 +129,9 @@ export default async function StatusReportPage() {
         ? {
             date:       lastMtg.date.toISOString(),
             title:      lastMtg.title,
-            highlights: lastMtg.content,
+            location:   lastMtg.location ?? null,
+            highlights: lastMtg.content ?? null,
+            decisions:  lastMtg.decisions ?? null,
             nextSteps,
           }
         : null,
