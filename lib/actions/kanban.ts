@@ -3,7 +3,7 @@
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
 import { revalidatePath } from "next/cache"
-import { ProjectStatus } from "@/lib/generated/prisma/enums"
+import { ProjectStatus, TaskStatus } from "@/lib/generated/prisma/enums"
 
 export async function getProjectTasksForKanban(projectId: string) {
   const tasks = await db.scheduleTask.findMany({
@@ -26,7 +26,7 @@ export async function getProjectTasksForKanban(projectId: string) {
   }))
 }
 
-export async function updateTaskStatusKanban(taskId: string, status: string) {
+export async function updateTaskStatusKanban(taskId: string, status: TaskStatus) {
   const session = await auth()
   if (!session?.user) throw new Error("Não autorizado")
 

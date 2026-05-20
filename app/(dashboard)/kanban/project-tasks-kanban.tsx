@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { getProjectTasksForKanban, updateTaskStatusKanban } from "@/lib/actions/kanban"
+import { TaskStatus } from "@/lib/generated/prisma/enums"
 import type { KanbanProject } from "./kanban-client"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -412,7 +413,7 @@ export function ProjectTasksKanban({
     const targetCol = COL_BY_ID[colId]
     if (!targetCol) return
 
-    const newStatus = targetCol.id
+    const newStatus = targetCol.id as TaskStatus
     const prev      = prevStatuses.current[taskId]
     if (prev === newStatus) return
 
