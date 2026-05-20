@@ -134,6 +134,63 @@ function memberColor(name: string) {
   return `hsl(${hue},55%,42%)`
 }
 
+// ─── Mini Progress Ring ───────────────────────────────────────────────────────
+
+function MiniProgressRing({
+  pct, total, done, colColor, colId,
+}: {
+  pct: number; total: number; done: number; colColor: string; colId: string
+}) {
+  const size   = 40
+  const stroke = 3.5
+  const r      = (size - stroke) / 2
+  const circ   = 2 * Math.PI * r
+  const dash   = total > 0 ? (pct / 100) * circ : 0
+  const gid    = `krx-ring-${colId}`
+
+  return (
+    <div className="flex flex-col items-center gap-0.5 shrink-0">
+      <div className="relative" style={{ width: size, height: size }}>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}
+          style={{ transform: "rotate(-90deg)" }}>
+          <defs>
+            <linearGradient id={gid} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor={colColor} stopOpacity="0.55" />
+              <stop offset="100%" stopColor={colColor} />
+            </linearGradient>
+          </defs>
+          {/* Track */}
+          <circle cx={size / 2} cy={size / 2} r={r}
+            fill="none" stroke="#F1F5F9" strokeWidth={stroke} />
+          {/* Arc */}
+          {total > 0 && (
+            <circle cx={size / 2} cy={size / 2} r={r}
+              fill="none" stroke={`url(#${gid})`} strokeWidth={stroke}
+              strokeLinecap="round"
+              strokeDasharray={`${dash} ${circ}`}
+              style={{ transition: "stroke-dasharray 0.8s cubic-bezier(0.22,1,0.36,1)" }}
+            />
+          )}
+        </svg>
+        {/* Center label */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          {total > 0 ? (
+            <span style={{ fontSize: 9, fontWeight: 900, color: colColor, lineHeight: 1 }}>
+              {pct}%
+            </span>
+          ) : (
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#CBD5E1", lineHeight: 1 }}>—</span>
+          )}
+        </div>
+      </div>
+      {/* Tasks fraction below ring */}
+      <span style={{ fontSize: 8, fontWeight: 600, color: total > 0 ? "#94A3B8" : "#CBD5E1", lineHeight: 1 }}>
+        {total > 0 ? `${done}/${total}` : "sem tarefas"}
+      </span>
+    </div>
+  )
+}
+
 // ─── Card ─────────────────────────────────────────────────────────────────────
 
 function ProjectCard({
@@ -237,83 +294,80 @@ function ProjectCard({
             {project.sponsor}
           </p>
 
-          {/* Progress bar */}
+          {/* Progress accent bar — thin, only when tasks exist */}
           {project.tasksTotal > 0 && (
-            <div className="mb-3.5">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] text-slate-400 font-medium">
-                  {project.tasksDone}/{project.tasksTotal} tarefas
-                </span>
-                <span className="text-[10px] font-black" style={{ color: col.color }}>
-                  {project.progress}%
-                </span>
-              </div>
-              <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all duration-700"
-                  style={{
-                    width:      `${project.progress}%`,
-                    background: col.gradient,
-                  }}
-                />
-              </div>
+            <div className="mb-3 h-1 rounded-full bg-slate-100 overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-700"
+                style={{ width: `${project.progress}%`, background: col.gradient }}
+              />
             </div>
           )}
 
           {/* Bottom row */}
-          <div className="flex items-center justify-between">
-            {/* Avatars */}
-            <div className="flex items-center">
-              {project.members.slice(0, 4).map((m, i) => (
-                <div
-                  key={m.id}
-                  title={m.name}
-                  className="w-6 h-6 rounded-full flex items-center justify-center text-[8px] font-black text-white ring-2 ring-white shrink-0"
-                  style={{
-                    background: memberColor(m.name),
-                    marginLeft: i > 0 ? "-6px" : "0",
-                    zIndex:     20 - i,
-                    boxShadow:  "0 1px 3px rgba(0,0,0,0.15)",
-                  }}
-                >
-                  {initials(m.name)}
-                </div>
-              ))}
-              {project.teamSize > 4 && (
-                <div
-                  className="w-6 h-6 rounded-full flex items-center justify-center text-[8px] font-bold ring-2 ring-white -ml-1.5 bg-slate-100 text-slate-500 shrink-0"
-                  style={{ zIndex: 1 }}
-                >
-                  +{project.teamSize - 4}
-                </div>
-              )}
+          <div className="flex items-end justify-between gap-2">
+            {/* Left: avatars + optional risk + date stacked */}
+            <div className="flex flex-col gap-1.5 min-w-0">
+              <div className="flex items-center">
+                {project.members.slice(0, 4).map((m, i) => (
+                  <div
+                    key={m.id}
+                    title={m.name}
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-[8px] font-black text-white ring-2 ring-white shrink-0"
+                    style={{
+                      background: memberColor(m.name),
+                      marginLeft: i > 0 ? "-6px" : "0",
+                      zIndex:     20 - i,
+                      boxShadow:  "0 1px 3px rgba(0,0,0,0.15)",
+                    }}
+                  >
+                    {initials(m.name)}
+                  </div>
+                ))}
+                {project.teamSize > 4 && (
+                  <div
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-[8px] font-bold ring-2 ring-white -ml-1.5 bg-slate-100 text-slate-500 shrink-0"
+                    style={{ zIndex: 1 }}
+                  >
+                    +{project.teamSize - 4}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {/* Risk */}
+                {project.riskCount > 0 && (
+                  <div
+                    className="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold"
+                    style={{
+                      background: project.highRisks > 0 ? "rgba(220,38,38,0.09)" : "rgba(217,119,6,0.09)",
+                      color:      project.highRisks > 0 ? "#DC2626" : "#D97706",
+                    }}
+                  >
+                    <AlertTriangle className="w-2.5 h-2.5" />
+                    {project.riskCount}
+                  </div>
+                )}
+                {/* End date */}
+                {project.expectedEnd && (
+                  <span
+                    className="text-[9px] font-semibold"
+                    style={{ color: isDelayed ? "#DC2626" : isUrgent ? "#D97706" : "#94A3B8" }}
+                  >
+                    {format(new Date(project.expectedEnd), "dd/MM", { locale: ptBR })}
+                  </span>
+                )}
+              </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {/* Risk */}
-              {project.riskCount > 0 && (
-                <div
-                  className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
-                  style={{
-                    background: project.highRisks > 0 ? "rgba(220,38,38,0.09)" : "rgba(217,119,6,0.09)",
-                    color:      project.highRisks > 0 ? "#DC2626" : "#D97706",
-                  }}
-                >
-                  <AlertTriangle className="w-2.5 h-2.5" />
-                  {project.riskCount}
-                </div>
-              )}
-
-              {/* End date */}
-              {project.expectedEnd && (
-                <span
-                  className="text-[10px] font-semibold"
-                  style={{ color: isDelayed ? "#DC2626" : isUrgent ? "#D97706" : "#94A3B8" }}
-                >
-                  {format(new Date(project.expectedEnd), "dd/MM", { locale: ptBR })}
-                </span>
-              )}
-            </div>
+            {/* Right: mini progress ring */}
+            <MiniProgressRing
+              pct={project.progress}
+              total={project.tasksTotal}
+              done={project.tasksDone}
+              colColor={col.color}
+              colId={col.id}
+            />
           </div>
         </div>
       </div>
