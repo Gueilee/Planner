@@ -12,6 +12,7 @@ export async function getProjectTasksForKanban(projectId: string) {
     include: {
       wbsArea:     { select: { name: true, color: true } },
       responsible: { select: { id: true, name: true } },
+      _count:      { select: { subtasks: true } },
     },
   })
   return tasks.map((t) => ({
@@ -23,6 +24,8 @@ export async function getProjectTasksForKanban(projectId: string) {
     endDate:     t.endDate?.toISOString()    ?? null,
     wbsArea:     t.wbsArea  ?? null,
     responsible: t.responsible ?? null,
+    parentId:    t.parentId   ?? null,
+    childCount:  t._count.subtasks,
   }))
 }
 
@@ -32,7 +35,7 @@ export async function updateTaskStatusKanban(taskId: string, status: TaskStatus)
 
   const task = await db.scheduleTask.findUnique({
     where:  { id: taskId },
-    select: { projectId: true, progress: true },
+    select: { projectId: true, parentId: true },
   })
 
   await db.scheduleTask.update({
@@ -43,6 +46,20 @@ export async function updateTaskStatusKanban(taskId: string, status: TaskStatus)
       completedAt: status === "COMPLETED" ? new Date() : undefined,
     },
   })
+
+  // Auto-complete parent when all its children are COMPLETED
+  if (status === "COMPLETED" && task?.parentId) {
+    const siblings = await db.scheduleTask.findMany({
+      where:  { parentId: task.parentId },
+      select: { status: true },
+    })
+    if (siblings.every((s) => s.status === "COMPLETED")) {
+      await db.scheduleTask.update({
+        where: { id: task.parentId },
+        data:  { status: TaskStatus.COMPLETED, progress: 100, completedAt: new Date() },
+      })
+    }
+  }
 
   if (task) {
     revalidatePath(`/projects/${task.projectId}`)

@@ -31,6 +31,8 @@ export type TaskItem = {
   endDate:     string | null
   wbsArea:     { name: string; color: string | null } | null
   responsible: { id: string; name: string } | null
+  parentId:    string | null
+  childCount:  number
 }
 
 // ─── Column Config ────────────────────────────────────────────────────────────
@@ -397,12 +399,17 @@ export function ProjectTasksKanban({
     })
   }, [project.id])
 
-  const activeTask = activeId ? tasks.find((t) => t.id === activeId) ?? null : null
+  // Only show tasks with no children (leaf tasks).
+  // Parents that have children are managed implicitly — when all children complete,
+  // the parent is auto-completed server-side.
+  const visibleTasks = tasks.filter((t) => t.childCount === 0)
+
+  const activeTask = activeId ? visibleTasks.find((t) => t.id === activeId) ?? null : null
 
   function handleDragStart(e: DragStartEvent) {
     const id = e.active.id as string
     setActiveId(id)
-    prevStatuses.current[id] = tasks.find((t) => t.id === id)?.status ?? ""
+    prevStatuses.current[id] = visibleTasks.find((t) => t.id === id)?.status ?? ""
   }
 
   function handleDragOver(e: DragOverEvent) {
@@ -444,8 +451,8 @@ export function ProjectTasksKanban({
     })
   }
 
-  const progress = calcProgress(tasks)
-  const done     = tasks.filter((t) => t.status === "COMPLETED").length
+  const progress = calcProgress(visibleTasks)
+  const done     = visibleTasks.filter((t) => t.status === "COMPLETED").length
 
   return (
     <>
@@ -493,7 +500,7 @@ export function ProjectTasksKanban({
               </div>
               <div className="w-32">
                 <div className="flex justify-between text-[9px] mb-1.5">
-                  <span className="text-slate-400">{done}/{tasks.length} tarefas</span>
+                  <span className="text-slate-400">{done}/{visibleTasks.length} tarefas</span>
                 </div>
                 <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
                   <div
@@ -562,7 +569,7 @@ export function ProjectTasksKanban({
             style={{ borderTop: "1px solid rgba(15,23,42,0.05)", scrollbarWidth: "none" }}
           >
             {TASK_COLS.map((col) => {
-              const count = tasks.filter((t) => resolveColId(t.status) === col.id).length
+              const count = visibleTasks.filter((t) => resolveColId(t.status) === col.id).length
               return (
                 <div
                   key={col.id}
@@ -586,7 +593,7 @@ export function ProjectTasksKanban({
             </div>
           </div>
         ) : view === "list" ? (
-          <TaskListView tasks={tasks} />
+          <TaskListView tasks={visibleTasks} />
         ) : (
           <DndContext
             sensors={sensors}
@@ -604,7 +611,7 @@ export function ProjectTasksKanban({
                   <TaskColumn
                     key={col.id}
                     col={col}
-                    tasks={tasks.filter((t) => resolveColId(t.status) === col.id)}
+                    tasks={visibleTasks.filter((t) => resolveColId(t.status) === col.id)}
                     isOver={overId === col.id}
                   />
                 ))}
