@@ -529,14 +529,14 @@ function ProjectHistoryView({ data }: { data: NonNullable<FullHistory> }) {
               </TimelineEvent>
             )}
 
-            {p.documents.map((doc, idx) => (
+            {p.documents.filter((doc) => doc.type !== "KICKOFF").map((doc, idx, arr) => (
               <TimelineEvent key={doc.id} date={doc.createdAt}
                 title={doc.title}
                 subtitle={doc.type === "PROJECT_CLOSURE" ? "Documento de Encerramento" : doc.type === "PROJECT_OPENING" ? "Termo de Abertura" : "Documento"}
                 color={doc.type === "PROJECT_CLOSURE" ? "#0D9488" : "#7C3AED"}
                 icon={FileText}
                 iconBg={doc.type === "PROJECT_CLOSURE" ? "#F0FDFA" : "#F5F3FF"}
-                isLast={idx === p.documents.length - 1 && !isOpen}>
+                isLast={idx === arr.length - 1 && !isOpen}>
                 {doc.content && (
                   <TCard color={doc.type === "PROJECT_CLOSURE" ? "#0D9488" : "#7C3AED"}>
                     <div className="px-4 py-3">
