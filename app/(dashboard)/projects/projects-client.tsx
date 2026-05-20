@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react"
 import Link from "next/link"
-import { Plus, FolderKanban, ChevronRight, Search, X } from "lucide-react"
+import { Plus, FolderKanban, ChevronRight, Search, X, ChevronLeft } from "lucide-react"
 import { StatusBadge } from "@/components/kronex/status-badge"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -39,9 +39,22 @@ function avg(arr: number[]) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+const PAGE_SIZE = 10
+
 export function ProjectsClient({ projects }: { projects: ProjectRow[] }) {
   const [activeFilter, setActiveFilter] = useState<FilterKey>("ALL")
   const [search, setSearch] = useState("")
+  const [page, setPage] = useState(1)
+
+  function handleFilterChange(key: FilterKey) {
+    setActiveFilter(key)
+    setPage(1)
+  }
+
+  function handleSearchChange(value: string) {
+    setSearch(value)
+    setPage(1)
+  }
 
   const filtered = useMemo(() => {
     const filter = FILTERS.find((f) => f.key === activeFilter)!
@@ -53,6 +66,10 @@ export function ProjectsClient({ projects }: { projects: ProjectRow[] }) {
     })
   }, [projects, activeFilter, search])
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+
   return (
     <>
       {/* Filter + action bar */}
@@ -63,12 +80,12 @@ export function ProjectsClient({ projects }: { projects: ProjectRow[] }) {
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300" />
             <input
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               placeholder="Buscar projeto..."
               className="pl-8 pr-8 h-8 text-xs rounded-xl border border-slate-200 bg-white outline-none focus:border-[#7B2FBE] transition-colors w-52"
             />
             {search && (
-              <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2">
+              <button onClick={() => handleSearchChange("")} className="absolute right-2.5 top-1/2 -translate-y-1/2">
                 <X className="w-3 h-3 text-slate-400" />
               </button>
             )}
@@ -84,7 +101,7 @@ export function ProjectsClient({ projects }: { projects: ProjectRow[] }) {
               return (
                 <button
                   key={f.key}
-                  onClick={() => setActiveFilter(f.key)}
+                  onClick={() => handleFilterChange(f.key)}
                   className="px-3 h-8 text-xs font-semibold rounded-xl border transition-all"
                   style={isActive ? {
                     background: `${f.color}15`,
@@ -156,7 +173,7 @@ export function ProjectsClient({ projects }: { projects: ProjectRow[] }) {
           </div>
         ) : (
           <div className="divide-y divide-slate-50">
-            {filtered.map((project) => {
+            {paginated.map((project) => {
               const tasksDone  = project.tasks.filter((t) => t.status === "COMPLETED").length
               const tasksTotal = project.tasks.length
               const progress   = tasksTotal > 0
@@ -244,11 +261,52 @@ export function ProjectsClient({ projects }: { projects: ProjectRow[] }) {
         )}
       </div>
 
-      {/* Count footer */}
+      {/* Pagination footer */}
       {filtered.length > 0 && (
-        <p className="text-xs text-slate-400 text-center">
-          Exibindo {filtered.length} de {projects.length} projetos
-        </p>
+        <div className="flex items-center justify-between gap-4 px-1">
+          <p className="text-xs text-slate-400">
+            Exibindo {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} de {filtered.length} projetos
+          </p>
+
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+                className="w-8 h-8 rounded-lg flex items-center justify-center border border-slate-200 text-slate-400 hover:border-[#7B2FBE] hover:text-[#7B2FBE] disabled:opacity-30 disabled:pointer-events-none transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setPage(p)}
+                  className="w-8 h-8 rounded-lg text-xs font-semibold border transition-all"
+                  style={p === safePage ? {
+                    background: "linear-gradient(135deg, #7B2FBE, #9333EA)",
+                    color: "#fff",
+                    borderColor: "#7B2FBE",
+                  } : {
+                    background: "#fff",
+                    color: "#64748B",
+                    borderColor: "#E2E8F0",
+                  }}
+                >
+                  {p}
+                </button>
+              ))}
+
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safePage === totalPages}
+                className="w-8 h-8 rounded-lg flex items-center justify-center border border-slate-200 text-slate-400 hover:border-[#7B2FBE] hover:text-[#7B2FBE] disabled:opacity-30 disabled:pointer-events-none transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </div>
       )}
     </>
   )
