@@ -174,6 +174,14 @@ export default async function ProjectDetailPage({
                         Go/No-Go
                       </Link>
                       <Link
+                        href={`/projects/${id}/presentation`}
+                        className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.98]"
+                        style={{ background: "linear-gradient(135deg, #0891B2, #06B6D4)", boxShadow: "0 4px 20px rgba(8,145,178,0.30)" }}
+                      >
+                        <Layers className="w-3.5 h-3.5" />
+                        Ap. Técnica
+                      </Link>
+                      <Link
                         href={`/projects/${id}/kickoff`}
                         className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.98]"
                         style={{ background: "linear-gradient(135deg, #10B981, #059669)", boxShadow: "0 4px 20px rgba(16,185,129,0.30)" }}
