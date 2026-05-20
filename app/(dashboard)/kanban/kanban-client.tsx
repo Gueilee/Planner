@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useTransition, useRef } from "react"
+import { ProjectTasksKanban } from "./project-tasks-kanban"
 import {
   DndContext, DragOverlay, closestCorners,
   PointerSensor, KeyboardSensor, useSensor, useSensors,
@@ -956,7 +957,7 @@ export function KanbanClient({ projects: initial }: { projects: KanbanProject[] 
         </DndContext>
       )}
 
-      {selected && <DetailDrawer project={selected} onClose={() => setSelected(null)} />}
+      {selected && <ProjectTasksKanban project={selected} onClose={() => setSelected(null)} />}
     </div>
   )
 }
