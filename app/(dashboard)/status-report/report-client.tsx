@@ -61,7 +61,7 @@ export type ProjectSlideData = {
 
 const STATUS_CFG: Record<string, { label: string; color: string; glow: string }> = {
   IN_PROGRESS: { label: "Em Andamento", color: "#60A5FA", glow: "rgba(96,165,250,0.35)" },
-  PILOT:       { label: "Piloto",       color: "#FCD34D", glow: "rgba(252,211,77,0.30)" },
+  PILOT:       { label: "Em Validação", color: "#22D3EE", glow: "rgba(34,211,238,0.30)" },
   RAMP_UP:     { label: "Ramp-Up",      color: "#C084FC", glow: "rgba(192,132,252,0.30)" },
   GO_LIVE:     { label: "GO LIVE",      color: "#34D399", glow: "rgba(52,211,153,0.40)" },
   POST_GOLIVE: { label: "Pós GO LIVE",  color: "#67E8F9", glow: "rgba(103,232,249,0.30)" },

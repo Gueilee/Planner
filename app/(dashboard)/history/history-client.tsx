@@ -44,7 +44,7 @@ type FullHistory = Awaited<ReturnType<typeof getProjectFullHistory>>
 const STATUS_CFG: Record<string, { label: string; color: string; bg: string; border: string; pill: string }> = {
   PLANNING:        { label: "Planejamento",  color: "#475569", bg: "#F8FAFC", border: "#CBD5E1", pill: "bg-slate-100 text-slate-600 border-slate-200" },
   IN_PROGRESS:     { label: "Em Andamento",  color: "#2563EB", bg: "#EFF6FF", border: "#BFDBFE", pill: "bg-blue-50 text-blue-700 border-blue-200" },
-  PILOT:           { label: "Piloto",         color: "#7C3AED", bg: "#F5F3FF", border: "#DDD6FE", pill: "bg-violet-50 text-violet-700 border-violet-200" },
+  PILOT:           { label: "Em Validação",   color: "#0891B2", bg: "#ECFEFF", border: "#A5F3FC", pill: "bg-cyan-50 text-cyan-700 border-cyan-200" },
   RAMP_UP:         { label: "Ramp-Up",        color: "#D97706", bg: "#FFFBEB", border: "#FDE68A", pill: "bg-amber-50 text-amber-700 border-amber-200" },
   GO_LIVE:         { label: "GO LIVE",        color: "#059669", bg: "#ECFDF5", border: "#A7F3D0", pill: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   POST_GOLIVE:     { label: "Pós GO LIVE",    color: "#047857", bg: "#D1FAE5", border: "#6EE7B7", pill: "bg-green-50 text-green-700 border-green-200" },

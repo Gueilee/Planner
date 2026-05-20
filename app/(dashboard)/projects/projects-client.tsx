@@ -24,8 +24,8 @@ type FilterKey = "ALL" | "PLANNING" | "IN_PROGRESS" | "ON_HOLD" | "GO_LIVE" | "C
 const FILTERS: { key: FilterKey; label: string; statuses: string[]; color: string }[] = [
   { key: "ALL",             label: "Todos",           statuses: [],                                          color: "#2463FF" },
   { key: "PLANNING",        label: "Planejamento",    statuses: ["PLANNING"],                                color: "#64748B" },
-  { key: "IN_PROGRESS",     label: "Em Andamento",    statuses: ["IN_PROGRESS", "PILOT", "RAMP_UP"],         color: "#10B981" },
-  { key: "ON_HOLD",         label: "Em Validação",    statuses: ["ON_HOLD"],                                 color: "#8B5CF6" },
+  { key: "IN_PROGRESS",     label: "Em Andamento",    statuses: ["IN_PROGRESS", "RAMP_UP"],                  color: "#10B981" },
+  { key: "ON_HOLD",         label: "Em Validação",    statuses: ["ON_HOLD", "PILOT"],                        color: "#8B5CF6" },
   { key: "GO_LIVE",         label: "Go Live",         statuses: ["GO_LIVE", "POST_GOLIVE"],                  color: "#059669" },
   { key: "COMPLETED",       label: "Concluído",       statuses: ["COMPLETED"],                               color: "#6D28D9" },
   { key: "FUTURE_ANALYSIS", label: "Análise Futura",  statuses: ["FUTURE_ANALYSIS"],                        color: "#9333EA" },

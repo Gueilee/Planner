@@ -10,7 +10,7 @@ const STATUS_CONFIG: Record<string, { label: string; dot: string; bg: string; te
   CANCELLED:         { label: "Cancelada",      dot: "bg-gray-300",    bg: "bg-gray-50",     text: "text-gray-500",    border: "border-gray-200" },
   PLANNING:          { label: "Planejamento",   dot: "bg-blue-400",    bg: "bg-blue-50",     text: "text-blue-600",    border: "border-blue-200" },
   IN_PROGRESS:       { label: "Em Andamento",   dot: "bg-green-400",   bg: "bg-green-50",    text: "text-green-600",   border: "border-green-200" },
-  PILOT:             { label: "Piloto",         dot: "bg-cyan-400",    bg: "bg-cyan-50",     text: "text-cyan-600",    border: "border-cyan-200" },
+  PILOT:             { label: "Em Validação",   dot: "bg-cyan-400",    bg: "bg-cyan-50",     text: "text-cyan-600",    border: "border-cyan-200" },
   RAMP_UP:           { label: "Ramp-Up",        dot: "bg-indigo-400",  bg: "bg-indigo-50",   text: "text-indigo-600",  border: "border-indigo-200" },
   GO_LIVE:           { label: "GO LIVE",        dot: "bg-emerald-500", bg: "bg-emerald-50",  text: "text-emerald-700", border: "border-emerald-200" },
   POST_GOLIVE:       { label: "Pós GO LIVE",    dot: "bg-teal-400",    bg: "bg-teal-50",     text: "text-teal-600",    border: "border-teal-200" },

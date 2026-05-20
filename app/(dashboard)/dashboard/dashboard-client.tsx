@@ -37,13 +37,13 @@ interface DashboardClientProps {
 const STATUS_LABEL: Record<string, string> = {
   PLANNING:    "Planejamento",
   IN_PROGRESS: "Em Andamento",
-  PILOT:       "Piloto",
+  PILOT:       "Em Validação",
   RAMP_UP:     "Ramp-up",
   GO_LIVE:     "Go Live",
   POST_GOLIVE: "Pós Go Live",
   COMPLETED:   "Concluído",
   CANCELLED:   "Cancelado",
-  ON_HOLD:     "Em Validação",
+  ON_HOLD:     "Em Espera",
   FUTURE_ANALYSIS: "Análise Futura",
 }
 
@@ -63,8 +63,8 @@ const STATUS_COLOR: Record<string, string> = {
 // 6 pipeline stages. statusKeys = DB statuses that count towards each stage.
 const PIPELINE = [
   { key: "PLANNING",    statusKeys: ["PLANNING"],                         label: "Planejamento",  color: "#2463FF" },
-  { key: "IN_PROGRESS", statusKeys: ["IN_PROGRESS", "PILOT", "RAMP_UP"], label: "Em Andamento",  color: "#10B981" },
-  { key: "ON_HOLD",     statusKeys: ["ON_HOLD"],                          label: "Em Validação",  color: "#8B5CF6" },
+  { key: "IN_PROGRESS", statusKeys: ["IN_PROGRESS", "RAMP_UP"],           label: "Em Andamento",  color: "#10B981" },
+  { key: "ON_HOLD",     statusKeys: ["ON_HOLD", "PILOT"],                 label: "Em Validação",  color: "#8B5CF6" },
   { key: "GO_LIVE",     statusKeys: ["GO_LIVE"],                          label: "Go Live",       color: "#059669" },
   { key: "POST_GOLIVE", statusKeys: ["POST_GOLIVE"],                      label: "Pós Go Live",   color: "#0891B2" },
   { key: "COMPLETED",   statusKeys: ["COMPLETED"],                        label: "Concluído",     color: "#64748B" },

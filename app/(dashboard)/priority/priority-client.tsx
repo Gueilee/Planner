@@ -60,7 +60,7 @@ const PRIORITY_LEVELS = [
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
   PLANNING:    { label: "Planejamento", cls: "bg-slate-100 text-slate-600 border-slate-200" },
   IN_PROGRESS: { label: "Em Andamento", cls: "bg-blue-50 text-blue-700 border-blue-200" },
-  PILOT:       { label: "Piloto",       cls: "bg-violet-50 text-violet-700 border-violet-200" },
+  PILOT:       { label: "Em Validação", cls: "bg-cyan-50 text-cyan-700 border-cyan-200" },
   RAMP_UP:     { label: "Ramp-Up",      cls: "bg-amber-50 text-amber-700 border-amber-200" },
   GO_LIVE:     { label: "GO LIVE",      cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   POST_GOLIVE: { label: "Pós GO LIVE",  cls: "bg-green-50 text-green-700 border-green-200" },

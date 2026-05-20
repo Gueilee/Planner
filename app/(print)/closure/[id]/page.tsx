@@ -23,7 +23,7 @@ function currency(v: number | null | undefined): string {
 const STATUS_LABEL: Record<string, string> = {
   PLANNING:    "Planejamento",
   IN_PROGRESS: "Em Andamento",
-  PILOT:       "Piloto",
+  PILOT:       "Em Validação",
   RAMP_UP:     "Ramp-Up",
   GO_LIVE:     "GO LIVE",
   POST_GOLIVE: "Pós GO LIVE",
