@@ -286,9 +286,18 @@ function TaskForm({ mode, initial, areas, members, allTasks, onSave, onDelete, o
   return (
     <div className="fixed inset-y-0 right-0 z-50 flex flex-col bg-white shadow-2xl" style={{ width: 400, borderLeft: "1px solid #E2E8F0" }}>
       <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-        <h3 className="font-black text-[#0F172A] text-sm">
-          {mode === "add" ? "Nova Atividade" : "Editar Atividade"}
-        </h3>
+        <div>
+          <h3 className="font-black text-[#0F172A] text-sm">
+            {mode === "add"
+              ? (form.parentId ? "Nova Tarefa" : "Nova Atividade")
+              : (initial.parentId ? "Editar Tarefa" : "Editar Atividade")}
+          </h3>
+          {form.parentId && (
+            <p className="text-[10px] text-slate-400 mt-0.5">
+              Subtarefa de: {allTasks.find((t) => t.id === form.parentId)?.title ?? "—"}
+            </p>
+          )}
+        </div>
         <button onClick={onClose} className="text-slate-400 hover:text-[#0F172A] transition-colors">
           <X className="w-4 h-4" />
         </button>
@@ -296,8 +305,9 @@ function TaskForm({ mode, initial, areas, members, allTasks, onSave, onDelete, o
 
       <div className="flex-1 overflow-y-auto p-5 space-y-4">
         <div>
-          <label className={labelCls}>Atividade *</label>
-          <input value={form.title} onChange={(e) => upd("title", e.target.value)} className={inputCls} placeholder="Nome da atividade" />
+          <label className={labelCls}>{form.parentId ? "Tarefa *" : "Atividade *"}</label>
+          <input value={form.title} onChange={(e) => upd("title", e.target.value)} className={inputCls}
+            placeholder={form.parentId ? "Nome da tarefa" : "Nome da atividade"} />
         </div>
 
         <div>
@@ -450,7 +460,7 @@ function TaskForm({ mode, initial, areas, members, allTasks, onSave, onDelete, o
           className="inline-flex items-center gap-2 px-4 h-9 text-sm font-bold rounded-xl text-white transition-all disabled:opacity-50"
           style={{ background: "linear-gradient(135deg, #7B2FBE, #2463FF)" }}>
           {pending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-          {mode === "add" ? "Adicionar" : "Salvar"}
+          {mode === "add" ? (form.parentId ? "Adicionar Tarefa" : "Adicionar Atividade") : "Salvar"}
         </button>
       </div>
     </div>
@@ -951,20 +961,41 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                 const isDone = t.status === "COMPLETED"
                 const isHov  = hoveredId === t.id
                 const cfg    = STATUS_CFG[t.status]
+                const isTarefa = depth > 0
 
                 return (
                   <div
                     key={`task-${t.id}`}
-                    style={{ height: ROW_H, display: "flex", alignItems: "center", borderBottom: "1px solid #F1F5F9", background: isHov ? "#F0F4FF" : i % 2 === 0 ? "white" : "#FAFBFD" }}
+                    style={{
+                      height: ROW_H,
+                      display: "flex",
+                      alignItems: "center",
+                      borderBottom: "1px solid #F1F5F9",
+                      background: isHov
+                        ? "#EEF2FF"
+                        : isTarefa
+                          ? "#F7F5FF"
+                          : i % 2 === 0 ? "white" : "#FAFBFD",
+                      borderLeft: isTarefa
+                        ? `3px solid ${areaColor ?? "#C4B5FD"}55`
+                        : "3px solid transparent",
+                    }}
                     onMouseEnter={() => setHoveredId(t.id)}
                     onMouseLeave={() => setHoveredId(null)}
                   >
                     {/* EAP */}
-                    <div style={{ width: 72, paddingLeft: 8 + depth * 16 }} className="shrink-0 text-right">
-                      <span className="text-[10px] font-mono text-slate-300 pr-2">{eap}</span>
+                    <div style={{ width: 72 }} className="shrink-0 flex items-center justify-end pr-2">
+                      <span className="text-[10px] font-mono text-slate-300">{eap}</span>
                     </div>
 
-                    {/* Expand / subtask connector */}
+                    {/* Tree indent spacer for subtasks */}
+                    {isTarefa && (
+                      <div style={{ width: depth * 20, flexShrink: 0, position: "relative", alignSelf: "stretch", display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+                        <div style={{ position: "absolute", right: 0, top: 0, bottom: "50%", width: 10, borderBottom: "1.5px solid #DDD6FE", borderLeft: "1.5px solid #DDD6FE", borderBottomLeftRadius: 4 }} />
+                      </div>
+                    )}
+
+                    {/* Expand / leaf dot */}
                     <div className="w-5 shrink-0 flex items-center justify-center">
                       {hasChildren ? (
                         <button onClick={(e) => { e.stopPropagation(); toggleListTask(t.id) }}
@@ -973,23 +1004,31 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                             ? <ChevronDown className="w-3.5 h-3.5" />
                             : <ChevronRight className="w-3.5 h-3.5" />}
                         </button>
-                      ) : depth > 0 ? (
-                        <div className="w-3 border-b border-slate-200" style={{ marginLeft: 4 }} />
-                      ) : null}
+                      ) : (
+                        <div className="w-1.5 h-1.5 rounded-full shrink-0"
+                          style={{ background: isTarefa ? "#A78BFA" : (areaColor ?? color) }} />
+                      )}
                     </div>
 
                     {/* Name */}
                     <div className="flex-1 flex items-center gap-1.5 min-w-0 cursor-pointer px-1 py-1" onClick={() => openEdit(t)}>
                       {isLate && <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />}
-                      <span className={`text-xs font-semibold truncate ${isDone ? "line-through text-slate-400" : "text-[#0F172A]"}`}>
+                      <span className={`text-xs truncate ${
+                        isDone         ? "line-through text-slate-400"
+                        : isTarefa     ? "text-slate-500 font-medium"
+                        : "text-[#0F172A] font-semibold"
+                      }`}>
                         {t.title}
                       </span>
-                      {hasChildren && (
-                        <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full font-bold" style={{ background: "#E0F2FE", color: "#0369A1" }}>
-                          Grupo
-                        </span>
-                      )}
-                      {t._count.comments > 0 && <span className="text-[9px] text-slate-300 shrink-0">💬</span>}
+                      {/* Type badge — always visible */}
+                      <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full font-bold" style={
+                        isTarefa
+                          ? { background: "#EDE9FE", color: "#7C3AED" }
+                          : { background: "#DBEAFE", color: "#1D4ED8" }
+                      }>
+                        {isTarefa ? "Tarefa" : "Atividade"}
+                      </span>
+                      {t._count.comments   > 0 && <span className="text-[9px] text-slate-300 shrink-0">💬</span>}
                       {t._count.attachments > 0 && <span className="text-[9px] text-slate-300 shrink-0">📎</span>}
                     </div>
 
@@ -1034,9 +1073,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                     {/* Progress */}
                     <div style={{ width: 96 }} className="px-3 shrink-0">
                       <div className="flex flex-col gap-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[9px] font-bold" style={{ color }}>{t.progress}%</span>
-                        </div>
+                        <span className="text-[9px] font-bold" style={{ color }}>{t.progress}%</span>
                         <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
                           <div style={{ width: `${t.progress}%`, height: "100%", background: color, borderRadius: "inherit", transition: "width 0.3s" }} />
                         </div>
@@ -1044,14 +1081,23 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                     </div>
 
                     {/* Actions */}
-                    <div style={{ width: 88, opacity: isHov ? 1 : 0, transition: "opacity 0.15s" }} className="flex items-center gap-1 px-2 shrink-0">
-                      <button onClick={() => openEdit(t)} className="p-1.5 rounded-lg text-slate-400 hover:text-[#7B2FBE] hover:bg-violet-50 transition-all">
+                    <div style={{ width: 88 }} className="flex items-center gap-0.5 px-2 shrink-0">
+                      <button onClick={() => openEdit(t)}
+                        style={{ opacity: isHov ? 1 : 0, transition: "opacity 0.15s" }}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-[#7B2FBE] hover:bg-violet-50 transition-all">
                         <Pencil className="w-3 h-3" />
                       </button>
-                      <button onClick={() => openAdd(t.id)} title="Adicionar subtarefa" className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 transition-all">
-                        <Plus className="w-3 h-3" />
-                      </button>
-                      <button onClick={() => handleDelete(t.id)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-50 transition-all">
+                      {/* Add tarefa — always faintly visible on Atividade rows */}
+                      {!isTarefa && (
+                        <button onClick={() => openAdd(t.id)} title="Adicionar tarefa"
+                          style={{ opacity: isHov ? 1 : 0.25, transition: "opacity 0.15s" }}
+                          className="p-1.5 rounded-lg text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 transition-all">
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      )}
+                      <button onClick={() => handleDelete(t.id)}
+                        style={{ opacity: isHov ? 1 : 0, transition: "opacity 0.15s" }}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-50 transition-all">
                         <Trash2 className="w-3 h-3" />
                       </button>
                     </div>
