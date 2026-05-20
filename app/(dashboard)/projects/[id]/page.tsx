@@ -221,6 +221,16 @@ export default async function ProjectDetailPage({
                         <Rocket className="w-3.5 h-3.5" />
                         GO LIVE
                       </Link>
+                      {/* Kick-Off edit — secondary, always accessible */}
+                      <Link
+                        href={`/projects/${id}/kickoff`}
+                        className="inline-flex items-center gap-2 px-3 h-9 text-sm font-semibold rounded-xl border transition-all hover:bg-emerald-50 active:scale-[0.98]"
+                        style={{ borderColor: "#A7F3D0", color: "#059669", background: "transparent" }}
+                        title="Editar Kick-Off"
+                      >
+                        <Timer className="w-3.5 h-3.5" />
+                        Kick-Off
+                      </Link>
                     </>
                   )}
 
@@ -245,6 +255,16 @@ export default async function ProjectDetailPage({
                         <FileDown className="w-3.5 h-3.5" />
                         Encerramento
                       </a>
+                      {/* Kick-Off edit — secondary, always accessible */}
+                      <Link
+                        href={`/projects/${id}/kickoff`}
+                        className="inline-flex items-center gap-2 px-3 h-9 text-sm font-semibold rounded-xl border transition-all hover:bg-emerald-50 active:scale-[0.98]"
+                        style={{ borderColor: "#A7F3D0", color: "#059669", background: "transparent" }}
+                        title="Editar Kick-Off"
+                      >
+                        <Timer className="w-3.5 h-3.5" />
+                        Kick-Off
+                      </Link>
                       <StatusActions projectId={id} currentStatus={project.status} userRole={userRole} />
                     </>
                   )}
