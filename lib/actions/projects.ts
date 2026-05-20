@@ -63,6 +63,14 @@ export async function updateProjectDetails(id: string, data: {
   revalidatePath(`/projects/${id}`)
 }
 
+export async function deleteProject(id: string) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+
+  await db.project.delete({ where: { id } })
+  revalidatePath(`/projects`)
+}
+
 // ─── WBS Areas ─────────────────────────────────────────────────────────────
 
 export async function createWbsArea(projectId: string, name: string, color: string) {

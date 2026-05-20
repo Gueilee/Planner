@@ -10,8 +10,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
   ArrowLeft, Users, Calendar, AlertTriangle, CheckCircle2,
   Clock, BarChart3, Layers, TrendingUp, Play, Timer, CalendarDays, RefreshCw,
-  Rocket, FileDown, BookOpen,
+  Rocket, FileDown, BookOpen, Shield,
 } from "lucide-react"
+import { DeleteProjectButton } from "./delete-project-button"
 import Link from "next/link"
 import { format, differenceInDays } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -725,6 +726,26 @@ export default async function ProjectDetailPage({
               </div>
             </TabsContent>
           </Tabs>
+
+          {/* Danger zone */}
+          <div
+            className="rounded-2xl p-5 flex items-center justify-between gap-4"
+            style={{ border: "1px solid #FECACA", background: "#FFF5F5" }}
+          >
+            <div className="flex items-center gap-3">
+              <div
+                className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: "#FEE2E2", border: "1px solid #FECACA" }}
+              >
+                <Shield className="w-4 h-4 text-red-400" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-red-700">Zona de Perigo</p>
+                <p className="text-[11px] text-red-400 mt-0.5">A exclusão remove permanentemente todos os dados do projeto</p>
+              </div>
+            </div>
+            <DeleteProjectButton projectId={id} projectTitle={project.title} />
+          </div>
 
         </div>
       </div>
