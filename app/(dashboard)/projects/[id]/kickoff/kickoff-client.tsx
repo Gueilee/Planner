@@ -12,7 +12,7 @@ import {
   Pen, Check,
 } from "lucide-react"
 import { saveKickOff, registerKickOff } from "@/lib/actions/kickoff"
-import type { KickOffData, EAPArea, EAPTask, Milestone, KickOffAttachment } from "@/lib/types/kickoff"
+import type { KickOffData, EAPArea, EAPTask, Milestone, KickOffAttachment, ExternalAttendee } from "@/lib/types/kickoff"
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -538,6 +538,12 @@ export function KickOffClient({ project, existing, allUsers }: KickOffClientProp
   const [attendeeIds, setAttendeeIds] = useState<string[]>(
     existing?.attendeeIds ?? project.members.map((m) => m.user.id)
   )
+  const [externalAttendees, setExternalAttendees] = useState<ExternalAttendee[]>(
+    existing?.externalAttendees ?? []
+  )
+  const [addingExternal, setAddingExternal] = useState(false)
+  const [extName, setExtName]   = useState("")
+  const [extRole, setExtRole]   = useState("")
   const [notes, setNotes] = useState(existing?.notes ?? "")
   const [uploading, setUploading] = useState(false)
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle")
@@ -557,8 +563,21 @@ export function KickOffClient({ project, existing, allUsers }: KickOffClientProp
       milestones,
       attachments,
       attendeeIds,
+      externalAttendees,
       notes,
     }
+  }
+
+  function confirmExternal() {
+    if (!extName.trim()) return
+    setExternalAttendees((prev) => [...prev, { id: uid(), name: extName.trim(), role: extRole.trim() }])
+    setExtName("")
+    setExtRole("")
+    setAddingExternal(false)
+  }
+
+  function removeExternal(id: string) {
+    setExternalAttendees((prev) => prev.filter((e) => e.id !== id))
   }
 
   function handleSave() {
@@ -874,6 +893,7 @@ export function KickOffClient({ project, existing, allUsers }: KickOffClientProp
               <SectionHeader number={5} title="Participantes & Notas" icon={Users} description="Selecione quem participará do Kick-Off." />
               <div className="mt-4 space-y-4">
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {/* Internal users */}
                   {allUsers.map((user) => {
                     const selected = attendeeIds.includes(user.id)
                     const initials = user.name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()
@@ -901,6 +921,89 @@ export function KickOffClient({ project, existing, allUsers }: KickOffClientProp
                       </button>
                     )
                   })}
+
+                  {/* External attendees already added */}
+                  {externalAttendees.map((ext) => {
+                    const initials = ext.name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()
+                    return (
+                      <div
+                        key={ext.id}
+                        className="flex items-center gap-2.5 p-3 rounded-xl text-left bg-emerald-50 border-2 border-emerald-200 relative"
+                      >
+                        <div
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black text-white shrink-0"
+                          style={{ background: "linear-gradient(135deg, #059669, #0891B2)" }}
+                        >
+                          {initials}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold truncate text-emerald-800">{ext.name}</p>
+                          <p className="text-[10px] text-emerald-600 truncate">{ext.role || "Externo"}</p>
+                        </div>
+                        <span className="text-[8px] font-black uppercase tracking-widest text-emerald-500 shrink-0 hidden sm:block">Ext.</span>
+                        {!isRegistered && (
+                          <button
+                            onClick={() => removeExternal(ext.id)}
+                            className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-emerald-100 hover:bg-red-100 flex items-center justify-center transition-colors"
+                          >
+                            <X className="w-2.5 h-2.5 text-emerald-500 hover:text-red-500" />
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+
+                  {/* Add external participant card */}
+                  {!isRegistered && (
+                    addingExternal ? (
+                      <div className="flex flex-col gap-2 p-3 rounded-xl border-2 border-dashed border-emerald-300 bg-emerald-50 col-span-2 sm:col-span-1">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700">Novo participante</p>
+                        <input
+                          autoFocus
+                          value={extName}
+                          onChange={(e) => setExtName(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && confirmExternal()}
+                          placeholder="Nome completo"
+                          className="w-full px-2 py-1.5 text-xs rounded-lg border border-emerald-200 bg-white outline-none focus:border-emerald-400 placeholder-slate-300"
+                        />
+                        <input
+                          value={extRole}
+                          onChange={(e) => setExtRole(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && confirmExternal()}
+                          placeholder="Área / Empresa"
+                          className="w-full px-2 py-1.5 text-xs rounded-lg border border-emerald-200 bg-white outline-none focus:border-emerald-400 placeholder-slate-300"
+                        />
+                        <div className="flex gap-1.5">
+                          <button
+                            onClick={confirmExternal}
+                            disabled={!extName.trim()}
+                            className="flex-1 py-1.5 text-[11px] font-black rounded-lg text-white transition-all disabled:opacity-40"
+                            style={{ background: "linear-gradient(135deg, #059669, #0891B2)" }}
+                          >
+                            Adicionar
+                          </button>
+                          <button
+                            onClick={() => { setAddingExternal(false); setExtName(""); setExtRole("") }}
+                            className="px-3 py-1.5 text-[11px] font-semibold rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setAddingExternal(true)}
+                        className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border-2 border-dashed border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50 transition-all group min-h-[64px]"
+                      >
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center bg-slate-100 group-hover:bg-emerald-100 transition-colors">
+                          <Plus className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-600 transition-colors" />
+                        </div>
+                        <p className="text-[10px] font-bold text-slate-400 group-hover:text-emerald-600 transition-colors text-center leading-tight">
+                          Participante<br />externo
+                        </p>
+                      </button>
+                    )
+                  )}
                 </div>
 
                 <div>

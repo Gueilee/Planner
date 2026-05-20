@@ -8,7 +8,7 @@ import { ptBR } from "date-fns/locale"
 import {
   ArrowLeft, CheckCircle2, AlertTriangle, MessageSquare,
   ChevronDown, ChevronRight, Loader2, Check, BarChart3,
-  History, RefreshCw, X, Paperclip, CalendarDays, Filter,
+  History, RefreshCw, X, Paperclip, CalendarDays, Filter, Plus,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -568,6 +568,10 @@ export function CheckpointClient({ project, areas, tasks, members, history }: Ch
   const [blockers, setBlockers]     = useState("")
   const [nextSteps, setNextSteps]   = useState("")
   const [attendeeIds, setAttendeeIds] = useState<string[]>([])
+  const [externalAttendees, setExternalAttendees] = useState<{ id: string; name: string; role: string }[]>([])
+  const [addingExternal, setAddingExternal] = useState(false)
+  const [extName, setExtName] = useState("")
+  const [extRole, setExtRole] = useState("")
   const [expandedAreas, setExpandedAreas] = useState<Set<string>>(new Set(areas.map((a) => a.id)))
   const [saving, setSaving]       = useState(false)
   const [saved, setSaved]         = useState(false)
@@ -643,6 +647,12 @@ export function CheckpointClient({ project, areas, tasks, members, history }: Ch
     )
   }
 
+  function confirmExternal() {
+    if (!extName.trim()) return
+    setExternalAttendees((prev) => [...prev, { id: Math.random().toString(36).slice(2), name: extName.trim(), role: extRole.trim() }])
+    setExtName(""); setExtRole(""); setAddingExternal(false)
+  }
+
   async function handleSave() {
     if (saving) return
     setSaving(true)
@@ -655,7 +665,7 @@ export function CheckpointClient({ project, areas, tasks, members, history }: Ch
         location,
         highlights,
         blockers,
-        nextSteps,
+        nextSteps: nextSteps + (externalAttendees.length ? "\n\nParticipantes externos: " + externalAttendees.map((e) => `${e.name}${e.role ? ` (${e.role})` : ""}`).join(", ") : ""),
         attendeeIds,
         taskUpdates: changedTasks.map((t) => ({
           taskId:      t.id,
@@ -945,46 +955,66 @@ export function CheckpointClient({ project, areas, tasks, members, history }: Ch
             </div>
 
             {/* Attendees */}
-            {members.length > 0 && (
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">
-                  Participantes ({attendeeIds.length}/{members.length})
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {members.map((m) => {
-                    const selected = attendeeIds.includes(m.id)
-                    return (
-                      <button
-                        key={m.id}
-                        onClick={() => toggleAttendee(m.id)}
-                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all border ${
-                          selected
-                            ? "text-white border-transparent"
-                            : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
-                        }`}
-                        style={
-                          selected
-                            ? {
-                                background: "linear-gradient(135deg, #2463FF, #8B2FFF)",
-                                boxShadow: "0 2px 8px rgba(36,99,255,0.25)",
-                              }
-                            : {}
-                        }
-                      >
-                        <span
-                          className={`w-5 h-5 rounded-lg flex items-center justify-center text-[9px] font-black shrink-0 ${
-                            selected ? "bg-white/20 text-white" : "bg-slate-100 text-[#0F172A]"
-                          }`}
-                        >
-                          {initials(m.name)}
-                        </span>
-                        {m.name.split(" ")[0]}
-                      </button>
-                    )
-                  })}
-                </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">
+                Participantes ({attendeeIds.length + externalAttendees.length}{members.length > 0 ? `/${members.length}` : ""})
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {members.map((m) => {
+                  const selected = attendeeIds.includes(m.id)
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => toggleAttendee(m.id)}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all border ${
+                        selected ? "text-white border-transparent" : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+                      }`}
+                      style={selected ? { background: "linear-gradient(135deg, #2463FF, #8B2FFF)", boxShadow: "0 2px 8px rgba(36,99,255,0.25)" } : {}}
+                    >
+                      <span className={`w-5 h-5 rounded-lg flex items-center justify-center text-[9px] font-black shrink-0 ${selected ? "bg-white/20 text-white" : "bg-slate-100 text-[#0F172A]"}`}>
+                        {initials(m.name)}
+                      </span>
+                      {m.name.split(" ")[0]}
+                    </button>
+                  )
+                })}
+
+                {/* External attendees */}
+                {externalAttendees.map((ext) => (
+                  <span
+                    key={ext.id}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-white border-transparent"
+                    style={{ background: "linear-gradient(135deg, #059669, #0891B2)", boxShadow: "0 2px 8px rgba(5,150,105,0.25)" }}
+                  >
+                    <span className="w-5 h-5 rounded-lg flex items-center justify-center text-[9px] font-black bg-white/20 shrink-0">
+                      {ext.name.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase()}
+                    </span>
+                    {ext.name.split(" ")[0]}
+                    <span className="text-[8px] bg-white/20 px-1 rounded">Ext.</span>
+                    <button onClick={() => setExternalAttendees((p) => p.filter((e) => e.id !== ext.id))} className="ml-0.5 hover:bg-white/20 rounded p-0.5">
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  </span>
+                ))}
+
+                {/* Add external button / inline form */}
+                {addingExternal ? (
+                  <div className="flex items-center gap-1.5 p-1.5 rounded-xl border-2 border-dashed border-emerald-300 bg-emerald-50">
+                    <input autoFocus value={extName} onChange={(e) => setExtName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && confirmExternal()} placeholder="Nome" className="w-24 px-2 py-0.5 text-xs rounded-lg border border-emerald-200 bg-white outline-none focus:border-emerald-400 placeholder-slate-300" />
+                    <input value={extRole} onChange={(e) => setExtRole(e.target.value)} onKeyDown={(e) => e.key === "Enter" && confirmExternal()} placeholder="Área / Empresa" className="w-28 px-2 py-0.5 text-xs rounded-lg border border-emerald-200 bg-white outline-none focus:border-emerald-400 placeholder-slate-300" />
+                    <button onClick={confirmExternal} disabled={!extName.trim()} className="px-2 py-0.5 text-[11px] font-black rounded-lg text-white disabled:opacity-40" style={{ background: "linear-gradient(135deg,#059669,#0891B2)" }}>OK</button>
+                    <button onClick={() => { setAddingExternal(false); setExtName(""); setExtRole("") }} className="px-1.5 py-0.5 text-[11px] rounded-lg bg-slate-100 text-slate-400 hover:bg-slate-200"><X className="w-3 h-3" /></button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setAddingExternal(true)}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold border-2 border-dashed border-slate-200 text-slate-400 hover:border-emerald-300 hover:text-emerald-600 hover:bg-emerald-50 transition-all"
+                  >
+                    <Plus className="w-3 h-3" /> Externo
+                  </button>
+                )}
               </div>
-            )}
+            </div>
 
             {/* Stats summary */}
             <div className="pt-3 border-t border-slate-100">

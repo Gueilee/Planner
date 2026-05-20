@@ -6,7 +6,7 @@ import { addDays, format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import {
   ArrowLeft, Loader2, CheckCircle2, Rocket, Calendar,
-  Users, ChevronRight, Clock, Zap, AlertCircle,
+  Users, ChevronRight, Clock, Zap, AlertCircle, Plus, X,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -65,6 +65,10 @@ export function GoLiveClient({ project, members }: GoLiveClientProps) {
   const [rampUpEndDate, setRampUpEndDate]     = useState("")
   const [postGoLiveDays, setPostGoLiveDays]   = useState<30 | 60 | 90>(30)
   const [attendeeIds, setAttendeeIds]         = useState<string[]>([])
+  const [externalAttendees, setExternalAttendees] = useState<{ id: string; name: string; role: string }[]>([])
+  const [addingExternal, setAddingExternal]   = useState(false)
+  const [extName, setExtName]                 = useState("")
+  const [extRole, setExtRole]                 = useState("")
   const [notes, setNotes]                     = useState("")
   const [saving, setSaving]                   = useState(false)
   const [saved, setSaved]                     = useState(false)
@@ -77,6 +81,12 @@ export function GoLiveClient({ project, members }: GoLiveClientProps) {
 
   function toggleAttendee(id: string) {
     setAttendeeIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])
+  }
+
+  function confirmExternal() {
+    if (!extName.trim()) return
+    setExternalAttendees((prev) => [...prev, { id: Math.random().toString(36).slice(2), name: extName.trim(), role: extRole.trim() }])
+    setExtName(""); setExtRole(""); setAddingExternal(false)
   }
 
   async function handleSubmit() {
@@ -92,7 +102,7 @@ export function GoLiveClient({ project, members }: GoLiveClientProps) {
         pilotEndDate: deploymentType === "PHASED" ? pilotEndDate || undefined : undefined,
         rampUpEndDate: deploymentType === "PHASED" ? rampUpEndDate || undefined : undefined,
         postGoLiveDays,
-        notes,
+        notes: notes + (externalAttendees.length ? "\n\nParticipantes externos: " + externalAttendees.map((e) => `${e.name}${e.role ? ` (${e.role})` : ""}`).join(", ") : ""),
         attendeeIds,
       })
       setSaved(true)
@@ -400,39 +410,60 @@ export function GoLiveClient({ project, members }: GoLiveClientProps) {
         </FormCard>
 
         {/* ── Section 4: Participants ── */}
-        {members.length > 0 && (
-          <FormCard icon={<Users className="w-4 h-4" />} title={`Participantes (${attendeeIds.length}/${members.length})`}>
-            <div className="flex flex-wrap gap-2">
-              {members.map((m) => {
-                const selected = attendeeIds.includes(m.id)
-                return (
-                  <button
-                    key={m.id}
-                    onClick={() => toggleAttendee(m.id)}
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all"
-                    style={{
-                      background: selected ? "rgba(16,185,129,0.15)" : "rgba(255,255,255,0.05)",
-                      border: selected ? "1px solid rgba(16,185,129,0.40)" : "1px solid rgba(255,255,255,0.10)",
-                      color: selected ? "#34D399" : "rgba(255,255,255,0.55)",
-                    }}
-                  >
-                    <span
-                      className="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black shrink-0"
-                      style={{
-                        background: selected ? "rgba(16,185,129,0.25)" : "rgba(255,255,255,0.08)",
-                        color: selected ? "#34D399" : "rgba(255,255,255,0.50)",
-                      }}
-                    >
-                      {initials(m.name)}
-                    </span>
-                    {m.name.split(" ")[0]}
-                    {selected && <CheckCircle2 className="w-3 h-3" />}
-                  </button>
-                )
-              })}
-            </div>
-          </FormCard>
-        )}
+        <FormCard icon={<Users className="w-4 h-4" />} title={`Participantes (${attendeeIds.length + externalAttendees.length}${members.length > 0 ? `/${members.length}` : ""})`}>
+          <div className="flex flex-wrap gap-2">
+            {members.map((m) => {
+              const selected = attendeeIds.includes(m.id)
+              return (
+                <button
+                  key={m.id}
+                  onClick={() => toggleAttendee(m.id)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all"
+                  style={{
+                    background: selected ? "rgba(16,185,129,0.15)" : "rgba(255,255,255,0.05)",
+                    border: selected ? "1px solid rgba(16,185,129,0.40)" : "1px solid rgba(255,255,255,0.10)",
+                    color: selected ? "#34D399" : "rgba(255,255,255,0.55)",
+                  }}
+                >
+                  <span className="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black shrink-0" style={{ background: selected ? "rgba(16,185,129,0.25)" : "rgba(255,255,255,0.08)", color: selected ? "#34D399" : "rgba(255,255,255,0.50)" }}>
+                    {initials(m.name)}
+                  </span>
+                  {m.name.split(" ")[0]}
+                  {selected && <CheckCircle2 className="w-3 h-3" />}
+                </button>
+              )
+            })}
+
+            {/* External attendees */}
+            {externalAttendees.map((ext) => (
+              <span key={ext.id} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold" style={{ background: "rgba(8,145,178,0.20)", border: "1px solid rgba(8,145,178,0.40)", color: "#67E8F9" }}>
+                <span className="w-5 h-5 rounded-lg flex items-center justify-center text-[9px] font-black shrink-0" style={{ background: "rgba(8,145,178,0.30)" }}>
+                  {ext.name.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase()}
+                </span>
+                {ext.name.split(" ")[0]}
+                <span className="text-[8px] opacity-70 ml-0.5">Ext.</span>
+                <button onClick={() => setExternalAttendees((p) => p.filter((e) => e.id !== ext.id))} className="ml-0.5 hover:opacity-70 transition-opacity"><X className="w-2.5 h-2.5" /></button>
+              </span>
+            ))}
+
+            {/* Add external inline form / button */}
+            {addingExternal ? (
+              <div className="flex items-center gap-1.5 p-1.5 rounded-xl" style={{ border: "1.5px dashed rgba(8,145,178,0.40)", background: "rgba(8,145,178,0.08)" }}>
+                <input autoFocus value={extName} onChange={(e) => setExtName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && confirmExternal()} placeholder="Nome" className="w-24 px-2 py-0.5 text-xs rounded-lg outline-none placeholder-slate-400" style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.85)" }} />
+                <input value={extRole} onChange={(e) => setExtRole(e.target.value)} onKeyDown={(e) => e.key === "Enter" && confirmExternal()} placeholder="Área/Empresa" className="w-28 px-2 py-0.5 text-xs rounded-lg outline-none placeholder-slate-400" style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.85)" }} />
+                <button onClick={confirmExternal} disabled={!extName.trim()} className="px-2 py-0.5 text-[11px] font-black rounded-lg disabled:opacity-40" style={{ background: "rgba(8,145,178,0.35)", color: "#67E8F9" }}>OK</button>
+                <button onClick={() => { setAddingExternal(false); setExtName(""); setExtRole("") }} className="px-1.5 py-0.5 text-[11px] rounded-lg" style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.40)" }}><X className="w-3 h-3" /></button>
+              </div>
+            ) : (
+              <button onClick={() => setAddingExternal(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all" style={{ background: "rgba(255,255,255,0.03)", border: "1.5px dashed rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.35)" }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(8,145,178,0.50)"; (e.currentTarget as HTMLElement).style.color = "#67E8F9" }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.15)"; (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.35)" }}
+              >
+                <Plus className="w-3 h-3" /> Externo
+              </button>
+            )}
+          </div>
+        </FormCard>
 
         {/* ── Section 5: Notes ── */}
         <FormCard icon={<Zap className="w-4 h-4" />} title="Observações">

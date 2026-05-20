@@ -33,6 +33,7 @@ export async function saveKickOff(data: KickOffData) {
     milestones: data.milestones,
     attachments: data.attachments,
     attendeeIds: data.attendeeIds,
+    externalAttendees: data.externalAttendees ?? [],
     notes: data.notes,
     registeredAt: data.registeredAt,
   })
@@ -74,6 +75,7 @@ export async function registerKickOff(data: KickOffData) {
     milestones: data.milestones,
     attachments: data.attachments,
     attendeeIds: data.attendeeIds,
+    externalAttendees: data.externalAttendees ?? [],
     notes: data.notes,
     registeredAt,
   })

@@ -26,6 +26,12 @@ export type KickOffAttachment = {
   size?: number
 }
 
+export type ExternalAttendee = {
+  id:   string
+  name: string
+  role: string
+}
+
 export type KickOffData = {
   id?: string
   projectId: string
@@ -36,6 +42,7 @@ export type KickOffData = {
   milestones: Milestone[]
   attachments: KickOffAttachment[]
   attendeeIds: string[]
+  externalAttendees: ExternalAttendee[]
   notes: string
   registeredAt?: string
 }

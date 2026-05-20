@@ -135,6 +135,10 @@ export function EncerramentoMeetingClient({ project, members, wbsAreas, risks, m
   const [nextActions, setNextActions] = useState("")
   const [closingNotes, setClosingNotes] = useState("")
   const [attendeeIds, setAttendeeIds] = useState<string[]>([])
+  const [externalAttendees, setExternalAttendees] = useState<{ id: string; name: string; role: string }[]>([])
+  const [addingExternal, setAddingExternal] = useState(false)
+  const [extName, setExtName] = useState("")
+  const [extRole, setExtRole] = useState("")
 
   // lessons
   const [lessons,      setLessons]      = useState<LessonRef[]>(initialLessons)
@@ -155,6 +159,12 @@ export function EncerramentoMeetingClient({ project, members, wbsAreas, risks, m
   const progress = project.tasksTotal > 0
     ? Math.round((project.tasksDone / project.tasksTotal) * 100)
     : 0
+
+  function confirmExternal() {
+    if (!extName.trim()) return
+    setExternalAttendees((prev) => [...prev, { id: Math.random().toString(36).slice(2), name: extName.trim(), role: extRole.trim() }])
+    setExtName(""); setExtRole(""); setAddingExternal(false)
+  }
 
   function toggleAttendee(id: string) {
     setAttendeeIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])
@@ -210,7 +220,7 @@ export function EncerramentoMeetingClient({ project, members, wbsAreas, risks, m
           location:     location || undefined,
           content:      content || undefined,
           decisions:    decisions || undefined,
-          nextActions:  nextActions || undefined,
+          nextActions:  (nextActions || "") + (externalAttendees.length ? (nextActions ? "\n\n" : "") + "Participantes externos: " + externalAttendees.map((e) => `${e.name}${e.role ? ` (${e.role})` : ""}`).join(", ") : "") || undefined,
           attendeeIds,
           closingNotes: closingNotes || undefined,
         })
@@ -373,39 +383,65 @@ export function EncerramentoMeetingClient({ project, members, wbsAreas, risks, m
         </Section>
 
         {/* ── Attendees ── */}
-        <Section title="Participantes da Reunião" icon={Users} defaultOpen={members.length > 0}>
-          {members.length === 0 ? (
-            <p className="text-sm text-[#9c99b0] mt-1">Nenhum membro cadastrado no projeto.</p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
-              {members.map((m) => {
-                const checked = attendeeIds.includes(m.id)
-                return (
-                  <button
-                    key={m.id}
-                    onClick={() => toggleAttendee(m.id)}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all ${
-                      checked
-                        ? "border-violet-300 bg-violet-50"
-                        : "border-black/[0.07] bg-[#F7F6F2] hover:bg-white"
-                    }`}
-                  >
-                    <div
-                      className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
-                      style={{ background: checked ? "linear-gradient(135deg, #7B2FBE, #9333EA)" : "#c4c1d4" }}
-                    >
-                      {m.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className={`text-sm font-medium truncate ${checked ? "text-violet-700" : "text-[#1a1625]"}`}>{m.name}</p>
-                      {m.department && <p className="text-[11px] text-[#9c99b0] truncate">{m.department}</p>}
-                    </div>
-                    {checked && <CheckCircle2 className="w-4 h-4 text-violet-600 shrink-0" />}
-                  </button>
-                )
-              })}
-            </div>
-          )}
+        <Section title="Participantes da Reunião" icon={Users} defaultOpen={true}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+            {members.map((m) => {
+              const checked = attendeeIds.includes(m.id)
+              return (
+                <button
+                  key={m.id}
+                  onClick={() => toggleAttendee(m.id)}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all ${checked ? "border-violet-300 bg-violet-50" : "border-black/[0.07] bg-[#F7F6F2] hover:bg-white"}`}
+                >
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0" style={{ background: checked ? "linear-gradient(135deg, #7B2FBE, #9333EA)" : "#c4c1d4" }}>
+                    {m.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-sm font-medium truncate ${checked ? "text-violet-700" : "text-[#1a1625]"}`}>{m.name}</p>
+                    {m.department && <p className="text-[11px] text-[#9c99b0] truncate">{m.department}</p>}
+                  </div>
+                  {checked && <CheckCircle2 className="w-4 h-4 text-violet-600 shrink-0" />}
+                </button>
+              )
+            })}
+
+            {/* External attendees */}
+            {externalAttendees.map((ext) => (
+              <div key={ext.id} className="flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-emerald-200 bg-emerald-50 relative">
+                <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0" style={{ background: "linear-gradient(135deg,#059669,#0891B2)" }}>
+                  {ext.name.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate text-emerald-800">{ext.name}</p>
+                  <p className="text-[11px] text-emerald-500 truncate">{ext.role || "Externo"}</p>
+                </div>
+                <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest hidden sm:block">Ext.</span>
+                <button onClick={() => setExternalAttendees((p) => p.filter((e) => e.id !== ext.id))} className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-emerald-100 hover:bg-red-100 flex items-center justify-center transition-colors">
+                  <X className="w-2.5 h-2.5 text-emerald-400 hover:text-red-400" />
+                </button>
+              </div>
+            ))}
+
+            {/* Add external card */}
+            {addingExternal ? (
+              <div className="flex flex-col gap-2 p-3 rounded-xl border-2 border-dashed border-emerald-300 bg-emerald-50">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700">Novo participante</p>
+                <input autoFocus value={extName} onChange={(e) => setExtName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && confirmExternal()} placeholder="Nome completo" className="w-full px-2 py-1.5 text-xs rounded-lg border border-emerald-200 bg-white outline-none focus:border-emerald-400 placeholder-slate-300" />
+                <input value={extRole} onChange={(e) => setExtRole(e.target.value)} onKeyDown={(e) => e.key === "Enter" && confirmExternal()} placeholder="Área / Empresa" className="w-full px-2 py-1.5 text-xs rounded-lg border border-emerald-200 bg-white outline-none focus:border-emerald-400 placeholder-slate-300" />
+                <div className="flex gap-1.5">
+                  <button onClick={confirmExternal} disabled={!extName.trim()} className="flex-1 py-1.5 text-[11px] font-black rounded-lg text-white disabled:opacity-40" style={{ background: "linear-gradient(135deg,#059669,#0891B2)" }}>Adicionar</button>
+                  <button onClick={() => { setAddingExternal(false); setExtName(""); setExtRole("") }} className="px-3 py-1.5 text-[11px] font-semibold rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200">Cancelar</button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => setAddingExternal(true)} className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border-2 border-dashed border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50 transition-all group min-h-[64px]">
+                <div className="w-7 h-7 rounded-full flex items-center justify-center bg-slate-100 group-hover:bg-emerald-100 transition-colors">
+                  <Plus className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-600 transition-colors" />
+                </div>
+                <p className="text-[10px] font-bold text-slate-400 group-hover:text-emerald-600 transition-colors text-center leading-tight">Participante<br />externo</p>
+              </button>
+            )}
+          </div>
         </Section>
 
         {/* ── Deliverables ── */}
