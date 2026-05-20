@@ -38,6 +38,7 @@ export type TaskItem = {
 const TASK_COLS = [
   { id: "PLANNING",    label: "A Fazer",       color: "#64748B", glow: "rgba(100,116,139,0.25)", gradient: "linear-gradient(135deg,#64748B,#94A3B8)", icon: Clock },
   { id: "IN_PROGRESS", label: "Em Andamento",  color: "#2463FF", glow: "rgba(36,99,255,0.25)",   gradient: "linear-gradient(135deg,#2463FF,#60A5FA)", icon: Layers },
+  { id: "DELAYED",     label: "Atrasada",      color: "#EF4444", glow: "rgba(239,68,68,0.25)",   gradient: "linear-gradient(135deg,#EF4444,#F87171)", icon: AlertTriangle },
   { id: "VALIDATION",  label: "Em Validação",  color: "#8B5CF6", glow: "rgba(139,92,246,0.25)",  gradient: "linear-gradient(135deg,#8B5CF6,#C4B5FD)", icon: ClipboardCheck },
   { id: "COMPLETED",   label: "Concluída",     color: "#059669", glow: "rgba(5,150,105,0.25)",   gradient: "linear-gradient(135deg,#059669,#34D399)", icon: CheckCircle2 },
   { id: "ON_HOLD",     label: "Pausada",       color: "#F59E0B", glow: "rgba(245,158,11,0.25)",  gradient: "linear-gradient(135deg,#D97706,#F59E0B)", icon: PauseCircle },
@@ -45,6 +46,12 @@ const TASK_COLS = [
 
 type ColId = typeof TASK_COLS[number]["id"]
 const COL_BY_ID = Object.fromEntries(TASK_COLS.map((c) => [c.id, c])) as Record<string, typeof TASK_COLS[number]>
+
+// Statuses not in TASK_COLS → map to nearest column
+const STATUS_REMAP: Record<string, string> = { INITIATIVE: "PLANNING" }
+function resolveColId(status: string): string {
+  return STATUS_REMAP[status] ?? status
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -63,7 +70,7 @@ function calcProgress(tasks: TaskItem[]) {
 // ─── Task Card ────────────────────────────────────────────────────────────────
 
 function TaskCard({ task, isDragOverlay = false }: { task: TaskItem; isDragOverlay?: boolean }) {
-  const col = COL_BY_ID[task.status] ?? TASK_COLS[0]
+  const col = COL_BY_ID[resolveColId(task.status)] ?? TASK_COLS[0]
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id:       task.id,
     data:     { status: task.status },
@@ -300,7 +307,7 @@ function TaskListView({ tasks }: { tasks: TaskItem[] }) {
             style={{ border: "1px solid rgba(15,23,42,0.07)", boxShadow: "0 1px 4px rgba(15,23,42,0.04)" }}
           >
             {items.map((t, i) => {
-              const col       = COL_BY_ID[t.status] ?? TASK_COLS[0]
+              const col       = COL_BY_ID[resolveColId(t.status)] ?? TASK_COLS[0]
               const isDelayed = t.endDate && new Date(t.endDate) < new Date() && t.status !== "COMPLETED"
               return (
                 <div
@@ -555,7 +562,7 @@ export function ProjectTasksKanban({
             style={{ borderTop: "1px solid rgba(15,23,42,0.05)", scrollbarWidth: "none" }}
           >
             {TASK_COLS.map((col) => {
-              const count = tasks.filter((t) => t.status === col.id).length
+              const count = tasks.filter((t) => resolveColId(t.status) === col.id).length
               return (
                 <div
                   key={col.id}
@@ -597,7 +604,7 @@ export function ProjectTasksKanban({
                   <TaskColumn
                     key={col.id}
                     col={col}
-                    tasks={tasks.filter((t) => t.status === col.id)}
+                    tasks={tasks.filter((t) => resolveColId(t.status) === col.id)}
                     isOver={overId === col.id}
                   />
                 ))}
