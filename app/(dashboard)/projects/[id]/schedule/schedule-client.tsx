@@ -956,6 +956,15 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
     setDragType(null)
   }
 
+  const listHeaderRef = useRef<HTMLDivElement>(null)
+  const listBodyRef   = useRef<HTMLDivElement>(null)
+
+  const onListBodyScroll = useCallback(() => {
+    if (listHeaderRef.current && listBodyRef.current) {
+      listHeaderRef.current.scrollLeft = listBodyRef.current.scrollLeft
+    }
+  }, [])
+
   const leftBodyRef = useRef<HTMLDivElement>(null)
   const rightRef    = useRef<HTMLDivElement>(null)
   const syncing     = useRef(false)
@@ -1322,30 +1331,31 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
       {/* ── LIST VIEW ────────────────────────────────────────────────────── */}
       {viewMode === "list" && (
         <div className="flex flex-col flex-1 min-h-0 bg-white">
-          {/* Single scrollable container — header and rows scroll together */}
-          <div className="flex-1 min-h-0 overflow-auto">
 
-          {/* Table header — sticky so it stays fixed during vertical scroll */}
-          <div className="flex items-center shrink-0 border-b border-slate-100 bg-[#0F172A] sticky top-0 z-10" style={{ height: 44, minWidth: "max-content" }}>
-            <div style={{ width: 24, flexShrink: 0 }} />
-            <div style={{ width: 72, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest pl-4">EAP</div>
-            <div style={{ width: 60, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Ações</div>
-            <div style={{ minWidth: 240, flex: 1 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest px-2">Nome da Atividade</div>
-            <div style={{ width: 130, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Status</div>
-            <div style={{ width: 120, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest px-3">Responsável</div>
-            <div style={{ width: 88, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Início Plan.</div>
-            <div style={{ width: 88, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Fim Plan.</div>
-            <div style={{ width: 88, flexShrink: 0 }} className="text-[10px] font-black text-emerald-400/60 uppercase tracking-widest text-center">Início Real</div>
-            <div style={{ width: 88, flexShrink: 0 }} className="text-[10px] font-black text-emerald-400/60 uppercase tracking-widest text-center">Fim Real</div>
-            <div style={{ width: 64, flexShrink: 0 }} className="text-[10px] font-black text-violet-400/70 uppercase tracking-widest text-center">Est.h</div>
-            <div style={{ width: 64, flexShrink: 0 }} className="text-[10px] font-black text-violet-400/70 uppercase tracking-widest text-center">Real h</div>
-            <div style={{ width: 68, flexShrink: 0 }} className="text-[10px] font-black text-amber-400/70 uppercase tracking-widest text-center">% Est.</div>
-            <div style={{ width: 68, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">% Real</div>
-            <div style={{ width: 100, flexShrink: 0 }} className="text-[10px] font-black text-indigo-400/70 uppercase tracking-widest text-center">Predecessoras</div>
+          {/* Header — overflow hidden, synced via JS to body scrollLeft */}
+          <div ref={listHeaderRef} style={{ overflowX: "hidden", overflowY: "visible", flexShrink: 0 }}>
+            <div className="flex items-center border-b border-slate-100 bg-[#0F172A]" style={{ height: 44, minWidth: "max-content" }}>
+              <div style={{ width: 24, flexShrink: 0 }} />
+              <div style={{ width: 72, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest pl-4">EAP</div>
+              <div style={{ width: 60, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Ações</div>
+              <div style={{ width: 240, flexShrink: 0, flex: 1, minWidth: 240 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest px-2">Nome da Atividade</div>
+              <div style={{ width: 130, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Status</div>
+              <div style={{ width: 120, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest px-3">Responsável</div>
+              <div style={{ width: 88, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Início Plan.</div>
+              <div style={{ width: 88, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Fim Plan.</div>
+              <div style={{ width: 88, flexShrink: 0 }} className="text-[10px] font-black text-emerald-400/60 uppercase tracking-widest text-center">Início Real</div>
+              <div style={{ width: 88, flexShrink: 0 }} className="text-[10px] font-black text-emerald-400/60 uppercase tracking-widest text-center">Fim Real</div>
+              <div style={{ width: 64, flexShrink: 0 }} className="text-[10px] font-black text-violet-400/70 uppercase tracking-widest text-center">Est.h</div>
+              <div style={{ width: 64, flexShrink: 0 }} className="text-[10px] font-black text-violet-400/70 uppercase tracking-widest text-center">Real h</div>
+              <div style={{ width: 68, flexShrink: 0 }} className="text-[10px] font-black text-amber-400/70 uppercase tracking-widest text-center">% Est.</div>
+              <div style={{ width: 68, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">% Real</div>
+              <div style={{ width: 100, flexShrink: 0 }} className="text-[10px] font-black text-indigo-400/70 uppercase tracking-widest text-center">Predecessoras</div>
+            </div>
           </div>
 
-          {/* Rows */}
-          <div>
+          {/* Scrollable body — drives header scrollLeft via onListBodyScroll */}
+          <div ref={listBodyRef} className="flex-1 min-h-0 overflow-auto" onScroll={onListBodyScroll}>
+          <div style={{ minWidth: "max-content" }}>
             {listRows.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 gap-3 text-slate-300">
                 <Layers className="w-10 h-10" />
@@ -1878,8 +1888,8 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                 <Plus className="w-3.5 h-3.5" /> Nova Atividade
               </button>
             </div>
-          </div>
-          </div>{/* end single scroll container */}
+          </div>{/* end minWidth wrapper */}
+          </div>{/* end scrollable body */}
         </div>
       )}
 
