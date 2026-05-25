@@ -85,10 +85,99 @@ export async function getAllProjectsForKanban() {
         include: { user: { select: { id: true, name: true } } },
       },
       _count: { select: { members: true } },
-      tasks:  { select: { status: true, progress: true } },
+      tasks:  { where: { subtasks: { none: {} } }, select: { status: true, progress: true } },
       risks:  { select: { status: true } },
     },
   })
+}
+
+export async function getTaskDetail(taskId: string) {
+  const task = await db.scheduleTask.findUnique({
+    where: { id: taskId },
+    select: {
+      id:          true,
+      actualStart: true,
+      actualEnd:   true,
+      progress:    true,
+      status:      true,
+      comments: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          id:        true,
+          content:   true,
+          createdAt: true,
+          user: { select: { id: true, name: true } },
+        },
+      },
+      attachments: {
+        orderBy: { uploadedAt: "desc" },
+        select: { id: true, fileName: true, fileUrl: true, fileType: true, fileSize: true },
+      },
+    },
+  })
+  if (!task) return null
+  return {
+    ...task,
+    status:      task.status as string,
+    actualStart: task.actualStart?.toISOString() ?? null,
+    actualEnd:   task.actualEnd?.toISOString()   ?? null,
+    comments:    task.comments.map((c) => ({ ...c, createdAt: c.createdAt.toISOString() })),
+  }
+}
+
+export async function updateTaskKanban(
+  taskId:    string,
+  projectId: string,
+  data: {
+    progress?:    number
+    actualStart?: string | null
+    actualEnd?:   string | null
+    status?:      string
+  },
+) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+
+  await db.scheduleTask.update({
+    where: { id: taskId },
+    data: {
+      ...(data.progress    !== undefined && { progress:    data.progress }),
+      ...(data.actualStart !== undefined && { actualStart: data.actualStart ? new Date(data.actualStart) : null }),
+      ...(data.actualEnd   !== undefined && { actualEnd:   data.actualEnd   ? new Date(data.actualEnd)   : null }),
+      ...(data.status !== undefined && {
+        status: data.status as never,
+        ...(data.status === "COMPLETED" && { completedAt: new Date(), progress: 100 }),
+        ...(data.status === "IN_PROGRESS" && { completedAt: null }),
+      }),
+    },
+  })
+
+  revalidatePath(`/projects/${projectId}/schedule`)
+  revalidatePath("/kanban")
+}
+
+export async function addTaskComment(taskId: string, projectId: string, content: string) {
+  const session = await auth()
+  if (!session?.user?.email) throw new Error("Não autorizado")
+
+  const user = await db.user.findUnique({
+    where:  { email: session.user.email },
+    select: { id: true },
+  })
+  if (!user) throw new Error("Usuário não encontrado")
+
+  const comment = await db.comment.create({
+    data: { taskId, userId: user.id, content },
+    select: {
+      id:        true,
+      content:   true,
+      createdAt: true,
+      user: { select: { id: true, name: true } },
+    },
+  })
+
+  revalidatePath(`/projects/${projectId}/schedule`)
+  return { ...comment, createdAt: comment.createdAt.toISOString() }
 }
 
 export async function updateProjectStatusKanban(

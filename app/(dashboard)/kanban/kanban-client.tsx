@@ -224,6 +224,15 @@ function ProjectCard({
   const isDelayed = project.daysLeft !== null && project.daysLeft < 0
   const isUrgent  = !isDelayed && project.daysLeft !== null && project.daysLeft <= 14
 
+  const cardBg     = isDelayed ? "#fff8f8" : isUrgent ? "#fffcf0" : "#ffffff"
+  const cardBorder = isDragOverlay
+    ? `1px solid ${col.color}40`
+    : isDelayed
+      ? "1px solid rgba(239,68,68,0.22)"
+      : isUrgent
+        ? "1px solid rgba(245,158,11,0.22)"
+        : "1px solid rgba(15,23,42,0.07)"
+
   return (
     <div
       ref={isDragOverlay ? undefined : setNodeRef}
@@ -241,8 +250,8 @@ function ProjectCard({
       <div
         className="group/card select-none rounded-2xl overflow-hidden"
         style={{
-          background: "#ffffff",
-          border:     `1px solid ${isDragOverlay ? col.color + "40" : "rgba(15,23,42,0.07)"}`,
+          background: cardBg,
+          border:     cardBorder,
           boxShadow:  isDragOverlay
             ? `0 24px 60px rgba(0,0,0,0.20), 0 0 0 2px ${col.color}35`
             : "0 1px 3px rgba(15,23,42,0.05), 0 4px 12px rgba(15,23,42,0.04)",

@@ -14,9 +14,15 @@ import {
   X, LayoutGrid, List, Loader2, ExternalLink,
   Clock, Layers, CheckCircle2, PauseCircle, ClipboardCheck,
   ChevronRight, TrendingUp, AlertTriangle, Users,
+  Play, Pause, Send, Paperclip,
 } from "lucide-react"
 import Link from "next/link"
-import { getProjectTasksForKanban, updateTaskStatusKanban } from "@/lib/actions/kanban"
+import { WorkingDayPicker } from "@/components/working-day-picker"
+import {
+  getProjectTasksForKanban, updateTaskStatusKanban,
+  getTaskDetail, updateTaskKanban, addTaskComment,
+} from "@/lib/actions/kanban"
+import { todayStr } from "@/lib/date-utils"
 import { TaskStatus } from "@/lib/generated/prisma/enums"
 import type { KanbanProject } from "./kanban-client"
 
@@ -71,7 +77,15 @@ function calcProgress(tasks: TaskItem[]) {
 
 // ─── Task Card ────────────────────────────────────────────────────────────────
 
-function TaskCard({ task, isDragOverlay = false }: { task: TaskItem; isDragOverlay?: boolean }) {
+function TaskCard({
+  task,
+  isDragOverlay = false,
+  onCardClick,
+}: {
+  task: TaskItem
+  isDragOverlay?: boolean
+  onCardClick?: () => void
+}) {
   const col = COL_BY_ID[resolveColId(task.status)] ?? TASK_COLS[0]
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id:       task.id,
@@ -80,6 +94,13 @@ function TaskCard({ task, isDragOverlay = false }: { task: TaskItem; isDragOverl
   })
 
   const isDelayed = task.endDate && new Date(task.endDate) < new Date() && task.status !== "COMPLETED"
+
+  const cardBg     = isDelayed ? "#fff8f8" : "#ffffff"
+  const cardBorder = isDragOverlay
+    ? `1px solid ${col.color}40`
+    : isDelayed
+      ? "1px solid rgba(239,68,68,0.22)"
+      : "1px solid rgba(15,23,42,0.07)"
 
   return (
     <div
@@ -96,9 +117,10 @@ function TaskCard({ task, isDragOverlay = false }: { task: TaskItem; isDragOverl
     >
       <div
         className="select-none rounded-xl overflow-hidden group/card"
+        onClick={onCardClick}
         style={{
-          background: "#ffffff",
-          border:     `1px solid ${isDragOverlay ? col.color + "40" : "rgba(15,23,42,0.07)"}`,
+          background: cardBg,
+          border:     cardBorder,
           boxShadow:  isDragOverlay
             ? `0 20px 48px rgba(0,0,0,0.18), 0 0 0 2px ${col.color}35`
             : "0 1px 3px rgba(15,23,42,0.05)",
@@ -195,10 +217,12 @@ function TaskColumn({
   col,
   tasks,
   isOver,
+  onTaskClick,
 }: {
   col: typeof TASK_COLS[number]
   tasks: TaskItem[]
   isOver: boolean
+  onTaskClick: (t: TaskItem) => void
 }) {
   const { setNodeRef } = useDroppable({ id: col.id })
   const Icon = col.icon
@@ -245,7 +269,7 @@ function TaskColumn({
         className="flex-1 overflow-y-auto p-2.5 space-y-2"
         style={{ scrollbarWidth: "thin", scrollbarColor: `${col.color}20 transparent` }}
       >
-        {tasks.map((t) => <TaskCard key={t.id} task={t} />)}
+        {tasks.map((t) => <TaskCard key={t.id} task={t} onCardClick={() => onTaskClick(t)} />)}
         {tasks.length === 0 && (
           <div
             className="flex items-center justify-center py-8 rounded-xl"
@@ -261,7 +285,7 @@ function TaskColumn({
 
 // ─── List View ────────────────────────────────────────────────────────────────
 
-function TaskListView({ tasks }: { tasks: TaskItem[] }) {
+function TaskListView({ tasks, onTaskClick }: { tasks: TaskItem[]; onTaskClick: (t: TaskItem) => void }) {
   const byWbs: Record<string, { label: string; color: string | null; items: TaskItem[] }> = {}
 
   for (const t of tasks) {
@@ -314,7 +338,8 @@ function TaskListView({ tasks }: { tasks: TaskItem[] }) {
               return (
                 <div
                   key={t.id}
-                  className="flex items-center gap-4 px-4 py-3 hover:bg-slate-50 transition-colors"
+                  onClick={() => onTaskClick(t)}
+                  className="flex items-center gap-4 px-4 py-3 hover:bg-slate-50 transition-colors cursor-pointer"
                   style={{ borderBottom: i < items.length - 1 ? "1px solid rgba(15,23,42,0.05)" : "none" }}
                 >
                   {/* Status dot */}
@@ -369,6 +394,330 @@ function TaskListView({ tasks }: { tasks: TaskItem[] }) {
   )
 }
 
+// ─── Task Detail Panel ────────────────────────────────────────────────────────
+
+type TaskDetailData = Awaited<ReturnType<typeof getTaskDetail>>
+
+function TaskDetailPanel({
+  task: initTask,
+  projectId,
+  onClose,
+  onUpdated,
+}: {
+  task: TaskItem
+  projectId: string
+  onClose: () => void
+  onUpdated: (updates: Partial<TaskItem>) => void
+}) {
+  const [detail,       setDetail]       = useState<TaskDetailData>(null)
+  const [loadingDetail, setLoadingDetail] = useState(true)
+  const [localProgress, setLocalProgress] = useState(initTask.progress)
+  const [localStatus,  setLocalStatus]  = useState(initTask.status)
+  const [actualStart,  setActualStart]  = useState("")
+  const [actualEnd,    setActualEnd]    = useState("")
+  const [commentText,  setCommentText]  = useState("")
+  const [submitting,   setSubmitting]   = useState(false)
+  const [saving,       setSaving]       = useState(false)
+  const [, start] = useTransition()
+
+  useEffect(() => {
+    setLoadingDetail(true)
+    getTaskDetail(initTask.id).then((d) => {
+      setDetail(d)
+      if (d) {
+        setLocalProgress(d.progress)
+        setLocalStatus(d.status)
+        setActualStart(d.actualStart?.slice(0, 10) ?? "")
+        setActualEnd(d.actualEnd?.slice(0, 10) ?? "")
+      }
+      setLoadingDetail(false)
+    })
+  }, [initTask.id])
+
+  const col    = COL_BY_ID[resolveColId(localStatus)] ?? TASK_COLS[0]
+  const canPlay = localStatus !== "IN_PROGRESS" && localStatus !== "COMPLETED"
+
+  function handlePlayPause() {
+    const newStatus   = canPlay ? "IN_PROGRESS" : "ON_HOLD"
+    const newStart    = canPlay && !actualStart ? todayStr() : undefined
+    setSaving(true)
+    setLocalStatus(newStatus)
+    if (newStart) setActualStart(newStart)
+    start(async () => {
+      await updateTaskKanban(initTask.id, projectId, {
+        status: newStatus,
+        ...(newStart && { actualStart: newStart }),
+      })
+      onUpdated({ status: newStatus })
+      setSaving(false)
+    })
+  }
+
+  function handleProgressBlur() {
+    if (localProgress === initTask.progress) return
+    start(async () => {
+      await updateTaskKanban(initTask.id, projectId, { progress: localProgress })
+      onUpdated({ progress: localProgress })
+    })
+  }
+
+  function handleActualStartChange(v: string) {
+    setActualStart(v)
+    start(async () => { await updateTaskKanban(initTask.id, projectId, { actualStart: v || null }) })
+  }
+
+  function handleActualEndChange(v: string) {
+    setActualEnd(v)
+    start(async () => { await updateTaskKanban(initTask.id, projectId, { actualEnd: v || null }) })
+  }
+
+  async function handleSubmitComment() {
+    if (!commentText.trim() || submitting) return
+    setSubmitting(true)
+    try {
+      const newComment = await addTaskComment(initTask.id, projectId, commentText.trim())
+      setDetail((d) => d ? { ...d, comments: [...d.comments, newComment] } : d)
+      setCommentText("")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 z-[60]" onClick={onClose} />
+
+      <div
+        className="fixed right-4 top-4 bottom-4 z-[60] flex flex-col overflow-hidden"
+        style={{
+          width:        420,
+          borderRadius: 20,
+          background:   "#ffffff",
+          boxShadow:    "0 32px 80px rgba(0,0,0,0.28), 0 0 0 1px rgba(15,23,42,0.10)",
+          animation:    "slideInRight 0.25s cubic-bezier(0.22,1,0.36,1)",
+        }}
+      >
+        {/* top gradient bar */}
+        <div className="h-1 shrink-0" style={{ background: col.gradient }} />
+
+        {/* header */}
+        <div className="px-5 pt-4 pb-4 shrink-0" style={{ borderBottom: "1px solid rgba(15,23,42,0.07)" }}>
+          {initTask.wbsArea && (
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <div
+                className="w-1.5 h-1.5 rounded-full shrink-0"
+                style={{ background: initTask.wbsArea.color ?? col.color }}
+              />
+              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                {initTask.wbsArea.name}
+              </span>
+            </div>
+          )}
+          <div className="flex items-start gap-3">
+            <p className="flex-1 text-sm font-bold text-slate-800 leading-snug">{initTask.title}</p>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 hover:bg-slate-100 transition-colors"
+              style={{ border: "1px solid rgba(15,23,42,0.09)", color: "#94A3B8" }}
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 mt-3">
+            <span
+              className="text-[9px] font-bold px-2 py-0.5 rounded-full"
+              style={{ background: `${col.color}12`, color: col.color }}
+            >
+              {col.label}
+            </span>
+            <button
+              onClick={handlePlayPause}
+              disabled={saving}
+              className="flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full transition-all hover:opacity-80 disabled:opacity-50"
+              style={{
+                background: canPlay ? "rgba(36,99,255,0.10)" : "rgba(245,158,11,0.10)",
+                color:      canPlay ? "#2463FF" : "#D97706",
+              }}
+            >
+              {canPlay
+                ? <Play  className="w-3 h-3 fill-current" />
+                : <Pause className="w-3 h-3 fill-current" />}
+              {canPlay ? "Iniciar" : "Pausar"}
+            </button>
+            {saving && <Loader2 className="w-3 h-3 animate-spin text-slate-400" />}
+          </div>
+        </div>
+
+        {/* body */}
+        <div
+          className="flex-1 overflow-y-auto p-5 space-y-5"
+          style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(0,0,0,0.06) transparent" }}
+        >
+          {/* Progress */}
+          <div>
+            <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-2">Progresso</p>
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-300"
+                  style={{ width: `${localProgress}%`, background: col.gradient }}
+                />
+              </div>
+              <div className="flex items-center gap-0.5">
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={localProgress}
+                  onChange={(e) => setLocalProgress(Math.min(100, Math.max(0, Number(e.target.value))))}
+                  onBlur={handleProgressBlur}
+                  className="w-10 text-right text-sm font-black outline-none border-b-2 border-transparent focus:border-[#7B2FBE]"
+                  style={{ color: col.color }}
+                />
+                <span className="text-sm font-bold text-slate-400">%</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Actual dates */}
+          <div>
+            <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-2">Execução Real</p>
+            <div
+              className="rounded-xl overflow-hidden"
+              style={{ border: "1px solid rgba(15,23,42,0.07)" }}
+            >
+              <div
+                className="flex items-center px-4 py-2.5"
+                style={{ borderBottom: "1px solid rgba(15,23,42,0.05)" }}
+              >
+                <span className="text-xs text-slate-400 w-28 shrink-0">Início real</span>
+                {loadingDetail
+                  ? <div className="h-3 w-20 bg-slate-100 rounded animate-pulse" />
+                  : <WorkingDayPicker value={actualStart} onChange={handleActualStartChange} compact placeholder="Selecionar" />}
+              </div>
+              <div className="flex items-center px-4 py-2.5">
+                <span className="text-xs text-slate-400 w-28 shrink-0">Término real</span>
+                {loadingDetail
+                  ? <div className="h-3 w-20 bg-slate-100 rounded animate-pulse" />
+                  : <WorkingDayPicker value={actualEnd} onChange={handleActualEndChange} compact placeholder="Selecionar" />}
+              </div>
+            </div>
+          </div>
+
+          {/* Comments */}
+          <div>
+            <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-2">
+              Comentários{detail?.comments.length ? ` (${detail.comments.length})` : ""}
+            </p>
+
+            {loadingDetail ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="w-4 h-4 animate-spin text-slate-300" />
+              </div>
+            ) : (
+              <div className="space-y-2 mb-3">
+                {detail?.comments.length === 0 && (
+                  <p className="text-[11px] text-slate-300 text-center py-3">Nenhum comentário ainda</p>
+                )}
+                {detail?.comments.map((c) => (
+                  <div
+                    key={c.id}
+                    className="rounded-xl p-3"
+                    style={{ background: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}
+                  >
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <div
+                        className="w-5 h-5 rounded-full flex items-center justify-center text-[7px] font-black text-white shrink-0"
+                        style={{ background: memberColor(c.user.name) }}
+                      >
+                        {initials(c.user.name)}
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-600">{c.user.name.split(" ")[0]}</span>
+                      <span className="text-[9px] text-slate-400 ml-auto">
+                        {format(new Date(c.createdAt), "dd/MM HH:mm", { locale: ptBR })}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">{c.content}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Comment input */}
+            <div
+              className="rounded-xl overflow-hidden"
+              style={{ border: "1.5px solid rgba(15,23,42,0.09)" }}
+            >
+              <textarea
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault()
+                    handleSubmitComment()
+                  }
+                }}
+                placeholder="Adicionar comentário… (Ctrl+Enter para enviar)"
+                rows={2}
+                className="w-full resize-none text-xs text-slate-700 px-3 pt-2.5 pb-1 outline-none placeholder:text-slate-300 bg-transparent"
+              />
+              <div className="flex justify-end px-3 pb-2.5">
+                <button
+                  onClick={handleSubmitComment}
+                  disabled={!commentText.trim() || submitting}
+                  className="flex items-center gap-1.5 text-[10px] font-bold px-3 py-1.5 rounded-lg transition-all disabled:opacity-40"
+                  style={{
+                    background: commentText.trim() ? "linear-gradient(135deg,#7B2FBE,#2463FF)" : "#F1F5F9",
+                    color:      commentText.trim() ? "white" : "#94A3B8",
+                  }}
+                >
+                  {submitting
+                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                    : <Send className="w-3 h-3" />}
+                  Enviar
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Attachments */}
+          {!loadingDetail && detail?.attachments && detail.attachments.length > 0 && (
+            <div>
+              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-2">
+                Anexos ({detail.attachments.length})
+              </p>
+              <div className="space-y-2">
+                {detail.attachments.map((a) => (
+                  <a
+                    key={a.id}
+                    href={a.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors"
+                    style={{ border: "1px solid rgba(15,23,42,0.07)" }}
+                  >
+                    <Paperclip className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span className="text-xs text-slate-600 flex-1 truncate">{a.fileName}</span>
+                    <ExternalLink className="w-3 h-3 text-slate-300 shrink-0" />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes slideInRight {
+          from { transform: translateX(100%); opacity: 0; }
+          to   { transform: translateX(0);    opacity: 1; }
+        }
+      `}</style>
+    </>
+  )
+}
+
 // ─── Main Modal ───────────────────────────────────────────────────────────────
 
 export function ProjectTasksKanban({
@@ -378,12 +727,13 @@ export function ProjectTasksKanban({
   project: KanbanProject
   onClose: () => void
 }) {
-  const [tasks,    setTasks]    = useState<TaskItem[]>([])
-  const [loading,  setLoading]  = useState(true)
-  const [view,     setView]     = useState<"kanban" | "list">("kanban")
-  const [activeId, setActiveId] = useState<string | null>(null)
-  const [overId,   setOverId]   = useState<string | null>(null)
-  const [saving,   setSaving]   = useState<string | null>(null)
+  const [tasks,        setTasks]        = useState<TaskItem[]>([])
+  const [loading,      setLoading]      = useState(true)
+  const [view,         setView]         = useState<"kanban" | "list">("kanban")
+  const [activeId,     setActiveId]     = useState<string | null>(null)
+  const [overId,       setOverId]       = useState<string | null>(null)
+  const [saving,       setSaving]       = useState<string | null>(null)
+  const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null)
   const [, startTransition] = useTransition()
   const prevStatuses = useRef<Record<string, string>>({})
 
@@ -593,7 +943,7 @@ export function ProjectTasksKanban({
             </div>
           </div>
         ) : view === "list" ? (
-          <TaskListView tasks={visibleTasks} />
+          <TaskListView tasks={visibleTasks} onTaskClick={setSelectedTask} />
         ) : (
           <DndContext
             sensors={sensors}
@@ -613,6 +963,7 @@ export function ProjectTasksKanban({
                     col={col}
                     tasks={visibleTasks.filter((t) => resolveColId(t.status) === col.id)}
                     isOver={overId === col.id}
+                    onTaskClick={setSelectedTask}
                   />
                 ))}
               </div>
@@ -631,6 +982,18 @@ export function ProjectTasksKanban({
           to   { transform: scale(1)    translateY(0);   opacity: 1; }
         }
       `}</style>
+
+      {selectedTask && (
+        <TaskDetailPanel
+          task={selectedTask}
+          projectId={project.id}
+          onClose={() => setSelectedTask(null)}
+          onUpdated={(updates) => {
+            setTasks((ts) => ts.map((t) => t.id === selectedTask.id ? { ...t, ...updates } : t))
+            setSelectedTask((t) => t ? { ...t, ...updates } : null)
+          }}
+        />
+      )}
     </>
   )
 }
