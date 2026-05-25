@@ -883,6 +883,13 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
 
+  // Gantt-specific expand + inline edit state
+  const [expandedGanttAreas, setExpandedGanttAreas] = useState<Set<string>>(
+    () => new Set([...initialAreas.map((a) => a.id), "__ungrouped__"])
+  )
+  const [ganttInlineId,  setGanttInlineId]  = useState<string | null>(null)
+  const [ganttInlineVal, setGanttInlineVal] = useState("")
+
   // ── Drag-and-drop state ──────────────────────────────────────────────────
   const [draggedId,  setDraggedId]  = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
@@ -979,8 +986,15 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
   const totalDays  = differenceInDays(ganttEnd, ganttStart) + 1
   const ganttWidth = Math.max(900, totalDays * dayWidth)
 
-  const flatTasks  = useMemo(() => flattenTasks(tasks, expandedGantt), [tasks, expandedGantt])
   const listRows   = useMemo(() => buildListRows(areas, tasks, expandedAreas, expandedTasks, search, hideDone), [areas, tasks, expandedAreas, expandedTasks, search, hideDone])
+
+  // Gantt rows — area-grouped, uses its own expand sets
+  const ganttRows  = useMemo(() => buildListRows(areas, tasks, expandedGanttAreas, expandedGantt, "", false), [areas, tasks, expandedGanttAreas, expandedGantt])
+  const ganttRowIndexMap = useMemo(() => {
+    const m = new Map<string, number>()
+    ganttRows.forEach((row, i) => { if (row.kind === "task") m.set(row.task.id, i) })
+    return m
+  }, [ganttRows])
 
   function dateToX(ds: string) { return differenceInDays(parseISO(ds), ganttStart) * dayWidth }
   const todayX = differenceInDays(today, ganttStart) * dayWidth
@@ -1041,6 +1055,24 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
   function toggleGanttTask(id: string) {
     setExpandedGantt((prev) => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
   }
+  function toggleGanttArea(id: string) {
+    setExpandedGanttAreas((prev) => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
+  }
+
+  function saveGanttInline(task: Task) {
+    const newTitle = ganttInlineVal.trim()
+    setGanttInlineId(null)
+    setGanttInlineVal("")
+    if (!newTitle || newTitle === task.title) return
+    start(async () => {
+      const updated = await updateTask(task.id, project.id, { title: newTitle })
+      setTasks((prev) => {
+        const i = prev.findIndex((x) => x.id === task.id)
+        if (i === -1) return prev
+        const arr = [...prev]; arr[i] = updated as Task; return arr
+      })
+    })
+  }
 
   function expandAll() {
     setExpandedAreas(new Set([...areas.map((a) => a.id), "__ungrouped__"]))
@@ -1056,15 +1088,17 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
 
   const arrows = useMemo(() => {
     const result: React.ReactNode[] = []
-    const rowMap = new Map(flatTasks.map((t, i) => [t.id, i]))
-    for (const task of flatTasks) {
+    for (const row of ganttRows) {
+      if (row.kind !== "task") continue
+      const task = row.task
       if (!task.dependencies.length || !task.startDate) continue
-      const toIdx = rowMap.get(task.id)!
-      const toX   = dateToX(task.startDate)
-      const toY   = toIdx * ROW_H + ROW_H / 2
+      const toIdx = ganttRowIndexMap.get(task.id)
+      if (toIdx === undefined) continue
+      const toX = dateToX(task.startDate)
+      const toY = toIdx * ROW_H + ROW_H / 2
       for (const depId of task.dependencies) {
         const dep     = tasks.find((t) => t.id === depId)
-        const fromIdx = rowMap.get(depId)
+        const fromIdx = ganttRowIndexMap.get(depId)
         if (!dep?.endDate || fromIdx === undefined) continue
         const fromX     = dateToX(dep.endDate) + dayWidth
         const fromY     = fromIdx * ROW_H + ROW_H / 2
@@ -1085,7 +1119,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
       }
     }
     return result
-  }, [flatTasks, tasks, dayWidth, ganttStart])
+  }, [ganttRows, ganttRowIndexMap, tasks, dayWidth, ganttStart])
 
   async function handleExport() {
     setExporting(true)
@@ -1627,6 +1661,8 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
 
           {/* Left panel */}
           <div className="flex flex-col shrink-0 border-r border-slate-200 bg-white" style={{ width: LEFT_W }}>
+
+            {/* Left panel header */}
             <div className="flex items-center shrink-0 border-b border-slate-100 bg-[#0F172A]" style={{ height: HDR_H }}>
               <div style={{ width: 36 }} />
               <div style={{ width: 24 }} />
@@ -1635,11 +1671,12 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
               <div style={{ width: 76 }} className="text-[10px] font-black text-white/50 uppercase tracking-widest text-center">Início</div>
               <div style={{ width: 76 }} className="text-[10px] font-black text-white/50 uppercase tracking-widest text-center">Fim</div>
               <div style={{ width: 48 }} className="text-[10px] font-black text-white/50 uppercase tracking-widest text-center">%</div>
-              <div style={{ width: 52 }} />
+              <div style={{ width: 56 }} className="text-[10px] font-black text-white/50 uppercase tracking-widest text-center">Ações</div>
             </div>
 
+            {/* Left panel body — area-grouped */}
             <div ref={leftBodyRef} className="flex-1 overflow-y-auto overflow-x-hidden" onScroll={onLeftScroll} style={{ scrollbarWidth: "none" }}>
-              {flatTasks.length === 0 ? (
+              {tasks.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-64 text-slate-300 gap-3">
                   <Layers className="w-10 h-10" />
                   <p className="text-sm font-semibold">Nenhuma atividade</p>
@@ -1648,84 +1685,234 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                   </button>
                 </div>
               ) : (
-                flatTasks.map((t, i) => {
-                  const color   = taskColor(t)
-                  const isHov   = hoveredId === t.id
-                  const isDone  = t.status === "COMPLETED"
-                  const isLate  = t.status === "DELAYED" || isAutoDelayed(t)
-                  const hasWarn = t.dependencies.some((depId) => {
-                    const dep = tasks.find((x) => x.id === depId)
-                    return dep?.endDate && t.startDate && dep.endDate > t.startDate
-                  })
-
-                  return (
-                    <div key={t.id}
-                      style={{ height: ROW_H, borderBottom: "1px solid #F1F5F9", display: "flex", alignItems: "center", background: isHov ? "#F8FAFC" : i % 2 === 0 ? "white" : "#FAFBFD", borderLeft: `3px solid ${t.depth > 0 ? "transparent" : color}` }}
-                      onMouseEnter={() => setHoveredId(t.id)}
-                      onMouseLeave={() => setHoveredId(null)}
-                    >
-                      <div style={{ width: 36, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, paddingRight: 4, flexShrink: 0 }}>
-                        <span style={{ fontSize: 9, color: "#CBD5E1", fontWeight: 700 }}>{i + 1}</span>
-                        <div style={{ width: 6, height: 6, borderRadius: "50%", background: STATUS_CFG[t.status]?.dot ?? color }} />
-                      </div>
-                      <div style={{ width: 24 }} className="shrink-0 flex items-center justify-center">
-                        {t.hasChildren ? (
-                          <button onClick={() => toggleGanttTask(t.id)} className="text-slate-400 hover:text-slate-700 transition-colors">
-                            {expandedGantt.has(t.id) ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                <>
+                  {ganttRows.map((row, i) => {
+                    /* ── Area header row ── */
+                    if (row.kind === "area") {
+                      const areaId    = row.id
+                      const areaName  = row.name
+                      const areaColor = row.color
+                      const isExp     = expandedGanttAreas.has(areaId)
+                      const progress  = row.taskCount > 0 ? Math.round((row.doneCount / row.taskCount) * 100) : 0
+                      return (
+                        <div
+                          key={`ga-${areaId}`}
+                          style={{
+                            height: ROW_H, display: "flex", alignItems: "center",
+                            background: areaColor ? `${areaColor}12` : "#F8FAFC",
+                            borderBottom: `1px solid ${areaColor ?? "#E2E8F0"}28`,
+                            borderLeft: `4px solid ${areaColor ?? "#CBD5E1"}`,
+                          }}
+                        >
+                          {/* Expand toggle */}
+                          <button
+                            onClick={() => toggleGanttArea(areaId)}
+                            style={{ width: 36, height: ROW_H, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                            className="text-slate-400 hover:text-slate-700 transition-colors"
+                          >
+                            {isExp ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                           </button>
-                        ) : t.depth > 0 ? (
-                          <div className="w-3 border-b border-slate-200" style={{ marginLeft: 4 }} />
-                        ) : null}
-                      </div>
-                      <div className="flex-1 flex items-center gap-1.5 min-w-0 px-1 cursor-pointer" style={{ paddingLeft: 4 + t.depth * 12 }} onClick={() => openEdit(t)}>
-                        {hasWarn && <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />}
-                        <span className={`text-xs font-semibold truncate ${isDone ? "line-through text-slate-400" : "text-[#0F172A]"}`}>{t.title}</span>
-                        {(isLate || isDone) && (
-                          <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                            style={{ background: STATUS_CFG[t.status]?.bg ?? "#F8FAFC", color: isLate && t.status !== "DELAYED" ? "#EF4444" : STATUS_CFG[t.status]?.color, border: `1px solid ${isLate && t.status !== "DELAYED" ? "#EF444430" : `${STATUS_CFG[t.status]?.color}30`}` }}>
-                            {isLate && t.status !== "DELAYED" ? "Atrasado" : STATUS_CFG[t.status]?.label}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ width: 110 }} className="px-2 shrink-0">
-                        {t.responsible ? (
-                          <div className="flex items-center gap-1.5 justify-end">
-                            <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black text-white shrink-0" style={{ background: color }}>
-                              {initials(t.responsible.name)}
-                            </div>
-                            <span className="text-[10px] text-slate-500 truncate">{t.responsible.name.split(" ")[0]}</span>
+                          <div style={{ width: 24, flexShrink: 0 }} />
+
+                          {/* Area name + count */}
+                          <div
+                            className="flex-1 flex items-center gap-2 min-w-0 px-1 cursor-pointer"
+                            onClick={() => toggleGanttArea(areaId)}
+                          >
+                            <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: areaColor ?? "#CBD5E1" }} />
+                            <span className="font-black text-[#0F172A] text-xs truncate">{areaName}</span>
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold shrink-0"
+                              style={{ background: areaColor ? `${areaColor}20` : "#EDE9FE", color: areaColor ?? "#7C3AED" }}>
+                              {row.doneCount}/{row.taskCount} · {progress}%
+                            </span>
                           </div>
-                        ) : <span className="text-[10px] text-slate-300 block text-right">—</span>}
-                      </div>
-                      <div style={{ width: 76 }} className="text-center shrink-0">
-                        <span className="text-[10px] text-slate-500 font-mono">{fmtDate(t.startDate)}</span>
-                      </div>
-                      <div style={{ width: 76 }} className="text-center shrink-0">
-                        <span className="text-[10px] text-slate-500 font-mono">{fmtDate(t.endDate)}</span>
-                      </div>
-                      <div style={{ width: 48 }} className="px-2 shrink-0">
-                        <div className="flex flex-col items-center gap-0.5">
-                          <span className="text-[9px] font-bold" style={{ color }}>{t.progress}%</span>
-                          <div className="w-6 h-1 rounded-full bg-slate-100 overflow-hidden">
-                            <div style={{ width: `${t.progress}%`, height: "100%", background: color, borderRadius: "inherit" }} />
+
+                          {/* Placeholder columns */}
+                          <div style={{ width: 110, flexShrink: 0 }} />
+                          <div style={{ width: 76, flexShrink: 0 }} />
+                          <div style={{ width: 76, flexShrink: 0 }} />
+                          <div style={{ width: 48, flexShrink: 0 }} />
+
+                          {/* Add task to this area */}
+                          <div style={{ width: 56, flexShrink: 0 }} className="flex items-center justify-center gap-1 pr-2">
+                            {areaId !== "__ungrouped__" && (
+                              <button
+                                onClick={() => openAdd(undefined, areaId)}
+                                title="Nova atividade nesta área"
+                                className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
+                                style={{ background: "#DCFCE7", color: "#16A34A" }}
+                              >
+                                <Plus className="w-3 h-3" />
+                              </button>
+                            )}
                           </div>
                         </div>
+                      )
+                    }
+
+                    /* ── Task row ── */
+                    const { task: t, depth, hasChildren, areaColor: aColor } = row
+                    const color     = taskColor(t)
+                    const isHov     = hoveredId === t.id
+                    const isDone    = t.status === "COMPLETED"
+                    const isLate    = t.status === "DELAYED" || isAutoDelayed(t)
+                    const hasWarn   = t.dependencies.some((depId) => {
+                      const dep = tasks.find((x) => x.id === depId)
+                      return dep?.endDate && t.startDate && dep.endDate > t.startDate
+                    })
+                    const isEditing = ganttInlineId === t.id
+
+                    return (
+                      <div
+                        key={`gt-${t.id}`}
+                        style={{
+                          height: ROW_H, display: "flex", alignItems: "center",
+                          background: isHov ? "#EEF2FF" : i % 2 === 0 ? "white" : "#FAFBFD",
+                          borderBottom: "1px solid #F1F5F9",
+                          borderLeft: `3px solid ${depth > 0 ? (aColor ? `${aColor}55` : "#C4B5FD55") : color}`,
+                        }}
+                        onMouseEnter={() => setHoveredId(t.id)}
+                        onMouseLeave={() => setHoveredId(null)}
+                      >
+                        {/* Row # + status dot */}
+                        <div style={{ width: 36, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, paddingRight: 4, flexShrink: 0 }}>
+                          <span style={{ fontSize: 9, color: "#CBD5E1", fontWeight: 700 }}>{i + 1}</span>
+                          <div style={{ width: 6, height: 6, borderRadius: "50%", background: STATUS_CFG[t.status]?.dot ?? color }} />
+                        </div>
+
+                        {/* Expand / leaf */}
+                        <div style={{ width: 24, flexShrink: 0 }} className="flex items-center justify-center">
+                          {hasChildren ? (
+                            <button onClick={() => toggleGanttTask(t.id)} className="text-slate-400 hover:text-slate-700 transition-colors">
+                              {expandedGantt.has(t.id) ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                            </button>
+                          ) : depth > 0 ? (
+                            <div className="w-3 border-b border-slate-200" style={{ marginLeft: 4 }} />
+                          ) : null}
+                        </div>
+
+                        {/* Name — double-click to edit inline */}
+                        <div
+                          className="flex-1 flex items-center gap-1.5 min-w-0 px-1"
+                          style={{ paddingLeft: 4 + depth * 12 }}
+                        >
+                          {hasWarn && !isEditing && <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />}
+                          {isEditing ? (
+                            <input
+                              autoFocus
+                              value={ganttInlineVal}
+                              onChange={(e) => setGanttInlineVal(e.target.value)}
+                              onBlur={() => saveGanttInline(t)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") { e.preventDefault(); saveGanttInline(t) }
+                                if (e.key === "Escape") { setGanttInlineId(null); setGanttInlineVal("") }
+                                e.stopPropagation()
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex-1 text-xs bg-white outline-none px-1.5 py-0.5 rounded border border-[#7B2FBE] font-semibold text-[#0F172A] min-w-0"
+                            />
+                          ) : (
+                            <span
+                              className={`text-xs font-semibold truncate cursor-pointer select-none ${isDone ? "line-through text-slate-400" : "text-[#0F172A]"}`}
+                              onClick={() => openEdit(t)}
+                              onDoubleClick={(e) => {
+                                e.stopPropagation()
+                                setGanttInlineId(t.id)
+                                setGanttInlineVal(t.title)
+                              }}
+                              title="Clique para editar · Duplo-clique para renomear"
+                            >
+                              {t.title}
+                            </span>
+                          )}
+                          {!isEditing && (isLate || isDone) && (
+                            <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                              style={{
+                                background: STATUS_CFG[t.status]?.bg ?? "#F8FAFC",
+                                color: isLate && t.status !== "DELAYED" ? "#EF4444" : STATUS_CFG[t.status]?.color,
+                                border: `1px solid ${isLate && t.status !== "DELAYED" ? "#EF444430" : `${STATUS_CFG[t.status]?.color}30`}`,
+                              }}>
+                              {isLate && t.status !== "DELAYED" ? "Atrasado" : STATUS_CFG[t.status]?.label}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Responsible */}
+                        <div style={{ width: 110, flexShrink: 0 }} className="px-2">
+                          {t.responsible ? (
+                            <div className="flex items-center gap-1.5 justify-end">
+                              <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black text-white shrink-0" style={{ background: color }}>
+                                {initials(t.responsible.name)}
+                              </div>
+                              <span className="text-[10px] text-slate-500 truncate">{t.responsible.name.split(" ")[0]}</span>
+                            </div>
+                          ) : <span className="text-[10px] text-slate-300 block text-right">—</span>}
+                        </div>
+
+                        {/* Start */}
+                        <div style={{ width: 76, flexShrink: 0 }} className="text-center">
+                          <span className="text-[10px] text-slate-500 font-mono">{fmtDate(t.startDate)}</span>
+                        </div>
+
+                        {/* End */}
+                        <div style={{ width: 76, flexShrink: 0 }} className="text-center">
+                          <span className={`text-[10px] font-mono ${isLate ? "text-red-400 font-bold" : "text-slate-500"}`}>{fmtDate(t.endDate)}</span>
+                        </div>
+
+                        {/* Progress % */}
+                        <div style={{ width: 48, flexShrink: 0 }} className="px-2">
+                          <div className="flex flex-col items-center gap-0.5">
+                            <span className="text-[9px] font-bold" style={{ color }}>{t.progress}%</span>
+                            <div className="w-6 h-1 rounded-full bg-slate-100 overflow-hidden">
+                              <div style={{ width: `${t.progress}%`, height: "100%", background: color, borderRadius: "inherit" }} />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Actions — always visible */}
+                        <div style={{ width: 56, flexShrink: 0, display: "flex", alignItems: "center", gap: 1, padding: "0 4px" }}>
+                          <button
+                            onClick={() => openEdit(t)}
+                            title="Editar atividade"
+                            className="p-1 rounded text-slate-400 hover:text-[#7B2FBE] hover:bg-violet-50 transition-all"
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={() => openAdd(t.id, t.wbsAreaId ?? undefined)}
+                            title="Adicionar subtarefa"
+                            className="p-1 rounded text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 transition-all"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(t.id)}
+                            title="Excluir"
+                            className="p-1 rounded text-slate-400 hover:text-red-400 hover:bg-red-50 transition-all"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
                       </div>
-                      <div style={{ opacity: isHov ? 1 : 0, width: 52, display: "flex", alignItems: "center", gap: 2, padding: "0 4px", flexShrink: 0, transition: "opacity 0.15s" }}>
-                        <button onClick={() => openEdit(t)} className="p-1 rounded text-slate-400 hover:text-[#7B2FBE] hover:bg-violet-50 transition-all"><Pencil className="w-3 h-3" /></button>
-                        <button onClick={() => openAdd(t.id)} className="p-1 rounded text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 transition-all" title="Subtarefa"><Plus className="w-3 h-3" /></button>
-                        <button onClick={() => handleDelete(t.id)} className="p-1 rounded text-slate-400 hover:text-red-400 hover:bg-red-50 transition-all"><Trash2 className="w-3 h-3" /></button>
-                      </div>
-                    </div>
-                  )
-                })
-              )}
-              {flatTasks.length > 0 && (
-                <div className="p-4">
-                  <button onClick={() => openAdd()} className="flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-[#7B2FBE] transition-colors">
-                    <Plus className="w-3.5 h-3.5" /> Adicionar atividade
-                  </button>
-                </div>
+                    )
+                  })}
+
+                  {/* Footer — add buttons */}
+                  <div className="p-4 flex items-center gap-5 border-t border-slate-100">
+                    <button
+                      onClick={() => setAddingArea(true)}
+                      className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-[#7B2FBE] transition-colors"
+                    >
+                      <FolderOpen className="w-3.5 h-3.5" /> Nova Área
+                    </button>
+                    <button
+                      onClick={() => openAdd()}
+                      className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-[#7B2FBE] transition-colors"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Nova Atividade
+                    </button>
+                  </div>
+                </>
               )}
             </div>
           </div>
@@ -1736,22 +1923,45 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
               <div className="sticky top-0 z-20">
                 <GanttHeader ganttStart={ganttStart} ganttEnd={ganttEnd} dayWidth={dayWidth} zoom={zoom} />
               </div>
-              {flatTasks.length === 0 ? (
+              {tasks.length === 0 ? (
                 <div className="flex items-center justify-center h-64">
                   <p className="text-sm text-slate-300">Adicione atividades para visualizar o Gantt</p>
                 </div>
               ) : (
-                <div style={{ position: "relative", width: ganttWidth, height: flatTasks.length * ROW_H }}>
-                  {flatTasks.map((t, i) => (
-                    <div key={`bg-${t.id}`} style={{ position: "absolute", top: i * ROW_H, left: 0, right: 0, height: ROW_H, background: i % 2 === 0 ? "white" : "#FAFBFD", borderBottom: "1px solid #F1F5F9", pointerEvents: "none" }} />
-                  ))}
+                <div style={{ position: "relative", width: ganttWidth, height: ganttRows.length * ROW_H }}>
+
+                  {/* Background rows — area rows get tinted bg */}
+                  {ganttRows.map((row, i) => {
+                    const isArea   = row.kind === "area"
+                    const aColor   = isArea ? row.color : null
+                    const bg       = isArea
+                      ? (aColor ? `${aColor}0D` : "#F8FAFC")
+                      : i % 2 === 0 ? "white" : "#FAFBFD"
+                    return (
+                      <div
+                        key={`gbg-${isArea ? row.id : row.task.id}`}
+                        style={{
+                          position: "absolute", top: i * ROW_H, left: 0, right: 0, height: ROW_H,
+                          background: bg,
+                          borderBottom: isArea
+                            ? `1px solid ${aColor ?? "#E2E8F0"}25`
+                            : "1px solid #F1F5F9",
+                          pointerEvents: "none",
+                        }}
+                      />
+                    )
+                  })}
+
+                  {/* Month separator lines */}
                   {eachMonthOfInterval({ start: ganttStart, end: ganttEnd }).map((m) => {
                     const x = differenceInDays(startOfMonth(m), ganttStart) * dayWidth
                     return <div key={m.toISOString()} style={{ position: "absolute", top: 0, bottom: 0, left: x, width: 1, background: "rgba(226,232,240,0.7)", pointerEvents: "none" }} />
                   })}
+
+                  {/* Weekend / holiday shading */}
                   {zoom === "day" && Array.from({ length: totalDays }).map((_, i) => {
-                    const d   = addDays(ganttStart, i)
-                    const ds  = format(d, "yyyy-MM-dd")
+                    const d     = addDays(ganttStart, i)
+                    const ds    = format(d, "yyyy-MM-dd")
                     const isWE  = isSaturday(d) || isSunday(d)
                     const isHol = !isWE && isHoliday(ds)
                     if (!isWE && !isHol) return null
@@ -1763,13 +1973,19 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                       }} />
                     )
                   })}
+
+                  {/* Today line */}
                   {todayX >= 0 && todayX <= ganttWidth && (
                     <div style={{ position: "absolute", top: 0, bottom: 0, left: todayX, width: 2, background: "#EF4444", opacity: 0.7, zIndex: 6, pointerEvents: "none" }}>
                       <div style={{ position: "absolute", top: -4, left: -4, width: 10, height: 10, borderRadius: "50%", background: "#EF4444" }} />
                       <div style={{ position: "absolute", top: 4, left: 4, fontSize: 9, fontWeight: 800, color: "#EF4444", whiteSpace: "nowrap" }}>Hoje</div>
                     </div>
                   )}
-                  {flatTasks.map((t, i) => {
+
+                  {/* Task bars */}
+                  {ganttRows.map((row, i) => {
+                    if (row.kind !== "task") return null
+                    const { task: t, hasChildren } = row
                     if (!t.startDate || !t.endDate) return null
                     const barLeft  = dateToX(t.startDate)
                     const barRight = dateToX(t.endDate) + dayWidth
@@ -1783,21 +1999,23 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                       return dep?.endDate && t.startDate && dep.endDate > t.startDate
                     })
                     return (
-                      <div key={`bar-${t.id}`}
+                      <div
+                        key={`bar-${t.id}`}
                         onClick={() => openEdit(t)}
                         onMouseEnter={() => setHoveredId(t.id)}
                         onMouseLeave={() => setHoveredId(null)}
                         title={`${t.title} | ${fmtDate(t.startDate)} → ${fmtDate(t.endDate)} | ${t.progress}%`}
                         style={{
                           position: "absolute", top: i * ROW_H + BAR_PAD, left: barLeft, width: barW, height: BAR_H,
-                          borderRadius: t.hasChildren ? 4 : 6, overflow: "hidden", cursor: "pointer", zIndex: 4,
+                          borderRadius: hasChildren ? 4 : 6, overflow: "hidden", cursor: "pointer", zIndex: 4,
                           border: isLateB ? `1.5px solid #EF444488` : hasWarn ? `1.5px dashed #F59E0B` : `1.5px solid ${barColor}55`,
                           boxShadow: hoveredId === t.id ? `0 2px 12px ${barColor}40` : "none",
                           transition: "box-shadow 0.15s",
                           background: isDone ? `${barColor}30` : isLateB ? "#FEE2E2" : `${barColor}22`,
-                        }}>
+                        }}
+                      >
                         <div style={{ position: "absolute", top: 0, left: 0, bottom: 0, width: `${t.progress}%`, background: isLateB ? "#EF444490" : isDone ? `${barColor}90` : `${barColor}70`, transition: "width 0.4s ease" }} />
-                        {t.hasChildren && (
+                        {hasChildren && (
                           <div style={{ position: "absolute", inset: 0, backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 3px, ${color}15 3px, ${color}15 6px)` }} />
                         )}
                         {barW > 48 && (
@@ -1814,6 +2032,8 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                       </div>
                     )
                   })}
+
+                  {/* Dependency arrows */}
                   <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 5 }} overflow="visible">
                     <defs>
                       <marker id="arr-gray" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
