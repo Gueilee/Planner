@@ -1322,9 +1322,11 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
       {/* ── LIST VIEW ────────────────────────────────────────────────────── */}
       {viewMode === "list" && (
         <div className="flex flex-col flex-1 min-h-0 bg-white">
+          {/* Single scrollable container — header and rows scroll together */}
+          <div className="flex-1 min-h-0 overflow-auto">
 
-          {/* Table header */}
-          <div className="flex items-center shrink-0 border-b border-slate-100 bg-[#0F172A] overflow-x-auto" style={{ height: 44, minWidth: "max-content" }}>
+          {/* Table header — sticky so it stays fixed during vertical scroll */}
+          <div className="flex items-center shrink-0 border-b border-slate-100 bg-[#0F172A] sticky top-0 z-10" style={{ height: 44, minWidth: "max-content" }}>
             <div style={{ width: 24, flexShrink: 0 }} />
             <div style={{ width: 72, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest pl-4">EAP</div>
             <div style={{ width: 60, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Ações</div>
@@ -1343,7 +1345,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
           </div>
 
           {/* Rows */}
-          <div className="flex-1 overflow-auto" style={{ overflowX: "auto" }}>
+          <div>
             {listRows.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 gap-3 text-slate-300">
                 <Layers className="w-10 h-10" />
@@ -1411,7 +1413,8 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
 
                       {/* Area name — clickable to expand */}
                       <div
-                        className="flex-1 flex items-center gap-2.5 px-2 min-w-0 cursor-pointer"
+                        style={{ flex: 1, minWidth: 240 }}
+                        className="flex items-center gap-2.5 px-2 cursor-pointer overflow-hidden"
                         onClick={() => toggleArea(row.id)}
                       >
                         <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: row.color ?? "#CBD5E1" }} />
@@ -1534,30 +1537,28 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                       </button>
                     </div>
 
-                    {/* Tree indent spacer for subtasks */}
-                    {isTarefa && (
-                      <div style={{ width: depth * 20, flexShrink: 0, position: "relative", alignSelf: "stretch", display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
-                        <div style={{ position: "absolute", right: 0, top: 0, bottom: "50%", width: 10, borderBottom: "1.5px solid #DDD6FE", borderLeft: "1.5px solid #DDD6FE", borderBottomLeftRadius: 4 }} />
-                      </div>
-                    )}
-
-                    {/* Expand / leaf dot */}
-                    <div className="w-5 shrink-0 flex items-center justify-center">
-                      {hasChildren ? (
-                        <button onClick={(e) => { e.stopPropagation(); toggleListTask(t.id) }}
-                          className="text-slate-400 hover:text-slate-700 transition-colors">
-                          {expandedTasks.has(t.id)
-                            ? <ChevronDown className="w-3.5 h-3.5" />
-                            : <ChevronRight className="w-3.5 h-3.5" />}
-                        </button>
-                      ) : (
-                        <div className="w-1.5 h-1.5 rounded-full shrink-0"
-                          style={{ background: isTarefa ? "#A78BFA" : (areaColor ?? color) }} />
+                    {/* Name — fixed start position matching header; contains indent + expand + title + badges */}
+                    <div style={{ flex: 1, minWidth: 240, flexShrink: 0 }} className="flex items-center gap-1.5 px-1 py-1 overflow-hidden">
+                      {/* Tree indent spacer for subtasks */}
+                      {isTarefa && (
+                        <div style={{ width: depth * 20, flexShrink: 0, position: "relative", alignSelf: "stretch", display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+                          <div style={{ position: "absolute", right: 0, top: 0, bottom: "50%", width: 10, borderBottom: "1.5px solid #DDD6FE", borderLeft: "1.5px solid #DDD6FE", borderBottomLeftRadius: 4 }} />
+                        </div>
                       )}
-                    </div>
-
-                    {/* Name */}
-                    <div className="flex-1 flex items-center gap-1.5 min-w-0 px-1 py-1">
+                      {/* Expand / leaf dot */}
+                      <div className="w-5 shrink-0 flex items-center justify-center">
+                        {hasChildren ? (
+                          <button onClick={(e) => { e.stopPropagation(); toggleListTask(t.id) }}
+                            className="text-slate-400 hover:text-slate-700 transition-colors">
+                            {expandedTasks.has(t.id)
+                              ? <ChevronDown className="w-3.5 h-3.5" />
+                              : <ChevronRight className="w-3.5 h-3.5" />}
+                          </button>
+                        ) : (
+                          <div className="w-1.5 h-1.5 rounded-full shrink-0"
+                            style={{ background: isTarefa ? "#A78BFA" : (areaColor ?? color) }} />
+                        )}
+                      </div>
                       {isLate    && <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />}
                       {isBlocked && !isLate && <Lock className="w-3 h-3 text-slate-300 shrink-0" />}
                       {editTitle?.id === t.id ? (
@@ -1878,6 +1879,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
               </button>
             </div>
           </div>
+          </div>{/* end single scroll container */}
         </div>
       )}
 
