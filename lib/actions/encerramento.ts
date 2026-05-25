@@ -5,6 +5,7 @@ import { auth } from "@/auth"
 import { revalidatePath } from "next/cache"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { generateMeetingATA } from "@/lib/actions/ata"
 
 export type ClosureMeetingInput = {
   projectId:    string
@@ -88,7 +89,7 @@ export async function registerClosureMeeting(data: ClosureMeetingInput) {
   const meetingDate = new Date(data.date + "T12:00:00")
   const now         = new Date()
 
-  await db.$transaction(async (tx) => {
+  const meetingId = await db.$transaction(async (tx) => {
     const meeting = await tx.meeting.create({
       data: {
         projectId:   data.projectId,
@@ -122,9 +123,18 @@ export async function registerClosureMeeting(data: ClosureMeetingInput) {
       where: { id: data.projectId },
       data:  { status: "COMPLETED", actualEnd: now },
     })
+
+    return meeting.id
   })
 
   revalidatePath(`/projects/${data.projectId}`)
   revalidatePath("/encerramento")
-  return { success: true }
+
+  let ataContent: string | null = null
+  try {
+    const ata = await generateMeetingATA(meetingId)
+    ataContent = ata.content
+  } catch {}
+
+  return { success: true, meetingId, ataContent }
 }

@@ -5,6 +5,7 @@ import { auth } from "@/auth"
 import { revalidatePath } from "next/cache"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { generateMeetingATA } from "@/lib/actions/ata"
 
 export type LessonItem = {
   type: "GOOD_PRACTICE" | "PROBLEM"
@@ -31,7 +32,7 @@ export async function saveLessonsLearned(data: LessonsLearnedInput) {
   const goodCount   = data.lessons.filter((l) => l.type === "GOOD_PRACTICE").length
   const probCount   = data.lessons.filter((l) => l.type === "PROBLEM").length
 
-  await db.$transaction(async (tx) => {
+  const meetingId = await db.$transaction(async (tx) => {
     const meeting = await tx.meeting.create({
       data: {
         projectId:   data.projectId,
@@ -66,10 +67,19 @@ export async function saveLessonsLearned(data: LessonsLearnedInput) {
         },
       })
     }
+
+    return meeting.id
   })
 
   revalidatePath(`/projects/${data.projectId}`)
-  return { success: true }
+
+  let ataContent: string | null = null
+  try {
+    const ata = await generateMeetingATA(meetingId)
+    ataContent = ata.content
+  } catch {}
+
+  return { success: true, meetingId, ataContent }
 }
 
 export async function getProjectForLessons(projectId: string) {

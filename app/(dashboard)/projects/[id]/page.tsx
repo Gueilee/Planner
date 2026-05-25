@@ -10,7 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
   ArrowLeft, Users, Calendar, AlertTriangle, CheckCircle2,
   Clock, BarChart3, Layers, TrendingUp, Play, Timer, CalendarDays, RefreshCw,
-  Rocket, FileDown, BookOpen, Shield,
+  Rocket, FileDown, BookOpen, Shield, FileText,
 } from "lucide-react"
 import { DeleteProjectButton } from "./delete-project-button"
 import { SuggestedDatesPanel } from "./suggested-dates-panel"
@@ -192,6 +192,17 @@ export default async function ProjectDetailPage({
                       mitigation:  r.mitigation,
                     }))}
                   />
+
+                  {/* Meetings history — always accessible */}
+                  <Link
+                    href={`/projects/${id}/meetings`}
+                    className="inline-flex items-center gap-2 px-3 h-9 text-sm font-semibold rounded-xl border transition-all hover:bg-slate-50 active:scale-[0.98]"
+                    style={{ borderColor: "#E2E8F0", color: "#475569", background: "transparent" }}
+                    title="Histórico de Reuniões e ATAs"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    Reuniões
+                  </Link>
 
                   {/* PENDING GO/NO-GO — nova solicitação aguardando análise e reunião */}
                   {project.status === "PENDING_GO_NO_GO" && (

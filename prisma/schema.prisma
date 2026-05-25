@@ -73,6 +73,7 @@ enum DocumentType {
   GO_NO_GO_DECISION
   TECHNICAL_PRESENTATION
   KICKOFF
+  MEETING_ATA
 }
 
 enum LessonType {
@@ -130,6 +131,7 @@ model User {
   assignedTasks        ScheduleTask[]    @relation("TaskResponsible")
   comments             Comment[]
   createdMeetings      Meeting[]         @relation("MeetingCreator")
+  meetingParticipations MeetingParticipant[]
   createdReports       StatusReport[]
   createdDocuments     ProjectDocument[]
   notifications        Notification[]
@@ -334,6 +336,7 @@ model MeetingParticipant {
   userId    String
 
   meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
 
   @@unique([meetingId, userId])
 }
@@ -381,6 +384,7 @@ model ProjectDocument {
   content   String?
   pdfUrl    String?
   version   Int          @default(1)
+  meetingId String?
 
   createdById String
   createdBy   User    @relation(fields: [createdById], references: [id])

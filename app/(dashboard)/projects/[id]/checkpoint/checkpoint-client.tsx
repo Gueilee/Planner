@@ -9,8 +9,10 @@ import {
   ArrowLeft, CheckCircle2, AlertTriangle, MessageSquare,
   ChevronDown, ChevronRight, Loader2, Check, BarChart3,
   History, RefreshCw, X, Paperclip, CalendarDays, Filter, Plus,
+  FileText,
 } from "lucide-react"
 import Link from "next/link"
+import { MeetingAtaModal } from "@/components/meeting-ata-modal"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -573,9 +575,11 @@ export function CheckpointClient({ project, areas, tasks, members, history }: Ch
   const [extName, setExtName] = useState("")
   const [extRole, setExtRole] = useState("")
   const [expandedAreas, setExpandedAreas] = useState<Set<string>>(new Set(areas.map((a) => a.id)))
-  const [saving, setSaving]       = useState(false)
-  const [saved, setSaved]         = useState(false)
-  const [error, setError]         = useState("")
+  const [saving, setSaving]         = useState(false)
+  const [saved, setSaved]           = useState(false)
+  const [error, setError]           = useState("")
+  const [ataContent, setAtaContent] = useState<string | null>(null)
+  const [showAta, setShowAta]       = useState(false)
   const [filterAreaId, setFilterAreaId]   = useState<string | null>(null)
   const [filterRespId, setFilterRespId]   = useState<string | null>(null)
   const [detailTaskId, setDetailTaskId]   = useState<string | null>(null)
@@ -658,7 +662,7 @@ export function CheckpointClient({ project, areas, tasks, members, history }: Ch
     setSaving(true)
     setError("")
     try {
-      await saveCheckpoint({
+      const result = await saveCheckpoint({
         projectId: project.id,
         date: meetingDate,
         frequency,
@@ -675,6 +679,7 @@ export function CheckpointClient({ project, areas, tasks, members, history }: Ch
           attachments: taskStates[t.id].attachments.length ? taskStates[t.id].attachments : undefined,
         })),
       })
+      if (result.ataContent) setAtaContent(result.ataContent)
       setSaved(true)
     } catch (e) {
       console.error(e)
@@ -688,6 +693,7 @@ export function CheckpointClient({ project, areas, tasks, members, history }: Ch
 
   if (saved) {
     return (
+      <>
       <div className="flex-1 flex flex-col items-center justify-center gap-8 p-8">
         <div
           className="w-24 h-24 rounded-3xl flex items-center justify-center"
@@ -739,7 +745,7 @@ export function CheckpointClient({ project, areas, tasks, members, history }: Ch
           <p className="text-sm text-slate-400 font-medium">Reunião registrada sem alterações nas tarefas.</p>
         )}
 
-        <div className="flex gap-3 mt-2">
+        <div className="flex gap-3 mt-2 flex-wrap justify-center">
           <Link
             href={`/projects/${project.id}`}
             className="inline-flex items-center gap-2 px-6 h-10 rounded-xl border border-slate-200 text-sm font-semibold text-[#0F172A] hover:bg-slate-50 transition-colors"
@@ -747,6 +753,20 @@ export function CheckpointClient({ project, areas, tasks, members, history }: Ch
             <ArrowLeft className="w-4 h-4" />
             Voltar ao Projeto
           </Link>
+          {ataContent && (
+            <button
+              onClick={() => setShowAta(true)}
+              className="inline-flex items-center gap-2 px-6 h-10 rounded-xl text-sm font-semibold transition-all hover:opacity-90"
+              style={{
+                background: "linear-gradient(135deg, #2463FF, #1d4ed8)",
+                boxShadow: "0 4px 20px rgba(36,99,255,0.3)",
+                color: "#fff",
+              }}
+            >
+              <FileText className="w-4 h-4" />
+              Ver ATA
+            </button>
+          )}
           <Link
             href={`/projects/${project.id}/schedule`}
             className="inline-flex items-center gap-2 px-6 h-10 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90"
@@ -760,6 +780,15 @@ export function CheckpointClient({ project, areas, tasks, members, history }: Ch
           </Link>
         </div>
       </div>
+
+      {showAta && ataContent && (
+        <MeetingAtaModal
+          content={ataContent}
+          title={`ATA — Checkpoint — ${format(new Date(meetingDate + "T12:00:00"), "dd/MM/yyyy")}`}
+          onClose={() => setShowAta(false)}
+        />
+      )}
+      </>
     )
   }
 

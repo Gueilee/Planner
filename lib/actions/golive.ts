@@ -5,6 +5,7 @@ import { auth } from "@/auth"
 import { revalidatePath } from "next/cache"
 import { addDays, format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { generateMeetingATA } from "@/lib/actions/ata"
 
 export type DeploymentType = "DIRECT" | "PHASED"
 
@@ -33,7 +34,7 @@ export async function registerGoLive(data: GoLiveInput) {
   }
   if (data.notes.trim()) contentParts.push(data.notes.trim())
 
-  await db.$transaction(async (tx) => {
+  const meetingId = await db.$transaction(async (tx) => {
     const meeting = await tx.meeting.create({
       data: {
         projectId:   data.projectId,
@@ -60,10 +61,19 @@ export async function registerGoLive(data: GoLiveInput) {
         status:            "GO_LIVE",
       },
     })
+
+    return meeting.id
   })
 
   revalidatePath(`/projects/${data.projectId}`)
-  return { success: true }
+
+  let ataContent: string | null = null
+  try {
+    const ata = await generateMeetingATA(meetingId)
+    ataContent = ata.content
+  } catch {}
+
+  return { success: true, meetingId, ataContent }
 }
 
 export async function closeProject(projectId: string, closingNotes?: string) {

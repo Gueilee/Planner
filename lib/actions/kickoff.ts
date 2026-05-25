@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache"
 import { DocumentType } from "@/lib/generated/prisma/enums"
 import { format } from "date-fns"
 import type { KickOffData } from "@/lib/types/kickoff"
+import { generateMeetingATA } from "@/lib/actions/ata"
 
 export async function getKickOff(projectId: string) {
   const doc = await db.projectDocument.findFirst({
@@ -80,7 +81,7 @@ export async function registerKickOff(data: KickOffData) {
     registeredAt,
   })
 
-  await db.$transaction(async (tx) => {
+  const meetingId = await db.$transaction(async (tx) => {
     // 1. Save/update kick-off document
     if (data.id) {
       await tx.projectDocument.update({
@@ -143,8 +144,17 @@ export async function registerKickOff(data: KickOffData) {
       where: { id: data.projectId },
       data: { status: "IN_PROGRESS", actualStart: meetingDate },
     })
+
+    return meeting.id
   })
 
   revalidatePath(`/projects/${data.projectId}`)
-  return { success: true }
+
+  let ataContent: string | null = null
+  try {
+    const ata = await generateMeetingATA(meetingId)
+    ataContent = ata.content
+  } catch {}
+
+  return { success: true, meetingId, ataContent }
 }

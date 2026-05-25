@@ -5,6 +5,7 @@ import { auth } from "@/auth"
 import { revalidatePath } from "next/cache"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { generateMeetingATA } from "@/lib/actions/ata"
 
 export type CheckpointFrequency = "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY"
 
@@ -49,7 +50,7 @@ export async function saveCheckpoint(data: CheckpointInput) {
   const meetingDate = new Date(data.date)
   const freq = FREQ_LABELS[data.frequency]
 
-  await db.$transaction(async (tx) => {
+  const meetingId = await db.$transaction(async (tx) => {
     // 1. Create meeting record
     const meeting = await tx.meeting.create({
       data: {
@@ -108,11 +109,23 @@ export async function saveCheckpoint(data: CheckpointInput) {
         }
       }
     }
+
+    return meeting.id
   })
 
   revalidatePath(`/projects/${data.projectId}`)
   revalidatePath(`/projects/${data.projectId}/schedule`)
-  return { success: true }
+
+  // Generate ATA after transaction completes (reads participants + comments)
+  let ataContent: string | null = null
+  try {
+    const ata = await generateMeetingATA(meetingId)
+    ataContent = ata.content
+  } catch {
+    // ATA generation is best-effort; don't fail the save
+  }
+
+  return { success: true, meetingId, ataContent }
 }
 
 export async function getCheckpointHistory(projectId: string) {

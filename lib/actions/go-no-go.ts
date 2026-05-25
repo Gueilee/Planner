@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 import { auth } from "@/auth"
 import { revalidatePath } from "next/cache"
 import { ProjectStatus, MeetingType } from "@/lib/generated/prisma/enums"
+import { generateMeetingATA } from "@/lib/actions/ata"
 
 export async function saveGoNoGoDecision(data: {
   projectId: string
@@ -27,12 +28,12 @@ export async function saveGoNoGoDecision(data: {
     data.decision === "NO_GO"   ? "ANÁLISE FUTURA" :
     "STAND BY"
 
-  await db.$transaction([
-    db.project.update({
+  const meetingId = await db.$transaction(async (tx) => {
+    await tx.project.update({
       where: { id: data.projectId },
       data: { status: projectStatus },
-    }),
-    db.meeting.create({
+    })
+    const meeting = await tx.meeting.create({
       data: {
         projectId: data.projectId,
         type: MeetingType.GO_NO_GO,
@@ -44,11 +45,19 @@ export async function saveGoNoGoDecision(data: {
           ? { participants: { create: uniqueIds.map((userId) => ({ userId })) } }
           : {}),
       },
-    }),
-  ])
+    })
+    return meeting.id
+  })
 
   revalidatePath(`/projects/${data.projectId}`)
   revalidatePath("/projects")
   revalidatePath("/dashboard")
-  return { success: true }
+
+  let ataContent: string | null = null
+  try {
+    const ata = await generateMeetingATA(meetingId)
+    ataContent = ata.content
+  } catch {}
+
+  return { success: true, meetingId, ataContent }
 }
