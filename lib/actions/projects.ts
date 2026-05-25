@@ -71,6 +71,26 @@ export async function deleteProject(id: string) {
   revalidatePath(`/projects`)
 }
 
+export async function updateSuggestedDates(id: string, data: {
+  suggestedStart: string | null
+  suggestedEnd: string | null
+}) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+
+  const toDate = (v: string | null) => v ? new Date(v) : null
+
+  await db.project.update({
+    where: { id },
+    data: {
+      suggestedStart: toDate(data.suggestedStart),
+      suggestedEnd:   toDate(data.suggestedEnd),
+    },
+  })
+  revalidatePath(`/projects/${id}`)
+  revalidatePath(`/projects/${id}/go-no-go`)
+}
+
 // ─── WBS Areas ─────────────────────────────────────────────────────────────
 
 export async function createWbsArea(projectId: string, name: string, color: string) {

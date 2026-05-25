@@ -13,6 +13,7 @@ import {
   Rocket, FileDown, BookOpen, Shield,
 } from "lucide-react"
 import { DeleteProjectButton } from "./delete-project-button"
+import { SuggestedDatesPanel } from "./suggested-dates-panel"
 import Link from "next/link"
 import { format, differenceInDays } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -523,6 +524,17 @@ export default async function ProjectDetailPage({
                   )}
                 </div>
               </div>
+
+              {/* Análise de prazo — visível em planejamento ou se já tiver sugestão */}
+              {(project.status === "PLANNING" || project.suggestedStart || project.suggestedEnd) && (
+                <SuggestedDatesPanel
+                  projectId={id}
+                  requestedStart={project.expectedStart}
+                  requestedEnd={project.expectedEnd}
+                  suggestedStart={project.suggestedStart}
+                  suggestedEnd={project.suggestedEnd}
+                />
+              )}
 
               {/* WBS summary */}
               {project.wbsAreas.length > 0 && (

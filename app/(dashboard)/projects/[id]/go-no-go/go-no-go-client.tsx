@@ -30,8 +30,10 @@ type ProjectData = {
   toBe: string | null
   assumptions: string | null
   restrictions: string | null
-  expectedStart: string | null
-  expectedEnd: string | null
+  expectedStart:  string | null
+  expectedEnd:    string | null
+  suggestedStart: string | null
+  suggestedEnd:   string | null
   economy: number | null
   estimatedCosts: number | null
   budget: number | null
@@ -454,73 +456,119 @@ function SlideConstraints({ assumptions, restrictions }: { assumptions: string |
   )
 }
 
-function SlideTimeline({ start, end }: { start: string | null; end: string | null }) {
+function DateColumn({
+  label, sublabel, start, end, accentColor, borderColor, textColor,
+}: {
+  label: string; sublabel?: string
+  start: string | null; end: string | null
+  accentColor: string; borderColor: string; textColor: string
+}) {
   const duration = start && end ? differenceInDays(new Date(end), new Date(start)) : null
-  const elapsed  = start ? differenceInDays(new Date(), new Date(start)) : 0
-  const pct = duration && duration > 0 ? Math.min(100, Math.max(0, Math.round((elapsed / duration) * 100))) : 0
+  return (
+    <div style={{
+      background: `${accentColor}0d`, border: `1px solid ${borderColor}`,
+      borderRadius: "16px", padding: "1.25rem 1.5rem", flex: 1,
+    }}>
+      <div style={{ marginBottom: "1rem" }}>
+        <p style={{ fontSize: "10px", fontWeight: 800, color: textColor, letterSpacing: "0.15em", textTransform: "uppercase", margin: "0 0 2px" }}>
+          {label}
+        </p>
+        {sublabel && (
+          <p style={{ fontSize: "10px", color: "rgba(248,250,252,0.30)", margin: 0 }}>{sublabel}</p>
+        )}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        {[
+          { key: "Início",   value: fmtDateShort(start) },
+          { key: "Término",  value: fmtDateShort(end) },
+          { key: "Duração",  value: duration !== null ? `${duration} dias` : "—" },
+        ].map(({ key, value }) => (
+          <div key={key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "10px", color: "rgba(248,250,252,0.35)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em" }}>{key}</span>
+            <span style={{ fontSize: "13px", fontWeight: 800, color: textColor }}>{value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function SlideTimeline({
+  start, end, suggestedStart, suggestedEnd,
+}: {
+  start: string | null; end: string | null
+  suggestedStart: string | null; suggestedEnd: string | null
+}) {
+  const hasSuggestion = suggestedStart || suggestedEnd
+
+  // Delta in days between suggested end and requested end
+  const delta = (end && suggestedEnd)
+    ? differenceInDays(new Date(suggestedEnd), new Date(end))
+    : null
 
   return (
     <Card accent="linear-gradient(90deg, #2463FF 0%, #00C4E0 60%, transparent 100%)">
-      <SlideLabel icon={Calendar} label="Cronograma Previsto" color="#2463FF" />
+      <SlideLabel icon={Calendar} label="Cronograma — Análise de Prazo" color="#2463FF" />
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: "2rem", marginBottom: "2.5rem" }}>
-        {/* Start */}
-        <div style={{
-          background: "rgba(36,99,255,0.10)", border: "1px solid rgba(36,99,255,0.25)",
-          borderRadius: "16px", padding: "1.25rem 1.5rem",
-        }}>
-          <p style={{ fontSize: "10px", fontWeight: 700, color: "rgba(248,250,252,0.35)", letterSpacing: "0.15em", textTransform: "uppercase", margin: "0 0 6px" }}>
-            Início Previsto
-          </p>
-          <p style={{ fontSize: "1.1rem", fontWeight: 800, color: "#93C5FD", margin: 0 }}>
-            {fmtDateShort(start)}
-          </p>
+      <div style={{ display: "flex", gap: "1.5rem", marginBottom: hasSuggestion ? "1.5rem" : "2rem" }}>
+        {/* Prazo solicitado */}
+        <DateColumn
+          label="Prazo Solicitado"
+          sublabel="Pelo solicitante na abertura"
+          start={start} end={end}
+          accentColor="#64748B" borderColor="rgba(100,116,139,0.25)" textColor="rgba(248,250,252,0.60)"
+        />
+
+        {/* Divider */}
+        <div style={{ display: "flex", alignItems: "center", padding: "0 0.25rem" }}>
+          <div style={{ width: "1px", height: "100%", background: "rgba(255,255,255,0.08)" }} />
         </div>
 
-        {/* Duration */}
-        <div style={{ textAlign: "center" }}>
-          <div style={{
-            width: "64px", height: "64px", borderRadius: "50%",
-            background: "linear-gradient(135deg, #2463FF, #7B2FBE)",
-            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-            boxShadow: "0 0 32px rgba(123,47,190,0.5)",
-          }}>
-            <span style={{ fontSize: "16px", fontWeight: 900, color: "white", lineHeight: 1 }}>{duration ?? "?"}</span>
-            <span style={{ fontSize: "8px", fontWeight: 700, color: "rgba(255,255,255,0.6)", letterSpacing: "0.1em" }}>DIAS</span>
-          </div>
-        </div>
-
-        {/* End */}
-        <div style={{
-          background: "rgba(0,196,224,0.10)", border: "1px solid rgba(0,196,224,0.25)",
-          borderRadius: "16px", padding: "1.25rem 1.5rem", textAlign: "right",
-        }}>
-          <p style={{ fontSize: "10px", fontWeight: 700, color: "rgba(248,250,252,0.35)", letterSpacing: "0.15em", textTransform: "uppercase", margin: "0 0 6px" }}>
-            Término Previsto
-          </p>
-          <p style={{ fontSize: "1.1rem", fontWeight: 800, color: "#67E8F9", margin: 0 }}>
-            {fmtDateShort(end)}
-          </p>
-        </div>
+        {/* Sugestão do time */}
+        <DateColumn
+          label="Sugestão do Time"
+          sublabel={hasSuggestion ? "Após análise do planejamento" : "Não preenchida"}
+          start={suggestedStart} end={suggestedEnd}
+          accentColor="#2463FF" borderColor="rgba(36,99,255,0.35)" textColor="#93C5FD"
+        />
       </div>
 
-      {/* Timeline bar */}
-      <div>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-          <span style={{ fontSize: "11px", color: "rgba(248,250,252,0.40)", fontWeight: 600 }}>Execução do projeto</span>
-          <span style={{ fontSize: "11px", color: "rgba(248,250,252,0.60)", fontWeight: 700 }}>0% concluído</span>
+      {/* Delta chip */}
+      {delta !== null && (
+        <div style={{ marginBottom: "1.5rem" }}>
+          {delta === 0 ? (
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 16px", borderRadius: "12px", background: "rgba(16,185,129,0.10)", border: "1px solid rgba(16,185,129,0.25)" }}>
+              <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#10B981" }} />
+              <span style={{ fontSize: "13px", fontWeight: 700, color: "#6EE7B7" }}>
+                Prazo sugerido alinhado com o solicitado
+              </span>
+            </div>
+          ) : (
+            <div style={{
+              display: "flex", alignItems: "center", gap: "8px", padding: "10px 16px", borderRadius: "12px",
+              background: delta > 0 ? "rgba(245,158,11,0.10)" : "rgba(16,185,129,0.10)",
+              border: `1px solid ${delta > 0 ? "rgba(245,158,11,0.30)" : "rgba(16,185,129,0.25)"}`,
+            }}>
+              <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: delta > 0 ? "#F59E0B" : "#10B981" }} />
+              <span style={{ fontSize: "13px", fontWeight: 700, color: delta > 0 ? "#FCD34D" : "#6EE7B7" }}>
+                {delta > 0
+                  ? `Sugestão estende o prazo em ${delta} dia${delta !== 1 ? "s" : ""} — a discutir na reunião`
+                  : `Sugestão antecipa o prazo em ${Math.abs(delta)} dia${Math.abs(delta) !== 1 ? "s" : ""}`
+                }
+              </span>
+            </div>
+          )}
         </div>
-        <div style={{ height: "8px", borderRadius: "999px", background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
-          <div style={{
-            height: "100%", width: `${pct}%`, borderRadius: "999px",
-            background: "linear-gradient(90deg, #2463FF, #00C4E0)",
-            transition: "width 1s ease",
-          }} />
+      )}
+
+      {/* Timeline bar based on requested dates */}
+      {(start || end) && (
+        <div>
+          <p style={{ fontSize: "12px", color: "rgba(248,250,252,0.30)", textAlign: "center" }}>
+            Prazo solicitado: {fmtDate(start)} &nbsp;→&nbsp; {fmtDate(end)}
+          </p>
         </div>
-        <p style={{ marginTop: "10px", fontSize: "12px", color: "rgba(248,250,252,0.35)", textAlign: "center" }}>
-          Data completa de início: {fmtDate(start)} &nbsp;·&nbsp; Término: {fmtDate(end)}
-        </p>
-      </div>
+      )}
     </Card>
   )
 }
@@ -956,7 +1004,7 @@ export function GoNoGoClient({
     project.toBe ? "proposal" : null,
     project.scope ? "scope" : null,
     (project.assumptions || project.restrictions) ? "constraints" : null,
-    (project.expectedStart || project.expectedEnd) ? "timeline" : null,
+    (project.expectedStart || project.expectedEnd || project.suggestedStart || project.suggestedEnd) ? "timeline" : null,
     (project.budget || project.estimatedCosts || project.economy) ? "financial" : null,
     risks.length > 0 ? "risks" : null,
     "decision",
@@ -1032,7 +1080,7 @@ export function GoNoGoClient({
       case "proposal":    return <SlideToBe toBe={project.toBe!} />
       case "scope":       return <SlideScope scope={project.scope!} stakeholderAreas={stakeholderAreas} />
       case "constraints": return <SlideConstraints assumptions={project.assumptions} restrictions={project.restrictions} />
-      case "timeline":    return <SlideTimeline start={project.expectedStart} end={project.expectedEnd} />
+      case "timeline":    return <SlideTimeline start={project.expectedStart} end={project.expectedEnd} suggestedStart={project.suggestedStart} suggestedEnd={project.suggestedEnd} />
       case "financial":   return <SlideFinancial budget={project.budget} costs={project.estimatedCosts} economy={project.economy} />
       case "risks":       return <SlideRisks risks={risks} />
       case "decision":    return (

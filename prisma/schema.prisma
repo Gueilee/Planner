@@ -162,6 +162,10 @@ model Project {
   sponsorId String?
   sponsor   User?   @relation("ProjectSponsor", fields: [sponsorId], references: [id])
 
+  // Team analysis — suggested dates after reviewing the request
+  suggestedStart DateTime?
+  suggestedEnd   DateTime?
+
   actualStart DateTime?
   actualEnd   DateTime?
   goLiveDate  DateTime?
