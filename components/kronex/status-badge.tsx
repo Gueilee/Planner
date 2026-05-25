@@ -8,6 +8,7 @@ const STATUS_CONFIG: Record<string, { label: string; dot: string; bg: string; te
   APPROVED:          { label: "Aprovada",       dot: "bg-green-400",   bg: "bg-green-50",    text: "text-green-600",   border: "border-green-200" },
   REJECTED:          { label: "Rejeitada",      dot: "bg-red-400",     bg: "bg-red-50",      text: "text-red-600",     border: "border-red-200" },
   CANCELLED:         { label: "Cancelada",      dot: "bg-gray-300",    bg: "bg-gray-50",     text: "text-gray-500",    border: "border-gray-200" },
+  PENDING_GO_NO_GO:  { label: "Pend. Go/No-Go", dot: "bg-amber-400",   bg: "bg-amber-50",    text: "text-amber-700",   border: "border-amber-200" },
   PLANNING:          { label: "Planejamento",   dot: "bg-blue-400",    bg: "bg-blue-50",     text: "text-blue-600",    border: "border-blue-200" },
   IN_PROGRESS:       { label: "Em Andamento",   dot: "bg-green-400",   bg: "bg-green-50",    text: "text-green-600",   border: "border-green-200" },
   PILOT:             { label: "Em Validação",   dot: "bg-cyan-400",    bg: "bg-cyan-50",     text: "text-cyan-600",    border: "border-cyan-200" },

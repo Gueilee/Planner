@@ -22,6 +22,7 @@ enum UserRole {
 
 
 enum ProjectStatus {
+  PENDING_GO_NO_GO
   PLANNING
   IN_PROGRESS
   PILOT

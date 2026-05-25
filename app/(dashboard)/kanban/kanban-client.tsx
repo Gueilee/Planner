@@ -48,6 +48,16 @@ export type KanbanProject = {
 
 const COLUMNS = [
   {
+    id: "PENDING_GO_NO_GO",
+    label: "Aguard. Go/No-Go",
+    dropStatus: "PENDING_GO_NO_GO",
+    displayStatuses: ["PENDING_GO_NO_GO"],
+    color: "#D97706",
+    glow: "rgba(217,119,6,0.25)",
+    icon: ArrowRight,
+    gradient: "linear-gradient(135deg, #D97706, #F59E0B)",
+  },
+  {
     id: "PLANNING",
     label: "Planejamento",
     dropStatus: "PLANNING",

@@ -7,6 +7,7 @@ import { updateProjectStatus } from "@/lib/actions/projects"
 
 const TRANSITIONS: Record<string, { label: string; next: string; icon: typeof Play; color: string }> = {
   PLANNING:     { label: "Iniciar Projeto",    next: "IN_PROGRESS", icon: Play,         color: "from-blue-500 to-blue-600" },
+  // PENDING_GO_NO_GO has no manual transition — progresses only via Go/No-Go meeting
   IN_PROGRESS:  { label: "Ir para Piloto",     next: "PILOT",       icon: FlaskConical, color: "from-cyan-500 to-blue-500" },
   PILOT:        { label: "Iniciar Ramp-Up",    next: "RAMP_UP",     icon: TrendingUp,   color: "from-indigo-500 to-violet-500" },
   RAMP_UP:      { label: "GO LIVE",            next: "GO_LIVE",     icon: Rocket,       color: "from-emerald-500 to-green-600" },

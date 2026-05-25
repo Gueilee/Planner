@@ -35,7 +35,7 @@ export async function createProjectRequest(data: {
     data: {
       title:          data.title,
       description:    data.scope || null,
-      status:         ProjectStatus.PLANNING,
+      status:         ProjectStatus.PENDING_GO_NO_GO,
       origin:         data.origin || null,
       scope:          data.scope || null,
       asIs:           data.asIs || null,

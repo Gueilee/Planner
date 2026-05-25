@@ -19,16 +19,17 @@ export type ProjectRow = {
 
 // ─── Filter config ────────────────────────────────────────────────────────────
 
-type FilterKey = "ALL" | "PLANNING" | "IN_PROGRESS" | "ON_HOLD" | "GO_LIVE" | "COMPLETED" | "FUTURE_ANALYSIS"
+type FilterKey = "ALL" | "PENDING_GO_NO_GO" | "PLANNING" | "IN_PROGRESS" | "ON_HOLD" | "GO_LIVE" | "COMPLETED" | "FUTURE_ANALYSIS"
 
 const FILTERS: { key: FilterKey; label: string; statuses: string[]; color: string }[] = [
-  { key: "ALL",             label: "Todos",           statuses: [],                                          color: "#2463FF" },
-  { key: "PLANNING",        label: "Planejamento",    statuses: ["PLANNING"],                                color: "#64748B" },
-  { key: "IN_PROGRESS",     label: "Em Andamento",    statuses: ["IN_PROGRESS", "RAMP_UP"],                  color: "#10B981" },
-  { key: "ON_HOLD",         label: "Em Validação",    statuses: ["ON_HOLD", "PILOT"],                        color: "#8B5CF6" },
-  { key: "GO_LIVE",         label: "Go Live",         statuses: ["GO_LIVE", "POST_GOLIVE"],                  color: "#059669" },
-  { key: "COMPLETED",       label: "Concluído",       statuses: ["COMPLETED"],                               color: "#6D28D9" },
-  { key: "FUTURE_ANALYSIS", label: "Análise Futura",  statuses: ["FUTURE_ANALYSIS"],                        color: "#9333EA" },
+  { key: "ALL",             label: "Todos",             statuses: [],                                          color: "#2463FF" },
+  { key: "PENDING_GO_NO_GO",label: "Pend. Go/No-Go",   statuses: ["PENDING_GO_NO_GO"],                        color: "#D97706" },
+  { key: "PLANNING",        label: "Planejamento",      statuses: ["PLANNING"],                                color: "#64748B" },
+  { key: "IN_PROGRESS",     label: "Em Andamento",      statuses: ["IN_PROGRESS", "RAMP_UP"],                  color: "#10B981" },
+  { key: "ON_HOLD",         label: "Em Validação",      statuses: ["ON_HOLD", "PILOT"],                        color: "#8B5CF6" },
+  { key: "GO_LIVE",         label: "Go Live",           statuses: ["GO_LIVE", "POST_GOLIVE"],                  color: "#059669" },
+  { key: "COMPLETED",       label: "Concluído",         statuses: ["COMPLETED"],                               color: "#6D28D9" },
+  { key: "FUTURE_ANALYSIS", label: "Análise Futura",    statuses: ["FUTURE_ANALYSIS"],                         color: "#9333EA" },
 ]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

@@ -17,6 +17,7 @@ export default async function DashboardPage() {
   const in14  = addDays(today, 14)
 
   const NOT_DONE: ProjectStatus[] = [
+    ProjectStatus.PENDING_GO_NO_GO,
     ProjectStatus.PLANNING, ProjectStatus.IN_PROGRESS, ProjectStatus.PILOT,
     ProjectStatus.RAMP_UP, ProjectStatus.GO_LIVE, ProjectStatus.POST_GOLIVE,
     ProjectStatus.ON_HOLD, ProjectStatus.FUTURE_ANALYSIS,

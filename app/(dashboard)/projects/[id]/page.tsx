@@ -100,12 +100,13 @@ export default async function ProjectDetailPage({
     : null
 
   const STATUS_FLOW = [
-    { key: "PLANNING",    label: "Planejamento" },
-    { key: "IN_PROGRESS", label: "Em Andamento" },
-    { key: "PILOT",       label: "Em Validação" },
-    { key: "GO_LIVE",     label: "Go Live" },
-    { key: "POST_GOLIVE", label: "Pós Go Live" },
-    { key: "COMPLETED",   label: "Concluído" },
+    { key: "PENDING_GO_NO_GO", label: "Go/No-Go" },
+    { key: "PLANNING",         label: "Planejamento" },
+    { key: "IN_PROGRESS",      label: "Em Andamento" },
+    { key: "PILOT",            label: "Em Validação" },
+    { key: "GO_LIVE",          label: "Go Live" },
+    { key: "POST_GOLIVE",      label: "Pós Go Live" },
+    { key: "COMPLETED",        label: "Concluído" },
   ]
   // RAMP_UP sits between validation and go-live — show it at the "Em Validação" step
   const statusForFlow = project.status === "RAMP_UP" ? "PILOT" : project.status
@@ -131,13 +132,16 @@ export default async function ProjectDetailPage({
             className="bg-white rounded-2xl overflow-hidden"
             style={{ border: "1px solid #E2E8F0", boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 8px 32px rgba(15,23,42,0.06)" }}
           >
-            {/* Gradient top bar — violet for FUTURE_ANALYSIS */}
+            {/* Gradient top bar */}
             <div
               className="h-1.5 w-full"
               style={{
-                background: project.status === "FUTURE_ANALYSIS"
-                  ? "linear-gradient(90deg, #4C1D95, #7C3AED, #A78BFA)"
-                  : "linear-gradient(90deg, #00C4E0 0%, #2463FF 50%, #8B2FFF 100%)",
+                background:
+                  project.status === "PENDING_GO_NO_GO"
+                    ? "linear-gradient(90deg, #92400E, #D97706, #F59E0B)"
+                    : project.status === "FUTURE_ANALYSIS"
+                      ? "linear-gradient(90deg, #4C1D95, #7C3AED, #A78BFA)"
+                      : "linear-gradient(90deg, #00C4E0 0%, #2463FF 50%, #8B2FFF 100%)",
               }}
             />
 
@@ -185,7 +189,37 @@ export default async function ProjectDetailPage({
                     }))}
                   />
 
-                  {/* PLANNING */}
+                  {/* PENDING GO/NO-GO — nova solicitação aguardando análise e reunião */}
+                  {project.status === "PENDING_GO_NO_GO" && (
+                    <>
+                      <Link
+                        href={`/projects/${id}/go-no-go`}
+                        className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.98]"
+                        style={{ background: "linear-gradient(135deg, #D97706, #F59E0B)", boxShadow: "0 4px 20px rgba(217,119,6,0.35)" }}
+                      >
+                        <Play className="w-3.5 h-3.5" />
+                        Go/No-Go
+                      </Link>
+                      <Link
+                        href={`/projects/${id}/presentation`}
+                        className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.98]"
+                        style={{ background: "linear-gradient(135deg, #0891B2, #06B6D4)", boxShadow: "0 4px 20px rgba(8,145,178,0.30)" }}
+                      >
+                        <Layers className="w-3.5 h-3.5" />
+                        Ap. Técnica
+                      </Link>
+                      <Link
+                        href={`/projects/${id}/kickoff`}
+                        className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.98]"
+                        style={{ background: "linear-gradient(135deg, #10B981, #059669)", boxShadow: "0 4px 20px rgba(16,185,129,0.30)" }}
+                      >
+                        <Timer className="w-3.5 h-3.5" />
+                        Kick-Off
+                      </Link>
+                    </>
+                  )}
+
+                  {/* PLANNING — já passou pelo Go/No-Go e foi aprovado */}
                   {project.status === "PLANNING" && (
                     <>
                       <Link
