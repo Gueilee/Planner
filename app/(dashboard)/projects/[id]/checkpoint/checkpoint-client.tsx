@@ -66,7 +66,7 @@ const FREQ_LABELS: Record<CheckpointFrequency, string> = {
 }
 
 const STATUS_CFG = [
-  { value: "PLANNING",    label: "Planejamento", hex: "#64748B" },
+  { value: "PLANNING",    label: "A Iniciar",    hex: "#64748B" },
   { value: "IN_PROGRESS", label: "Em Andamento", hex: "#2463FF" },
   { value: "COMPLETED",   label: "Concluído",    hex: "#10B981" },
   { value: "DELAYED",     label: "Atrasado",     hex: "#EF4444" },

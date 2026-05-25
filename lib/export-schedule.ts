@@ -23,7 +23,7 @@ type Task = {
 type Area = { id: string; name: string; color: string | null }
 
 const STATUS_LABELS: Record<string, string> = {
-  PLANNING:    "Em Planejamento",
+  PLANNING:    "A Iniciar",
   IN_PROGRESS: "Em Andamento",
   COMPLETED:   "Concluído",
   DELAYED:     "Atrasado",

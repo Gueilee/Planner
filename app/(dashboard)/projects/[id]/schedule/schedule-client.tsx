@@ -37,7 +37,7 @@ const DAY_PX = { month: 5, week: 16, day: 30 } as const
 type Zoom = keyof typeof DAY_PX
 
 const STATUS_CFG: Record<string, { label: string; color: string; bg: string; dot: string }> = {
-  PLANNING:    { label: "Em Planejamento", color: "#64748B", bg: "#F8FAFC", dot: "#94A3B8" },
+  PLANNING:    { label: "A Iniciar",       color: "#64748B", bg: "#F8FAFC", dot: "#94A3B8" },
   IN_PROGRESS: { label: "Em Andamento",   color: "#2463FF", bg: "#EFF6FF", dot: "#2463FF" },
   COMPLETED:   { label: "Concluído",      color: "#10B981", bg: "#ECFDF5", dot: "#10B981" },
   DELAYED:     { label: "Atrasado",       color: "#EF4444", bg: "#FEF2F2", dot: "#EF4444" },

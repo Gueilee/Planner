@@ -29,7 +29,7 @@ const RISK_LABELS: Record<string, string> = {
   LOW: "Baixo", MEDIUM: "Médio", HIGH: "Alto", CRITICAL: "Crítico"
 }
 const TASK_STATUS_LABELS: Record<string, string> = {
-  PLANNING: "Planejamento", IN_PROGRESS: "Em Andamento", COMPLETED: "Concluída",
+  PLANNING: "A Iniciar", IN_PROGRESS: "Em Andamento", COMPLETED: "Concluída",
   VALIDATION: "Validação", ON_HOLD: "Pausada", INITIATIVE: "Iniciativa",
 }
 const TASK_STATUS_COLORS: Record<string, string> = {
