@@ -24,6 +24,8 @@ export async function updateProjectDetails(id: string, data: {
   title?:          string
   description?:    string
   scope?:          string
+  assumptions?:    string | null
+  restrictions?:   string | null
   origin?:         string
   budget?:         number | null
   economy?:        number | null
@@ -47,6 +49,8 @@ export async function updateProjectDetails(id: string, data: {
       title:          data.title         || undefined,
       description:    data.description   ?? undefined,
       scope:          data.scope         ?? undefined,
+      assumptions:    data.assumptions   ?? undefined,
+      restrictions:   data.restrictions  ?? undefined,
       origin:         data.origin        ?? undefined,
       budget:         data.budget        !== undefined ? data.budget  : undefined,
       economy:        data.economy       !== undefined ? data.economy : undefined,
@@ -216,4 +220,58 @@ export async function removeProjectMember(projectId: string, userId: string) {
     where: { projectId_userId: { projectId, userId } },
   })
   revalidatePath(`/projects/${projectId}`)
+}
+
+// ─── Risks ─────────────────────────────────────────────────────────────────
+
+export async function createRisk(projectId: string, data: {
+  description: string
+  level: string
+  probability?: string
+  impact?: string
+  mitigation?: string
+}) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+
+  await db.risk.create({
+    data: {
+      projectId,
+      description: data.description,
+      status:      (data.level as import("@/lib/generated/prisma/enums").RiskLevel) ?? "MEDIUM",
+      probability: data.probability ?? "MÉDIO",
+      impact:      data.impact      ?? "MÉDIO",
+      mitigation:  data.mitigation  ?? null,
+    },
+  })
+  revalidatePath(`/projects/${projectId}`)
+}
+
+export async function updateRisk(id: string, data: {
+  description?: string
+  level?: string
+  mitigation?: string
+}) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+
+  const risk = await db.risk.findUnique({ where: { id }, select: { projectId: true } })
+  await db.risk.update({
+    where: { id },
+    data: {
+      description: data.description,
+      status:      data.level ? (data.level as import("@/lib/generated/prisma/enums").RiskLevel) : undefined,
+      mitigation:  data.mitigation,
+    },
+  })
+  if (risk) revalidatePath(`/projects/${risk.projectId}`)
+}
+
+export async function deleteRisk(id: string) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+
+  const risk = await db.risk.findUnique({ where: { id }, select: { projectId: true } })
+  await db.risk.delete({ where: { id } })
+  if (risk) revalidatePath(`/projects/${risk.projectId}`)
 }

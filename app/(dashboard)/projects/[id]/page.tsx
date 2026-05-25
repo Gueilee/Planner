@@ -56,7 +56,8 @@ export default async function ProjectDetailPage({
   const { id } = await params
   const session = await auth()
 
-  const project = await db.project.findUnique({
+  const [project, allUsers] = await Promise.all([
+   db.project.findUnique({
     where: { id },
     include: {
       members: { include: { user: { select: { id: true, name: true, email: true, role: true, department: true } } } },
@@ -79,7 +80,13 @@ export default async function ProjectDetailPage({
       risks: true,
       _count: { select: { tasks: true, risks: true, meetings: true } },
     },
-  })
+   }),
+   db.user.findMany({
+     where: { active: true },
+     select: { id: true, name: true, department: true, role: true },
+     orderBy: { name: "asc" },
+   }),
+  ])
 
   if (!project) notFound()
 
@@ -153,6 +160,8 @@ export default async function ProjectDetailPage({
                       title:         project.title,
                       description:   project.description,
                       scope:         project.scope,
+                      assumptions:   project.assumptions,
+                      restrictions:  project.restrictions,
                       origin:        project.origin,
                       budget:        project.budget,
                       economy:       project.economy,
@@ -162,6 +171,18 @@ export default async function ProjectDetailPage({
                       actualEnd:     project.actualEnd,
                       goLiveDate:    project.goLiveDate,
                     }}
+                    members={project.members.map(m => ({
+                      userId: m.userId,
+                      role:   m.role,
+                      user:   m.user,
+                    }))}
+                    allUsers={allUsers}
+                    risks={project.risks.map(r => ({
+                      id:          r.id,
+                      description: r.description,
+                      level:       r.status,
+                      mitigation:  r.mitigation,
+                    }))}
                   />
 
                   {/* PLANNING */}
