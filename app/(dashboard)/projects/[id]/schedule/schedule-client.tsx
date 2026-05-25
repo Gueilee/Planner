@@ -5,10 +5,11 @@ import {
 } from "react"
 import Link from "next/link"
 import {
-  parseISO, format, differenceInDays, startOfMonth, endOfMonth,
+  format, differenceInDays, startOfMonth, endOfMonth,
   eachMonthOfInterval, addMonths, subMonths, addDays, subDays,
   isSaturday, isSunday, min, max, isAfter, isBefore, eachWeekOfInterval,
 } from "date-fns"
+import { parseDateStr, fmtDateShort, todayStr } from "@/lib/date-utils"
 import { ptBR } from "date-fns/locale"
 import {
   ArrowLeft, Plus, ChevronRight, ChevronDown, Pencil, Trash2,
@@ -90,17 +91,17 @@ function taskColor(t: Task): string {
 function isAutoDelayed(t: Task): boolean {
   if (t.status === "COMPLETED" || t.status === "DELAYED") return false
   if (!t.endDate) return false
-  return new Date(t.endDate) < new Date()
+  return t.endDate.slice(0, 10) < todayStr()
 }
 
 function fmtDate(ds: string | null) {
-  return ds ? format(parseISO(ds), "dd/MM/yy") : "—"
+  return fmtDateShort(ds)
 }
 
 function calcEstimatedProgress(startDate: string | null, endDate: string | null): number | null {
   if (!startDate || !endDate) return null
-  const start = parseISO(startDate)
-  const end   = parseISO(endDate)
+  const start = parseDateStr(startDate)
+  const end   = parseDateStr(endDate)
   const today = new Date()
   const total = differenceInDays(end, start)
   if (total <= 0) return null
@@ -971,8 +972,8 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
   const today    = useMemo(() => new Date(), [])
 
   const allDates = useMemo(() => [
-    ...tasks.filter((t) => t.startDate).map((t) => parseISO(t.startDate!)),
-    ...tasks.filter((t) => t.endDate).map((t) => parseISO(t.endDate!)),
+    ...tasks.filter((t) => t.startDate).map((t) => parseDateStr(t.startDate!)),
+    ...tasks.filter((t) => t.endDate).map((t) => parseDateStr(t.endDate!)),
   ], [tasks])
 
   const ganttStart = useMemo(() =>
@@ -996,7 +997,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
     return m
   }, [ganttRows])
 
-  function dateToX(ds: string) { return differenceInDays(parseISO(ds), ganttStart) * dayWidth }
+  function dateToX(ds: string) { return differenceInDays(parseDateStr(ds), ganttStart) * dayWidth }
   const todayX = differenceInDays(today, ganttStart) * dayWidth
 
   useEffect(() => {

@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs"
-import { format, parseISO, differenceInDays } from "date-fns"
+import { format, differenceInDays } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { fmtDateLong, parseDateStr } from "@/lib/date-utils"
 
 type Task = {
   id: string
@@ -48,14 +49,13 @@ function lightenHex(hex: string, amount = 0.85): string {
 }
 
 function fmtDate(ds: string | null) {
-  if (!ds) return "—"
-  try { return format(parseISO(ds), "dd/MM/yyyy", { locale: ptBR }) } catch { return "—" }
+  return fmtDateLong(ds)
 }
 
 function calcEstimatedProgress(startDate: string | null, endDate: string | null): number | null {
   if (!startDate || !endDate) return null
-  const start = parseISO(startDate)
-  const end   = parseISO(endDate)
+  const start = parseDateStr(startDate)
+  const end   = parseDateStr(endDate)
   const today = new Date()
   const total = differenceInDays(end, start)
   if (total <= 0) return null

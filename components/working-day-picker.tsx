@@ -2,10 +2,11 @@
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import {
-  format, parseISO, addMonths, subMonths,
+  format, addMonths, subMonths,
   startOfMonth, endOfMonth, eachDayOfInterval,
   getDay, isToday,
 } from "date-fns"
+import { parseDateStr, fmtDateLong } from "@/lib/date-utils"
 import { ptBR } from "date-fns/locale"
 import { ChevronLeft, ChevronRight, X, CalendarDays } from "lucide-react"
 import { isWeekend, isHoliday, isWorkingDay, getHolidayName } from "@/lib/working-days"
@@ -30,7 +31,7 @@ export function WorkingDayPicker({
   disabled,
 }: WorkingDayPickerProps) {
   const [open, setOpen]         = useState(false)
-  const [viewDate, setViewDate] = useState(() => value ? parseISO(value) : new Date())
+  const [viewDate, setViewDate] = useState(() => value ? parseDateStr(value) : new Date())
   const [hovered, setHovered]   = useState<string | null>(null)
   const [calPos, setCalPos]     = useState({ top: 0, left: 0, above: false })
 
@@ -51,7 +52,7 @@ export function WorkingDayPicker({
   }, [open])
 
   // Sync view when value changes externally
-  useEffect(() => { if (value) setViewDate(parseISO(value)) }, [value])
+  useEffect(() => { if (value) setViewDate(parseDateStr(value)) }, [value])
 
   const openCalendar = useCallback(() => {
     if (disabled) return
@@ -88,7 +89,7 @@ export function WorkingDayPicker({
     onChange("")
   }
 
-  const displayValue = value ? format(parseISO(value), "dd/MM/yyyy") : ""
+  const displayValue = value ? fmtDateLong(value) : ""
   const hoveredHoliday = hovered ? getHolidayName(hovered) : null
   const hoveredWE      = hovered ? isWeekend(hovered) : false
 
