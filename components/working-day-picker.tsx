@@ -6,7 +6,7 @@ import {
   startOfMonth, endOfMonth, eachDayOfInterval,
   getDay, isToday,
 } from "date-fns"
-import { parseDateStr, fmtDateLong } from "@/lib/date-utils"
+import { parseDateStr, fmtDateLong, fmtDateShort } from "@/lib/date-utils"
 import { ptBR } from "date-fns/locale"
 import { ChevronLeft, ChevronRight, X, CalendarDays } from "lucide-react"
 import { isWeekend, isHoliday, isWorkingDay, getHolidayName } from "@/lib/working-days"
@@ -18,6 +18,7 @@ interface WorkingDayPickerProps {
   className?: string
   style?: React.CSSProperties
   disabled?: boolean
+  compact?: boolean       // table-cell mode: smaller text, short date format
 }
 
 const DOW = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
@@ -29,6 +30,7 @@ export function WorkingDayPicker({
   className = "",
   style,
   disabled,
+  compact = false,
 }: WorkingDayPickerProps) {
   const [open, setOpen]         = useState(false)
   const [viewDate, setViewDate] = useState(() => value ? parseDateStr(value) : new Date())
@@ -89,7 +91,7 @@ export function WorkingDayPicker({
     onChange("")
   }
 
-  const displayValue = value ? fmtDateLong(value) : ""
+  const displayValue = value ? (compact ? fmtDateShort(value) : fmtDateLong(value)) : ""
   const hoveredHoliday = hovered ? getHolidayName(hovered) : null
   const hoveredWE      = hovered ? isWeekend(hovered) : false
 
@@ -99,11 +101,11 @@ export function WorkingDayPicker({
       <div
         ref={triggerRef}
         onClick={openCalendar}
-        className={`flex items-center gap-2 cursor-pointer select-none ${disabled ? "opacity-50 cursor-not-allowed" : ""} ${className}`}
+        className={`flex items-center ${compact ? "gap-1" : "gap-2"} cursor-pointer select-none ${disabled ? "opacity-50 cursor-not-allowed" : ""} ${className}`}
         style={style}
       >
-        <CalendarDays className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-        <span className={`flex-1 text-sm ${displayValue ? "text-[#0F172A]" : "text-slate-400"}`}>
+        <CalendarDays className={`${compact ? "w-3 h-3" : "w-3.5 h-3.5"} text-slate-400 shrink-0`} />
+        <span className={`flex-1 ${compact ? "text-[10px] font-mono" : "text-sm"} ${displayValue ? "text-[#0F172A]" : "text-slate-400"}`}>
           {displayValue || placeholder}
         </span>
         {value && !disabled && (
@@ -111,7 +113,7 @@ export function WorkingDayPicker({
             onClick={clearDate}
             className="text-slate-300 hover:text-slate-500 transition-colors shrink-0"
           >
-            <X className="w-3 h-3" />
+            <X className={`${compact ? "w-2.5 h-2.5" : "w-3 h-3"}`} />
           </button>
         )}
       </div>

@@ -883,6 +883,8 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
   const [pending, start]          = useTransition()
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
+  const [editTitle, setEditTitle] = useState<{ id: string; val: string } | null>(null)
+  const [editNum,   setEditNum]   = useState<{ id: string; field: "estimatedEffort" | "actualEffort" | "progress"; val: string } | null>(null)
 
   // Gantt-specific expand + inline edit state
   const [expandedGanttAreas, setExpandedGanttAreas] = useState<Set<string>>(
@@ -1031,6 +1033,18 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
       await deleteTask(id, project.id)
       setTasks((prev) => prev.filter((t) => t.id !== id && t.parentId !== id))
       setPanel(null)
+    })
+  }
+
+  function saveTaskField(taskId: string, data: Record<string, unknown>) {
+    start(async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const updated = await updateTask(taskId, project.id, data as any)
+      setTasks((prev) => {
+        const i = prev.findIndex((x) => x.id === taskId)
+        if (i === -1) return prev
+        const arr = [...prev]; arr[i] = updated as Task; return arr
+      })
     })
   }
 
@@ -1260,10 +1274,10 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
             <div style={{ minWidth: 240, flex: 1 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest px-2">Nome da Atividade</div>
             <div style={{ width: 130, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Status</div>
             <div style={{ width: 120, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest px-3">Responsável</div>
-            <div style={{ width: 78, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Início Plan.</div>
-            <div style={{ width: 78, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Fim Plan.</div>
-            <div style={{ width: 78, flexShrink: 0 }} className="text-[10px] font-black text-emerald-400/60 uppercase tracking-widest text-center">Início Real</div>
-            <div style={{ width: 78, flexShrink: 0 }} className="text-[10px] font-black text-emerald-400/60 uppercase tracking-widest text-center">Fim Real</div>
+            <div style={{ width: 88, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Início Plan.</div>
+            <div style={{ width: 88, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Fim Plan.</div>
+            <div style={{ width: 88, flexShrink: 0 }} className="text-[10px] font-black text-emerald-400/60 uppercase tracking-widest text-center">Início Real</div>
+            <div style={{ width: 88, flexShrink: 0 }} className="text-[10px] font-black text-emerald-400/60 uppercase tracking-widest text-center">Fim Real</div>
             <div style={{ width: 64, flexShrink: 0 }} className="text-[10px] font-black text-violet-400/70 uppercase tracking-widest text-center">Est.h</div>
             <div style={{ width: 64, flexShrink: 0 }} className="text-[10px] font-black text-violet-400/70 uppercase tracking-widest text-center">Real h</div>
             <div style={{ width: 68, flexShrink: 0 }} className="text-[10px] font-black text-amber-400/70 uppercase tracking-widest text-center">% Est.</div>
@@ -1351,10 +1365,10 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                         <span className="text-[10px] text-slate-400 font-medium">{row.doneCount}/{row.taskCount}</span>
                       </div>
                       <div style={{ width: 120, flexShrink: 0 }} />
-                      <div style={{ width: 78, flexShrink: 0 }} />
-                      <div style={{ width: 78, flexShrink: 0 }} />
-                      <div style={{ width: 78, flexShrink: 0 }} />
-                      <div style={{ width: 78, flexShrink: 0 }} />
+                      <div style={{ width: 88, flexShrink: 0 }} />
+                      <div style={{ width: 88, flexShrink: 0 }} />
+                      <div style={{ width: 88, flexShrink: 0 }} />
+                      <div style={{ width: 88, flexShrink: 0 }} />
                       <div style={{ width: 64, flexShrink: 0 }} />
                       <div style={{ width: 64, flexShrink: 0 }} />
                       <div style={{ width: 68, flexShrink: 0 }} />
@@ -1486,16 +1500,41 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                     </div>
 
                     {/* Name */}
-                    <div className="flex-1 flex items-center gap-1.5 min-w-0 cursor-pointer px-1 py-1" onClick={() => openEdit(t)}>
+                    <div className="flex-1 flex items-center gap-1.5 min-w-0 px-1 py-1">
                       {isLate    && <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />}
                       {isBlocked && !isLate && <Lock className="w-3 h-3 text-slate-300 shrink-0" />}
-                      <span className={`text-xs truncate ${
-                        isDone         ? "line-through text-slate-400"
-                        : isTarefa     ? "text-slate-500 font-medium"
-                        : "text-[#0F172A] font-semibold"
-                      }`}>
-                        {t.title}
-                      </span>
+                      {editTitle?.id === t.id ? (
+                        <input
+                          autoFocus
+                          value={editTitle.val}
+                          onChange={(e) => setEditTitle({ id: t.id, val: e.target.value })}
+                          onBlur={() => {
+                            const val = editTitle.val.trim()
+                            setEditTitle(null)
+                            if (val && val !== t.title) saveTaskField(t.id, { title: val })
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur() }
+                            if (e.key === "Escape") setEditTitle(null)
+                            e.stopPropagation()
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex-1 min-w-0 text-xs font-semibold text-[#0F172A] bg-white rounded-lg px-2 py-0.5 outline-none"
+                          style={{ border: "1.5px solid #7B2FBE" }}
+                        />
+                      ) : (
+                        <span
+                          className={`flex-1 text-xs truncate cursor-text ${
+                            isDone     ? "line-through text-slate-400"
+                            : isTarefa ? "text-slate-500 font-medium"
+                            : "text-[#0F172A] font-semibold"
+                          }`}
+                          onClick={() => setEditTitle({ id: t.id, val: t.title })}
+                          title="Clique para renomear"
+                        >
+                          {t.title}
+                        </span>
+                      )}
                       {/* Type badge */}
                       <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full font-bold" style={
                         isTarefa
@@ -1534,60 +1573,131 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                     </div>
 
                     {/* Responsible */}
-                    <div style={{ width: 120, flexShrink: 0 }} className="px-2">
-                      {t.responsible ? (
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black text-white shrink-0"
+                    <div style={{ width: 120, flexShrink: 0 }} className="px-1">
+                      <div className="flex items-center gap-1.5">
+                        {t.responsible && (
+                          <div className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black text-white shrink-0"
                             style={{ background: areaColor ?? color }}>
                             {initials(t.responsible.name)}
                           </div>
-                          <span className="text-[10px] text-slate-600 truncate">{t.responsible.name.split(" ")[0]}</span>
-                        </div>
-                      ) : (
-                        <span className="text-[10px] text-slate-300">—</span>
-                      )}
+                        )}
+                        <select
+                          value={t.responsibleId ?? ""}
+                          onChange={(e) => saveTaskField(t.id, { responsibleId: e.target.value || null })}
+                          className="flex-1 min-w-0 text-[10px] text-slate-600 bg-transparent border-0 outline-none cursor-pointer"
+                          title={t.responsible?.name ?? "Sem responsável"}
+                        >
+                          <option value="">— Sem responsável</option>
+                          {members.map((m) => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
 
                     {/* Início Planejado */}
-                    <div style={{ width: 78, flexShrink: 0 }} className="text-center">
-                      <span className="text-[10px] text-slate-500 font-mono">{fmtDate(t.startDate)}</span>
+                    <div style={{ width: 88, flexShrink: 0 }} className="px-1">
+                      <WorkingDayPicker
+                        compact
+                        value={t.startDate?.slice(0, 10) ?? ""}
+                        onChange={(v) => saveTaskField(t.id, { startDate: v || null })}
+                        placeholder="—"
+                      />
                     </div>
 
                     {/* Término Planejado */}
-                    <div style={{ width: 78, flexShrink: 0 }} className="text-center">
-                      <span className={`text-[10px] font-mono ${isLate ? "text-red-400 font-bold" : "text-slate-500"}`}>
-                        {fmtDate(t.endDate)}
-                      </span>
+                    <div style={{ width: 88, flexShrink: 0 }} className="px-1">
+                      <WorkingDayPicker
+                        compact
+                        value={t.endDate?.slice(0, 10) ?? ""}
+                        onChange={(v) => saveTaskField(t.id, { endDate: v || null })}
+                        placeholder="—"
+                      />
                     </div>
 
                     {/* Início Real */}
-                    <div style={{ width: 78, flexShrink: 0 }} className="text-center">
-                      <span className="text-[10px] font-mono text-emerald-600">{fmtDate(t.actualStart)}</span>
+                    <div style={{ width: 88, flexShrink: 0 }} className="px-1">
+                      <WorkingDayPicker
+                        compact
+                        value={t.actualStart?.slice(0, 10) ?? ""}
+                        onChange={(v) => saveTaskField(t.id, { actualStart: v || null })}
+                        placeholder="—"
+                      />
                     </div>
 
                     {/* Término Real */}
-                    <div style={{ width: 78, flexShrink: 0 }} className="text-center">
-                      <span className="text-[10px] font-mono text-emerald-600">{fmtDate(t.actualEnd)}</span>
+                    <div style={{ width: 88, flexShrink: 0 }} className="px-1">
+                      <WorkingDayPicker
+                        compact
+                        value={t.actualEnd?.slice(0, 10) ?? ""}
+                        onChange={(v) => saveTaskField(t.id, { actualEnd: v || null })}
+                        placeholder="—"
+                      />
                     </div>
 
                     {/* Esforço Estimado */}
-                    <div style={{ width: 64, flexShrink: 0 }} className="text-center">
-                      <span className="text-[10px] font-mono text-violet-600">
-                        {t.estimatedEffort != null ? `${t.estimatedEffort}h` : "—"}
-                      </span>
+                    <div style={{ width: 64, flexShrink: 0 }} className="text-center px-1">
+                      {editNum?.id === t.id && editNum.field === "estimatedEffort" ? (
+                        <input
+                          type="number" min={0} step={0.5} autoFocus
+                          value={editNum.val}
+                          onChange={(e) => setEditNum({ id: t.id, field: "estimatedEffort", val: e.target.value })}
+                          onBlur={() => {
+                            const val = editNum.val === "" ? null : Number(editNum.val)
+                            setEditNum(null)
+                            saveTaskField(t.id, { estimatedEffort: val })
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") e.currentTarget.blur()
+                            if (e.key === "Escape") setEditNum(null)
+                          }}
+                          className="w-full text-[10px] text-center font-mono text-violet-600 rounded outline-none bg-white"
+                          style={{ border: "1.5px solid #7B2FBE" }}
+                        />
+                      ) : (
+                        <span
+                          className="text-[10px] font-mono text-violet-600 cursor-text block"
+                          onClick={() => setEditNum({ id: t.id, field: "estimatedEffort", val: String(t.estimatedEffort ?? "") })}
+                          title="Clique para editar"
+                        >
+                          {t.estimatedEffort != null ? `${t.estimatedEffort}h` : "—"}
+                        </span>
+                      )}
                     </div>
 
                     {/* Esforço Real */}
-                    <div style={{ width: 64, flexShrink: 0 }} className="text-center">
-                      {(() => {
-                        if (t.actualEffort == null) return <span className="text-[10px] text-slate-300">—</span>
-                        const over = t.estimatedEffort != null && t.actualEffort > t.estimatedEffort
-                        return (
-                          <span className={`text-[10px] font-mono font-bold ${over ? "text-red-500" : "text-violet-600"}`}>
-                            {t.actualEffort}h
-                          </span>
-                        )
-                      })()}
+                    <div style={{ width: 64, flexShrink: 0 }} className="text-center px-1">
+                      {editNum?.id === t.id && editNum.field === "actualEffort" ? (
+                        <input
+                          type="number" min={0} step={0.5} autoFocus
+                          value={editNum.val}
+                          onChange={(e) => setEditNum({ id: t.id, field: "actualEffort", val: e.target.value })}
+                          onBlur={() => {
+                            const val = editNum.val === "" ? null : Number(editNum.val)
+                            setEditNum(null)
+                            saveTaskField(t.id, { actualEffort: val })
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") e.currentTarget.blur()
+                            if (e.key === "Escape") setEditNum(null)
+                          }}
+                          className="w-full text-[10px] text-center font-mono text-violet-600 rounded outline-none bg-white"
+                          style={{ border: "1.5px solid #7B2FBE" }}
+                        />
+                      ) : (
+                        (() => {
+                          const over = t.estimatedEffort != null && t.actualEffort != null && t.actualEffort > t.estimatedEffort
+                          return (
+                            <span
+                              className={`text-[10px] font-mono font-bold cursor-text block ${over ? "text-red-500" : t.actualEffort != null ? "text-violet-600" : "text-slate-300"}`}
+                              onClick={() => setEditNum({ id: t.id, field: "actualEffort", val: String(t.actualEffort ?? "") })}
+                              title="Clique para editar"
+                            >
+                              {t.actualEffort != null ? `${t.actualEffort}h` : "—"}
+                            </span>
+                          )
+                        })()
+                      )}
                     </div>
 
                     {/* % Completo Estimado */}
@@ -1612,12 +1722,35 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
 
                     {/* % Completo Real */}
                     <div style={{ width: 68, flexShrink: 0 }} className="px-2">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-[9px] font-bold text-center" style={{ color }}>{t.progress}%</span>
-                        <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                          <div style={{ width: `${t.progress}%`, height: "100%", background: color, borderRadius: "inherit", transition: "width 0.3s" }} />
+                      {editNum?.id === t.id && editNum.field === "progress" ? (
+                        <input
+                          type="number" min={0} max={100} autoFocus
+                          value={editNum.val}
+                          onChange={(e) => setEditNum({ id: t.id, field: "progress", val: e.target.value })}
+                          onBlur={() => {
+                            const val = Math.min(100, Math.max(0, Number(editNum.val) || 0))
+                            setEditNum(null)
+                            saveTaskField(t.id, { progress: val })
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") e.currentTarget.blur()
+                            if (e.key === "Escape") setEditNum(null)
+                          }}
+                          className="w-full text-[10px] text-center font-bold rounded outline-none bg-white"
+                          style={{ color, border: "1.5px solid #7B2FBE" }}
+                        />
+                      ) : (
+                        <div
+                          className="flex flex-col gap-0.5 cursor-text"
+                          onClick={() => setEditNum({ id: t.id, field: "progress", val: String(t.progress) })}
+                          title="Clique para editar"
+                        >
+                          <span className="text-[9px] font-bold text-center" style={{ color }}>{t.progress}%</span>
+                          <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                            <div style={{ width: `${t.progress}%`, height: "100%", background: color, borderRadius: "inherit", transition: "width 0.3s" }} />
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
 
                     {/* Predecessoras */}
