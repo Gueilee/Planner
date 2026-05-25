@@ -14,7 +14,7 @@ import {
   ArrowLeft, Plus, ChevronRight, ChevronDown, Pencil, Trash2,
   Loader2, X, Check, CalendarDays, AlertTriangle, Layers,
   List, BarChart2, Search, FolderOpen, Paperclip,
-  Link2, Lock, ArrowRight, GripVertical,
+  Link2, Lock, ArrowRight, GripVertical, FileSpreadsheet,
 } from "lucide-react"
 import {
   createTask, updateTask, deleteTask, createArea,
@@ -881,6 +881,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
   const [panel, setPanel]         = useState<{ mode: "add" | "edit"; task: Partial<Task> & { projectId: string } } | null>(null)
   const [pending, start]          = useTransition()
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
 
   // ── Drag-and-drop state ──────────────────────────────────────────────────
   const [draggedId,  setDraggedId]  = useState<string | null>(null)
@@ -1086,6 +1087,16 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
     return result
   }, [flatTasks, tasks, dayWidth, ganttStart])
 
+  async function handleExport() {
+    setExporting(true)
+    try {
+      const { exportScheduleToExcel } = await import("@/lib/export-schedule")
+      await exportScheduleToExcel(project.title, areas, tasks)
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const completedCount = tasks.filter((t) => t.status === "COMPLETED").length
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1178,6 +1189,21 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
             <FolderOpen className="w-3.5 h-3.5" /> Nova Área
           </button>
         )}
+
+        {/* Export Excel */}
+        <button
+          onClick={handleExport}
+          disabled={exporting || tasks.length === 0}
+          className="inline-flex items-center gap-2 px-3 h-8 text-xs font-semibold rounded-xl border transition-all hover:border-emerald-300 hover:text-emerald-600 hover:bg-emerald-50 active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed"
+          style={{ borderColor: "#D1FAE5", color: "#059669", background: "white" }}
+          title="Exportar cronograma em Excel"
+        >
+          {exporting
+            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            : <FileSpreadsheet className="w-3.5 h-3.5" />
+          }
+          {exporting ? "Exportando…" : "Excel"}
+        </button>
 
         {/* Add task */}
         <button onClick={() => openAdd()}
