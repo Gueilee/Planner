@@ -14,10 +14,11 @@ import {
   ArrowLeft, Plus, ChevronRight, ChevronDown, Pencil, Trash2,
   Loader2, X, Check, CalendarDays, AlertTriangle, Layers,
   List, BarChart2, Search, FolderOpen, Paperclip,
-  Link2, Lock, ArrowRight,
+  Link2, Lock, ArrowRight, GripVertical,
 } from "lucide-react"
 import {
   createTask, updateTask, deleteTask, createArea,
+  reorderAreas, reorderTasks,
   getTaskAttachments, addTaskAttachments,
   type AttachmentUpload,
 } from "@/lib/actions/schedule"
@@ -60,8 +61,10 @@ type Task = {
   title: string; description: string | null; responsibleId: string | null
   responsible: { id: string; name: string } | null
   wbsArea: { id: string; name: string; color: string | null } | null
-  startDate: string | null; endDate: string | null; status: string
-  progress: number; order: number; dependencies: string[]
+  startDate: string | null; endDate: string | null
+  actualStart: string | null; actualEnd: string | null
+  estimatedEffort: number | null; actualEffort: number | null
+  status: string; progress: number; order: number; dependencies: string[]
   _count: { comments: number; attachments: number }
 }
 type FlatTask = Task & { depth: number; hasChildren: boolean }
@@ -92,6 +95,16 @@ function isAutoDelayed(t: Task): boolean {
 
 function fmtDate(ds: string | null) {
   return ds ? format(parseISO(ds), "dd/MM/yy") : "—"
+}
+
+function calcEstimatedProgress(startDate: string | null, endDate: string | null): number | null {
+  if (!startDate || !endDate) return null
+  const start = parseISO(startDate)
+  const end   = parseISO(endDate)
+  const today = new Date()
+  const total = differenceInDays(end, start)
+  if (total <= 0) return null
+  return Math.max(0, Math.min(100, Math.round((differenceInDays(today, start) / total) * 100)))
 }
 
 function flattenTasks(tasks: Task[], expanded: Set<string>): FlatTask[] {
@@ -199,16 +212,20 @@ interface TaskFormProps {
 function TaskForm({ mode, initial, areas, members, allTasks, onSave, onDelete, onClose }: TaskFormProps) {
   const [pending, start] = useTransition()
   const [form, setForm] = useState({
-    title:         initial.title         ?? "",
-    description:   initial.description   ?? "",
-    wbsAreaId:     initial.wbsAreaId     ?? "",
-    responsibleId: initial.responsibleId ?? "",
-    parentId:      initial.parentId      ?? "",
-    startDate:     initial.startDate?.slice(0, 10) ?? "",
-    endDate:       initial.endDate?.slice(0, 10)   ?? "",
-    status:        initial.status        ?? "PLANNING",
-    progress:      initial.progress      ?? 0,
-    dependencies:  initial.dependencies  ?? [] as string[],
+    title:           initial.title           ?? "",
+    description:     initial.description     ?? "",
+    wbsAreaId:       initial.wbsAreaId       ?? "",
+    responsibleId:   initial.responsibleId   ?? "",
+    parentId:        initial.parentId        ?? "",
+    startDate:       initial.startDate?.slice(0, 10)    ?? "",
+    endDate:         initial.endDate?.slice(0, 10)      ?? "",
+    actualStart:     initial.actualStart?.slice(0, 10)  ?? "",
+    actualEnd:       initial.actualEnd?.slice(0, 10)    ?? "",
+    estimatedEffort: initial.estimatedEffort ?? ("" as number | ""),
+    actualEffort:    initial.actualEffort    ?? ("" as number | ""),
+    status:          initial.status          ?? "PLANNING",
+    progress:        initial.progress        ?? 0,
+    dependencies:    initial.dependencies    ?? [] as string[],
   })
 
   // ── Attachments ──────────────────────────────────────────────────────────
@@ -279,17 +296,21 @@ function TaskForm({ mode, initial, areas, members, allTasks, onSave, onDelete, o
     if (!form.title.trim()) return
     start(async () => {
       const data = {
-        projectId:     initial.projectId,
-        title:         form.title,
-        description:   form.description || null,
-        wbsAreaId:     form.wbsAreaId   || null,
-        responsibleId: form.responsibleId || null,
-        parentId:      form.parentId    || null,
-        startDate:     form.startDate   || null,
-        endDate:       form.endDate     || null,
-        status:        form.status,
-        progress:      form.progress,
-        dependencies:  form.dependencies,
+        projectId:       initial.projectId,
+        title:           form.title,
+        description:     form.description || null,
+        wbsAreaId:       form.wbsAreaId   || null,
+        responsibleId:   form.responsibleId || null,
+        parentId:        form.parentId    || null,
+        startDate:       form.startDate   || null,
+        endDate:         form.endDate     || null,
+        actualStart:     form.actualStart || null,
+        actualEnd:       form.actualEnd   || null,
+        estimatedEffort: form.estimatedEffort !== "" ? Number(form.estimatedEffort) : null,
+        actualEffort:    form.actualEffort    !== "" ? Number(form.actualEffort)    : null,
+        status:          form.status,
+        progress:        form.progress,
+        dependencies:    form.dependencies,
       }
       const result = mode === "edit" && initial.id
         ? await updateTask(initial.id, initial.projectId, data)
@@ -358,24 +379,86 @@ function TaskForm({ mode, initial, areas, members, allTasks, onSave, onDelete, o
           </select>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className={labelCls}>Data Inicial</label>
-            <WorkingDayPicker
-              value={form.startDate}
-              onChange={(v) => upd("startDate", v)}
-              placeholder="dd/mm/aaaa"
-              className={inputCls}
-            />
+        {/* Datas planejadas */}
+        <div>
+          <label className={labelCls} style={{ color: "#2463FF" }}>Datas Planejadas</label>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Início Planejado</label>
+              <WorkingDayPicker
+                value={form.startDate}
+                onChange={(v) => upd("startDate", v)}
+                placeholder="dd/mm/aaaa"
+                className={inputCls}
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Término Planejado</label>
+              <WorkingDayPicker
+                value={form.endDate}
+                onChange={(v) => upd("endDate", v)}
+                placeholder="dd/mm/aaaa"
+                className={inputCls}
+              />
+            </div>
           </div>
-          <div>
-            <label className={labelCls}>Data Final</label>
-            <WorkingDayPicker
-              value={form.endDate}
-              onChange={(v) => upd("endDate", v)}
-              placeholder="dd/mm/aaaa"
-              className={inputCls}
-            />
+        </div>
+
+        {/* Datas reais */}
+        <div>
+          <label className={labelCls} style={{ color: "#059669" }}>Datas Reais</label>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Início Real</label>
+              <WorkingDayPicker
+                value={form.actualStart}
+                onChange={(v) => upd("actualStart", v)}
+                placeholder="dd/mm/aaaa"
+                className={inputCls}
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Término Real</label>
+              <WorkingDayPicker
+                value={form.actualEnd}
+                onChange={(v) => upd("actualEnd", v)}
+                placeholder="dd/mm/aaaa"
+                className={inputCls}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Esforço */}
+        <div>
+          <label className={labelCls} style={{ color: "#7B2FBE" }}>Esforço (horas)</label>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Estimado (analista)</label>
+              <div className="relative">
+                <input
+                  type="number" min={0} step={0.5}
+                  value={form.estimatedEffort}
+                  onChange={(e) => upd("estimatedEffort", e.target.value === "" ? "" : Number(e.target.value))}
+                  placeholder="0"
+                  className={inputCls + " pr-8"}
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-semibold">h</span>
+              </div>
+            </div>
+            <div>
+              <label className={labelCls}>Real (responsável)</label>
+              <div className="relative">
+                <input
+                  type="number" min={0} step={0.5}
+                  value={form.actualEffort}
+                  onChange={(e) => upd("actualEffort", e.target.value === "" ? "" : Number(e.target.value))}
+                  placeholder="0"
+                  className={inputCls + " pr-8"}
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-semibold">h</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -799,6 +882,63 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
   const [pending, start]          = useTransition()
   const [hoveredId, setHoveredId] = useState<string | null>(null)
 
+  // ── Drag-and-drop state ──────────────────────────────────────────────────
+  const [draggedId,  setDraggedId]  = useState<string | null>(null)
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
+  const [dragType,   setDragType]   = useState<"area" | "task" | null>(null)
+
+  function onDragStart(e: React.DragEvent, id: string, type: "area" | "task") {
+    setDraggedId(id)
+    setDragType(type)
+    e.dataTransfer.effectAllowed = "move"
+  }
+
+  function onDragOver(e: React.DragEvent, id: string) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "move"
+    if (id !== dragOverId) setDragOverId(id)
+  }
+
+  function onDrop(e: React.DragEvent, targetId: string, targetType: "area" | "task") {
+    e.preventDefault()
+    const fromId = draggedId
+    if (!fromId || fromId === targetId) { cleanDrag(); return }
+
+    if (dragType === "area" && targetType === "area") {
+      const arr      = [...areas]
+      const fromIdx  = arr.findIndex((a) => a.id === fromId)
+      const toIdx    = arr.findIndex((a) => a.id === targetId)
+      if (fromIdx === -1 || toIdx === -1) { cleanDrag(); return }
+      const [item]   = arr.splice(fromIdx, 1)
+      arr.splice(toIdx, 0, item)
+      setAreas(arr)
+      start(() => reorderAreas(project.id, arr.map((a) => a.id)))
+    } else if (dragType === "task" && targetType === "task") {
+      const dragged = tasks.find((t) => t.id === fromId)
+      const target  = tasks.find((t) => t.id === targetId)
+      if (!dragged || !target) { cleanDrag(); return }
+      if (dragged.parentId !== target.parentId || dragged.wbsAreaId !== target.wbsAreaId) { cleanDrag(); return }
+
+      const arr      = [...tasks]
+      const fromIdx  = arr.findIndex((t) => t.id === fromId)
+      const toIdx    = arr.findIndex((t) => t.id === targetId)
+      const [item]   = arr.splice(fromIdx, 1)
+      arr.splice(toIdx, 0, item)
+      setTasks(arr.map((t, i) => ({ ...t, order: i })))
+
+      const group    = arr.filter((t) => t.parentId === dragged.parentId && t.wbsAreaId === dragged.wbsAreaId)
+      start(() => reorderTasks(project.id, group.map((t) => t.id)))
+    }
+
+    cleanDrag()
+  }
+
+  function cleanDrag() {
+    setDraggedId(null)
+    setDragOverId(null)
+    setDragType(null)
+  }
+
   const leftBodyRef = useRef<HTMLDivElement>(null)
   const rightRef    = useRef<HTMLDivElement>(null)
   const syncing     = useRef(false)
@@ -1052,19 +1192,26 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
         <div className="flex flex-col flex-1 min-h-0 bg-white">
 
           {/* Table header */}
-          <div className="flex items-center shrink-0 border-b border-slate-100 bg-[#0F172A]" style={{ height: 44 }}>
-            <div style={{ width: 72 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest pl-4">EAP</div>
-            <div style={{ width: 60 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Ações</div>
-            <div className="flex-1 text-[10px] font-black text-white/40 uppercase tracking-widest px-2">Nome da Atividade</div>
-            <div style={{ width: 140 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Status</div>
-            <div style={{ width: 140 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest px-3">Responsável</div>
-            <div style={{ width: 80 }}  className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Início</div>
-            <div style={{ width: 80 }}  className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Fim</div>
-            <div style={{ width: 96 }}  className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Progresso</div>
+          <div className="flex items-center shrink-0 border-b border-slate-100 bg-[#0F172A] overflow-x-auto" style={{ height: 44, minWidth: "max-content" }}>
+            <div style={{ width: 24, flexShrink: 0 }} />
+            <div style={{ width: 72, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest pl-4">EAP</div>
+            <div style={{ width: 60, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Ações</div>
+            <div style={{ minWidth: 240, flex: 1 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest px-2">Nome da Atividade</div>
+            <div style={{ width: 130, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Status</div>
+            <div style={{ width: 120, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest px-3">Responsável</div>
+            <div style={{ width: 78, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Início Plan.</div>
+            <div style={{ width: 78, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Fim Plan.</div>
+            <div style={{ width: 78, flexShrink: 0 }} className="text-[10px] font-black text-emerald-400/60 uppercase tracking-widest text-center">Início Real</div>
+            <div style={{ width: 78, flexShrink: 0 }} className="text-[10px] font-black text-emerald-400/60 uppercase tracking-widest text-center">Fim Real</div>
+            <div style={{ width: 64, flexShrink: 0 }} className="text-[10px] font-black text-violet-400/70 uppercase tracking-widest text-center">Est.h</div>
+            <div style={{ width: 64, flexShrink: 0 }} className="text-[10px] font-black text-violet-400/70 uppercase tracking-widest text-center">Real h</div>
+            <div style={{ width: 68, flexShrink: 0 }} className="text-[10px] font-black text-amber-400/70 uppercase tracking-widest text-center">% Est.</div>
+            <div style={{ width: 68, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">% Real</div>
+            <div style={{ width: 56, flexShrink: 0 }} className="text-[10px] font-black text-indigo-400/70 uppercase tracking-widest text-center">Pred.</div>
           </div>
 
           {/* Rows */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-auto" style={{ overflowX: "auto" }}>
             {listRows.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 gap-3 text-slate-300">
                 <Layers className="w-10 h-10" />
@@ -1082,8 +1229,28 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                     <div
                       key={`area-${row.id}`}
                       className="flex items-center gap-0 border-b border-slate-100 select-none group transition-colors"
-                      style={{ borderLeft: `4px solid ${row.color ?? "#CBD5E1"}`, background: "#F8FAFC", minHeight: 44 }}
+                      draggable
+                      onDragStart={(e) => onDragStart(e, row.id, "area")}
+                      onDragOver={(e) => onDragOver(e, row.id)}
+                      onDrop={(e) => onDrop(e, row.id, "area")}
+                      onDragEnd={cleanDrag}
+                      style={{
+                        borderLeft: `4px solid ${row.color ?? "#CBD5E1"}`,
+                        background: dragOverId === row.id && dragType === "area" ? "#EEF2FF" : "#F8FAFC",
+                        minHeight: 44, minWidth: "max-content",
+                        outline: dragOverId === row.id && dragType === "area" ? "2px solid #7B2FBE" : "none",
+                        outlineOffset: -2,
+                      }}
                     >
+                      {/* Drag handle */}
+                      <div
+                        style={{ width: 24, flexShrink: 0, cursor: "grab" }}
+                        className="flex items-center justify-center text-slate-300 hover:text-slate-500 transition-colors"
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >
+                        <GripVertical className="w-3.5 h-3.5" />
+                      </div>
+
                       {/* EAP + collapse toggle */}
                       <div
                         style={{ width: 72 }}
@@ -1119,13 +1286,18 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                         <span className="font-black text-[#0F172A] text-sm truncate">{row.name}</span>
                         <span className="text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0" style={{ background: "#EDE9FE", color: "#7C3AED" }}>Módulo</span>
                       </div>
-                      <div style={{ width: 140 }} className="flex justify-center">
-                        <span className="text-[10px] text-slate-400 font-medium">{row.doneCount}/{row.taskCount} concluídas</span>
+                      <div style={{ width: 130, flexShrink: 0 }} className="flex justify-center">
+                        <span className="text-[10px] text-slate-400 font-medium">{row.doneCount}/{row.taskCount}</span>
                       </div>
-                      <div style={{ width: 140 }} />
-                      <div style={{ width: 80 }} />
-                      <div style={{ width: 80 }} />
-                      <div style={{ width: 96 }} className="px-3">
+                      <div style={{ width: 120, flexShrink: 0 }} />
+                      <div style={{ width: 78, flexShrink: 0 }} />
+                      <div style={{ width: 78, flexShrink: 0 }} />
+                      <div style={{ width: 78, flexShrink: 0 }} />
+                      <div style={{ width: 78, flexShrink: 0 }} />
+                      <div style={{ width: 64, flexShrink: 0 }} />
+                      <div style={{ width: 64, flexShrink: 0 }} />
+                      <div style={{ width: 68, flexShrink: 0 }} />
+                      <div style={{ width: 68, flexShrink: 0 }} className="px-3">
                         {row.taskCount > 0 && (
                           <div className="flex flex-col gap-1">
                             <span className="text-[9px] font-bold text-slate-500 text-center">{progress}%</span>
@@ -1135,6 +1307,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                           </div>
                         )}
                       </div>
+                      <div style={{ width: 56, flexShrink: 0 }} />
                     </div>
                   )
                 }
@@ -1159,23 +1332,41 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                 return (
                   <div
                     key={`task-${t.id}`}
+                    draggable
+                    onDragStart={(e) => onDragStart(e, t.id, "task")}
+                    onDragOver={(e) => onDragOver(e, t.id)}
+                    onDrop={(e) => onDrop(e, t.id, "task")}
+                    onDragEnd={cleanDrag}
+                    onMouseEnter={() => setHoveredId(t.id)}
+                    onMouseLeave={() => setHoveredId(null)}
                     style={{
                       height: ROW_H,
                       display: "flex",
                       alignItems: "center",
-                      borderBottom: "1px solid #F1F5F9",
-                      background: isHov
-                        ? "#EEF2FF"
-                        : isTarefa
-                          ? "#F7F5FF"
-                          : i % 2 === 0 ? "white" : "#FAFBFD",
+                      borderBottom: dragOverId === t.id && dragType === "task" ? "2px solid #7B2FBE" : "1px solid #F1F5F9",
+                      minWidth: "max-content",
+                      background: dragOverId === t.id && dragType === "task"
+                        ? "#F5F3FF"
+                        : isHov
+                          ? "#EEF2FF"
+                          : isTarefa
+                            ? "#F7F5FF"
+                            : i % 2 === 0 ? "white" : "#FAFBFD",
                       borderLeft: isTarefa
                         ? `3px solid ${areaColor ?? "#C4B5FD"}55`
                         : "3px solid transparent",
+                      opacity: draggedId === t.id ? 0.45 : 1,
+                      transition: "opacity 0.15s, background 0.1s",
                     }}
-                    onMouseEnter={() => setHoveredId(t.id)}
-                    onMouseLeave={() => setHoveredId(null)}
                   >
+                    {/* Drag handle */}
+                    <div
+                      style={{ width: 24, flexShrink: 0, cursor: "grab" }}
+                      className="flex items-center justify-center text-slate-200 hover:text-slate-400 transition-colors"
+                    >
+                      <GripVertical className="w-3.5 h-3.5" />
+                    </div>
+
                     {/* EAP */}
                     <div style={{ width: 72 }} className="shrink-0 flex items-center justify-end pr-2">
                       <span className="text-[10px] font-mono text-slate-300">{eap}</span>
@@ -1271,18 +1462,18 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                     </div>
 
                     {/* Status — click to cycle */}
-                    <div style={{ width: 140 }} className="flex justify-center shrink-0 px-2">
+                    <div style={{ width: 130, flexShrink: 0 }} className="flex justify-center px-1">
                       <button
                         onClick={() => cycleStatus(t)}
                         title="Clique para avançar o status"
-                        className="text-[10px] font-bold px-2.5 py-1 rounded-full transition-all hover:opacity-80 hover:shadow-sm whitespace-nowrap"
+                        className="text-[10px] font-bold px-2 py-1 rounded-full transition-all hover:opacity-80 whitespace-nowrap"
                         style={{ background: cfg?.bg ?? "#F8FAFC", color: isLate && t.status !== "DELAYED" ? "#EF4444" : cfg?.color ?? "#64748B", border: `1px solid ${cfg?.color ?? "#CBD5E1"}30` }}>
                         {cfg?.label ?? t.status}
                       </button>
                     </div>
 
                     {/* Responsible */}
-                    <div style={{ width: 140 }} className="px-3 shrink-0">
+                    <div style={{ width: 120, flexShrink: 0 }} className="px-2">
                       {t.responsible ? (
                         <div className="flex items-center gap-1.5">
                           <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black text-white shrink-0"
@@ -1296,26 +1487,92 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                       )}
                     </div>
 
-                    {/* Start */}
-                    <div style={{ width: 80 }} className="text-center shrink-0">
+                    {/* Início Planejado */}
+                    <div style={{ width: 78, flexShrink: 0 }} className="text-center">
                       <span className="text-[10px] text-slate-500 font-mono">{fmtDate(t.startDate)}</span>
                     </div>
 
-                    {/* End */}
-                    <div style={{ width: 80 }} className="text-center shrink-0">
+                    {/* Término Planejado */}
+                    <div style={{ width: 78, flexShrink: 0 }} className="text-center">
                       <span className={`text-[10px] font-mono ${isLate ? "text-red-400 font-bold" : "text-slate-500"}`}>
                         {fmtDate(t.endDate)}
                       </span>
                     </div>
 
-                    {/* Progress */}
-                    <div style={{ width: 96 }} className="px-3 shrink-0">
-                      <div className="flex flex-col gap-1">
-                        <span className="text-[9px] font-bold" style={{ color }}>{t.progress}%</span>
+                    {/* Início Real */}
+                    <div style={{ width: 78, flexShrink: 0 }} className="text-center">
+                      <span className="text-[10px] font-mono text-emerald-600">{fmtDate(t.actualStart)}</span>
+                    </div>
+
+                    {/* Término Real */}
+                    <div style={{ width: 78, flexShrink: 0 }} className="text-center">
+                      <span className="text-[10px] font-mono text-emerald-600">{fmtDate(t.actualEnd)}</span>
+                    </div>
+
+                    {/* Esforço Estimado */}
+                    <div style={{ width: 64, flexShrink: 0 }} className="text-center">
+                      <span className="text-[10px] font-mono text-violet-600">
+                        {t.estimatedEffort != null ? `${t.estimatedEffort}h` : "—"}
+                      </span>
+                    </div>
+
+                    {/* Esforço Real */}
+                    <div style={{ width: 64, flexShrink: 0 }} className="text-center">
+                      {(() => {
+                        if (t.actualEffort == null) return <span className="text-[10px] text-slate-300">—</span>
+                        const over = t.estimatedEffort != null && t.actualEffort > t.estimatedEffort
+                        return (
+                          <span className={`text-[10px] font-mono font-bold ${over ? "text-red-500" : "text-violet-600"}`}>
+                            {t.actualEffort}h
+                          </span>
+                        )
+                      })()}
+                    </div>
+
+                    {/* % Completo Estimado */}
+                    {(() => {
+                      const ep = calcEstimatedProgress(t.startDate, t.endDate)
+                      const delta = ep !== null ? ep - t.progress : null
+                      return (
+                        <div style={{ width: 68, flexShrink: 0 }} className="text-center">
+                          {ep !== null ? (
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className="text-[9px] font-bold text-amber-600">{ep}%</span>
+                              {delta !== null && Math.abs(delta) >= 5 && (
+                                <span className={`text-[8px] font-bold ${delta > 0 ? "text-red-400" : "text-emerald-500"}`}>
+                                  {delta > 0 ? `+${delta}` : delta}
+                                </span>
+                              )}
+                            </div>
+                          ) : <span className="text-[10px] text-slate-300">—</span>}
+                        </div>
+                      )
+                    })()}
+
+                    {/* % Completo Real */}
+                    <div style={{ width: 68, flexShrink: 0 }} className="px-2">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[9px] font-bold text-center" style={{ color }}>{t.progress}%</span>
                         <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
                           <div style={{ width: `${t.progress}%`, height: "100%", background: color, borderRadius: "inherit", transition: "width 0.3s" }} />
                         </div>
                       </div>
+                    </div>
+
+                    {/* Predecessoras */}
+                    <div style={{ width: 56, flexShrink: 0 }} className="flex justify-center">
+                      {t.dependencies.length > 0 ? (
+                        <span
+                          className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                          title={t.dependencies.map((d) => tasks.find((x) => x.id === d)?.title ?? d).join(", ")}
+                          style={depViolation
+                            ? { background: "#FEF3C7", color: "#B45309" }
+                            : { background: "#EEF2FF", color: "#4338CA" }
+                          }
+                        >
+                          {t.dependencies.length}
+                        </span>
+                      ) : <span className="text-[10px] text-slate-200">—</span>}
                     </div>
 
                   </div>

@@ -13,6 +13,10 @@ export type TaskInput = {
   responsibleId?: string | null
   startDate?: string | null
   endDate?: string | null
+  actualStart?: string | null
+  actualEnd?: string | null
+  estimatedEffort?: number | null
+  actualEffort?: number | null
   status?: string
   progress?: number
   dependencies?: string[]
@@ -28,7 +32,8 @@ const INCLUDE = {
 function serialize(t: {
   id: string; projectId: string; wbsAreaId: string | null; parentId: string | null
   title: string; description: string | null; responsibleId: string | null
-  startDate: Date | null; endDate: Date | null; completedAt: Date | null
+  startDate: Date | null; endDate: Date | null; actualStart: Date | null; actualEnd: Date | null
+  completedAt: Date | null; estimatedEffort: number | null; actualEffort: number | null
   status: string; riskStatus: string; progress: number; order: number
   dependencies: string | null; createdAt: Date; updatedAt: Date
   responsible: { id: string; name: string } | null
@@ -39,6 +44,8 @@ function serialize(t: {
     ...t,
     startDate: t.startDate?.toISOString() ?? null,
     endDate: t.endDate?.toISOString() ?? null,
+    actualStart: t.actualStart?.toISOString() ?? null,
+    actualEnd: t.actualEnd?.toISOString() ?? null,
     completedAt: t.completedAt?.toISOString() ?? null,
     createdAt: t.createdAt.toISOString(),
     updatedAt: t.updatedAt.toISOString(),
@@ -65,6 +72,10 @@ export async function createTask(data: TaskInput) {
       responsibleId: data.responsibleId || null,
       startDate: data.startDate ? new Date(data.startDate) : null,
       endDate: data.endDate ? new Date(data.endDate) : null,
+      actualStart: data.actualStart ? new Date(data.actualStart) : null,
+      actualEnd: data.actualEnd ? new Date(data.actualEnd) : null,
+      estimatedEffort: data.estimatedEffort ?? null,
+      actualEffort: data.actualEffort ?? null,
       status: (data.status ?? "PLANNING") as never,
       progress: data.progress ?? 0,
       dependencies: data.dependencies?.length ? JSON.stringify(data.dependencies) : null,
@@ -91,6 +102,10 @@ export async function updateTask(id: string, projectId: string, data: Partial<Ta
       ...(data.parentId !== undefined && { parentId: data.parentId }),
       ...(data.startDate !== undefined && { startDate: data.startDate ? new Date(data.startDate) : null }),
       ...(data.endDate !== undefined && { endDate: data.endDate ? new Date(data.endDate) : null }),
+      ...(data.actualStart !== undefined && { actualStart: data.actualStart ? new Date(data.actualStart) : null }),
+      ...(data.actualEnd !== undefined && { actualEnd: data.actualEnd ? new Date(data.actualEnd) : null }),
+      ...(data.estimatedEffort !== undefined && { estimatedEffort: data.estimatedEffort }),
+      ...(data.actualEffort !== undefined && { actualEffort: data.actualEffort }),
       ...(data.status !== undefined && { status: data.status as never }),
       ...(data.progress !== undefined && { progress: data.progress }),
       ...(data.dependencies !== undefined && {
@@ -150,4 +165,22 @@ export async function createArea(projectId: string, name: string, color: string)
   })
   revalidatePath(`/projects/${projectId}/schedule`)
   return area
+}
+
+export async function reorderAreas(projectId: string, orderedIds: string[]) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+  await Promise.all(
+    orderedIds.map((id, i) => db.wbsArea.update({ where: { id }, data: { order: i } }))
+  )
+  revalidatePath(`/projects/${projectId}/schedule`)
+}
+
+export async function reorderTasks(projectId: string, orderedIds: string[]) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+  await Promise.all(
+    orderedIds.map((id, i) => db.scheduleTask.update({ where: { id }, data: { order: i } }))
+  )
+  revalidatePath(`/projects/${projectId}/schedule`)
 }

@@ -209,6 +209,14 @@ export default async function ProjectDetailPage({
                         Ap. Técnica
                       </Link>
                       <Link
+                        href={`/projects/${id}/schedule`}
+                        className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl transition-all hover:opacity-90 active:scale-[0.98]"
+                        style={{ background: "linear-gradient(135deg, #0F172A, #1E293B)", boxShadow: "0 4px 20px rgba(15,23,42,0.25)", color: "white" }}
+                      >
+                        <CalendarDays className="w-3.5 h-3.5" />
+                        Cronograma
+                      </Link>
+                      <Link
                         href={`/projects/${id}/kickoff`}
                         className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.98]"
                         style={{ background: "linear-gradient(135deg, #10B981, #059669)", boxShadow: "0 4px 20px rgba(16,185,129,0.30)" }}
@@ -237,6 +245,14 @@ export default async function ProjectDetailPage({
                       >
                         <Layers className="w-3.5 h-3.5" />
                         Ap. Técnica
+                      </Link>
+                      <Link
+                        href={`/projects/${id}/schedule`}
+                        className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl transition-all hover:opacity-90 active:scale-[0.98]"
+                        style={{ background: "linear-gradient(135deg, #0F172A, #1E293B)", boxShadow: "0 4px 20px rgba(15,23,42,0.25)", color: "white" }}
+                      >
+                        <CalendarDays className="w-3.5 h-3.5" />
+                        Cronograma
                       </Link>
                       <Link
                         href={`/projects/${id}/kickoff`}

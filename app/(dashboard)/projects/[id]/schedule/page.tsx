@@ -34,6 +34,8 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
     ...t,
     startDate: t.startDate?.toISOString() ?? null,
     endDate: t.endDate?.toISOString() ?? null,
+    actualStart: t.actualStart?.toISOString() ?? null,
+    actualEnd: t.actualEnd?.toISOString() ?? null,
     completedAt: t.completedAt?.toISOString() ?? null,
     createdAt: t.createdAt.toISOString(),
     updatedAt: t.updatedAt.toISOString(),

@@ -544,6 +544,7 @@ export function KickOffClient({ project, existing, allUsers }: KickOffClientProp
   const [addingExternal, setAddingExternal] = useState(false)
   const [extName, setExtName]   = useState("")
   const [extRole, setExtRole]   = useState("")
+  const [extType, setExtType]   = useState<"EXTERNAL" | "INTERNAL">("EXTERNAL")
   const [notes, setNotes] = useState(existing?.notes ?? "")
   const [uploading, setUploading] = useState(false)
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle")
@@ -570,9 +571,10 @@ export function KickOffClient({ project, existing, allUsers }: KickOffClientProp
 
   function confirmExternal() {
     if (!extName.trim()) return
-    setExternalAttendees((prev) => [...prev, { id: uid(), name: extName.trim(), role: extRole.trim() }])
+    setExternalAttendees((prev) => [...prev, { id: uid(), name: extName.trim(), role: extRole.trim(), type: extType }])
     setExtName("")
     setExtRole("")
+    setExtType("EXTERNAL")
     setAddingExternal(false)
   }
 
@@ -674,31 +676,30 @@ export function KickOffClient({ project, existing, allUsers }: KickOffClientProp
           <p className="text-sm font-black text-[#0F172A] truncate">{project.title}</p>
         </div>
 
-        {isRegistered ? (
+        {isRegistered && (
           <span className="inline-flex items-center gap-1.5 px-3 h-8 text-xs font-bold rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
             <CheckCircle2 className="w-3.5 h-3.5" /> Kick-Off Realizado
           </span>
-        ) : (
-          <>
-            <button
-              onClick={handleSave}
-              disabled={isPending}
-              className="inline-flex items-center gap-2 px-3.5 h-8 text-xs font-semibold rounded-xl border border-slate-200 bg-white text-slate-600 hover:border-[#7B2FBE] hover:text-[#7B2FBE] transition-all"
-            >
-              {saveStatus === "saving" ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                : saveStatus === "saved" ? <><Check className="w-3.5 h-3.5" /> Salvo</>
-                : <><Save className="w-3.5 h-3.5" /> Salvar Rascunho</>}
-            </button>
-            <button
-              onClick={handleRegister}
-              disabled={isPending}
-              className="inline-flex items-center gap-2 px-4 h-8 text-xs font-black rounded-xl text-white transition-all hover:opacity-90 disabled:opacity-60"
-              style={{ background: "linear-gradient(135deg, #10B981, #059669)", boxShadow: "0 4px 16px rgba(16,185,129,0.35)" }}
-            >
-              {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Rocket className="w-3.5 h-3.5" />}
-              Registrar Kick-Off
-            </button>
-          </>
+        )}
+        <button
+          onClick={handleSave}
+          disabled={isPending}
+          className="inline-flex items-center gap-2 px-3.5 h-8 text-xs font-semibold rounded-xl border border-slate-200 bg-white text-slate-600 hover:border-[#7B2FBE] hover:text-[#7B2FBE] transition-all"
+        >
+          {saveStatus === "saving" ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            : saveStatus === "saved" ? <><Check className="w-3.5 h-3.5" /> Salvo</>
+            : <><Save className="w-3.5 h-3.5" /> Salvar</>}
+        </button>
+        {!isRegistered && (
+          <button
+            onClick={handleRegister}
+            disabled={isPending}
+            className="inline-flex items-center gap-2 px-4 h-8 text-xs font-black rounded-xl text-white transition-all hover:opacity-90 disabled:opacity-60"
+            style={{ background: "linear-gradient(135deg, #10B981, #059669)", boxShadow: "0 4px 16px rgba(16,185,129,0.35)" }}
+          >
+            {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Rocket className="w-3.5 h-3.5" />}
+            Registrar Kick-Off
+          </button>
         )}
       </div>
 
@@ -785,7 +786,6 @@ export function KickOffClient({ project, existing, allUsers }: KickOffClientProp
                     type="date"
                     value={meetingDate}
                     onChange={(e) => setMeetingDate(e.target.value)}
-                    disabled={isRegistered}
                     className="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200 bg-white text-[#0F172A] outline-none focus:border-[#7B2FBE] transition-colors"
                   />
                 </div>
@@ -794,7 +794,6 @@ export function KickOffClient({ project, existing, allUsers }: KickOffClientProp
                   <input
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
-                    disabled={isRegistered}
                     placeholder="Ex: Sala de Reuniões 2, Microsoft Teams..."
                     className="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200 bg-white text-[#0F172A] outline-none focus:border-[#7B2FBE] transition-colors placeholder-slate-300"
                   />
@@ -804,7 +803,6 @@ export function KickOffClient({ project, existing, allUsers }: KickOffClientProp
                   <textarea
                     value={objectives}
                     onChange={(e) => setObjectives(e.target.value)}
-                    disabled={isRegistered}
                     rows={5}
                     placeholder="Descreva os objetivos, escopo e expectativas do projeto para apresentar na reunião de Kick-Off..."
                     className="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200 bg-white text-[#0F172A] outline-none focus:border-[#7B2FBE] transition-colors resize-y placeholder-slate-300 leading-relaxed"
@@ -817,11 +815,7 @@ export function KickOffClient({ project, existing, allUsers }: KickOffClientProp
             <section id="section-eap">
               <SectionHeader number={2} title="EAP — Estrutura Analítica do Projeto" icon={Target} description="Defina as atividades por área. Clique no nome da área ou na tarefa para editar." />
               <div className="mt-4">
-                {isRegistered ? (
-                  <EAPTable areas={eapAreas} onChange={() => {}} />
-                ) : (
-                  <EAPTable areas={eapAreas} onChange={setEapAreas} />
-                )}
+                <EAPTable areas={eapAreas} onChange={setEapAreas} />
               </div>
             </section>
 
@@ -829,7 +823,7 @@ export function KickOffClient({ project, existing, allUsers }: KickOffClientProp
             <section id="section-marcos">
               <SectionHeader number={3} title="Cronograma de Marcos" icon={CheckCircle2} description="Defina as grandes entregas do projeto. Clique no círculo para marcar como concluído." />
               <div className="mt-4">
-                <MarcosTimeline milestones={milestones} onChange={isRegistered ? () => {} : setMilestones} />
+                <MarcosTimeline milestones={milestones} onChange={setMilestones} />
               </div>
             </section>
 
@@ -837,28 +831,24 @@ export function KickOffClient({ project, existing, allUsers }: KickOffClientProp
             <section id="section-documentos">
               <SectionHeader number={4} title="Documentos & Anexos" icon={Paperclip} description="Adicione qualquer arquivo relevante: análises, planilhas, imagens, apresentações." />
               <div className="mt-4 space-y-4">
-                {!isRegistered && (
-                  <>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      className="hidden"
-                      multiple
-                      onChange={handleFileUpload}
-                    />
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploading}
-                      className="w-full flex flex-col items-center justify-center gap-3 py-10 rounded-2xl border-2 border-dashed border-slate-200 hover:border-[#7B2FBE] hover:bg-violet-50 transition-all text-slate-400 hover:text-[#7B2FBE]"
-                    >
-                      {uploading ? <Loader2 className="w-6 h-6 animate-spin" /> : <Upload className="w-6 h-6" />}
-                      <div className="text-center">
-                        <p className="text-sm font-semibold">{uploading ? "Enviando..." : "Clique ou arraste arquivos aqui"}</p>
-                        <p className="text-xs mt-1 text-slate-300">Excel · Word · PDF · Imagens · Qualquer formato</p>
-                      </div>
-                    </button>
-                  </>
-                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  multiple
+                  onChange={handleFileUpload}
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="w-full flex flex-col items-center justify-center gap-3 py-10 rounded-2xl border-2 border-dashed border-slate-200 hover:border-[#7B2FBE] hover:bg-violet-50 transition-all text-slate-400 hover:text-[#7B2FBE]"
+                >
+                  {uploading ? <Loader2 className="w-6 h-6 animate-spin" /> : <Upload className="w-6 h-6" />}
+                  <div className="text-center">
+                    <p className="text-sm font-semibold">{uploading ? "Enviando..." : "Clique ou arraste arquivos aqui"}</p>
+                    <p className="text-xs mt-1 text-slate-300">Excel · Word · PDF · Imagens · Qualquer formato</p>
+                  </div>
+                </button>
 
                 {attachments.length > 0 && (
                   <div className="space-y-2">
@@ -872,18 +862,16 @@ export function KickOffClient({ project, existing, allUsers }: KickOffClientProp
                         <a href={att.url} target="_blank" rel="noreferrer" className="text-xs text-[#2463FF] hover:underline font-medium shrink-0">
                           Ver
                         </a>
-                        {!isRegistered && (
-                          <button onClick={() => removeAttachment(att.id)} className="shrink-0 text-slate-300 hover:text-red-400 transition-colors">
-                            <X className="w-4 h-4" />
-                          </button>
-                        )}
+                        <button onClick={() => removeAttachment(att.id)} className="shrink-0 text-slate-300 hover:text-red-400 transition-colors">
+                          <X className="w-4 h-4" />
+                        </button>
                       </div>
                     ))}
                   </div>
                 )}
 
-                {attachments.length === 0 && isRegistered && (
-                  <p className="text-sm text-slate-400 text-center py-6">Nenhum arquivo anexado.</p>
+                {attachments.length === 0 && (
+                  <p className="text-sm text-slate-400 text-center py-2">Nenhum arquivo anexado ainda.</p>
                 )}
               </div>
             </section>
@@ -900,7 +888,7 @@ export function KickOffClient({ project, existing, allUsers }: KickOffClientProp
                     return (
                       <button
                         key={user.id}
-                        onClick={() => !isRegistered && toggleAttendee(user.id)}
+                        onClick={() => toggleAttendee(user.id)}
                         className={`flex items-center gap-2.5 p-3 rounded-xl text-left transition-all ${
                           selected
                             ? "bg-violet-50 border-2 border-[#7B2FBE]/30"
@@ -922,87 +910,115 @@ export function KickOffClient({ project, existing, allUsers }: KickOffClientProp
                     )
                   })}
 
-                  {/* External attendees already added */}
+                  {/* External/Internal attendees already added */}
                   {externalAttendees.map((ext) => {
                     const initials = ext.name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()
+                    const isInternal = ext.type === "INTERNAL"
                     return (
                       <div
                         key={ext.id}
-                        className="flex items-center gap-2.5 p-3 rounded-xl text-left bg-emerald-50 border-2 border-emerald-200 relative"
+                        className={`flex items-center gap-2.5 p-3 rounded-xl text-left border-2 relative ${
+                          isInternal
+                            ? "bg-indigo-50 border-indigo-200"
+                            : "bg-emerald-50 border-emerald-200"
+                        }`}
                       >
                         <div
                           className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black text-white shrink-0"
-                          style={{ background: "linear-gradient(135deg, #059669, #0891B2)" }}
+                          style={{ background: isInternal ? "linear-gradient(135deg, #4F46E5, #7B2FBE)" : "linear-gradient(135deg, #059669, #0891B2)" }}
                         >
                           {initials}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs font-semibold truncate text-emerald-800">{ext.name}</p>
-                          <p className="text-[10px] text-emerald-600 truncate">{ext.role || "Externo"}</p>
+                          <p className={`text-xs font-semibold truncate ${isInternal ? "text-indigo-800" : "text-emerald-800"}`}>{ext.name}</p>
+                          <p className={`text-[10px] truncate ${isInternal ? "text-indigo-500" : "text-emerald-600"}`}>{ext.role || (isInternal ? "Interno" : "Externo")}</p>
                         </div>
-                        <span className="text-[8px] font-black uppercase tracking-widest text-emerald-500 shrink-0 hidden sm:block">Ext.</span>
-                        {!isRegistered && (
-                          <button
-                            onClick={() => removeExternal(ext.id)}
-                            className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-emerald-100 hover:bg-red-100 flex items-center justify-center transition-colors"
-                          >
-                            <X className="w-2.5 h-2.5 text-emerald-500 hover:text-red-500" />
-                          </button>
-                        )}
+                        <span className={`text-[8px] font-black uppercase tracking-widest shrink-0 hidden sm:block ${isInternal ? "text-indigo-400" : "text-emerald-500"}`}>
+                          {isInternal ? "Int." : "Ext."}
+                        </span>
+                        <button
+                          onClick={() => removeExternal(ext.id)}
+                          className={`absolute top-1.5 right-1.5 w-4 h-4 rounded-full flex items-center justify-center transition-colors ${
+                            isInternal ? "bg-indigo-100 hover:bg-red-100" : "bg-emerald-100 hover:bg-red-100"
+                          }`}
+                        >
+                          <X className={`w-2.5 h-2.5 hover:text-red-500 ${isInternal ? "text-indigo-400" : "text-emerald-500"}`} />
+                        </button>
                       </div>
                     )
                   })}
 
-                  {/* Add external participant card */}
-                  {!isRegistered && (
-                    addingExternal ? (
-                      <div className="flex flex-col gap-2 p-3 rounded-xl border-2 border-dashed border-emerald-300 bg-emerald-50 col-span-2 sm:col-span-1">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700">Novo participante</p>
-                        <input
-                          autoFocus
-                          value={extName}
-                          onChange={(e) => setExtName(e.target.value)}
-                          onKeyDown={(e) => e.key === "Enter" && confirmExternal()}
-                          placeholder="Nome completo"
-                          className="w-full px-2 py-1.5 text-xs rounded-lg border border-emerald-200 bg-white outline-none focus:border-emerald-400 placeholder-slate-300"
-                        />
-                        <input
-                          value={extRole}
-                          onChange={(e) => setExtRole(e.target.value)}
-                          onKeyDown={(e) => e.key === "Enter" && confirmExternal()}
-                          placeholder="Área / Empresa"
-                          className="w-full px-2 py-1.5 text-xs rounded-lg border border-emerald-200 bg-white outline-none focus:border-emerald-400 placeholder-slate-300"
-                        />
-                        <div className="flex gap-1.5">
-                          <button
-                            onClick={confirmExternal}
-                            disabled={!extName.trim()}
-                            className="flex-1 py-1.5 text-[11px] font-black rounded-lg text-white transition-all disabled:opacity-40"
-                            style={{ background: "linear-gradient(135deg, #059669, #0891B2)" }}
-                          >
-                            Adicionar
-                          </button>
-                          <button
-                            onClick={() => { setAddingExternal(false); setExtName(""); setExtRole("") }}
-                            className="px-3 py-1.5 text-[11px] font-semibold rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
-                          >
-                            Cancelar
-                          </button>
-                        </div>
+                  {/* Add participant card */}
+                  {addingExternal ? (
+                    <div className="flex flex-col gap-2 p-3 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 col-span-2 sm:col-span-1">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Novo participante</p>
+                      {/* Type selector */}
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={() => setExtType("INTERNAL")}
+                          className={`flex-1 py-1.5 text-[10px] font-black rounded-lg border transition-all ${
+                            extType === "INTERNAL"
+                              ? "bg-indigo-600 text-white border-indigo-600"
+                              : "bg-white text-slate-500 border-slate-200 hover:border-indigo-300"
+                          }`}
+                        >
+                          Interno – Vendemmia
+                        </button>
+                        <button
+                          onClick={() => setExtType("EXTERNAL")}
+                          className={`flex-1 py-1.5 text-[10px] font-black rounded-lg border transition-all ${
+                            extType === "EXTERNAL"
+                              ? "bg-emerald-600 text-white border-emerald-600"
+                              : "bg-white text-slate-500 border-slate-200 hover:border-emerald-300"
+                          }`}
+                        >
+                          Externo
+                        </button>
                       </div>
-                    ) : (
-                      <button
-                        onClick={() => setAddingExternal(true)}
-                        className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border-2 border-dashed border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50 transition-all group min-h-[64px]"
-                      >
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center bg-slate-100 group-hover:bg-emerald-100 transition-colors">
-                          <Plus className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-600 transition-colors" />
-                        </div>
-                        <p className="text-[10px] font-bold text-slate-400 group-hover:text-emerald-600 transition-colors text-center leading-tight">
-                          Participante<br />externo
-                        </p>
-                      </button>
-                    )
+                      <input
+                        autoFocus
+                        value={extName}
+                        onChange={(e) => setExtName(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && confirmExternal()}
+                        placeholder="Nome completo"
+                        className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-200 bg-white outline-none focus:border-[#7B2FBE] placeholder-slate-300"
+                      />
+                      <input
+                        value={extRole}
+                        onChange={(e) => setExtRole(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && confirmExternal()}
+                        placeholder={extType === "INTERNAL" ? "Área da Vendemmia" : "Empresa / Cargo"}
+                        className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-200 bg-white outline-none focus:border-[#7B2FBE] placeholder-slate-300"
+                      />
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={confirmExternal}
+                          disabled={!extName.trim()}
+                          className="flex-1 py-1.5 text-[11px] font-black rounded-lg text-white transition-all disabled:opacity-40"
+                          style={{ background: extType === "INTERNAL" ? "linear-gradient(135deg, #4F46E5, #7B2FBE)" : "linear-gradient(135deg, #059669, #0891B2)" }}
+                        >
+                          Adicionar
+                        </button>
+                        <button
+                          onClick={() => { setAddingExternal(false); setExtName(""); setExtRole(""); setExtType("EXTERNAL") }}
+                          className="px-3 py-1.5 text-[11px] font-semibold rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setAddingExternal(true)}
+                      className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border-2 border-dashed border-slate-200 bg-white hover:border-[#7B2FBE] hover:bg-violet-50 transition-all group min-h-[64px]"
+                    >
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center bg-slate-100 group-hover:bg-violet-100 transition-colors">
+                        <Plus className="w-3.5 h-3.5 text-slate-400 group-hover:text-[#7B2FBE] transition-colors" />
+                      </div>
+                      <p className="text-[10px] font-bold text-slate-400 group-hover:text-[#7B2FBE] transition-colors text-center leading-tight">
+                        Adicionar<br />participante
+                      </p>
+                    </button>
                   )}
                 </div>
 
@@ -1011,7 +1027,6 @@ export function KickOffClient({ project, existing, allUsers }: KickOffClientProp
                   <textarea
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    disabled={isRegistered}
                     rows={4}
                     placeholder="Ações definidas, decisões tomadas, próximos passos..."
                     className="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200 bg-white text-[#0F172A] outline-none focus:border-[#7B2FBE] transition-colors resize-y placeholder-slate-300 leading-relaxed"

@@ -254,7 +254,12 @@ model ScheduleTask {
   responsibleId String?
   startDate     DateTime?
   endDate       DateTime?
+  actualStart   DateTime?
+  actualEnd     DateTime?
   completedAt   DateTime?
+
+  estimatedEffort Float?   // horas estimadas pelo analista
+  actualEffort    Float?   // horas realizadas pelo responsável
 
   status     TaskStatus @default(PLANNING)
   riskStatus RiskLevel  @default(LOW)
