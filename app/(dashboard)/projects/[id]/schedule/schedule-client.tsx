@@ -1,7 +1,7 @@
 "use client"
 
 import {
-  useState, useRef, useMemo, useTransition, useCallback, useEffect,
+  useState, useRef, useMemo, useTransition, useCallback, useEffect, useLayoutEffect,
 } from "react"
 import Link from "next/link"
 import {
@@ -15,7 +15,7 @@ import {
   ArrowLeft, Plus, ChevronRight, ChevronDown, Pencil, Trash2,
   Loader2, X, Check, CalendarDays, AlertTriangle, Layers,
   List, BarChart2, Search, FolderOpen, Paperclip,
-  Link2, Lock, ArrowRight, GripVertical, FileSpreadsheet,
+  Link2, Lock, ArrowRight, GripVertical, FileSpreadsheet, ArrowUpDown,
 } from "lucide-react"
 import {
   createTask, updateTask, deleteTask, createArea,
@@ -544,7 +544,7 @@ function TaskForm({ mode, initial, areas, members, allTasks, onSave, onDelete, o
 
         {/* ── Predecessoras (Dependências) ── */}
         {(() => {
-          const candidatos = allTasks.filter((t) => t.id !== initial.id && !t.parentId)
+          const candidatos = allTasks.filter((t) => t.id !== initial.id)
           const selecionadas = candidatos.filter((t) => form.dependencies.includes(t.id))
           const disponiveis = candidatos
             .filter((t) => !form.dependencies.includes(t.id))
@@ -885,6 +885,12 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
   const [exporting, setExporting] = useState(false)
   const [editTitle, setEditTitle] = useState<{ id: string; val: string } | null>(null)
   const [editNum,   setEditNum]   = useState<{ id: string; field: "estimatedEffort" | "actualEffort" | "progress"; val: string } | null>(null)
+  const [sortBy,    setSortBy]    = useState<"startDate" | "endDate" | null>(null)
+  const [editPred,  setEditPred]  = useState<{ id: string; val: string } | null>(null)
+
+  // Always-current ref — safe to read inside async callbacks
+  const tasksRef = useRef(tasks)
+  useLayoutEffect(() => { tasksRef.current = tasks })
 
   // Gantt-specific expand + inline edit state
   const [expandedGanttAreas, setExpandedGanttAreas] = useState<Set<string>>(
@@ -989,7 +995,34 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
   const totalDays  = differenceInDays(ganttEnd, ganttStart) + 1
   const ganttWidth = Math.max(900, totalDays * dayWidth)
 
-  const listRows   = useMemo(() => buildListRows(areas, tasks, expandedAreas, expandedTasks, search, hideDone), [areas, tasks, expandedAreas, expandedTasks, search, hideDone])
+  // EAP maps — always natural order so identifiers are stable
+  const eapRows = useMemo(() => {
+    const allAreaIds = new Set([...areas.map(a => a.id), "__ungrouped__"])
+    const parentIds  = new Set(tasks.filter(t => t.parentId).map(t => t.parentId!))
+    const expandedParents = new Set(tasks.filter(t => parentIds.has(t.id)).map(t => t.id))
+    return buildListRows(areas, tasks, allAreaIds, expandedParents, "", false)
+  }, [areas, tasks])
+  const eapById = useMemo(() => {
+    const m = new Map<string, string>()
+    eapRows.forEach(r => { if (r.kind === "task") m.set(r.task.id, r.eap) })
+    return m
+  }, [eapRows])
+  const idByEap = useMemo(() => {
+    const m = new Map<string, string>()
+    eapRows.forEach(r => { if (r.kind === "task") m.set(r.eap, r.task.id) })
+    return m
+  }, [eapRows])
+
+  const sortedForList = useMemo(() => {
+    if (!sortBy) return tasks
+    return [...tasks].sort((a, b) => {
+      const av = (a[sortBy] ?? "9999-99-99") as string
+      const bv = (b[sortBy] ?? "9999-99-99") as string
+      return av < bv ? -1 : av > bv ? 1 : 0
+    })
+  }, [tasks, sortBy])
+
+  const listRows   = useMemo(() => buildListRows(areas, sortedForList, expandedAreas, expandedTasks, search, hideDone), [areas, sortedForList, expandedAreas, expandedTasks, search, hideDone])
 
   // Gantt rows — area-grouped, uses its own expand sets
   const ganttRows  = useMemo(() => buildListRows(areas, tasks, expandedGanttAreas, expandedGantt, "", false), [areas, tasks, expandedGanttAreas, expandedGantt])
@@ -1015,14 +1048,15 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
   function openEdit(t: Task) { setPanel({ mode: "edit", task: t }) }
 
   function handleSaved(t: Task) {
-    setTasks((prev) => {
-      const idx = prev.findIndex((x) => x.id === t.id)
-      if (idx === -1) return [...prev, t]
-      const next = [...prev]; next[idx] = t; return next
-    })
+    const latest = tasksRef.current
+    const newTasks = latest.some(x => x.id === t.id)
+      ? latest.map(x => x.id === t.id ? t : x)
+      : [...latest, t]
+    setTasks(newTasks)
     if (t.parentId) {
       setExpandedTasks((prev) => { const s = new Set(prev); s.add(t.parentId!); return s })
       setExpandedGantt((prev) => { const s = new Set(prev); s.add(t.parentId!); return s })
+      start(async () => { await recalcParent(t.id, newTasks) })
     }
     setPanel(null)
   }
@@ -1036,15 +1070,32 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
     })
   }
 
+  async function recalcParent(changedTaskId: string, latestTasks: Task[]) {
+    const changed = latestTasks.find(t => t.id === changedTaskId)
+    if (!changed?.parentId) return
+    const siblings = latestTasks.filter(t => t.parentId === changed.parentId)
+    if (siblings.length === 0) return
+    const startDates = siblings.map(c => c.startDate).filter(Boolean).sort() as string[]
+    const endDates   = siblings.map(c => c.endDate).filter(Boolean).sort() as string[]
+    const avgProg    = Math.round(siblings.reduce((s, c) => s + c.progress, 0) / siblings.length)
+    const newStart   = startDates[0] ?? null
+    const newEnd     = endDates.at(-1) ?? null
+    const parent     = latestTasks.find(t => t.id === changed.parentId)
+    if (!parent) return
+    if (parent.startDate === newStart && parent.endDate === newEnd && parent.progress === avgProg) return
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updated = await updateTask(changed.parentId!, project.id, { startDate: newStart, endDate: newEnd, progress: avgProg } as any)
+    setTasks(prev => prev.map(t => t.id === changed.parentId ? updated as Task : t))
+  }
+
   function saveTaskField(taskId: string, data: Record<string, unknown>) {
     start(async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const updated = await updateTask(taskId, project.id, data as any)
-      setTasks((prev) => {
-        const i = prev.findIndex((x) => x.id === taskId)
-        if (i === -1) return prev
-        const arr = [...prev]; arr[i] = updated as Task; return arr
-      })
+      const updatedTask = updated as Task
+      const newTasks = tasksRef.current.map(t => t.id === taskId ? updatedTask : t)
+      setTasks(newTasks)
+      await recalcParent(taskId, newTasks)
     })
   }
 
@@ -1053,11 +1104,9 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
     const next = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length]
     start(async () => {
       const updated = await updateTask(t.id, project.id, { status: next })
-      setTasks((prev) => {
-        const i = prev.findIndex((x) => x.id === t.id)
-        if (i === -1) return prev
-        const arr = [...prev]; arr[i] = updated as Task; return arr
-      })
+      const newTasks = tasksRef.current.map(x => x.id === t.id ? updated as Task : x)
+      setTasks(newTasks)
+      await recalcParent(t.id, newTasks)
     })
   }
 
@@ -1189,6 +1238,14 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
               className={`inline-flex items-center gap-1.5 px-3 h-8 text-xs font-semibold rounded-xl border transition-all ${hideDone ? "bg-violet-50 border-violet-200 text-[#7B2FBE]" : "border-slate-200 text-slate-500 bg-white hover:border-slate-300"}`}>
               Ocultar concluídos
             </button>
+            <button
+              onClick={() => setSortBy(s => s === "startDate" ? "endDate" : s === "endDate" ? null : "startDate")}
+              className={`inline-flex items-center gap-1.5 px-3 h-8 text-xs font-semibold rounded-xl border transition-all ${sortBy ? "bg-blue-50 border-blue-200 text-blue-600" : "border-slate-200 text-slate-500 bg-white hover:border-slate-300"}`}
+              title="Ordenar por data"
+            >
+              <ArrowUpDown className="w-3.5 h-3.5" />
+              {sortBy === "startDate" ? "Início ↑" : sortBy === "endDate" ? "Fim ↑" : "Ordenar"}
+            </button>
             <div className="flex items-center gap-1">
               <button onClick={expandAll} title="Expandir tudo" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">
                 <ChevronDown className="w-4 h-4" />
@@ -1282,7 +1339,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
             <div style={{ width: 64, flexShrink: 0 }} className="text-[10px] font-black text-violet-400/70 uppercase tracking-widest text-center">Real h</div>
             <div style={{ width: 68, flexShrink: 0 }} className="text-[10px] font-black text-amber-400/70 uppercase tracking-widest text-center">% Est.</div>
             <div style={{ width: 68, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">% Real</div>
-            <div style={{ width: 56, flexShrink: 0 }} className="text-[10px] font-black text-indigo-400/70 uppercase tracking-widest text-center">Pred.</div>
+            <div style={{ width: 100, flexShrink: 0 }} className="text-[10px] font-black text-indigo-400/70 uppercase tracking-widest text-center">Predecessoras</div>
           </div>
 
           {/* Rows */}
@@ -1382,7 +1439,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                           </div>
                         )}
                       </div>
-                      <div style={{ width: 56, flexShrink: 0 }} />
+                      <div style={{ width: 100, flexShrink: 0 }} />
                     </div>
                   )
                 }
@@ -1547,14 +1604,14 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                       {t.dependencies.length > 0 && (
                         <span
                           className="shrink-0 flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                          title={`${t.dependencies.length} predecessora(s)`}
+                          title={t.dependencies.map(d => `${eapById.get(d) ?? "?"} — ${tasks.find(x => x.id === d)?.title ?? d}`).join("\n")}
                           style={depViolation
                             ? { background: "#FEF3C7", color: "#B45309", border: "1px solid #FCD34D" }
                             : { background: "#EEF2FF", color: "#4338CA", border: "1px solid #C7D2FE" }
                           }
                         >
                           <Link2 className="w-2.5 h-2.5" />
-                          {t.dependencies.length}
+                          {t.dependencies.map(d => eapById.get(d) ?? "?").join(", ")}
                         </span>
                       )}
                       {t._count.comments   > 0 && <span className="text-[9px] text-slate-300 shrink-0">💬</span>}
@@ -1753,20 +1810,55 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                       )}
                     </div>
 
-                    {/* Predecessoras */}
-                    <div style={{ width: 56, flexShrink: 0 }} className="flex justify-center">
-                      {t.dependencies.length > 0 ? (
+                    {/* Predecessoras — editável por EAP */}
+                    <div style={{ width: 100, flexShrink: 0 }} className="flex items-center justify-center px-1">
+                      {editPred?.id === t.id ? (
+                        <input
+                          autoFocus
+                          value={editPred.val}
+                          placeholder="1.1, 1.2..."
+                          onChange={(e) => setEditPred({ id: t.id, val: e.target.value })}
+                          onBlur={() => {
+                            const raw = editPred.val
+                            setEditPred(null)
+                            const eaps = raw.split(/[,;\s]+/).map(s => s.trim()).filter(Boolean)
+                            const ids  = eaps.map(e => idByEap.get(e)).filter((id): id is string => Boolean(id))
+                            saveTaskField(t.id, { dependencies: ids })
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") e.currentTarget.blur()
+                            if (e.key === "Escape") setEditPred(null)
+                          }}
+                          className="w-full text-[9px] text-center px-1.5 py-0.5 rounded-lg outline-none bg-white font-mono"
+                          style={{ border: "1.5px solid #4338CA" }}
+                        />
+                      ) : (
                         <span
-                          className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                          title={t.dependencies.map((d) => tasks.find((x) => x.id === d)?.title ?? d).join(", ")}
-                          style={depViolation
-                            ? { background: "#FEF3C7", color: "#B45309" }
-                            : { background: "#EEF2FF", color: "#4338CA" }
+                          className="text-[9px] font-bold px-1.5 py-0.5 rounded-full cursor-text truncate max-w-full"
+                          style={t.dependencies.length > 0
+                            ? depViolation
+                              ? { background: "#FEF3C7", color: "#B45309" }
+                              : { background: "#EEF2FF", color: "#4338CA" }
+                            : { color: "#CBD5E1" }
                           }
+                          title={t.dependencies.length > 0
+                            ? t.dependencies.map(d => {
+                                const eap = eapById.get(d)
+                                const dep = tasks.find(x => x.id === d)
+                                return eap ? `${eap} — ${dep?.title ?? d}` : (dep?.title ?? d)
+                              }).join("\n")
+                            : "Clique para definir predecessoras"
+                          }
+                          onClick={() => setEditPred({
+                            id: t.id,
+                            val: t.dependencies.map(d => eapById.get(d) ?? "").filter(Boolean).join(", "),
+                          })}
                         >
-                          {t.dependencies.length}
+                          {t.dependencies.length > 0
+                            ? t.dependencies.map(d => eapById.get(d) ?? "?").join(", ")
+                            : "—"}
                         </span>
-                      ) : <span className="text-[10px] text-slate-200">—</span>}
+                      )}
                     </div>
 
                   </div>

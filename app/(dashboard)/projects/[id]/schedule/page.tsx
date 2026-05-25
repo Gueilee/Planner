@@ -10,7 +10,7 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
   const session = await auth()
   if (!session?.user) redirect("/login")
 
-  const [project, areas, tasks, memberships] = await Promise.all([
+  const [project, areas, tasks, allUsers] = await Promise.all([
     db.project.findUnique({ where: { id }, select: { id: true, title: true, status: true } }),
     db.wbsArea.findMany({ where: { projectId: id }, orderBy: { order: "asc" } }),
     db.scheduleTask.findMany({
@@ -22,9 +22,10 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
       },
       orderBy: { order: "asc" },
     }),
-    db.projectMember.findMany({
-      where: { projectId: id },
-      include: { user: { select: { id: true, name: true, department: true } } },
+    db.user.findMany({
+      where: { active: true },
+      select: { id: true, name: true, department: true },
+      orderBy: { name: "asc" },
     }),
   ])
 
@@ -47,11 +48,7 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
       project={{ id: project.id, title: project.title, status: project.status }}
       initialAreas={areas.map((a) => ({ id: a.id, name: a.name, color: a.color }))}
       initialTasks={serializedTasks}
-      members={memberships.map((m) => ({
-        id: m.user.id,
-        name: m.user.name,
-        department: m.user.department,
-      }))}
+      members={allUsers}
     />
   )
 }
