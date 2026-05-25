@@ -7,7 +7,7 @@ import { signOut, useSession } from "next-auth/react"
 import { cn } from "@/lib/utils"
 import {
   LayoutDashboard, FolderKanban,
-  BookOpen, Settings, ChevronLeft, LogOut, Users, FileBarChart2, Star, Columns3, History, CheckCircle2,
+  BookOpen, Settings, ChevronLeft, LogOut, Users, FileBarChart2, Star, Columns3, History, CheckCircle2, TrendingUp,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ROLE_LABELS } from "@/lib/permissions"
@@ -19,6 +19,7 @@ const NAV_ITEMS = [
   { label: "Priorização",          href: "/priority",      icon: Star },
   { label: "Kanban",               href: "/kanban",        icon: Columns3 },
   { label: "Status Report",        href: "/status-report", icon: FileBarChart2 },
+  { label: "Indicadores",          href: "/analytics",     icon: TrendingUp },
   { label: "Encerramento",         href: "/encerramento",  icon: CheckCircle2 },
   { label: "Base de Conhecimento", href: "/knowledge",     icon: BookOpen },
   { label: "Consulta de Projetos", href: "/history",       icon: History },
