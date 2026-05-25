@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 import { DeleteProjectButton } from "./delete-project-button"
 import { SuggestedDatesPanel } from "./suggested-dates-panel"
+import { ReopenProjectButton } from "./reopen-project-button"
 import Link from "next/link"
 import { format, differenceInDays } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -150,6 +151,9 @@ export default async function ProjectDetailPage({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 mb-3">
                     <StatusBadge status={project.status} size="md" />
+                    {project.status === "COMPLETED" && ["ADMIN", "PROJECT_MANAGER"].includes(userRole) && (
+                      <ReopenProjectButton projectId={id} />
+                    )}
                   </div>
                   <h1 className="text-2xl font-black text-[#0F172A] leading-tight tracking-tight">{project.title}</h1>
                   {project.description && (
