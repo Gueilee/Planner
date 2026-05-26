@@ -21,6 +21,7 @@ import {
   createTask, updateTask, deleteTask, createArea,
   reorderAreas, reorderTasks,
   getTaskAttachments, addTaskAttachments,
+  addExternalMember,
   type AttachmentUpload,
 } from "@/lib/actions/schedule"
 import { isHoliday, isWeekend as isWknd, getHolidayName, nextWorkingDay } from "@/lib/working-days"
@@ -858,9 +859,10 @@ interface ScheduleClientProps {
   members: Member[]
 }
 
-export function ScheduleClient({ project, initialAreas, initialTasks, members }: ScheduleClientProps) {
+export function ScheduleClient({ project, initialAreas, initialTasks, members: initialMembers }: ScheduleClientProps) {
   const [tasks, setTasks]   = useState<Task[]>(initialTasks)
   const [areas, setAreas]   = useState<Area[]>(initialAreas)
+  const [members, setMembers] = useState<Member[]>(initialMembers)
   const [viewMode, setViewMode] = useState<"list" | "gantt">("list")
 
   // List view state
@@ -887,6 +889,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
   const [editNum,   setEditNum]   = useState<{ id: string; field: "estimatedEffort" | "actualEffort" | "progress"; val: string } | null>(null)
   const [sortBy,    setSortBy]    = useState<"startDate" | "endDate" | null>(null)
   const [editPred,  setEditPred]  = useState<{ id: string; val: string } | null>(null)
+  const [inlineAdd, setInlineAdd] = useState<{ taskId: string; val: string } | null>(null)
 
   // Always-current ref — safe to read inside async callbacks
   const tasksRef = useRef(tasks)
@@ -1643,23 +1646,65 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members }:
                     {/* Responsible */}
                     <div style={{ width: 120, flexShrink: 0 }} className="px-1">
                       <div className="flex items-center gap-1.5">
-                        {t.responsible && (
+                        {t.responsible && inlineAdd?.taskId !== t.id && (
                           <div className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black text-white shrink-0"
                             style={{ background: areaColor ?? color }}>
                             {initials(t.responsible.name)}
                           </div>
                         )}
-                        <select
-                          value={t.responsibleId ?? ""}
-                          onChange={(e) => saveTaskField(t.id, { responsibleId: e.target.value || null })}
-                          className="flex-1 min-w-0 text-[10px] text-slate-600 bg-transparent border-0 outline-none cursor-pointer"
-                          title={t.responsible?.name ?? "Sem responsável"}
-                        >
-                          <option value="">— Sem responsável</option>
-                          {members.map((m) => (
-                            <option key={m.id} value={m.id}>{m.name}</option>
-                          ))}
-                        </select>
+                        {inlineAdd?.taskId === t.id ? (
+                          <input
+                            autoFocus
+                            value={inlineAdd.val}
+                            placeholder="Nome do responsável…"
+                            onChange={(e) => setInlineAdd({ taskId: t.id, val: e.target.value })}
+                            onKeyDown={async (e) => {
+                              if (e.key === "Escape") { setInlineAdd(null); return }
+                              if (e.key === "Enter") {
+                                e.preventDefault()
+                                const name = inlineAdd.val.trim()
+                                if (!name) { setInlineAdd(null); return }
+                                setInlineAdd(null)
+                                try {
+                                  const m = await addExternalMember(project.id, name)
+                                  setMembers((prev) => prev.some((x) => x.id === m.id) ? prev : [...prev, m])
+                                  await saveTaskField(t.id, { responsibleId: m.id })
+                                } catch {}
+                              }
+                            }}
+                            onBlur={async () => {
+                              const name = inlineAdd?.val.trim() ?? ""
+                              setInlineAdd(null)
+                              if (!name) return
+                              try {
+                                const m = await addExternalMember(project.id, name)
+                                setMembers((prev) => prev.some((x) => x.id === m.id) ? prev : [...prev, m])
+                                await saveTaskField(t.id, { responsibleId: m.id })
+                              } catch {}
+                            }}
+                            className="flex-1 min-w-0 text-[10px] text-[#0F172A] rounded-md px-1.5 py-0.5 outline-none"
+                            style={{ border: "1.5px solid #7B2FBE", background: "#F5F3FF" }}
+                          />
+                        ) : (
+                          <select
+                            value={t.responsibleId ?? ""}
+                            onChange={(e) => {
+                              if (e.target.value === "__other__") {
+                                setInlineAdd({ taskId: t.id, val: "" })
+                              } else {
+                                saveTaskField(t.id, { responsibleId: e.target.value || null })
+                              }
+                            }}
+                            className="flex-1 min-w-0 text-[10px] text-slate-600 bg-transparent border-0 outline-none cursor-pointer"
+                            title={t.responsible?.name ?? "Sem responsável"}
+                          >
+                            <option value="">— Sem responsável</option>
+                            {members.map((m) => (
+                              <option key={m.id} value={m.id}>{m.name}</option>
+                            ))}
+                            <option value="__other__">+ Outro (cadastrar)…</option>
+                          </select>
+                        )}
                       </div>
                     </div>
 

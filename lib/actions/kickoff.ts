@@ -5,8 +5,31 @@ import { auth } from "@/auth"
 import { revalidatePath } from "next/cache"
 import { DocumentType } from "@/lib/generated/prisma/enums"
 import { format } from "date-fns"
-import type { KickOffData } from "@/lib/types/kickoff"
+import type { KickOffData, ExternalAttendee } from "@/lib/types/kickoff"
 import { generateMeetingATA } from "@/lib/actions/ata"
+import bcrypt from "bcryptjs"
+
+async function syncExternalAttendees(projectId: string, externalAttendees: ExternalAttendee[]) {
+  for (const ext of externalAttendees) {
+    if (!ext.name?.trim()) continue
+    const slug  = ext.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 30).replace(/-$/, "")
+    const email = `ext-${slug}-${projectId.slice(-8)}@ext.planner`
+    try {
+      let user = await db.user.findUnique({ where: { email } })
+      if (!user) {
+        const hash = await bcrypt.hash(crypto.randomUUID(), 10)
+        user = await db.user.create({
+          data: { name: ext.name.trim(), email, password: hash, role: "PROJECT_MEMBER", active: true, department: ext.role || "Externo" },
+        })
+      }
+      await db.projectMember.upsert({
+        where: { projectId_userId: { projectId, userId: user.id } },
+        create: { projectId, userId: user.id, role: ext.role || "Externo" },
+        update: {},
+      })
+    } catch { /* ignore individual failures */ }
+  }
+}
 
 export async function getKickOff(projectId: string) {
   const doc = await db.projectDocument.findFirst({
@@ -38,6 +61,10 @@ export async function saveKickOff(data: KickOffData) {
     notes: data.notes,
     registeredAt: data.registeredAt,
   })
+
+  if (data.externalAttendees?.length) {
+    await syncExternalAttendees(data.projectId, data.externalAttendees)
+  }
 
   if (data.id) {
     await db.projectDocument.update({
@@ -80,6 +107,10 @@ export async function registerKickOff(data: KickOffData) {
     notes: data.notes,
     registeredAt,
   })
+
+  if (data.externalAttendees?.length) {
+    await syncExternalAttendees(data.projectId, data.externalAttendees)
+  }
 
   const meetingId = await db.$transaction(async (tx) => {
     // 1. Save/update kick-off document

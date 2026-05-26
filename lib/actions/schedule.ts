@@ -3,6 +3,7 @@
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
 import { revalidatePath } from "next/cache"
+import bcrypt from "bcryptjs"
 
 export type TaskInput = {
   projectId: string
@@ -183,4 +184,32 @@ export async function reorderTasks(projectId: string, orderedIds: string[]) {
     orderedIds.map((id, i) => db.scheduleTask.update({ where: { id }, data: { order: i } }))
   )
   revalidatePath(`/projects/${projectId}/schedule`)
+}
+
+export async function addExternalMember(projectId: string, name: string): Promise<{ id: string; name: string; department: string | null }> {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+
+  const trimmed = name.trim()
+  if (!trimmed) throw new Error("Nome obrigatório")
+
+  const slug  = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 30).replace(/-$/, "")
+  const email = `ext-${slug}-${projectId.slice(-8)}@ext.planner`
+
+  let user = await db.user.findUnique({ where: { email } })
+  if (!user) {
+    const hash = await bcrypt.hash(crypto.randomUUID(), 10)
+    user = await db.user.create({
+      data: { name: trimmed, email, password: hash, role: "PROJECT_MEMBER", active: true, department: "Externo" },
+    })
+  }
+
+  await db.projectMember.upsert({
+    where: { projectId_userId: { projectId, userId: user.id } },
+    create: { projectId, userId: user.id, role: "Externo" },
+    update: {},
+  })
+
+  revalidatePath(`/projects/${projectId}/schedule`)
+  return { id: user.id, name: user.name, department: user.department }
 }
