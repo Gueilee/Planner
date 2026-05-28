@@ -16,6 +16,12 @@ type Member = { userId: string; role: string; user: { id: string; name: string; 
 type AvailUser = { id: string; name: string; department: string | null; role: string }
 type RiskItem = { id: string; description: string; level: string; mitigation: string | null }
 
+const PROJECT_AREAS = [
+  { value: "TECNOLOGIA",  label: "Tecnologia",            desc: "Sistemas, TI e projetos digitais", color: "#0891B2", icon: "💻" },
+  { value: "QUALIDADE",   label: "Qualidade",             desc: "Melhoria contínua e certificações", color: "#059669", icon: "✅" },
+  { value: "ESTRATEGICO", label: "Projetos Estratégicos", desc: "Iniciativas de alto impacto",       color: "#7B2FBE", icon: "🎯" },
+]
+
 type Props = {
   project: {
     id: string
@@ -25,6 +31,7 @@ type Props = {
     assumptions: string | null
     restrictions: string | null
     origin: string | null
+    projectArea: string
     budget: number | null
     economy: number | null
     expectedStart: Date | null
@@ -459,6 +466,7 @@ export function ProjectEditModal({ project, members, allUsers, risks }: Props) {
     assumptions:   project.assumptions   ?? "",
     restrictions:  project.restrictions  ?? "",
     origin:        project.origin        ?? "INTERNAL",
+    projectArea:   project.projectArea   ?? "TECNOLOGIA",
     budget:        project.budget        != null ? String(project.budget)  : "",
     economy:       project.economy       != null ? String(project.economy) : "",
     expectedStart: toInputDate(project.expectedStart),
@@ -476,6 +484,7 @@ export function ProjectEditModal({ project, members, allUsers, risks }: Props) {
       assumptions:   project.assumptions   ?? "",
       restrictions:  project.restrictions  ?? "",
       origin:        project.origin        ?? "INTERNAL",
+      projectArea:   project.projectArea   ?? "TECNOLOGIA",
       budget:        project.budget        != null ? String(project.budget)  : "",
       economy:       project.economy       != null ? String(project.economy) : "",
       expectedStart: toInputDate(project.expectedStart),
@@ -504,6 +513,7 @@ export function ProjectEditModal({ project, members, allUsers, risks }: Props) {
         assumptions:   form.assumptions.trim()  || null,
         restrictions:  form.restrictions.trim() || null,
         origin:        form.origin || undefined,
+        projectArea:   form.projectArea || undefined,
         budget:        parseMoney(form.budget),
         economy:       parseMoney(form.economy),
         expectedStart: form.expectedStart || null,
@@ -598,6 +608,32 @@ export function ProjectEditModal({ project, members, allUsers, risks }: Props) {
                         {Object.entries(ORIGIN_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                       </select>
                       <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                    </div>
+                  </Field>
+
+                  <Field label="Portfólio / Área de Gestão">
+                    <div className="grid grid-cols-3 gap-2">
+                      {PROJECT_AREAS.map(pa => {
+                        const sel = form.projectArea === pa.value
+                        return (
+                          <button
+                            key={pa.value}
+                            type="button"
+                            onClick={() => setForm(f => ({ ...f, projectArea: pa.value }))}
+                            className="p-3 rounded-xl border-2 text-left transition-all duration-150"
+                            style={sel
+                              ? { borderColor: pa.color, background: `${pa.color}0D` }
+                              : { borderColor: "#E2E8F0", background: "#F8FAFC" }
+                            }
+                          >
+                            <div className="text-base mb-1">{pa.icon}</div>
+                            <p className="text-xs font-bold leading-tight" style={{ color: sel ? pa.color : "#0F172A" }}>
+                              {pa.label}
+                            </p>
+                            <p className="text-[10px] text-slate-400 mt-0.5 leading-snug">{pa.desc}</p>
+                          </button>
+                        )
+                      })}
                     </div>
                   </Field>
                 </>

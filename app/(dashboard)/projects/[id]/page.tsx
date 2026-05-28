@@ -171,6 +171,7 @@ export default async function ProjectDetailPage({
                       assumptions:   project.assumptions,
                       restrictions:  project.restrictions,
                       origin:        project.origin,
+                      projectArea:   project.projectArea,
                       budget:        project.budget,
                       economy:       project.economy,
                       expectedStart: project.expectedStart,
