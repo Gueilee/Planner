@@ -22,6 +22,8 @@ export type ProjectSummary = {
   status: string
   priority: number | null
   priorityLabel: string | null
+  projectArea: string
+  origin: string | null
   progress: number
   tasksDone: number
   tasksTotal: number
@@ -690,9 +692,25 @@ function ProjectHistoryView({ data }: { data: NonNullable<FullHistory> }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
+const AREA_CFG: Record<string, { label: string; color: string; icon: string }> = {
+  TECNOLOGIA:  { label: "Tecnologia",            color: "#0891B2", icon: "💻" },
+  QUALIDADE:   { label: "Qualidade",             color: "#059669", icon: "✅" },
+  ESTRATEGICO: { label: "Projetos Estratégicos", color: "#7B2FBE", icon: "🎯" },
+}
+
+const ORIGIN_CFG: Record<string, { label: string; icon: string; color: string }> = {
+  INTERNAL: { label: "Interna",   icon: "🏢", color: "#059669" },
+  SPONSOR:  { label: "Liderança", icon: "👤", color: "#7B2FBE" },
+  CLIENT:   { label: "Cliente",   icon: "🌐", color: "#2563EB" },
+}
+
 export function HistoryClient({ projects }: { projects: ProjectSummary[] }) {
-  const [search,   setSearch]   = useState("")
-  const [filter,   setFilter]   = useState("ALL")
+  const [search,        setSearch]        = useState("")
+  const [filter,        setFilter]        = useState("ALL")
+  const [filterArea,    setFilterArea]    = useState("ALL")
+  const [filterPriority,setFilterPriority]= useState("ALL")
+  const [filterSponsor, setFilterSponsor] = useState("ALL")
+  const [filterOrigin,  setFilterOrigin]  = useState("ALL")
   const [selected, setSelected] = useState<string | null>(null)
   const [history,  setHistory]  = useState<NonNullable<FullHistory> | null>(null)
   const [loading,  setLoading]  = useState(false)
@@ -705,15 +723,18 @@ export function HistoryClient({ projects }: { projects: ProjectSummary[] }) {
     { value: "ON_HOLD",   label: "Em Espera" },
   ]
 
+  const allSponsors = [...new Set(projects.map((p) => p.sponsor).filter((s) => s && s !== "—"))].sort()
+  const hasFilters  = !!(search || filter !== "ALL" || filterArea !== "ALL" || filterPriority !== "ALL" || filterSponsor !== "ALL" || filterOrigin !== "ALL")
+
   const filtered = projects.filter((p) => {
     const q = search.toLowerCase()
-    const matchesSearch = p.title.toLowerCase().includes(q) || p.sponsor.toLowerCase().includes(q)
-    const matchesFilter =
-      filter === "ALL"       ? true :
-      filter === "ACTIVE"    ? ACTIVE_STATUSES.includes(p.status) :
-      filter === "COMPLETED" ? p.status === "COMPLETED" :
-      filter === "ON_HOLD"   ? p.status === "ON_HOLD" : true
-    return matchesSearch && matchesFilter
+    const matchesSearch   = p.title.toLowerCase().includes(q) || p.sponsor.toLowerCase().includes(q) || (p.description ?? "").toLowerCase().includes(q)
+    const matchesStatus   = filter === "ALL" ? true : filter === "ACTIVE" ? ACTIVE_STATUSES.includes(p.status) : filter === "COMPLETED" ? p.status === "COMPLETED" : filter === "ON_HOLD" ? p.status === "ON_HOLD" : true
+    const matchesArea     = filterArea     === "ALL" || p.projectArea === filterArea
+    const matchesPriority = filterPriority === "ALL" || p.priorityLabel === filterPriority
+    const matchesSponsor  = filterSponsor  === "ALL" || p.sponsor === filterSponsor
+    const matchesOrigin   = filterOrigin   === "ALL" || p.origin === filterOrigin
+    return matchesSearch && matchesStatus && matchesArea && matchesPriority && matchesSponsor && matchesOrigin
   })
 
   const handleSelect = useCallback((id: string) => {
@@ -759,11 +780,12 @@ export function HistoryClient({ projects }: { projects: ProjectSummary[] }) {
           style={{ width: "320px", borderRight: "1px solid #E5E7EB" }}>
 
           {/* Search + filters */}
-          <div className="p-3.5 space-y-2.5 border-b border-gray-100">
+          <div className="p-3.5 space-y-3 border-b border-gray-100">
+            {/* Search */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-300" />
               <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar por nome ou sponsor…"
+                placeholder="Buscar por nome, sponsor…"
                 className="w-full pl-9 pr-8 h-9 rounded-xl text-sm outline-none bg-gray-50 border border-gray-200 text-gray-800 placeholder-gray-300 focus:ring-2 focus:ring-violet-200 focus:border-violet-400 transition-all" />
               {search && (
                 <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2">
@@ -771,19 +793,110 @@ export function HistoryClient({ projects }: { projects: ProjectSummary[] }) {
                 </button>
               )}
             </div>
-            <div className="flex gap-1.5 flex-wrap">
-              {STATUS_FILTERS.map((f) => (
-                <button key={f.value} onClick={() => setFilter(f.value)}
-                  className="px-3 h-7 rounded-full text-[10px] font-bold transition-all border"
-                  style={{
-                    background: filter === f.value ? "rgba(123,47,190,0.08)" : "transparent",
-                    color:      filter === f.value ? "#7B2FBE" : "#9CA3AF",
-                    borderColor: filter === f.value ? "#DDD6FE" : "#E5E7EB",
-                  }}>
-                  {f.label}
-                </button>
-              ))}
+
+            {/* Status */}
+            <div>
+              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Status</p>
+              <div className="flex gap-1 flex-wrap">
+                {STATUS_FILTERS.map((f) => (
+                  <button key={f.value} onClick={() => setFilter(f.value)}
+                    className="px-2.5 h-6 rounded-full text-[10px] font-bold transition-all border"
+                    style={{
+                      background:  filter === f.value ? "rgba(123,47,190,0.08)" : "transparent",
+                      color:       filter === f.value ? "#7B2FBE" : "#9CA3AF",
+                      borderColor: filter === f.value ? "#DDD6FE" : "#E5E7EB",
+                    }}>
+                    {f.label}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {/* Portfólio / Área */}
+            <div>
+              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Portfólio</p>
+              <div className="flex flex-col gap-1">
+                <button onClick={() => setFilterArea("ALL")}
+                  className="text-left px-2.5 h-7 rounded-lg text-[10px] font-semibold transition-all border"
+                  style={{ background: filterArea === "ALL" ? "rgba(100,116,139,0.10)" : "transparent", color: filterArea === "ALL" ? "#475569" : "#9CA3AF", borderColor: filterArea === "ALL" ? "#CBD5E1" : "#E5E7EB" }}>
+                  Todos os portfólios
+                </button>
+                {Object.entries(AREA_CFG).map(([key, cfg]) => {
+                  const count = projects.filter((p) => p.projectArea === key).length
+                  return (
+                    <button key={key} onClick={() => setFilterArea(key)}
+                      className="flex items-center gap-2 px-2.5 h-7 rounded-lg text-[10px] font-semibold transition-all border"
+                      style={{ background: filterArea === key ? `${cfg.color}10` : "transparent", color: filterArea === key ? cfg.color : "#9CA3AF", borderColor: filterArea === key ? `${cfg.color}30` : "#E5E7EB" }}>
+                      <span>{cfg.icon}</span>
+                      <span className="flex-1 text-left truncate">{cfg.label}</span>
+                      <span className="text-[9px] opacity-60">{count}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Prioridade */}
+            <div>
+              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Prioridade</p>
+              <div className="flex gap-1 flex-wrap">
+                {["ALL", "P1", "P2", "P3", "P4"].map((v) => {
+                  const active = filterPriority === v
+                  const pCfg = v !== "ALL" ? PRIORITY_CFG[v] : null
+                  return (
+                    <button key={v} onClick={() => setFilterPriority(v)}
+                      className="px-2.5 h-6 rounded-full text-[10px] font-bold transition-all border"
+                      style={{
+                        background:  active ? (pCfg ? `${pCfg.bg}` : "rgba(123,47,190,0.08)") : "transparent",
+                        color:       active ? (pCfg ? pCfg.color : "#7B2FBE") : "#9CA3AF",
+                        borderColor: active ? (pCfg ? pCfg.border : "#DDD6FE") : "#E5E7EB",
+                      }}>
+                      {v === "ALL" ? "Todas" : v}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Origem */}
+            <div>
+              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Origem</p>
+              <div className="flex gap-1 flex-wrap">
+                <button onClick={() => setFilterOrigin("ALL")}
+                  className="px-2.5 h-6 rounded-full text-[10px] font-bold transition-all border"
+                  style={{ background: filterOrigin === "ALL" ? "rgba(123,47,190,0.08)" : "transparent", color: filterOrigin === "ALL" ? "#7B2FBE" : "#9CA3AF", borderColor: filterOrigin === "ALL" ? "#DDD6FE" : "#E5E7EB" }}>
+                  Todas
+                </button>
+                {Object.entries(ORIGIN_CFG).map(([key, cfg]) => (
+                  <button key={key} onClick={() => setFilterOrigin(key)}
+                    className="flex items-center gap-1 px-2.5 h-6 rounded-full text-[10px] font-bold transition-all border"
+                    style={{ background: filterOrigin === key ? `${cfg.color}12` : "transparent", color: filterOrigin === key ? cfg.color : "#9CA3AF", borderColor: filterOrigin === key ? `${cfg.color}30` : "#E5E7EB" }}>
+                    <span>{cfg.icon}</span>{cfg.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Sponsor */}
+            {allSponsors.length > 0 && (
+              <div>
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Sponsor / Solicitante</p>
+                <select value={filterSponsor} onChange={(e) => setFilterSponsor(e.target.value)}
+                  className="w-full h-8 pl-2 pr-6 text-[11px] rounded-xl border border-gray-200 bg-gray-50 outline-none focus:ring-2 focus:ring-violet-200 text-gray-700 appearance-none cursor-pointer">
+                  <option value="ALL">Todos</option>
+                  {allSponsors.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            )}
+
+            {/* Limpar */}
+            {hasFilters && (
+              <button
+                onClick={() => { setSearch(""); setFilter("ALL"); setFilterArea("ALL"); setFilterPriority("ALL"); setFilterSponsor("ALL"); setFilterOrigin("ALL") }}
+                className="w-full flex items-center justify-center gap-1.5 h-7 rounded-xl text-[10px] font-bold text-red-500 border border-red-100 hover:bg-red-50 transition-colors">
+                <X className="w-3 h-3" /> Limpar filtros ({filtered.length}/{projects.length})
+              </button>
+            )}
           </div>
 
           {/* List */}

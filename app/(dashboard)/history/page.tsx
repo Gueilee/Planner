@@ -26,6 +26,8 @@ export default async function HistoryPage() {
       status:        p.status as string,
       priority:      p.priority,
       priorityLabel: p.priorityLabel,
+      projectArea:   p.projectArea as string,
+      origin:        p.origin ?? null,
       progress,
       tasksDone:     done,
       tasksTotal:    total,

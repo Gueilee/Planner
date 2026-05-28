@@ -11,7 +11,13 @@ export async function getAllProjectsSummary() {
       { priority: { sort: "asc", nulls: "last" } },
       { updatedAt: "desc" },
     ],
-    include: {
+    select: {
+      id: true, title: true, description: true, status: true,
+      priority: true, priorityLabel: true,
+      projectArea: true, origin: true,
+      economy: true, budget: true,
+      expectedStart: true, expectedEnd: true,
+      createdAt: true, updatedAt: true,
       sponsor: { select: { name: true } },
       tasks: { select: { status: true, progress: true } },
       _count: { select: { meetings: true, risks: true, members: true } },
