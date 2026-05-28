@@ -89,9 +89,66 @@ export async function createTask(data: TaskInput) {
   return serialize(task)
 }
 
+// ─── Auto-derivation helpers (also exported for client-side optimistic updates) ─
+
+export function deriveStatus(progress: number, currentStatus: string): string {
+  if ((currentStatus === "DELAYED" || currentStatus === "ON_HOLD") && progress < 100) return currentStatus
+  if (progress === 0) return "PLANNING"
+  if (progress <= 89) return "IN_PROGRESS"
+  if (progress <= 99) return "VALIDATION"
+  return "COMPLETED"
+}
+
+export function deriveProgress(newStatus: string, currentProgress: number): number {
+  if (newStatus === "PLANNING") return 0
+  if (newStatus === "IN_PROGRESS") return currentProgress >= 1 && currentProgress <= 89 ? currentProgress : 1
+  if (newStatus === "VALIDATION") return currentProgress >= 90 && currentProgress <= 99 ? currentProgress : 90
+  if (newStatus === "COMPLETED") return 100
+  return currentProgress // DELAYED, ON_HOLD
+}
+
+export type AncestorUpdate = { id: string; progress: number; status: string }
+
+async function propagateProgressUp(taskId: string, collected: AncestorUpdate[] = []): Promise<AncestorUpdate[]> {
+  const child = await db.scheduleTask.findUnique({ where: { id: taskId }, select: { parentId: true } })
+  if (!child?.parentId) return collected
+
+  const siblings = await db.scheduleTask.findMany({
+    where: { parentId: child.parentId },
+    select: { progress: true },
+  })
+  const avg = Math.round(siblings.reduce((s, t) => s + t.progress, 0) / siblings.length)
+
+  const parent = await db.scheduleTask.findUnique({ where: { id: child.parentId }, select: { status: true } })
+  if (!parent) return collected
+
+  const newStatus = deriveStatus(avg, parent.status)
+  await db.scheduleTask.update({
+    where: { id: child.parentId },
+    data: { progress: avg, status: newStatus as never },
+  })
+
+  collected.push({ id: child.parentId, progress: avg, status: newStatus })
+  return propagateProgressUp(child.parentId, collected)
+}
+
 export async function updateTask(id: string, projectId: string, data: Partial<TaskInput>) {
   const session = await auth()
   if (!session?.user) throw new Error("Não autorizado")
+
+  // Fetch current values for auto-derivation
+  const current = await db.scheduleTask.findUnique({ where: { id }, select: { progress: true, status: true } })
+  const curProgress = current?.progress ?? 0
+  const curStatus   = current?.status   ?? "PLANNING"
+
+  let finalProgress = data.progress !== undefined ? data.progress : curProgress
+  let finalStatus   = data.status   !== undefined ? data.status   : curStatus
+
+  if (data.progress !== undefined && data.status === undefined) {
+    finalStatus = deriveStatus(finalProgress, curStatus)
+  } else if (data.status !== undefined && data.progress === undefined) {
+    finalProgress = deriveProgress(finalStatus, curProgress)
+  }
 
   const task = await db.scheduleTask.update({
     where: { id },
@@ -107,8 +164,8 @@ export async function updateTask(id: string, projectId: string, data: Partial<Ta
       ...(data.actualEnd !== undefined && { actualEnd: data.actualEnd ? new Date(data.actualEnd) : null }),
       ...(data.estimatedEffort !== undefined && { estimatedEffort: data.estimatedEffort }),
       ...(data.actualEffort !== undefined && { actualEffort: data.actualEffort }),
-      ...(data.status !== undefined && { status: data.status as never }),
-      ...(data.progress !== undefined && { progress: data.progress }),
+      status: finalStatus as never,
+      progress: finalProgress,
       ...(data.dependencies !== undefined && {
         dependencies: data.dependencies?.length ? JSON.stringify(data.dependencies) : null,
       }),
@@ -117,8 +174,9 @@ export async function updateTask(id: string, projectId: string, data: Partial<Ta
     include: INCLUDE,
   })
 
+  const ancestors = await propagateProgressUp(id)
   revalidatePath(`/projects/${projectId}/schedule`)
-  return serialize(task)
+  return { task: serialize(task), ancestors }
 }
 
 export async function deleteTask(id: string, projectId: string) {

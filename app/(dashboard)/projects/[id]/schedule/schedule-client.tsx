@@ -21,8 +21,8 @@ import {
   createTask, updateTask, deleteTask, createArea,
   reorderAreas, reorderTasks,
   getTaskAttachments, addTaskAttachments,
-  addExternalMember,
-  type AttachmentUpload,
+  addExternalMember, deriveStatus, deriveProgress,
+  type AttachmentUpload, type AncestorUpdate,
 } from "@/lib/actions/schedule"
 import { isHoliday, isWeekend as isWknd, getHolidayName, nextWorkingDay } from "@/lib/working-days"
 import { WorkingDayPicker } from "@/components/working-day-picker"
@@ -210,7 +210,7 @@ interface TaskFormProps {
   areas: Area[]
   members: Member[]
   allTasks: Task[]
-  onSave: (t: Task) => void
+  onSave: (t: Task, ancestors?: AncestorUpdate[]) => void
   onDelete?: () => void
   onClose: () => void
 }
@@ -318,15 +318,21 @@ function TaskForm({ mode, initial, areas, members, allTasks, onSave, onDelete, o
         progress:        form.progress,
         dependencies:    form.dependencies,
       }
-      const result = mode === "edit" && initial.id
-        ? await updateTask(initial.id, initial.projectId, data)
-        : await createTask(data)
-
-      if (newAtts.length > 0) {
-        await addTaskAttachments(result.id, initial.projectId, newAtts)
+      let task: Task
+      let ancestors: AncestorUpdate[] = []
+      if (mode === "edit" && initial.id) {
+        const res = await updateTask(initial.id, initial.projectId, data)
+        task = res.task as Task
+        ancestors = res.ancestors
+      } else {
+        task = await createTask(data) as Task
       }
 
-      onSave(result as Task)
+      if (newAtts.length > 0) {
+        await addTaskAttachments(task.id, initial.projectId, newAtts)
+      }
+
+      onSave(task, ancestors)
     })
   }
 
@@ -1063,16 +1069,32 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
   }
   function openEdit(t: Task) { setPanel({ mode: "edit", task: t }) }
 
-  function handleSaved(t: Task) {
+  function applyTaskUpdates(task: Task, ancestors: AncestorUpdate[]) {
+    setTasks(prev => {
+      const map = new Map(prev.map(t => [t.id, t]))
+      map.set(task.id, { ...map.get(task.id) ?? task, ...task })
+      for (const anc of ancestors) {
+        const existing = map.get(anc.id)
+        if (existing) map.set(anc.id, { ...existing, progress: anc.progress, status: anc.status as Task["status"] })
+      }
+      return [...map.values()]
+    })
+  }
+
+  function handleSaved(t: Task, ancestors: AncestorUpdate[] = []) {
     const latest = tasksRef.current
-    const newTasks = latest.some(x => x.id === t.id)
+    const base = latest.some(x => x.id === t.id)
       ? latest.map(x => x.id === t.id ? t : x)
       : [...latest, t]
-    setTasks(newTasks)
+    const withAncestors = base.map(x => {
+      const anc = ancestors.find(a => a.id === x.id)
+      return anc ? { ...x, progress: anc.progress, status: anc.status as Task["status"] } : x
+    })
+    setTasks(withAncestors)
     if (t.parentId) {
       setExpandedTasks((prev) => { const s = new Set(prev); s.add(t.parentId!); return s })
       setExpandedGantt((prev) => { const s = new Set(prev); s.add(t.parentId!); return s })
-      start(async () => { await recalcParent(t.id, newTasks) })
+      // propagation already handled server-side; parent state updated via applyTaskUpdates above
     }
     setPanel(null)
   }
@@ -1086,43 +1108,22 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
     })
   }
 
-  async function recalcParent(changedTaskId: string, latestTasks: Task[]) {
-    const changed = latestTasks.find(t => t.id === changedTaskId)
-    if (!changed?.parentId) return
-    const siblings = latestTasks.filter(t => t.parentId === changed.parentId)
-    if (siblings.length === 0) return
-    const startDates = siblings.map(c => c.startDate).filter(Boolean).sort() as string[]
-    const endDates   = siblings.map(c => c.endDate).filter(Boolean).sort() as string[]
-    const avgProg    = Math.round(siblings.reduce((s, c) => s + c.progress, 0) / siblings.length)
-    const newStart   = startDates[0] ?? null
-    const newEnd     = endDates.at(-1) ?? null
-    const parent     = latestTasks.find(t => t.id === changed.parentId)
-    if (!parent) return
-    if (parent.startDate === newStart && parent.endDate === newEnd && parent.progress === avgProg) return
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updated = await updateTask(changed.parentId!, project.id, { startDate: newStart, endDate: newEnd, progress: avgProg } as any)
-    setTasks(prev => prev.map(t => t.id === changed.parentId ? updated as Task : t))
-  }
-
   function saveTaskField(taskId: string, data: Record<string, unknown>) {
+    // Optimistic update with derived progress/status
+    const current = tasksRef.current.find(t => t.id === taskId)
+    if (current) {
+      let optimistic = { ...current, ...data }
+      if ("progress" in data && !("status" in data)) {
+        optimistic.status = deriveStatus(optimistic.progress, current.status) as Task["status"]
+      } else if ("status" in data && !("progress" in data)) {
+        optimistic.progress = deriveProgress(optimistic.status, current.progress)
+      }
+      setTasks(prev => prev.map(t => t.id === taskId ? optimistic : t))
+    }
     start(async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const updated = await updateTask(taskId, project.id, data as any)
-      const updatedTask = updated as Task
-      const newTasks = tasksRef.current.map(t => t.id === taskId ? updatedTask : t)
-      setTasks(newTasks)
-      await recalcParent(taskId, newTasks)
-    })
-  }
-
-  function cycleStatus(t: Task) {
-    const idx  = STATUS_CYCLE.indexOf(t.status as typeof STATUS_CYCLE[number])
-    const next = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length]
-    start(async () => {
-      const updated = await updateTask(t.id, project.id, { status: next })
-      const newTasks = tasksRef.current.map(x => x.id === t.id ? updated as Task : x)
-      setTasks(newTasks)
-      await recalcParent(t.id, newTasks)
+      const result = await updateTask(taskId, project.id, data as any)
+      applyTaskUpdates(result.task as Task, result.ancestors)
     })
   }
 
@@ -1149,7 +1150,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
       setTasks((prev) => {
         const i = prev.findIndex((x) => x.id === task.id)
         if (i === -1) return prev
-        const arr = [...prev]; arr[i] = updated as Task; return arr
+        const arr = [...prev]; arr[i] = updated.task as Task; return arr
       })
     })
   }
@@ -1635,15 +1636,26 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                       {t._count.attachments > 0 && <span className="text-[9px] text-slate-300 shrink-0">📎</span>}
                     </div>
 
-                    {/* Status — click to cycle */}
+                    {/* Status — dropdown */}
                     <div style={{ width: 130, flexShrink: 0 }} className="flex justify-center px-1">
-                      <button
-                        onClick={() => cycleStatus(t)}
-                        title="Clique para avançar o status"
-                        className="text-[10px] font-bold px-2 py-1 rounded-full transition-all hover:opacity-80 whitespace-nowrap"
-                        style={{ background: cfg?.bg ?? "#F8FAFC", color: isLate && t.status !== "DELAYED" ? "#EF4444" : cfg?.color ?? "#64748B", border: `1px solid ${cfg?.color ?? "#CBD5E1"}30` }}>
-                        {cfg?.label ?? t.status}
-                      </button>
+                      <select
+                        value={t.status}
+                        onChange={(e) => saveTaskField(t.id, { status: e.target.value })}
+                        style={{
+                          background: cfg?.bg ?? "#F8FAFC",
+                          color: isLate && t.status !== "DELAYED" ? "#EF4444" : cfg?.color ?? "#64748B",
+                          border: `1.5px solid ${isLate && t.status !== "DELAYED" ? "#EF4444" : cfg?.color ?? "#CBD5E1"}50`,
+                          fontSize: 10, fontWeight: 700,
+                          padding: "3px 6px", borderRadius: 20,
+                          cursor: "pointer", outline: "none",
+                          appearance: "none", textAlignLast: "center",
+                          width: "100%", maxWidth: 118,
+                        }}
+                      >
+                        {STATUS_CYCLE.map(s => (
+                          <option key={s} value={s}>{STATUS_CFG[s]?.label ?? s}</option>
+                        ))}
+                      </select>
                     </div>
 
                     {/* Responsible */}
