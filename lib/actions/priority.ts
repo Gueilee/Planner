@@ -60,6 +60,7 @@ export async function getProjectsForPriority() {
       priorityLabel:    true,
       priorityNotes:    true,
       priorityUpdatedAt: true,
+      projectArea:  true,
       sponsor:     { select: { name: true } },
       members:     { select: { id: true } },
       tasks:       { select: { status: true, progress: true } },

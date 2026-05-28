@@ -21,6 +21,7 @@ export default async function PriorityPage() {
         priorityLabel:    p.priorityLabel,
         priorityNotes:    p.priorityNotes,
         priorityUpdatedAt: p.priorityUpdatedAt?.toISOString() ?? null,
+        projectArea:      p.projectArea,
         sponsor:          p.sponsor?.name ?? "—",
         expectedEnd:      p.expectedEnd?.toISOString() ?? null,
         economy:          p.economy,

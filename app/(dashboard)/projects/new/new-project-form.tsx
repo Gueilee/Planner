@@ -16,7 +16,7 @@ import { createProjectRequest } from "@/lib/actions/project-request"
 type RiskItem = { description: string; level: "LOW" | "MEDIUM" | "HIGH"; mitigation: string }
 type FileItem = { name: string; url: string; size: number; localFile?: File }
 type FormState = {
-  title: string; area: string; sponsorId: string; areaSolicitante: string; origin: string
+  title: string; area: string; projectArea: string; sponsorId: string; areaSolicitante: string; origin: string
   stakeholders: string[]
   scope: string; asIs: string; toBe: string
   assumptions: string; restrictions: string
@@ -37,6 +37,12 @@ const STEPS = [
 
 const AREAS = ["Tecnologia", "Projetos", "Qualidade", "Operações", "Financeiro", "Comercial",
   "Transportes", "RH", "Marketing", "Compras", "Controller", "Diretoria"]
+
+const PROJECT_AREAS = [
+  { value: "TECNOLOGIA",  label: "Tecnologia",            desc: "Sistemas, TI e projetos digitais", color: "#0891B2", icon: "💻" },
+  { value: "QUALIDADE",   label: "Qualidade",             desc: "Melhoria contínua e certificações", color: "#059669", icon: "✅" },
+  { value: "ESTRATEGICO", label: "Projetos Estratégicos", desc: "Iniciativas de alto impacto",       color: "#7B2FBE", icon: "🎯" },
+]
 
 const ORIGINS = [
   { value: "INTERNAL", label: "Interna",    desc: "Demanda da equipe interna",    icon: Building2,  color: "#10B981" },
@@ -99,7 +105,7 @@ export function NewProjectForm({ users, currentUserId }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [form, setForm] = useState<FormState>({
-    title: "", area: "", sponsorId: currentUserId, areaSolicitante: "",
+    title: "", area: "", projectArea: "TECNOLOGIA", sponsorId: currentUserId, areaSolicitante: "",
     origin: "INTERNAL", stakeholders: [],
     scope: "", asIs: "", toBe: "",
     assumptions: "", restrictions: "",
@@ -138,6 +144,7 @@ export function NewProjectForm({ users, currentUserId }: Props) {
       const { id } = await createProjectRequest({
         title:          form.title,
         area:           form.area,
+        projectArea:    form.projectArea,
         sponsorId:      form.sponsorId,
         areaSolicitante:form.areaSolicitante,
         origin:         form.origin,
@@ -243,6 +250,33 @@ export function NewProjectForm({ users, currentUserId }: Props) {
                   <Label required>Nome do Projeto</Label>
                   <input className={inputCls} placeholder="Ex: Implantação de Combos Metálicos Retornáveis"
                     value={form.title} onChange={e => set("title", e.target.value)} />
+                </div>
+
+                <div>
+                  <Label required>Portfólio / Área de Gestão</Label>
+                  <div className="grid grid-cols-3 gap-3">
+                    {PROJECT_AREAS.map(pa => {
+                      const sel = form.projectArea === pa.value
+                      return (
+                        <button key={pa.value} type="button" onClick={() => set("projectArea", pa.value)}
+                          className={cn(
+                            "p-4 rounded-xl border-2 text-left transition-all duration-200",
+                            sel
+                              ? "border-[2px] bg-[rgba(0,0,0,0.02)]"
+                              : "border-[rgba(0,0,0,0.09)] hover:border-[rgba(0,0,0,0.2)] hover:bg-[rgba(0,0,0,0.01)]"
+                          )}
+                          style={sel ? { borderColor: pa.color, background: `${pa.color}08` } : {}}
+                        >
+                          <div className="w-9 h-9 rounded-lg mb-2.5 flex items-center justify-center text-lg"
+                            style={{ background: `${pa.color}18` }}>
+                            {pa.icon}
+                          </div>
+                          <p className="text-sm font-bold leading-tight" style={{ color: sel ? pa.color : "#1a1625" }}>{pa.label}</p>
+                          <p className="text-[11px] text-[#9c99b0] mt-0.5 leading-snug">{pa.desc}</p>
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">

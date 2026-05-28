@@ -39,6 +39,7 @@ type ProjectRow = {
   priorityLabel: string | null
   priorityNotes: string | null
   priorityUpdatedAt: string | null
+  projectArea: string
   sponsor: string
   expectedEnd: string | null
   economy: number | null
@@ -239,12 +240,26 @@ function SortableCard({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
+type AreaTab = "ALL" | "TECNOLOGIA" | "QUALIDADE" | "ESTRATEGICO"
+
+const AREA_TABS: { key: AreaTab; label: string; color: string; bg: string }[] = [
+  { key: "ALL",         label: "Todos",                color: "#7B2FBE", bg: "rgba(123,47,190,0.08)" },
+  { key: "TECNOLOGIA",  label: "Tecnologia",           color: "#0891B2", bg: "rgba(8,145,178,0.08)"  },
+  { key: "QUALIDADE",   label: "Qualidade",            color: "#059669", bg: "rgba(5,150,105,0.08)"  },
+  { key: "ESTRATEGICO", label: "Projetos Estratégicos",color: "#7B2FBE", bg: "rgba(123,47,190,0.08)" },
+]
+
 export function PriorityClient({ projects: initial }: { projects: ProjectRow[] }) {
-  const [items, setItems]     = useState<ProjectRow[]>(initial)
-  const [saving, setSaving]   = useState(false)
-  const [saved,  setSaved]    = useState(false)
-  const [dirty,  setDirty]    = useState(false)
-  const [error,  setError]    = useState<string | null>(null)
+  const [items, setItems]       = useState<ProjectRow[]>(initial)
+  const [activeArea, setActiveArea] = useState<AreaTab>("ALL")
+  const [saving, setSaving]     = useState(false)
+  const [saved,  setSaved]      = useState(false)
+  const [dirty,  setDirty]      = useState(false)
+  const [error,  setError]      = useState<string | null>(null)
+
+  const visibleItems = activeArea === "ALL"
+    ? items
+    : items.filter(p => p.projectArea === activeArea)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -361,13 +376,40 @@ export function PriorityClient({ projects: initial }: { projects: ProjectRow[] }
       {/* ── Body ── */}
       <div className="max-w-5xl mx-auto px-8 py-6">
 
+        {/* ── Area tabs ── */}
+        <div className="flex gap-1 p-1 rounded-2xl bg-white border border-gray-100 shadow-sm mb-6 self-start w-fit">
+          {AREA_TABS.map((a) => {
+            const isActive = activeArea === a.key
+            const count = a.key === "ALL" ? items.length : items.filter(p => p.projectArea === a.key).length
+            return (
+              <button
+                key={a.key}
+                onClick={() => setActiveArea(a.key)}
+                className="px-4 h-9 text-xs font-bold rounded-xl transition-all whitespace-nowrap flex items-center gap-2"
+                style={isActive
+                  ? { background: a.color, color: "#fff", boxShadow: `0 2px 10px ${a.color}40` }
+                  : { background: "transparent", color: "#9CA3AF" }
+                }
+              >
+                {a.label}
+                <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full"
+                  style={isActive
+                    ? { background: "rgba(255,255,255,0.25)", color: "#fff" }
+                    : { background: "#F1F5F9", color: "#94A3B8" }
+                  }
+                >{count}</span>
+              </button>
+            )
+          })}
+        </div>
+
         {/* ── KPI strip ── */}
         <div className="grid grid-cols-4 gap-4 mb-6">
           {[
-            { label: "Total de Projetos", value: items.length,    icon: Target,     color: "#7B2FBE", bg: "rgba(123,47,190,0.08)" },
-            { label: "Classificados",     value: classified,       icon: Star,       color: "#059669", bg: "rgba(5,150,105,0.08)"  },
-            { label: "Sem Prioridade",    value: items.length - classified, icon: AlertTriangle, color: "#D97706", bg: "rgba(217,119,6,0.08)" },
-            { label: "Progresso Médio",   value: `${avgProgress}%`, icon: BarChart3, color: "#2563EB", bg: "rgba(37,99,235,0.08)"  },
+            { label: "Total de Projetos", value: visibleItems.length,    icon: Target,     color: "#7B2FBE", bg: "rgba(123,47,190,0.08)" },
+            { label: "Classificados",     value: visibleItems.filter(p => p.priorityLabel).length, icon: Star, color: "#059669", bg: "rgba(5,150,105,0.08)"  },
+            { label: "Sem Prioridade",    value: visibleItems.filter(p => !p.priorityLabel).length, icon: AlertTriangle, color: "#D97706", bg: "rgba(217,119,6,0.08)" },
+            { label: "Progresso Médio",   value: `${Math.round(visibleItems.reduce((s,p) => s+p.progress,0)/Math.max(visibleItems.length,1))}%`, icon: BarChart3, color: "#2563EB", bg: "rgba(37,99,235,0.08)"  },
           ].map(({ label, value, icon: Icon, color, bg }) => (
             <div key={label} className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3 shadow-sm">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: bg }}>
@@ -407,7 +449,7 @@ export function PriorityClient({ projects: initial }: { projects: ProjectRow[] }
         </div>
 
         {/* ── Priority groups ── */}
-        {items.length === 0 ? (
+        {visibleItems.length === 0 ? (
           <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center shadow-sm">
             <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center"
               style={{ background: "linear-gradient(135deg, rgba(123,47,190,0.08), rgba(147,51,234,0.12))" }}>
@@ -423,9 +465,9 @@ export function PriorityClient({ projects: initial }: { projects: ProjectRow[] }
           </div>
         ) : (
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={items.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+            <SortableContext items={visibleItems.map((p) => p.id)} strategy={verticalListSortingStrategy}>
               <div className="space-y-2.5">
-                {items.map((project, idx) => (
+                {visibleItems.map((project, idx) => (
                   <SortableCard
                     key={project.id}
                     project={project}

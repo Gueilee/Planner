@@ -22,6 +22,7 @@ export default async function ProjectsPage() {
         title: true,
         description: true,
         status: true,
+        projectArea: true,
         members: {
           take: 5,
           select: {
@@ -57,6 +58,7 @@ export default async function ProjectsPage() {
     title:       p.title,
     description: p.description,
     status:      p.status,
+    projectArea: p.projectArea,
     members:     p.members,
     tasks:       p.tasks,
     _count:      p._count,

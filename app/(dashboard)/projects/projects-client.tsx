@@ -12,6 +12,7 @@ export type ProjectRow = {
   title: string
   description: string | null
   status: string
+  projectArea: string
   members: { id: string; user: { name: string; image: string | null } }[]
   tasks: { status: string; progress: number }[]
   _count: { tasks: number; risks: number }
@@ -38,14 +39,31 @@ function avg(arr: number[]) {
   return arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0
 }
 
+// ─── Area config ─────────────────────────────────────────────────────────────
+
+type AreaKey = "ALL" | "TECNOLOGIA" | "QUALIDADE" | "ESTRATEGICO"
+
+const AREA_TABS: { key: AreaKey; label: string; color: string }[] = [
+  { key: "ALL",        label: "Todos",                color: "#2463FF" },
+  { key: "TECNOLOGIA", label: "Tecnologia",           color: "#0891B2" },
+  { key: "QUALIDADE",  label: "Qualidade",            color: "#059669" },
+  { key: "ESTRATEGICO",label: "Projetos Estratégicos",color: "#7B2FBE" },
+]
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const PAGE_SIZE = 10
 
 export function ProjectsClient({ projects }: { projects: ProjectRow[] }) {
+  const [activeArea, setActiveArea] = useState<AreaKey>("ALL")
   const [activeFilter, setActiveFilter] = useState<FilterKey>("ALL")
   const [search, setSearch] = useState("")
   const [page, setPage] = useState(1)
+
+  function handleAreaChange(key: AreaKey) {
+    setActiveArea(key)
+    setPage(1)
+  }
 
   function handleFilterChange(key: FilterKey) {
     setActiveFilter(key)
@@ -60,12 +78,13 @@ export function ProjectsClient({ projects }: { projects: ProjectRow[] }) {
   const filtered = useMemo(() => {
     const filter = FILTERS.find((f) => f.key === activeFilter)!
     return projects.filter((p) => {
+      const matchesArea   = activeArea === "ALL" || p.projectArea === activeArea
       const matchesStatus = filter.statuses.length === 0 || filter.statuses.includes(p.status)
       const q = search.trim().toLowerCase()
       const matchesSearch = !q || p.title.toLowerCase().includes(q) || (p.description ?? "").toLowerCase().includes(q)
-      return matchesStatus && matchesSearch
+      return matchesArea && matchesStatus && matchesSearch
     })
-  }, [projects, activeFilter, search])
+  }, [projects, activeArea, activeFilter, search])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
@@ -73,6 +92,33 @@ export function ProjectsClient({ projects }: { projects: ProjectRow[] }) {
 
   return (
     <>
+      {/* Area tabs */}
+      <div className="flex gap-1 p-1 rounded-xl bg-slate-100 border border-slate-200 self-start">
+        {AREA_TABS.map((a) => {
+          const isActive = activeArea === a.key
+          const count = a.key === "ALL" ? projects.length : projects.filter(p => p.projectArea === a.key).length
+          return (
+            <button
+              key={a.key}
+              onClick={() => handleAreaChange(a.key)}
+              className="px-4 h-8 text-xs font-bold rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5"
+              style={isActive
+                ? { background: a.color, color: "#fff", boxShadow: `0 2px 8px ${a.color}40` }
+                : { background: "transparent", color: "#64748B" }
+              }
+            >
+              {a.label}
+              <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full"
+                style={isActive
+                  ? { background: "rgba(255,255,255,0.25)", color: "#fff" }
+                  : { background: "#E2E8F0", color: "#94A3B8" }
+                }
+              >{count}</span>
+            </button>
+          )
+        })}
+      </div>
+
       {/* Filter + action bar */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">

@@ -108,6 +108,12 @@ enum PostGoLiveItemType {
   KPI
 }
 
+enum ProjectArea {
+  TECNOLOGIA
+  QUALIDADE
+  ESTRATEGICO
+}
+
 // ─────────────────────────────────────────────
 // AUTH
 // ─────────────────────────────────────────────
@@ -147,6 +153,7 @@ model Project {
   title        String
   description  String?
   status       ProjectStatus @default(PLANNING)
+  projectArea  ProjectArea   @default(TECNOLOGIA)
 
   // Planning / intake fields (previously on Initiative)
   origin         String?

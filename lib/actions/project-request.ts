@@ -8,6 +8,7 @@ import { ProjectStatus } from "@/lib/generated/prisma/enums"
 export async function createProjectRequest(data: {
   title: string
   area: string
+  projectArea: string
   sponsorId: string
   areaSolicitante: string
   origin: string
@@ -36,6 +37,7 @@ export async function createProjectRequest(data: {
       title:          data.title,
       description:    data.scope || null,
       status:         ProjectStatus.PENDING_GO_NO_GO,
+      projectArea:    (data.projectArea || "TECNOLOGIA") as never,
       origin:         data.origin || null,
       scope:          data.scope || null,
       asIs:           data.asIs || null,
