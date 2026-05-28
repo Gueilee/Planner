@@ -170,7 +170,23 @@ export async function registerKickOff(data: KickOffData) {
       await tx.meetingParticipant.create({ data: { meetingId: meeting.id, userId } }).catch(() => {})
     }
 
-    // 5. Move project to IN_PROGRESS
+    // 5. Save attachments to db.attachment linked to both the meeting and the project
+    if (data.attachments?.length) {
+      for (const att of data.attachments) {
+        await tx.attachment.create({
+          data: {
+            meetingId: meeting.id,
+            projectId: data.projectId,
+            fileName:  att.name,
+            fileUrl:   att.url,
+            fileType:  att.fileType ?? "application/octet-stream",
+            fileSize:  att.size     ?? null,
+          },
+        })
+      }
+    }
+
+    // 6. Move project to IN_PROGRESS
     await tx.project.update({
       where: { id: data.projectId },
       data: { status: "IN_PROGRESS", actualStart: meetingDate },
