@@ -780,7 +780,8 @@ export function HistoryClient({ projects }: { projects: ProjectSummary[] }) {
           style={{ width: "320px", borderRight: "1px solid #E5E7EB" }}>
 
           {/* Search + filters */}
-          <div className="p-3.5 space-y-3 border-b border-gray-100">
+          <div className="p-3.5 space-y-3 border-b border-gray-100 overflow-y-auto shrink-0"
+            style={{ maxHeight: "52%", scrollbarWidth: "thin", scrollbarColor: "#E5E7EB transparent" }}>
             {/* Search */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-300" />
