@@ -48,7 +48,15 @@ export type ProjectSlideData = {
     decisions: string | null
     nextSteps: string[]
   } | null
-  atRiskTasks: { title: string; type: "NOT_STARTED" | "OVERDUE" | "LATE_RUNNING"; date: string; daysLate: number }[]
+  atRiskTasks: {
+    title: string
+    type: "NOT_STARTED" | "OVERDUE" | "LATE_RUNNING"
+    date: string
+    daysLate: number
+    responsible: string | null
+    startDate: string | null
+    endDate: string | null
+  }[]
   wbsAreas: { name: string; color: string | null; total: number; done: number; pct: number }[]
   dates: { start: string | null; end: string | null; goLive: string | null }
   reportStatus: {
@@ -868,26 +876,50 @@ function ProjectSlide({ data, index, total }: { data: ProjectSlideData; index: n
                 />
                 <div className="flex-1 space-y-1 overflow-hidden">
                   {data.atRiskTasks.slice(0, 5).map((t, i) => {
-                    const isNotStarted  = t.type === "NOT_STARTED"
-                    const isOverdue     = t.type === "OVERDUE"
-                    const dotColor      = isOverdue ? "#EF4444" : isNotStarted ? "#F97316" : "#FBBF24"
-                    const textColor     = isOverdue ? "rgba(252,165,165,0.85)" : isNotStarted ? "rgba(253,186,116,0.85)" : "rgba(253,224,71,0.80)"
-                    const badgeLabel    = isOverdue ? "Atrasada" : isNotStarted ? "Não iniciada" : "Prazo vencido"
-                    const badgeBg       = isOverdue ? "rgba(239,68,68,0.18)" : isNotStarted ? "rgba(249,115,22,0.18)" : "rgba(251,191,36,0.18)"
-                    const badgeColor    = isOverdue ? "#FCA5A5" : isNotStarted ? "#FDBA74" : "#FDE047"
+                    const isNotStarted = t.type === "NOT_STARTED"
+                    const isOverdue    = t.type === "OVERDUE"
+                    const dotColor     = isOverdue ? "#EF4444" : isNotStarted ? "#F97316" : "#FBBF24"
+                    const titleColor   = isOverdue ? "rgba(252,165,165,0.90)" : isNotStarted ? "rgba(253,186,116,0.90)" : "rgba(253,224,71,0.85)"
+                    const metaColor    = isOverdue ? "rgba(252,165,165,0.50)" : isNotStarted ? "rgba(253,186,116,0.50)" : "rgba(253,224,71,0.45)"
+                    const badgeLabel   = isOverdue ? "Atrasada" : isNotStarted ? "Não iniciada" : "Prazo vencido"
+                    const badgeBg      = isOverdue ? "rgba(239,68,68,0.18)" : isNotStarted ? "rgba(249,115,22,0.18)" : "rgba(251,191,36,0.18)"
+                    const badgeColor   = isOverdue ? "#FCA5A5" : isNotStarted ? "#FDBA74" : "#FDE047"
+                    const fmtDate      = (d: string | null) => d ? format(new Date(d), "dd/MM", { locale: ptBR }) : "—"
                     return (
-                      <div key={i} className="flex items-start gap-2">
-                        <span className="w-2 h-2 rounded-full mt-1 shrink-0" style={{
+                      <div key={i} className="flex items-start gap-2 py-0.5"
+                        style={{ borderBottom: i < data.atRiskTasks.slice(0,5).length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
+                        {/* Dot */}
+                        <span className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{
                           background: dotColor,
                           boxShadow: `0 0 6px ${dotColor}CC`,
                           animation: "orbPulse 1.5s ease-in-out infinite",
                         }} />
-                        <span className="flex-1 text-[11px] leading-snug line-clamp-1" style={{ color: textColor }}>{t.title}</span>
-                        <span className="shrink-0 text-[9px] font-black px-1.5 py-0.5 rounded-full"
-                          style={{ background: badgeBg, color: badgeColor }}>
-                          {badgeLabel}
-                          {t.daysLate > 0 && ` +${t.daysLate}d`}
-                        </span>
+                        {/* Content */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[11px] font-semibold leading-snug truncate" style={{ color: titleColor }}>
+                              {t.title}
+                            </span>
+                            <span className="shrink-0 text-[9px] font-black px-1.5 py-0.5 rounded-full"
+                              style={{ background: badgeBg, color: badgeColor }}>
+                              {badgeLabel}{t.daysLate > 0 && ` +${t.daysLate}d`}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                            {t.responsible && (
+                              <span className="flex items-center gap-1 text-[10px]" style={{ color: metaColor }}>
+                                <Users className="w-2.5 h-2.5 shrink-0" />
+                                {t.responsible}
+                              </span>
+                            )}
+                            {(t.startDate || t.endDate) && (
+                              <span className="flex items-center gap-1 text-[10px]" style={{ color: metaColor }}>
+                                <Calendar className="w-2.5 h-2.5 shrink-0" />
+                                {fmtDate(t.startDate)} → {fmtDate(t.endDate)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     )
                   })}

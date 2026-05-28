@@ -26,7 +26,11 @@ export default async function StatusReportPage() {
       sponsor: { select: { name: true } },
       members: { select: { id: true } },
       tasks: {
-        select: { title: true, status: true, progress: true, startDate: true, endDate: true },
+        select: {
+          title: true, status: true, progress: true,
+          startDate: true, endDate: true,
+          responsible: { select: { name: true } },
+        },
         orderBy: { order: "asc" },
       },
       risks: {
@@ -74,21 +78,32 @@ export default async function StatusReportPage() {
     today.setHours(0, 0, 0, 0)
 
     // Tarefas em risco: não iniciadas com data passada, atrasadas, ou em andamento com prazo vencido
-    const atRiskTasks: { title: string; type: "NOT_STARTED" | "OVERDUE" | "LATE_RUNNING"; date: string; daysLate: number }[] = []
+    const atRiskTasks: {
+      title: string
+      type: "NOT_STARTED" | "OVERDUE" | "LATE_RUNNING"
+      date: string
+      daysLate: number
+      responsible: string | null
+      startDate: string | null
+      endDate: string | null
+    }[] = []
     for (const t of tasks) {
+      const responsible = t.responsible?.name ?? null
+      const startDate   = t.startDate?.toISOString() ?? null
+      const endDate     = t.endDate?.toISOString()   ?? null
       if (t.status === "PLANNING" && t.startDate) {
         const start = new Date(t.startDate); start.setHours(0,0,0,0)
         if (start < today) {
-          atRiskTasks.push({ title: t.title, type: "NOT_STARTED", date: t.startDate.toISOString(), daysLate: differenceInDays(today, start) })
+          atRiskTasks.push({ title: t.title, type: "NOT_STARTED", date: t.startDate.toISOString(), daysLate: differenceInDays(today, start), responsible, startDate, endDate })
         }
       } else if (t.status === "DELAYED") {
         const ref = t.endDate ?? t.startDate
         const daysLate = ref ? Math.max(0, differenceInDays(today, new Date(ref))) : 0
-        atRiskTasks.push({ title: t.title, type: "OVERDUE", date: (ref ?? new Date()).toISOString(), daysLate })
+        atRiskTasks.push({ title: t.title, type: "OVERDUE", date: (ref ?? new Date()).toISOString(), daysLate, responsible, startDate, endDate })
       } else if (t.status === "IN_PROGRESS" && t.endDate) {
         const end = new Date(t.endDate); end.setHours(0,0,0,0)
         if (end < today) {
-          atRiskTasks.push({ title: t.title, type: "LATE_RUNNING", date: t.endDate.toISOString(), daysLate: differenceInDays(today, end) })
+          atRiskTasks.push({ title: t.title, type: "LATE_RUNNING", date: t.endDate.toISOString(), daysLate: differenceInDays(today, end), responsible, startDate, endDate })
         }
       }
     }
