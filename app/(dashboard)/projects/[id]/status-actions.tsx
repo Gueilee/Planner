@@ -6,14 +6,14 @@ import { Loader2, Play, CheckCircle2, FlaskConical, Rocket, TrendingUp, RotateCc
 import { updateProjectStatus } from "@/lib/actions/projects"
 
 const TRANSITIONS: Record<string, { label: string; next: string; icon: typeof Play; color: string }> = {
-  PLANNING:     { label: "Iniciar Projeto",    next: "IN_PROGRESS", icon: Play,         color: "from-blue-500 to-blue-600" },
-  // PENDING_GO_NO_GO has no manual transition — progresses only via Go/No-Go meeting
-  IN_PROGRESS:  { label: "Ir para Piloto",     next: "PILOT",       icon: FlaskConical, color: "from-cyan-500 to-blue-500" },
-  PILOT:        { label: "Iniciar Ramp-Up",    next: "RAMP_UP",     icon: TrendingUp,   color: "from-indigo-500 to-violet-500" },
-  RAMP_UP:      { label: "GO LIVE",            next: "GO_LIVE",     icon: Rocket,       color: "from-emerald-500 to-green-600" },
-  GO_LIVE:      { label: "Pós GO LIVE",        next: "POST_GOLIVE", icon: CheckCircle2, color: "from-teal-500 to-emerald-500" },
-  POST_GOLIVE:     { label: "Encerrar Projeto",   next: "COMPLETED",    icon: CheckCircle2, color: "from-green-500 to-green-700" },
-  FUTURE_ANALYSIS: { label: "Retomar para Análise", next: "PLANNING",  icon: RotateCcw,    color: "from-violet-500 to-purple-600" },
+  PLANNING:        { label: "Iniciar Projeto",       next: "IN_PROGRESS", icon: Play,         color: "from-blue-500 to-blue-600" },
+  // PENDING_GO_NO_GO — progride via reunião de Go/No-Go
+  IN_PROGRESS:     { label: "Em Validação",          next: "PILOT",       icon: FlaskConical, color: "from-cyan-500 to-cyan-600" },
+  PILOT:           { label: "Iniciar Ramp-Up",       next: "RAMP_UP",     icon: TrendingUp,   color: "from-indigo-500 to-violet-500" },
+  // RAMP_UP — avança somente via cerimônia de GO LIVE (registra datas e ATA)
+  GO_LIVE:         { label: "Pós GO LIVE",           next: "POST_GOLIVE", icon: CheckCircle2, color: "from-teal-500 to-emerald-500" },
+  POST_GOLIVE:     { label: "Encerrar Projeto",      next: "COMPLETED",   icon: CheckCircle2, color: "from-green-500 to-green-700" },
+  FUTURE_ANALYSIS: { label: "Retomar para Análise",  next: "PLANNING",    icon: RotateCcw,    color: "from-violet-500 to-purple-600" },
 }
 
 interface StatusActionsProps {

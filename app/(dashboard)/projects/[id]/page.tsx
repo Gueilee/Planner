@@ -101,17 +101,16 @@ export default async function ProjectDetailPage({
     : null
 
   const STATUS_FLOW = [
-    { key: "PENDING_GO_NO_GO", label: "Go/No-Go" },
+    { key: "PENDING_GO_NO_GO", label: "Go/No-Go"    },
     { key: "PLANNING",         label: "Planejamento" },
     { key: "IN_PROGRESS",      label: "Em Andamento" },
     { key: "PILOT",            label: "Em Validação" },
-    { key: "GO_LIVE",          label: "Go Live" },
-    { key: "POST_GOLIVE",      label: "Pós Go Live" },
-    { key: "COMPLETED",        label: "Concluído" },
+    { key: "RAMP_UP",          label: "Ramp-Up"      },
+    { key: "GO_LIVE",          label: "Go Live"      },
+    { key: "POST_GOLIVE",      label: "Pós Go Live"  },
+    { key: "COMPLETED",        label: "Concluído"    },
   ]
-  // RAMP_UP sits between validation and go-live — show it at the "Em Validação" step
-  const statusForFlow = project.status === "RAMP_UP" ? "PILOT" : project.status
-  const flowIdx = STATUS_FLOW.findIndex((s) => s.key === statusForFlow)
+  const flowIdx = STATUS_FLOW.findIndex((s) => s.key === project.status)
 
   return (
     <div className="flex flex-col h-full">
@@ -282,7 +281,7 @@ export default async function ProjectDetailPage({
                     </>
                   )}
 
-                  {/* Active: Checkpoint + Cronograma + GO LIVE only */}
+                  {/* Active: IN_PROGRESS / PILOT (Em Validação) / RAMP_UP */}
                   {["IN_PROGRESS", "PILOT", "RAMP_UP"].includes(project.status) && (
                     <>
                       <Link
@@ -301,15 +300,18 @@ export default async function ProjectDetailPage({
                         <CalendarDays className="w-3.5 h-3.5" />
                         Cronograma
                       </Link>
-                      <Link
-                        href={`/projects/${id}/golive`}
-                        className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl transition-all hover:opacity-90 active:scale-[0.98]"
-                        style={{ background: "linear-gradient(135deg, #059669, #10B981)", boxShadow: "0 4px 20px rgba(16,185,129,0.35)", color: "white" }}
-                      >
-                        <Rocket className="w-3.5 h-3.5" />
-                        GO LIVE
-                      </Link>
-                      {/* Kick-Off edit — secondary, always accessible */}
+                      {/* GO LIVE — disponível a partir do RAMP_UP; cerimônia registra datas e muda o status */}
+                      {project.status === "RAMP_UP" && (
+                        <Link
+                          href={`/projects/${id}/golive`}
+                          className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl transition-all hover:opacity-90 active:scale-[0.98]"
+                          style={{ background: "linear-gradient(135deg, #059669, #10B981)", boxShadow: "0 4px 20px rgba(16,185,129,0.35)", color: "white" }}
+                        >
+                          <Rocket className="w-3.5 h-3.5" />
+                          GO LIVE
+                        </Link>
+                      )}
+                      {/* Kick-Off — sempre acessível */}
                       <Link
                         href={`/projects/${id}/kickoff`}
                         className="inline-flex items-center gap-2 px-3 h-9 text-sm font-semibold rounded-xl border transition-all hover:bg-emerald-50 active:scale-[0.98]"
@@ -319,6 +321,8 @@ export default async function ProjectDetailPage({
                         <Timer className="w-3.5 h-3.5" />
                         Kick-Off
                       </Link>
+                      {/* Avançar status: IN_PROGRESS→PILOT (Em Validação) | PILOT→RAMP_UP | RAMP_UP=null (via GO LIVE ceremony) */}
+                      <StatusActions projectId={id} currentStatus={project.status} userRole={userRole} />
                     </>
                   )}
 
