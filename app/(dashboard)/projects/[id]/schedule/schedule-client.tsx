@@ -21,9 +21,10 @@ import {
   createTask, updateTask, deleteTask, createArea,
   reorderAreas, reorderTasks,
   getTaskAttachments, addTaskAttachments,
-  addExternalMember, deriveStatus, deriveProgress,
-  type AttachmentUpload, type AncestorUpdate,
+  addExternalMember,
+  type AttachmentUpload,
 } from "@/lib/actions/schedule"
+import { deriveStatus, deriveProgress, type AncestorUpdate } from "@/lib/utils/task-progress"
 import { isHoliday, isWeekend as isWknd, getHolidayName, nextWorkingDay } from "@/lib/working-days"
 import { WorkingDayPicker } from "@/components/working-day-picker"
 
