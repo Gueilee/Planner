@@ -105,12 +105,13 @@ export default async function ProjectDetailPage({
     { key: "PLANNING",         label: "Planejamento" },
     { key: "IN_PROGRESS",      label: "Em Andamento" },
     { key: "PILOT",            label: "Em Validação" },
-    { key: "RAMP_UP",          label: "Ramp-Up"      },
     { key: "GO_LIVE",          label: "Go Live"      },
     { key: "POST_GOLIVE",      label: "Pós Go Live"  },
     { key: "COMPLETED",        label: "Concluído"    },
   ]
-  const flowIdx = STATUS_FLOW.findIndex((s) => s.key === project.status)
+  // RAMP_UP fica posicionado no passo "Em Validação" no indicador visual
+  const statusForFlow = project.status === "RAMP_UP" ? "PILOT" : project.status
+  const flowIdx = STATUS_FLOW.findIndex((s) => s.key === statusForFlow)
 
   return (
     <div className="flex flex-col h-full">
