@@ -194,17 +194,6 @@ export default async function ProjectDetailPage({
                     }))}
                   />
 
-                  {/* Meetings history — always accessible */}
-                  <Link
-                    href={`/projects/${id}/meetings`}
-                    className="inline-flex items-center gap-2 px-3 h-9 text-sm font-semibold rounded-xl border transition-all hover:bg-slate-50 active:scale-[0.98]"
-                    style={{ borderColor: "#E2E8F0", color: "#475569", background: "transparent" }}
-                    title="Histórico de Reuniões e ATAs"
-                  >
-                    <FileText className="w-3.5 h-3.5" />
-                    Reuniões
-                  </Link>
-
                   {/* PENDING GO/NO-GO — nova solicitação aguardando análise e reunião */}
                   {project.status === "PENDING_GO_NO_GO" && (
                     <>
@@ -239,6 +228,14 @@ export default async function ProjectDetailPage({
                       >
                         <Timer className="w-3.5 h-3.5" />
                         Kick-Off
+                      </Link>
+                      <Link
+                        href={`/projects/${id}/meetings`}
+                        className="inline-flex items-center gap-2 px-3 h-9 text-sm font-semibold rounded-xl border transition-all hover:bg-slate-50 active:scale-[0.98]"
+                        style={{ borderColor: "#E2E8F0", color: "#475569", background: "transparent" }}
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        Reuniões
                       </Link>
                     </>
                   )}
@@ -277,6 +274,14 @@ export default async function ProjectDetailPage({
                       >
                         <Timer className="w-3.5 h-3.5" />
                         Kick-Off
+                      </Link>
+                      <Link
+                        href={`/projects/${id}/meetings`}
+                        className="inline-flex items-center gap-2 px-3 h-9 text-sm font-semibold rounded-xl border transition-all hover:bg-slate-50 active:scale-[0.98]"
+                        style={{ borderColor: "#E2E8F0", color: "#475569", background: "transparent" }}
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        Reuniões
                       </Link>
                       <StatusActions projectId={id} currentStatus={project.status} userRole={userRole} />
                     </>
@@ -322,6 +327,14 @@ export default async function ProjectDetailPage({
                         <Timer className="w-3.5 h-3.5" />
                         Kick-Off
                       </Link>
+                      <Link
+                        href={`/projects/${id}/meetings`}
+                        className="inline-flex items-center gap-2 px-3 h-9 text-sm font-semibold rounded-xl border transition-all hover:bg-slate-50 active:scale-[0.98]"
+                        style={{ borderColor: "#E2E8F0", color: "#475569", background: "transparent" }}
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        Reuniões
+                      </Link>
                       {/* Avançar status: IN_PROGRESS→PILOT (Em Validação) | PILOT→RAMP_UP | RAMP_UP=null (via GO LIVE ceremony) */}
                       <StatusActions projectId={id} currentStatus={project.status} userRole={userRole} />
                     </>
@@ -357,6 +370,14 @@ export default async function ProjectDetailPage({
                       >
                         <Timer className="w-3.5 h-3.5" />
                         Kick-Off
+                      </Link>
+                      <Link
+                        href={`/projects/${id}/meetings`}
+                        className="inline-flex items-center gap-2 px-3 h-9 text-sm font-semibold rounded-xl border transition-all hover:bg-slate-50 active:scale-[0.98]"
+                        style={{ borderColor: "#E2E8F0", color: "#475569", background: "transparent" }}
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        Reuniões
                       </Link>
                       <StatusActions projectId={id} currentStatus={project.status} userRole={userRole} />
                     </>
