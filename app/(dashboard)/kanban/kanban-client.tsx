@@ -29,6 +29,7 @@ export type KanbanProject = {
   status: string
   priority: number | null
   priorityLabel: string | null
+  projectArea: string
   progress: number
   tasksDone: number
   tasksTotal: number
@@ -43,6 +44,23 @@ export type KanbanProject = {
   sponsor: string
   daysLeft: number | null
 }
+
+// ─── Area Config ──────────────────────────────────────────────────────────────
+
+type AreaKey = "ALL" | "TECNOLOGIA" | "QUALIDADE" | "ESTRATEGICO"
+
+const AREA_CFG: Record<string, { label: string; short: string; color: string; bg: string; border: string; icon: string }> = {
+  TECNOLOGIA:  { label: "Tecnologia",            short: "TEC", color: "#0891B2", bg: "rgba(8,145,178,0.10)",   border: "rgba(8,145,178,0.25)",   icon: "💻" },
+  QUALIDADE:   { label: "Qualidade",             short: "QUAL",color: "#059669", bg: "rgba(5,150,105,0.10)",   border: "rgba(5,150,105,0.25)",   icon: "✅" },
+  ESTRATEGICO: { label: "Projetos Estratégicos", short: "EST", color: "#7B2FBE", bg: "rgba(123,47,190,0.10)", border: "rgba(123,47,190,0.25)", icon: "🎯" },
+}
+
+const AREA_FILTERS: { key: AreaKey; label: string; color: string }[] = [
+  { key: "ALL",         label: "Todos",                color: "#64748B" },
+  { key: "TECNOLOGIA",  label: "Tecnologia",           color: "#0891B2" },
+  { key: "QUALIDADE",   label: "Qualidade",            color: "#059669" },
+  { key: "ESTRATEGICO", label: "Projetos Estratégicos",color: "#7B2FBE" },
+]
 
 // ─── Column Config ────────────────────────────────────────────────────────────
 
@@ -276,6 +294,18 @@ function ProjectCard({
         <div className="p-4">
           {/* Top row: badges */}
           <div className="flex items-center gap-1.5 mb-2.5 flex-wrap">
+            {/* Area badge */}
+            {(() => {
+              const area = AREA_CFG[project.projectArea]
+              return area ? (
+                <span
+                  className="text-[9px] font-black px-2 py-0.5 rounded-full flex items-center gap-1"
+                  style={{ background: area.bg, color: area.color, border: `1px solid ${area.border}` }}
+                >
+                  <span>{area.icon}</span>{area.short}
+                </span>
+              ) : null
+            })()}
             {pCfg && project.priorityLabel && (
               <span
                 className="text-[9px] font-black px-2 py-0.5 rounded-full tracking-wide"
@@ -533,6 +563,15 @@ function DetailDrawer({ project, onClose }: { project: KanbanProject; onClose: (
                 >
                   {col.label}
                 </span>
+                {(() => {
+                  const area = AREA_CFG[project.projectArea]
+                  return area ? (
+                    <span className="text-[10px] font-black px-2.5 py-1 rounded-full flex items-center gap-1"
+                      style={{ background: area.bg, color: area.color, border: `1px solid ${area.border}` }}>
+                      {area.icon} {area.label}
+                    </span>
+                  ) : null
+                })()}
                 {pCfg && project.priorityLabel && (
                   <span
                     className="text-[10px] font-black px-2.5 py-1 rounded-full"
@@ -775,7 +814,18 @@ function ListView({ projects, onRowClick }: { projects: KanbanProject[]; onRowCl
                         : <span className="text-[9px] text-slate-300">—</span>}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-slate-800 truncate">{p.title}</p>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <p className="text-sm font-bold text-slate-800 truncate">{p.title}</p>
+                        {(() => {
+                          const area = AREA_CFG[p.projectArea]
+                          return area ? (
+                            <span className="shrink-0 text-[9px] font-black px-1.5 py-0.5 rounded-full flex items-center gap-0.5"
+                              style={{ background: area.bg, color: area.color, border: `1px solid ${area.border}` }}>
+                              {area.icon}{area.short}
+                            </span>
+                          ) : null
+                        })()}
+                      </div>
                       <p className="text-[10px] truncate text-slate-400">{p.sponsor}</p>
                     </div>
                     <div className="w-28 shrink-0 hidden md:block">
@@ -826,13 +876,14 @@ function ListView({ projects, onRowClick }: { projects: KanbanProject[]; onRowCl
 // ─── Main Client ──────────────────────────────────────────────────────────────
 
 export function KanbanClient({ projects: initial }: { projects: KanbanProject[] }) {
-  const [projects,  setProjects]  = useState<KanbanProject[]>(initial)
-  const [activeId,  setActiveId]  = useState<string | null>(null)
-  const [overId,    setOverId]    = useState<string | null>(null)
-  const [view,      setView]      = useState<"kanban" | "list">("kanban")
-  const [search,    setSearch]    = useState("")
-  const [selected,  setSelected]  = useState<KanbanProject | null>(null)
-  const [saving,    setSaving]    = useState<string | null>(null)
+  const [projects,    setProjects]    = useState<KanbanProject[]>(initial)
+  const [activeId,    setActiveId]    = useState<string | null>(null)
+  const [overId,      setOverId]      = useState<string | null>(null)
+  const [view,        setView]        = useState<"kanban" | "list">("kanban")
+  const [search,      setSearch]      = useState("")
+  const [activeArea,  setActiveArea]  = useState<AreaKey>("ALL")
+  const [selected,    setSelected]    = useState<KanbanProject | null>(null)
+  const [saving,      setSaving]      = useState<string | null>(null)
   const [, startTransition] = useTransition()
   const prevStatuses = useRef<Record<string, string>>({})
 
@@ -842,8 +893,9 @@ export function KanbanClient({ projects: initial }: { projects: KanbanProject[] 
   )
 
   const filtered = projects.filter((p) =>
-    p.title.toLowerCase().includes(search.toLowerCase()) ||
-    p.sponsor.toLowerCase().includes(search.toLowerCase())
+    (activeArea === "ALL" || p.projectArea === activeArea) &&
+    (p.title.toLowerCase().includes(search.toLowerCase()) ||
+     p.sponsor.toLowerCase().includes(search.toLowerCase()))
   )
 
   const activeProject = activeId ? projects.find((p) => p.id === activeId) ?? null : null
@@ -927,6 +979,36 @@ export function KanbanClient({ projects: initial }: { projects: KanbanProject[] 
               <X className="w-3.5 h-3.5 text-slate-400" />
             </button>
           )}
+        </div>
+
+        {/* Area filter tabs */}
+        <div className="hidden md:flex items-center gap-1 p-1 rounded-xl shrink-0"
+          style={{ background: "#F1F5F9", border: "1.5px solid rgba(15,23,42,0.08)" }}>
+          {AREA_FILTERS.map((a) => {
+            const isActive = activeArea === a.key
+            const count = a.key === "ALL" ? projects.length : projects.filter(p => p.projectArea === a.key).length
+            return (
+              <button
+                key={a.key}
+                onClick={() => setActiveArea(a.key)}
+                className="flex items-center gap-1.5 px-2.5 h-7 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap"
+                style={isActive
+                  ? { background: a.color, color: "#fff", boxShadow: `0 2px 8px ${a.color}40` }
+                  : { background: "transparent", color: "#94A3B8" }
+                }
+              >
+                {a.key !== "ALL" && <span>{AREA_CFG[a.key]?.icon}</span>}
+                {a.key === "ALL" ? "Todos" : AREA_CFG[a.key]?.short ?? a.label}
+                <span
+                  className="text-[9px] font-black px-1 py-px rounded-full"
+                  style={isActive
+                    ? { background: "rgba(255,255,255,0.25)", color: "#fff" }
+                    : { background: "#E2E8F0", color: "#94A3B8" }
+                  }
+                >{count}</span>
+              </button>
+            )
+          })}
         </div>
 
         {/* Counts */}

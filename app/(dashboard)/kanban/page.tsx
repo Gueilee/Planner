@@ -35,6 +35,7 @@ export default async function KanbanPage() {
       status:        p.status as string,
       priority:      p.priority,
       priorityLabel: p.priorityLabel,
+      projectArea:   p.projectArea as string,
       progress,
       tasksDone:     done,
       tasksTotal:    total,

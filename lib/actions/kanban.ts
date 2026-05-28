@@ -78,15 +78,23 @@ export async function getAllProjectsForKanban() {
       { priority: { sort: "asc", nulls: "last" } },
       { createdAt: "desc" },
     ],
-    include: {
-      sponsor: { select: { name: true, department: true } },
-      members: {
-        take: 5,
-        include: { user: { select: { id: true, name: true } } },
-      },
-      _count: { select: { members: true } },
-      tasks:  { where: { subtasks: { none: {} } }, select: { status: true, progress: true } },
-      risks:  { select: { status: true } },
+    select: {
+      id:            true,
+      title:         true,
+      description:   true,
+      status:        true,
+      priority:      true,
+      priorityLabel: true,
+      economy:       true,
+      budget:        true,
+      expectedEnd:   true,
+      expectedStart: true,
+      projectArea:   true,
+      sponsor:  { select: { name: true, department: true } },
+      members:  { take: 5, include: { user: { select: { id: true, name: true } } } },
+      _count:   { select: { members: true } },
+      tasks:    { where: { subtasks: { none: {} } }, select: { status: true, progress: true } },
+      risks:    { select: { status: true } },
     },
   })
 }
