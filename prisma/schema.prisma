@@ -211,6 +211,7 @@ model Project {
   documents      ProjectDocument[]
   postGoLiveItems PostGoLiveItem[]
   lessonsLearned LessonLearned[]
+  attachments    Attachment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -472,10 +473,12 @@ model Attachment {
   taskId    String?
   commentId String?
   meetingId String?
+  projectId String?
 
   task    ScheduleTask? @relation(fields: [taskId], references: [id], onDelete: Cascade)
   comment Comment?      @relation(fields: [commentId], references: [id], onDelete: Cascade)
   meeting Meeting?      @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  project Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   uploadedAt DateTime @default(now())
 }

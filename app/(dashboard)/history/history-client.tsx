@@ -10,7 +10,8 @@ import {
   Calendar, FileText, Star, Rocket, BookOpen, Target,
   Play, RefreshCw, Flag, Loader2, ChevronRight, ExternalLink,
   ThumbsUp, ThumbsDown, BarChart3, Layers, Info, ArrowUpRight,
-  CircleDot, GitBranch, CheckCircle2,
+  CircleDot, GitBranch, CheckCircle2, Paperclip, Download,
+  FileImage, FileArchive, File,
 } from "lucide-react"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -683,6 +684,51 @@ function ProjectHistoryView({ data }: { data: NonNullable<FullHistory> }) {
             ))}
           </div>
         </section>
+
+        {/* 7. Anexos */}
+        {p.attachments.length > 0 && (
+          <section>
+            <SectionTitle icon={Paperclip} title={`Anexos do Projeto (${p.attachments.length})`} />
+            <div className="mt-4 grid grid-cols-1 gap-2">
+              {p.attachments.map((att) => {
+                const ext  = att.fileName.split(".").pop()?.toLowerCase() ?? ""
+                const isImg = ["jpg","jpeg","png","gif","webp","svg"].includes(ext)
+                const isZip = ["zip","rar","7z","tar"].includes(ext)
+                const Icon  = isImg ? FileImage : isZip ? FileArchive : ["pdf","doc","docx","xls","xlsx","ppt","pptx"].includes(ext) ? FileText : File
+                const sizeFmt = att.fileSize
+                  ? att.fileSize < 1024 * 1024
+                    ? `${(att.fileSize / 1024).toFixed(1)} KB`
+                    : `${(att.fileSize / (1024 * 1024)).toFixed(1)} MB`
+                  : ""
+                return (
+                  <a
+                    key={att.id}
+                    href={att.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    download={att.fileName}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white border border-gray-100 shadow-sm hover:border-violet-200 hover:shadow-md transition-all group"
+                  >
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                      style={{ background: "linear-gradient(135deg, rgba(123,47,190,0.08), rgba(147,51,234,0.12))" }}>
+                      <Icon className="w-4 h-4 text-violet-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-800 truncate group-hover:text-violet-700 transition-colors">
+                        {att.fileName}
+                      </p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">
+                        {att.fileType.toUpperCase()}{sizeFmt ? ` · ${sizeFmt}` : ""}
+                        {" · "}{new Date(att.uploadedAt).toLocaleDateString("pt-BR")}
+                      </p>
+                    </div>
+                    <Download className="w-4 h-4 text-gray-300 group-hover:text-violet-500 transition-colors shrink-0" />
+                  </a>
+                )
+              })}
+            </div>
+          </section>
+        )}
 
         <div className="h-8" />
       </div>

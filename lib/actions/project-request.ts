@@ -69,6 +69,16 @@ export async function createProjectRequest(data: {
             })),
           }
         : undefined,
+      attachments: data.files.length > 0
+        ? {
+            create: data.files.map((f) => ({
+              fileName: f.name,
+              fileUrl:  f.url,
+              fileSize: f.size,
+              fileType: f.name.split(".").pop()?.toLowerCase() ?? "",
+            })),
+          }
+        : undefined,
     },
   })
 
