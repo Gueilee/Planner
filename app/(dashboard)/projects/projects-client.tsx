@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
+import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Plus, FolderKanban, ChevronRight, Search, X, ChevronLeft } from "lucide-react"
 import { StatusBadge } from "@/components/kronex/status-badge"
@@ -55,8 +56,13 @@ const AREA_TABS: { key: AreaKey; label: string; color: string }[] = [
 const PAGE_SIZE = 10
 
 export function ProjectsClient({ projects }: { projects: ProjectRow[] }) {
+  const searchParams = useSearchParams()
+  const initialFilter = (searchParams.get("filter") as FilterKey | null) ?? "ALL"
+
   const [activeArea, setActiveArea] = useState<AreaKey>("ALL")
-  const [activeFilter, setActiveFilter] = useState<FilterKey>("ALL")
+  const [activeFilter, setActiveFilter] = useState<FilterKey>(
+    FILTERS.some(f => f.key === initialFilter) ? initialFilter : "ALL"
+  )
   const [search, setSearch] = useState("")
   const [page, setPage] = useState(1)
 

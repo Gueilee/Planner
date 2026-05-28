@@ -61,13 +61,14 @@ const STATUS_COLOR: Record<string, string> = {
 }
 
 // 6 pipeline stages. statusKeys = DB statuses that count towards each stage.
+// filterKey = query param ?filter= usado na tela de projetos
 const PIPELINE = [
-  { key: "PLANNING",    statusKeys: ["PLANNING"],                         label: "Planejamento",  color: "#2463FF" },
-  { key: "IN_PROGRESS", statusKeys: ["IN_PROGRESS", "RAMP_UP"],           label: "Em Andamento",  color: "#10B981" },
-  { key: "ON_HOLD",     statusKeys: ["ON_HOLD", "PILOT"],                 label: "Em Validação",  color: "#8B5CF6" },
-  { key: "GO_LIVE",     statusKeys: ["GO_LIVE"],                          label: "Go Live",       color: "#059669" },
-  { key: "POST_GOLIVE", statusKeys: ["POST_GOLIVE"],                      label: "Pós Go Live",   color: "#0891B2" },
-  { key: "COMPLETED",   statusKeys: ["COMPLETED"],                        label: "Concluído",     color: "#64748B" },
+  { key: "PLANNING",    filterKey: "PLANNING",    statusKeys: ["PLANNING"],              label: "Planejamento",  color: "#2463FF" },
+  { key: "IN_PROGRESS", filterKey: "IN_PROGRESS", statusKeys: ["IN_PROGRESS", "RAMP_UP"],label: "Em Andamento",  color: "#10B981" },
+  { key: "ON_HOLD",     filterKey: "ON_HOLD",     statusKeys: ["ON_HOLD", "PILOT"],      label: "Em Validação",  color: "#8B5CF6" },
+  { key: "GO_LIVE",     filterKey: "GO_LIVE",     statusKeys: ["GO_LIVE"],               label: "Go Live",       color: "#059669" },
+  { key: "POST_GOLIVE", filterKey: "GO_LIVE",     statusKeys: ["POST_GOLIVE"],           label: "Pós Go Live",   color: "#0891B2" },
+  { key: "COMPLETED",   filterKey: "COMPLETED",   statusKeys: ["COMPLETED"],             label: "Concluído",     color: "#64748B" },
 ]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -288,7 +289,7 @@ export function DashboardClient({
               : null
             return (
               <div key={stage.key} className="flex items-center gap-0">
-                <Link href="/projects" className="flex-1 group">
+                <Link href={`/projects?filter=${stage.filterKey}`} className="flex-1 group">
                   <div
                     className="rounded-xl p-4 text-center transition-all hover:shadow-md hover:-translate-y-0.5"
                     style={{ border: `1px solid ${stage.color}20`, background: `${stage.color}08` }}
@@ -325,15 +326,15 @@ export function DashboardClient({
         <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mr-1">Fora do fluxo</span>
           {[
-            { key: "FUTURE_ANALYSIS", count: futureAnalysis, label: "Análise Futura" },
-            { key: "CANCELLED",       count: cancelled,      label: "Cancelados" },
-          ].map(({ key, count, label }) => (
-            <span key={key}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold"
+            { key: "FUTURE_ANALYSIS", filterKey: "FUTURE_ANALYSIS", count: futureAnalysis, label: "Análise Futura" },
+            { key: "CANCELLED",       filterKey: "ALL",              count: cancelled,      label: "Cancelados" },
+          ].map(({ key, filterKey, count, label }) => (
+            <Link key={key} href={`/projects?filter=${filterKey}`}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all hover:opacity-80 hover:-translate-y-0.5"
               style={{ background: `${STATUS_COLOR[key]}12`, color: STATUS_COLOR[key], border: `1px solid ${STATUS_COLOR[key]}25` }}>
               <CircleDot className="w-3 h-3" />
               {label}: {count}
-            </span>
+            </Link>
           ))}
         </div>
       </div>

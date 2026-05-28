@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
 import { Header } from "@/components/layout/header"
@@ -95,7 +96,9 @@ export default async function ProjectsPage() {
         </div>
 
         {/* Interactive filter + list */}
-        <ProjectsClient projects={serialized} />
+        <Suspense fallback={null}>
+          <ProjectsClient projects={serialized} />
+        </Suspense>
 
       </div>
     </div>
