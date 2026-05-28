@@ -188,6 +188,24 @@ export async function addTaskComment(taskId: string, projectId: string, content:
   return { ...comment, createdAt: comment.createdAt.toISOString() }
 }
 
+export async function addTaskAttachmentKanban(
+  taskId: string,
+  projectId: string,
+  attachment: { fileName: string; fileUrl: string; fileType: string; fileSize: number },
+) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+
+  const att = await db.attachment.create({
+    data: { taskId, fileName: attachment.fileName, fileUrl: attachment.fileUrl, fileType: attachment.fileType, fileSize: attachment.fileSize },
+    select: { id: true, fileName: true, fileUrl: true, fileType: true, fileSize: true },
+  })
+
+  revalidatePath(`/projects/${projectId}/schedule`)
+  revalidatePath("/kanban")
+  return att
+}
+
 export async function updateProjectStatusKanban(
   projectId: string,
   newStatus: string,

@@ -20,7 +20,7 @@ import Link from "next/link"
 import { WorkingDayPicker } from "@/components/working-day-picker"
 import {
   getProjectTasksForKanban, updateTaskStatusKanban,
-  getTaskDetail, updateTaskKanban, addTaskComment,
+  getTaskDetail, updateTaskKanban, addTaskComment, addTaskAttachmentKanban,
 } from "@/lib/actions/kanban"
 import { todayStr } from "@/lib/date-utils"
 import { TaskStatus } from "@/lib/generated/prisma/enums"
@@ -409,15 +409,17 @@ function TaskDetailPanel({
   onClose: () => void
   onUpdated: (updates: Partial<TaskItem>) => void
 }) {
-  const [detail,       setDetail]       = useState<TaskDetailData>(null)
+  const [detail,        setDetail]        = useState<TaskDetailData>(null)
   const [loadingDetail, setLoadingDetail] = useState(true)
   const [localProgress, setLocalProgress] = useState(initTask.progress)
-  const [localStatus,  setLocalStatus]  = useState(initTask.status)
-  const [actualStart,  setActualStart]  = useState("")
-  const [actualEnd,    setActualEnd]    = useState("")
-  const [commentText,  setCommentText]  = useState("")
-  const [submitting,   setSubmitting]   = useState(false)
-  const [saving,       setSaving]       = useState(false)
+  const [localStatus,   setLocalStatus]   = useState(initTask.status)
+  const [actualStart,   setActualStart]   = useState("")
+  const [actualEnd,     setActualEnd]     = useState("")
+  const [commentText,   setCommentText]   = useState("")
+  const [submitting,    setSubmitting]    = useState(false)
+  const [saving,        setSaving]        = useState(false)
+  const [uploadingAtt,  setUploadingAtt]  = useState(false)
+  const attFileRef = useRef<HTMLInputElement>(null)
   const [, start] = useTransition()
 
   useEffect(() => {
@@ -682,11 +684,51 @@ function TaskDetailPanel({
           </div>
 
           {/* Attachments */}
-          {!loadingDetail && detail?.attachments && detail.attachments.length > 0 && (
-            <div>
-              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-2">
-                Anexos ({detail.attachments.length})
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">
+                Anexos / Evidências {detail?.attachments?.length ? `(${detail.attachments.length})` : ""}
               </p>
+              <button
+                onClick={() => attFileRef.current?.click()}
+                disabled={uploadingAtt}
+                className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50"
+                style={{ background: "#EFF6FF", color: "#2463FF", border: "1px solid #BFDBFE" }}
+              >
+                {uploadingAtt ? <Loader2 className="w-3 h-3 animate-spin" /> : <Paperclip className="w-3 h-3" />}
+                {uploadingAtt ? "Enviando..." : "Adicionar"}
+              </button>
+              <input
+                ref={attFileRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={async (e) => {
+                  const files = Array.from(e.target.files ?? [])
+                  if (!files.length) return
+                  e.target.value = ""
+                  setUploadingAtt(true)
+                  try {
+                    const form = new FormData()
+                    for (const f of files) form.append("files", f)
+                    const res  = await fetch("/api/upload", { method: "POST", body: form })
+                    const json = await res.json() as { files: { name: string; url: string; size: number }[] }
+                    for (let i = 0; i < json.files.length; i++) {
+                      const f = json.files[i]
+                      const saved = await addTaskAttachmentKanban(initTask.id, projectId, {
+                        fileName: f.name,
+                        fileUrl:  f.url,
+                        fileType: files[i]?.type ?? "application/octet-stream",
+                        fileSize: f.size,
+                      })
+                      setDetail((prev) => prev ? { ...prev, attachments: [...(prev.attachments ?? []), saved] } : prev)
+                    }
+                  } catch { /* ignore */ }
+                  setUploadingAtt(false)
+                }}
+              />
+            </div>
+            {!loadingDetail && detail?.attachments && detail.attachments.length > 0 && (
               <div className="space-y-2">
                 {detail.attachments.map((a) => (
                   <a
@@ -703,8 +745,14 @@ function TaskDetailPanel({
                   </a>
                 ))}
               </div>
-            </div>
-          )}
+            )}
+            {!loadingDetail && (!detail?.attachments || detail.attachments.length === 0) && (
+              <button onClick={() => attFileRef.current?.click()}
+                className="w-full flex items-center justify-center gap-2 h-9 rounded-xl border border-dashed border-slate-200 text-xs font-semibold text-slate-400 hover:border-blue-300 hover:text-blue-500 transition-colors">
+                <Paperclip className="w-3.5 h-3.5" /> Adicionar evidência
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

@@ -552,6 +552,118 @@ export async function generateMeetingATA(meetingId: string) {
   return { content, docId, meetingId }
 }
 
+// ─── Direct Checkpoint ATA (uses session data, not DB reconstruction) ─────────
+
+export async function generateCheckpointATADirect(ctx: {
+  meetingId:    string
+  projectId:    string
+  date:         Date
+  frequency:    string
+  location:     string
+  highlights:   string
+  blockers:     string
+  nextSteps:    string
+  registeredBy: string
+  participants: { name: string; department: string | null }[]
+  taskUpdates:  {
+    title: string; areaName: string; responsible: string
+    startDate: string | null; endDate: string | null
+    oldStatus: string; oldProgress: number
+    status: string; progress: number; comment?: string
+    attachments?: { fileName: string }[]
+  }[]
+}): Promise<string> {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+
+  const project = await db.project.findUnique({ where: { id: ctx.projectId }, select: { title: true } })
+  const projectTitle = project?.title ?? ctx.projectId
+
+  const dateLabel = fmtDate(ctx.date)
+  const dateTime  = fmtDateTime(new Date())
+
+  // Build task update table
+  let taskSection = "_Nenhuma atividade foi atualizada neste checkpoint._"
+
+  if (ctx.taskUpdates.length > 0) {
+    // Group by area
+    const byArea = new Map<string, typeof ctx.taskUpdates>()
+    for (const upd of ctx.taskUpdates) {
+      const key = upd.areaName || "Sem Área"
+      if (!byArea.has(key)) byArea.set(key, [])
+      byArea.get(key)!.push(upd)
+    }
+
+    const parts: string[] = []
+    for (const [area, updates] of byArea) {
+      parts.push(`\n**Área: ${area}**\n`)
+      const header = "| Atividade | Responsável | Datas Plan. | Status Anterior | Novo Status | % | Observação | Evidências |\n" +
+                     "|-----------|-------------|-------------|-----------------|-------------|---|:-----------|:----------|\n"
+      const rows = updates.map((u) => {
+        const dates    = u.startDate && u.endDate ? `${u.startDate} → ${u.endDate}` : u.startDate ?? u.endDate ?? "—"
+        const oldSt    = STATUS_LABELS[u.oldStatus]  ?? u.oldStatus
+        const newSt    = STATUS_LABELS[u.status]     ?? u.status
+        const changed  = u.status !== u.oldStatus || u.progress !== u.oldProgress
+        const statusCell = changed ? `**${newSt}**` : newSt
+        const attCount = u.attachments?.length ?? 0
+        const evidence = attCount > 0 ? `${attCount} arquivo${attCount > 1 ? "s" : ""}` : "—"
+        return `| ${u.title} | ${u.responsible} | ${dates} | ${oldSt} (${u.oldProgress}%) | ${statusCell} | ${u.progress}% | ${u.comment || "—"} | ${evidence} |`
+      }).join("\n")
+      parts.push(header + rows)
+    }
+    taskSection = parts.join("\n")
+  }
+
+  const participantList = ctx.participants.length
+    ? participantTable(ctx.participants)
+    : "_Nenhum participante registrado_"
+
+  const sections = [
+    section(1, "Participantes", participantList),
+    section(2, "Destaques e Conquistas do Período", ctx.highlights || "_Não informado_"),
+    section(3, "Atividades Atualizadas nesta Reunião", taskSection),
+    section(4, "Impedimentos e Bloqueios Identificados", ctx.blockers || "_Nenhum impedimento registrado_"),
+    section(5, "Próximos Passos e Responsabilidades", ctx.nextSteps || "_Não informado_"),
+    section(6, "Encerramento", encerramento(ctx.registeredBy, projectTitle)),
+  ]
+
+  const content = buildDocument({
+    typeLabel:    `Checkpoint ${ctx.frequency}`,
+    projectTitle,
+    date:         dateLabel,
+    location:     ctx.location || null,
+    registeredBy: ctx.registeredBy,
+    sections,
+    generatedAt:  dateTime,
+  })
+
+  // Upsert ATA document
+  const userId = (await db.user.findUnique({
+    where:  { email: session.user.email! },
+    select: { id: true },
+  }))?.id ?? session.user.id!
+
+  const existing = await db.projectDocument.findFirst({ where: { meetingId: ctx.meetingId } })
+  if (existing) {
+    await db.projectDocument.update({ where: { id: existing.id }, data: { content, updatedAt: new Date() } })
+  } else {
+    await db.projectDocument.create({
+      data: {
+        projectId:   ctx.projectId,
+        type:        "MEETING_ATA",
+        title:       `ATA — Checkpoint ${ctx.frequency} — ${format(ctx.date, "dd/MM/yyyy", { locale: ptBR })}`,
+        content,
+        version:     1,
+        meetingId:   ctx.meetingId,
+        createdById: userId,
+      },
+    })
+  }
+
+  revalidatePath(`/projects/${ctx.projectId}`)
+  return content
+}
+
 export async function getExistingMeetingATA(meetingId: string) {
   const doc = await db.projectDocument.findFirst({
     where:  { meetingId },
