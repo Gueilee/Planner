@@ -8,7 +8,7 @@ import {
 import type { TooltipContentProps } from "recharts"
 import {
   TrendingUp, Calendar, AlertTriangle, DollarSign, Activity,
-  Target, BarChart3, ChevronRight, Info,
+  Target, BarChart3, ChevronRight, Info, Search, X, Users,
 } from "lucide-react"
 import { Header } from "@/components/layout/header"
 import type { ProjectIndicator } from "./page"
@@ -208,17 +208,33 @@ function BudgetTooltip({ active, payload }: TooltipContentProps): React.ReactEle
   )
 }
 
+// ─── Area Config ─────────────────────────────────────────────────────────────
+const AREA_CFG: Record<string, { label: string; color: string }> = {
+  TECNOLOGIA:  { label: "Tecnologia",            color: "#0891B2" },
+  QUALIDADE:   { label: "Qualidade",             color: "#059669" },
+  ESTRATEGICO: { label: "Projetos Estratégicos", color: "#7B2FBE" },
+}
+
 // ─── Main Client Component ────────────────────────────────────────────────────
 export function AnalyticsClient({ projects }: { projects: ProjectIndicator[] }) {
-  const [filter, setFilter] = useState<"ACTIVE" | "ALL">("ACTIVE")
+  const [filter,      setFilter]      = useState<"ACTIVE" | "ALL">("ACTIVE")
+  const [areaFilter,  setAreaFilter]  = useState<string>("ALL")
+  const [responsible, setResponsible] = useState<string>("ALL")
+  const [search,      setSearch]      = useState("")
 
-  const filtered = useMemo(
-    () =>
-      filter === "ACTIVE"
-        ? projects.filter((p) => ACTIVE_STATUSES.has(p.status))
-        : projects,
-    [projects, filter],
+  // Responsáveis únicos de todas as tarefas
+  const allResponsibles = useMemo(
+    () => [...new Set(projects.flatMap((p) => p.taskResponsibles))].sort(),
+    [projects],
   )
+
+  const filtered = useMemo(() => {
+    let list = filter === "ACTIVE" ? projects.filter((p) => ACTIVE_STATUSES.has(p.status)) : projects
+    if (areaFilter !== "ALL")  list = list.filter((p) => p.projectArea === areaFilter)
+    if (responsible !== "ALL") list = list.filter((p) => p.taskResponsibles.includes(responsible))
+    if (search.trim())         list = list.filter((p) => p.title.toLowerCase().includes(search.trim().toLowerCase()))
+    return list
+  }, [projects, filter, areaFilter, responsible, search])
 
   // ── Summary KPIs ───────────────────────────────────────────────
   const onTime  = filtered.filter((p) => p.scheduleStatus === "ON_TIME").length
@@ -289,7 +305,7 @@ export function AnalyticsClient({ projects }: { projects: ProjectIndicator[] }) 
               </div>
             </div>
 
-            {/* Filter toggle */}
+            {/* Status toggle */}
             <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-1">
               {(["ACTIVE", "ALL"] as const).map((f) => (
                 <button
@@ -306,6 +322,86 @@ export function AnalyticsClient({ projects }: { projects: ProjectIndicator[] }) 
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* ── Filter bar ─────────────────────────────────────────── */}
+          <div className="flex flex-wrap gap-3 items-center p-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
+
+            {/* Busca por projeto */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar projeto…"
+                className="pl-8 pr-7 h-8 text-xs rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-[#7B2FBE] w-48 transition-colors"
+              />
+              {search && (
+                <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2">
+                  <X className="w-3 h-3 text-slate-400" />
+                </button>
+              )}
+            </div>
+
+            <div className="w-px h-6 bg-slate-200" />
+
+            {/* Portfólio / Área */}
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-100 border border-slate-200">
+              {[{ key: "ALL", label: "Todos", color: "#64748B" }, ...Object.entries(AREA_CFG).map(([k, v]) => ({ key: k, label: v.label, color: v.color }))].map((a) => {
+                const isActive = areaFilter === a.key
+                const count = a.key === "ALL" ? (filter === "ACTIVE" ? projects.filter(p => ACTIVE_STATUSES.has(p.status)).length : projects.length) : projects.filter(p => p.projectArea === a.key).length
+                return (
+                  <button
+                    key={a.key}
+                    onClick={() => setAreaFilter(a.key)}
+                    className="flex items-center gap-1.5 px-2.5 h-7 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap"
+                    style={isActive
+                      ? { background: a.color, color: "#fff", boxShadow: `0 2px 8px ${a.color}40` }
+                      : { background: "transparent", color: "#94A3B8" }
+                    }
+                  >
+                    {a.label}
+                    <span className="text-[9px] font-black px-1 py-px rounded-full"
+                      style={isActive ? { background: "rgba(255,255,255,0.25)", color: "#fff" } : { background: "#E2E8F0", color: "#94A3B8" }}>
+                      {count}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="w-px h-6 bg-slate-200" />
+
+            {/* Responsável pela atividade */}
+            <div className="flex items-center gap-2">
+              <Users className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <select
+                value={responsible}
+                onChange={(e) => setResponsible(e.target.value)}
+                className="h-8 pl-2 pr-7 text-xs rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-[#7B2FBE] text-slate-700 appearance-none cursor-pointer transition-colors"
+                style={{ minWidth: 160 }}
+              >
+                <option value="ALL">Todos os responsáveis</option>
+                {allResponsibles.map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Reset */}
+            {(areaFilter !== "ALL" || responsible !== "ALL" || search) && (
+              <button
+                onClick={() => { setAreaFilter("ALL"); setResponsible("ALL"); setSearch("") }}
+                className="flex items-center gap-1.5 px-3 h-7 rounded-xl text-xs font-semibold text-slate-500 hover:text-red-500 border border-slate-200 hover:border-red-200 transition-all"
+              >
+                <X className="w-3 h-3" /> Limpar filtros
+              </button>
+            )}
+
+            {/* Contador de resultados */}
+            <span className="ml-auto text-xs text-slate-400 font-medium">
+              {filtered.length} projeto{filtered.length !== 1 ? "s" : ""}
+            </span>
           </div>
 
           {/* ── Summary Strip ───────────────────────────────────── */}

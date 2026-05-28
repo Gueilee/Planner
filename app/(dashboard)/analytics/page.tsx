@@ -11,6 +11,7 @@ export type ProjectIndicator = {
   id: string
   title: string
   status: string
+  projectArea: string
   sponsor: string | null
   progress: number
   devio: number | null
@@ -23,6 +24,7 @@ export type ProjectIndicator = {
   risks: { critical: number; high: number; medium: number; low: number }
   expectedEnd: string | null
   reportStatus: { cost: string; schedule: string; resources: string; overall: string }
+  taskResponsibles: string[]   // nomes únicos dos responsáveis das tarefas
 }
 
 export default async function AnalyticsPage() {
@@ -36,8 +38,14 @@ export default async function AnalyticsPage() {
     orderBy: { createdAt: "asc" },
     include: {
       sponsor: { select: { name: true } },
-      tasks:   { select: { status: true, progress: true } },
-      risks:   { select: { status: true } },
+      tasks: {
+        select: {
+          status: true, progress: true,
+          startDate: true, endDate: true,
+          responsible: { select: { name: true } },
+        },
+      },
+      risks: { select: { status: true } },
     },
   })
 
@@ -68,16 +76,33 @@ export default async function AnalyticsPage() {
       }
     }
 
-    // ── IDP ──────────────────────────────────────────────────────
+    // ── IDP — calculado por tarefa (mais preciso que usar só datas do projeto)
+    // Para cada tarefa com startDate e endDate, calcula o % planejado baseado
+    // no tempo decorrido (mesmo cálculo do calcEstimatedProgress do cronograma).
+    // IDP = Σ(progresso_real) / Σ(progresso_planejado)
     let idp: number | null = null
-    if (p.expectedStart && p.expectedEnd) {
-      const totalDays = differenceInDays(p.expectedEnd, p.expectedStart)
+    const tasksWithDates = tasks.filter((t) => t.startDate && t.endDate)
+    if (tasksWithDates.length >= 3) {
+      let sumActual  = 0
+      let sumPlanned = 0
+      for (const t of tasksWithDates) {
+        const totalDays   = differenceInDays(t.endDate!, t.startDate!)
+        if (totalDays <= 0) { sumActual += t.progress; sumPlanned += t.progress; continue }
+        const elapsed     = differenceInDays(today, t.startDate!)
+        const planned     = Math.max(0, Math.min(100, (elapsed / totalDays) * 100))
+        sumActual  += t.progress
+        sumPlanned += planned
+      }
+      if (sumPlanned > 0) {
+        idp = sumActual / sumPlanned
+      }
+    } else if (p.expectedStart && p.expectedEnd) {
+      // Fallback: usar datas do projeto quando há poucas tarefas com datas
+      const totalDays   = differenceInDays(p.expectedEnd, p.expectedStart)
       const elapsedDays = differenceInDays(today, p.expectedStart)
       if (totalDays > 0) {
         const plannedPct = Math.min(Math.max((elapsedDays / totalDays) * 100, 0), 100)
-        if (plannedPct > 5) {
-          idp = progress / plannedPct
-        }
+        if (plannedPct > 5) idp = progress / plannedPct
       }
     }
 
@@ -95,11 +120,18 @@ export default async function AnalyticsPage() {
       low:      p.risks.filter((r) => r.status === "LOW").length,
     }
 
+    // ── Task responsibles ─────────────────────────────────────────
+    const taskResponsibles = [
+      ...new Set(tasks.map((t) => t.responsible?.name).filter((n): n is string => Boolean(n)))
+    ]
+
     return {
       id:             p.id,
       title:          p.title,
       status:         p.status,
+      projectArea:    p.projectArea,
       sponsor:        p.sponsor?.name ?? null,
+      taskResponsibles,
       progress,
       devio,
       idp,
