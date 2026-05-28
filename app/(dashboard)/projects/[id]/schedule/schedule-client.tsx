@@ -32,6 +32,10 @@ import { WorkingDayPicker } from "@/components/working-day-picker"
 const ROW_H   = 40
 const HDR_H   = 64
 const LEFT_W  = 600
+// List view: fixed column widths so header and rows always share the same total width
+const COL_NAME  = 280
+// 24+72+60+280+130+120+88+88+88+88+64+64+68+68+100
+const LIST_MIN_W = 1402
 const BAR_H   = 24
 const BAR_PAD = 8
 
@@ -1337,11 +1341,11 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
 
           {/* Header — overflow hidden, synced via JS to body scrollLeft */}
           <div ref={listHeaderRef} style={{ overflowX: "hidden", overflowY: "visible", flexShrink: 0 }}>
-            <div className="flex items-center border-b border-slate-100 bg-[#0F172A]" style={{ height: 44, minWidth: "max-content" }}>
+            <div className="flex items-center border-b border-slate-100 bg-[#0F172A]" style={{ height: 44, minWidth: LIST_MIN_W }}>
               <div style={{ width: 24, flexShrink: 0 }} />
               <div style={{ width: 72, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest pl-4">EAP</div>
               <div style={{ width: 60, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Ações</div>
-              <div style={{ width: 240, flexShrink: 0, flex: 1, minWidth: 240 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest px-2">Nome da Atividade</div>
+              <div style={{ width: COL_NAME, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest px-2">Nome da Atividade</div>
               <div style={{ width: 130, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Status</div>
               <div style={{ width: 120, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest px-3">Responsável</div>
               <div style={{ width: 88, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Início Plan.</div>
@@ -1358,7 +1362,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
 
           {/* Scrollable body — drives header scrollLeft via onListBodyScroll */}
           <div ref={listBodyRef} className="flex-1 min-h-0 overflow-auto" onScroll={onListBodyScroll}>
-          <div style={{ minWidth: "max-content" }}>
+          <div style={{ minWidth: LIST_MIN_W }}>
             {listRows.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 gap-3 text-slate-300">
                 <Layers className="w-10 h-10" />
@@ -1384,7 +1388,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                       style={{
                         borderLeft: `4px solid ${row.color ?? "#CBD5E1"}`,
                         background: dragOverId === row.id && dragType === "area" ? "#EEF2FF" : "#F8FAFC",
-                        minHeight: 44, minWidth: "max-content",
+                        minHeight: 44,
                         outline: dragOverId === row.id && dragType === "area" ? "2px solid #7B2FBE" : "none",
                         outlineOffset: -2,
                       }}
@@ -1426,7 +1430,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
 
                       {/* Area name — clickable to expand */}
                       <div
-                        style={{ flex: 1, minWidth: 240 }}
+                        style={{ width: COL_NAME, flexShrink: 0 }}
                         className="flex items-center gap-2.5 px-2 cursor-pointer overflow-hidden"
                         onClick={() => toggleArea(row.id)}
                       >
@@ -1492,7 +1496,6 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                       display: "flex",
                       alignItems: "center",
                       borderBottom: dragOverId === t.id && dragType === "task" ? "2px solid #7B2FBE" : "1px solid #F1F5F9",
-                      minWidth: "max-content",
                       background: dragOverId === t.id && dragType === "task"
                         ? "#F5F3FF"
                         : isHov
@@ -1550,8 +1553,8 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                       </button>
                     </div>
 
-                    {/* Name — fixed start position matching header; contains indent + expand + title + badges */}
-                    <div style={{ flex: 1, minWidth: 240, flexShrink: 0 }} className="flex items-center gap-1.5 px-1 py-1 overflow-hidden">
+                    {/* Name */}
+                    <div style={{ width: COL_NAME, flexShrink: 0 }} className="flex items-center gap-1.5 px-1 py-1 overflow-hidden">
                       {/* Tree indent spacer for subtasks */}
                       {isTarefa && (
                         <div style={{ width: depth * 20, flexShrink: 0, position: "relative", alignSelf: "stretch", display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
