@@ -23,7 +23,7 @@ export type ClosureMeetingInput = {
 export async function getProjectsForClosure() {
   return db.project.findMany({
     where: {
-      status: { notIn: ["COMPLETED", "CANCELLED"] },
+      status: { in: ["GO_LIVE", "POST_GOLIVE"] },
     },
     orderBy: [{ priority: "asc" }, { title: "asc" }],
     select: {
