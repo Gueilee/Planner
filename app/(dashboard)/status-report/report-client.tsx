@@ -48,6 +48,7 @@ export type ProjectSlideData = {
     decisions: string | null
     nextSteps: string[]
   } | null
+  atRiskTasks: { title: string; type: "NOT_STARTED" | "OVERDUE" | "LATE_RUNNING"; date: string; daysLate: number }[]
   wbsAreas: { name: string; color: string | null; total: number; done: number; pct: number }[]
   dates: { start: string | null; end: string | null; goLive: string | null }
   reportStatus: {
@@ -852,6 +853,47 @@ function ProjectSlide({ data, index, total }: { data: ProjectSlideData; index: n
                 }
               </div>
             </GlassPanel>
+
+            {/* Alertas de Prazo — só renderiza se houver itens em risco */}
+            {data.atRiskTasks.length > 0 && (
+              <GlassPanel accent="#EF4444" style={{ padding: "10px 12px", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+                <RSH
+                  label="⚠️ Alertas de Prazo"
+                  right={
+                    <span className="text-[9px] font-black px-2 py-0.5 rounded-full"
+                      style={{ background: "rgba(239,68,68,0.20)", color: "#FCA5A5", border: "1px solid rgba(239,68,68,0.35)" }}>
+                      {data.atRiskTasks.length} pendente{data.atRiskTasks.length > 1 ? "s" : ""}
+                    </span>
+                  }
+                />
+                <div className="flex-1 space-y-1 overflow-hidden">
+                  {data.atRiskTasks.slice(0, 5).map((t, i) => {
+                    const isNotStarted  = t.type === "NOT_STARTED"
+                    const isOverdue     = t.type === "OVERDUE"
+                    const dotColor      = isOverdue ? "#EF4444" : isNotStarted ? "#F97316" : "#FBBF24"
+                    const textColor     = isOverdue ? "rgba(252,165,165,0.85)" : isNotStarted ? "rgba(253,186,116,0.85)" : "rgba(253,224,71,0.80)"
+                    const badgeLabel    = isOverdue ? "Atrasada" : isNotStarted ? "Não iniciada" : "Prazo vencido"
+                    const badgeBg       = isOverdue ? "rgba(239,68,68,0.18)" : isNotStarted ? "rgba(249,115,22,0.18)" : "rgba(251,191,36,0.18)"
+                    const badgeColor    = isOverdue ? "#FCA5A5" : isNotStarted ? "#FDBA74" : "#FDE047"
+                    return (
+                      <div key={i} className="flex items-start gap-2">
+                        <span className="w-2 h-2 rounded-full mt-1 shrink-0" style={{
+                          background: dotColor,
+                          boxShadow: `0 0 6px ${dotColor}CC`,
+                          animation: "orbPulse 1.5s ease-in-out infinite",
+                        }} />
+                        <span className="flex-1 text-[11px] leading-snug line-clamp-1" style={{ color: textColor }}>{t.title}</span>
+                        <span className="shrink-0 text-[9px] font-black px-1.5 py-0.5 rounded-full"
+                          style={{ background: badgeBg, color: badgeColor }}>
+                          {badgeLabel}
+                          {t.daysLate > 0 && ` +${t.daysLate}d`}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </GlassPanel>
+            )}
 
             {/* Próximos Passos */}
             <GlassPanel accent="#8B2FFF" style={{ padding: "10px 12px", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>

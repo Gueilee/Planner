@@ -26,7 +26,7 @@ export default async function StatusReportPage() {
       sponsor: { select: { name: true } },
       members: { select: { id: true } },
       tasks: {
-        select: { title: true, status: true, progress: true },
+        select: { title: true, status: true, progress: true, startDate: true, endDate: true },
         orderBy: { order: "asc" },
       },
       risks: {
@@ -69,6 +69,30 @@ export default async function StatusReportPage() {
 
     const critRisks = p.risks.filter((r) => r.status === "CRITICAL").length
     const highRisks = p.risks.filter((r) => r.status === "HIGH").length
+
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    // Tarefas em risco: não iniciadas com data passada, atrasadas, ou em andamento com prazo vencido
+    const atRiskTasks: { title: string; type: "NOT_STARTED" | "OVERDUE" | "LATE_RUNNING"; date: string; daysLate: number }[] = []
+    for (const t of tasks) {
+      if (t.status === "PLANNING" && t.startDate) {
+        const start = new Date(t.startDate); start.setHours(0,0,0,0)
+        if (start < today) {
+          atRiskTasks.push({ title: t.title, type: "NOT_STARTED", date: t.startDate.toISOString(), daysLate: differenceInDays(today, start) })
+        }
+      } else if (t.status === "DELAYED") {
+        const ref = t.endDate ?? t.startDate
+        const daysLate = ref ? Math.max(0, differenceInDays(today, new Date(ref))) : 0
+        atRiskTasks.push({ title: t.title, type: "OVERDUE", date: (ref ?? new Date()).toISOString(), daysLate })
+      } else if (t.status === "IN_PROGRESS" && t.endDate) {
+        const end = new Date(t.endDate); end.setHours(0,0,0,0)
+        if (end < today) {
+          atRiskTasks.push({ title: t.title, type: "LATE_RUNNING", date: t.endDate.toISOString(), daysLate: differenceInDays(today, end) })
+        }
+      }
+    }
+    atRiskTasks.sort((a, b) => b.daysLate - a.daysLate)
 
     const daysLeft = p.expectedEnd
       ? differenceInDays(p.expectedEnd, new Date())
@@ -135,6 +159,7 @@ export default async function StatusReportPage() {
             nextSteps,
           }
         : null,
+      atRiskTasks: atRiskTasks.slice(0, 6),
       wbsAreas: wbsSummary,
       dates: {
         start:  p.actualStart?.toISOString() ?? p.expectedStart?.toISOString() ?? null,
