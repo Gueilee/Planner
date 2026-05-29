@@ -140,8 +140,9 @@ model User {
   meetingParticipations MeetingParticipant[]
   createdReports       StatusReport[]
   createdDocuments     ProjectDocument[]
-  notifications        Notification[]
-  lessonsLearned       LessonLearned[]
+  notifications           Notification[]
+  notificationPreference  NotificationPreference?
+  lessonsLearned          LessonLearned[]
 }
 
 // ─────────────────────────────────────────────
@@ -502,4 +503,30 @@ model Notification {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
+}
+
+model NotificationPreference {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  // Eventos de projeto
+  projectDeadline  Boolean @default(true)   // prazo se aproximando (7 dias)
+  projectOnHold    Boolean @default(true)   // projeto pausado
+  projectCompleted Boolean @default(false)  // projeto concluído
+
+  // Eventos de atividade
+  taskOverdue      Boolean @default(true)   // tarefa atrasada
+  taskAssigned     Boolean @default(true)   // tarefa atribuída a mim
+
+  // Eventos de reunião
+  checkpointAdded  Boolean @default(true)   // checkpoint registrado no projeto
+  meetingAdded     Boolean @default(false)  // qualquer reunião registrada
+
+  // Riscos
+  criticalRisk     Boolean @default(true)   // risco crítico identificado
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

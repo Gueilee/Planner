@@ -3,6 +3,8 @@
 import { useState } from "react"
 import { User, Bell, Building2, Users, ChevronRight, Lock } from "lucide-react"
 import { ProfileTab } from "./profile-tab"
+import { NotificationsTab } from "./notifications-tab"
+import type { NotificationPreferenceData } from "@/lib/actions/notification-preferences"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -18,10 +20,14 @@ export type UserProfile = {
   createdAt?: Date
 }
 
+type NotifItem = { id: string; type: string; title: string; message: string; link: string | null; read: boolean; createdAt: string }
+
 type Props = {
-  profile:  UserProfile
-  allUsers: UserProfile[]
-  isAdmin:  boolean
+  profile:       UserProfile
+  allUsers:      UserProfile[]
+  isAdmin:       boolean
+  preferences:   NotificationPreferenceData
+  notifications: NotifItem[]
 }
 
 // ─── Tab config ───────────────────────────────────────────────────────────────
@@ -38,14 +44,14 @@ type Tab = {
 
 const TABS: Tab[] = [
   { id: "profile",       label: "Meu Perfil",    icon: User,      ready: true  },
-  { id: "notifications", label: "Notificações",  icon: Bell,      ready: false },
+  { id: "notifications", label: "Notificações",  icon: Bell,      ready: true  },
   { id: "organization",  label: "Organização",   icon: Building2, ready: false, adminOnly: true },
   { id: "users",         label: "Usuários",      icon: Users,     ready: false, adminOnly: true },
 ]
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function SettingsClient({ profile, allUsers, isAdmin }: Props) {
+export function SettingsClient({ profile, allUsers, isAdmin, preferences, notifications }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>("profile")
 
   const visibleTabs = TABS.filter((t) => !t.adminOnly || isAdmin)
@@ -110,6 +116,9 @@ export function SettingsClient({ profile, allUsers, isAdmin }: Props) {
           <div className="flex-1 min-w-0">
             {activeTab === "profile" && (
               <ProfileTab profile={profile} allUsers={allUsers} isAdmin={isAdmin} />
+            )}
+            {activeTab === "notifications" && (
+              <NotificationsTab preferences={preferences} notifications={notifications} />
             )}
 
             {/* Placeholder for future tabs */}
