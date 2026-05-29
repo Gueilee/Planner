@@ -137,14 +137,54 @@ export default async function ProjectDetailPage({
     : null
 
   // Financial aggregates
+  // ── Earned Value Management ────────────────────────────────────────────────
   const totalBudgetedCost = project.tasks.reduce((s, t) => s + (t.budgetedCost ?? 0), 0)
   const totalActualCost   = project.tasks.reduce((s, t) => s + (t.actualCost   ?? 0), 0)
-  const earnedValue       = project.tasks.reduce((s, t) => s + ((t.budgetedCost ?? 0) * (t.progress / 100)), 0)
-  const idc               = totalActualCost > 0 ? earnedValue / totalActualCost : null
-  const budgetUsedPct     = project.budget && project.budget > 0 ? Math.round((totalActualCost / project.budget) * 100) : null
+  // VE — Valor Agregado (Earned Value): quanto do orçado já foi efetivamente realizado
+  const earnedValue = project.tasks.reduce(
+    (s, t) => s + ((t.budgetedCost ?? 0) * (t.progress / 100)), 0
+  )
+  // VP — Valor Planejado (Planned Value): quanto deveria ter sido realizado até hoje pela linha do tempo
+  const plannedValue: number | null = (() => {
+    if (!project.expectedStart || !project.expectedEnd || totalBudgetedCost <= 0) return null
+    const totalDays   = differenceInDays(project.expectedEnd, project.expectedStart)
+    const elapsedDays = differenceInDays(new Date(), project.expectedStart)
+    if (totalDays <= 0) return null
+    const elapsedPct  = Math.max(0, Math.min(1, elapsedDays / totalDays))
+    return totalBudgetedCost * elapsedPct
+  })()
+  // IDC = VE / CR  (Índice de Desempenho de Custo)
+  const idc = totalActualCost > 0 && earnedValue >= 0 ? earnedValue / totalActualCost : null
+  // IDP = VE / VP  (Índice de Desempenho de Prazo)
+  const idp = plannedValue !== null && plannedValue > 0 ? earnedValue / plannedValue : null
+
+  const budgetUsedPct = project.budget && project.budget > 0
+    ? Math.round((totalActualCost / project.budget) * 100) : null
 
   function fmtBRL(v: number) {
     return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })
+  }
+
+  function idcColor(v: number) {
+    return v >= 1.0 ? "#059669" : v >= 0.85 ? "#D97706" : "#DC2626"
+  }
+  function idcBg(v: number) {
+    return v >= 1.0 ? "#ECFDF5" : v >= 0.85 ? "#FFFBEB" : "#FEF2F2"
+  }
+  function idcBorder(v: number) {
+    return v >= 1.0 ? "#A7F3D0" : v >= 0.85 ? "#FDE68A" : "#FECACA"
+  }
+  function idcLabel(v: number, type: "cost" | "schedule") {
+    if (type === "cost") {
+      if (v > 1.05) return "Economia vs. planejado"
+      if (v >= 0.95) return "Exatamente no orçamento"
+      if (v >= 0.85) return "Atenção: acima do previsto"
+      return "Orçamento em risco"
+    }
+    if (v > 1.05) return "Projeto adiantado"
+    if (v >= 0.95) return "Cronograma em dia"
+    if (v >= 0.85) return "Leve atraso no plano"
+    return "Projeto atrasado"
   }
 
   const STATUS_FLOW = [
@@ -731,62 +771,84 @@ export default async function ProjectDetailPage({
                 </div>
               )}
 
-              {/* ── Controle Orçamentário ── */}
+              {/* ── Controle Orçamentário / EVM ── */}
               {(project.budget || totalBudgetedCost > 0 || totalActualCost > 0) && (
-                <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid #E2E8F0", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
-                  {/* Header gradient */}
-                  <div className="px-5 py-4 flex items-center justify-between"
-                    style={{ background: "linear-gradient(135deg, #0F172A 0%, #1E1B4B 100%)" }}>
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Controle Orçamentário</p>
-                      <p className="text-sm font-black text-white mt-0.5">
-                        {project.budget ? `Budget: ${fmtBRL(project.budget)}` : "Orçamento por atividades"}
-                      </p>
-                    </div>
-                    {idc !== null && (
-                      <div className="flex flex-col items-center">
-                        <span className="text-[9px] font-black uppercase tracking-widest mb-0.5" style={{ color: idc >= 1.0 ? "#34D399" : idc >= 0.85 ? "#FCD34D" : "#FCA5A5" }}>IDC</span>
-                        <span className="text-2xl font-black" style={{ color: idc >= 1.0 ? "#34D399" : idc >= 0.85 ? "#FCD34D" : "#FCA5A5" }}>
-                          {idc.toFixed(2)}
-                        </span>
-                        <span className="text-[9px] font-semibold mt-0.5" style={{ color: idc >= 1.0 ? "#34D399" : idc >= 0.85 ? "#FCD34D" : "#FCA5A5" }}>
-                          {idc >= 1.0 ? "✓ No orçamento" : idc >= 0.85 ? "⚠ Atenção" : "✕ Risco"}
+                <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid #E2E8F0", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+
+                  {/* Header */}
+                  <div className="px-5 py-4" style={{ background: "linear-gradient(135deg, #0F172A 0%, #1E1B4B 100%)" }}>
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-white/30 mb-0.5">Earned Value Management</p>
+                        <p className="text-sm font-black text-white">
+                          {project.budget ? `Budget Total: ${fmtBRL(project.budget)}` : "Controle por atividades"}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)" }}>
+                        <span className="text-[9px] font-bold text-white/40">VP</span>
+                        <span className="text-[9px] font-black text-white/70 ml-1">
+                          {plannedValue !== null ? fmtBRL(plannedValue) : "—"}
                         </span>
                       </div>
-                    )}
+                    </div>
+
+                    {/* IDC + IDP side by side */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* IDC */}
+                      {[
+                        { key: "IDC", name: "Índice de Desempenho de Custo", value: idc, type: "cost" as const,
+                          formula: "VE ÷ CR", tip: idc === null ? "Insira custos reais para calcular" : idc > 1.05 ? "Cada R$1 gasto gera mais de R$1 de valor" : idc >= 0.95 ? "Custos exatamente conforme planejado" : idc >= 0.85 ? "Gastando um pouco além do previsto" : "Custos acima do planejado — intervenção necessária" },
+                        { key: "IDP", name: "Índice de Desempenho de Prazo", value: idp, type: "schedule" as const,
+                          formula: "VE ÷ VP", tip: idp === null ? "Defina datas e orçamento por tarefa para calcular" : idp > 1.05 ? "Progresso à frente do cronograma planejado" : idp >= 0.95 ? "Progresso exatamente no prazo previsto" : idp >= 0.85 ? "Progresso levemente abaixo do esperado" : "Projeto significativamente atrasado em relação ao plano" },
+                      ].map(({ key, name, value, type, formula, tip }) => (
+                        <div key={key} className="rounded-xl p-3.5" style={{
+                          background: value !== null ? idcBg(value) : "rgba(255,255,255,0.06)",
+                          border: `1.5px solid ${value !== null ? idcBorder(value) : "rgba(255,255,255,0.10)"}`,
+                        }}>
+                          {/* acronym + name */}
+                          <div className="flex items-center justify-between mb-2">
+                            <div>
+                              <span className="text-xs font-black" style={{ color: value !== null ? idcColor(value) : "#94A3B8" }}>{key}</span>
+                              <p className="text-[9px] font-semibold mt-0.5 leading-tight max-w-[130px]" style={{ color: value !== null ? idcColor(value) + "CC" : "#64748B" }}>{name}</p>
+                            </div>
+                            <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-md font-mono shrink-0"
+                              style={{ background: value !== null ? idcColor(value) + "18" : "rgba(148,163,184,0.12)", color: value !== null ? idcColor(value) : "#64748B" }}>
+                              {formula}
+                            </span>
+                          </div>
+
+                          {/* value */}
+                          <div className="text-3xl font-black mb-1" style={{ color: value !== null ? idcColor(value) : "#94A3B8" }}>
+                            {value !== null ? value.toFixed(2) : "—"}
+                          </div>
+
+                          {/* interpretation */}
+                          <div className="flex items-center gap-1">
+                            {value !== null && (
+                              <span className="text-[10px] font-black shrink-0" style={{ color: idcColor(value) }}>
+                                {value > 1.05 ? "▲" : value >= 0.95 ? "●" : value >= 0.85 ? "▼" : "✕"}
+                              </span>
+                            )}
+                            <p className="text-[9px] font-semibold leading-tight" style={{ color: value !== null ? idcColor(value) + "BB" : "#94A3B8" }}>
+                              {value !== null ? idcLabel(value, type) : tip}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
-                  {/* Metrics grid */}
+                  {/* EVM metrics: VP / VE / CR */}
                   <div className="grid grid-cols-3 divide-x divide-slate-100">
-                    {[
-                      {
-                        label: "Orçado (Atividades)",
-                        value: totalBudgetedCost > 0 ? fmtBRL(totalBudgetedCost) : "—",
-                        sub: project.budget && totalBudgetedCost > 0
-                          ? `${Math.round((totalBudgetedCost / project.budget) * 100)}% do budget`
-                          : "Sem dados",
-                        color: "#059669", bg: "#F0FDF4",
-                      },
-                      {
-                        label: "Valor Agregado (VE)",
-                        value: earnedValue > 0 ? fmtBRL(earnedValue) : "—",
-                        sub: totalBudgetedCost > 0 ? `${Math.round((earnedValue / totalBudgetedCost) * 100)}% do orçado` : "—",
-                        color: "#2463FF", bg: "#EFF6FF",
-                      },
-                      {
-                        label: "Gasto Real (CR)",
-                        value: totalActualCost > 0 ? fmtBRL(totalActualCost) : "—",
-                        sub: totalBudgetedCost > 0 && totalActualCost > 0
-                          ? `${Math.round((totalActualCost / totalBudgetedCost) * 100)}% do orçado`
-                          : "Sem dados",
-                        color: totalActualCost > totalBudgetedCost && totalBudgetedCost > 0 ? "#DC2626" : "#D97706",
-                        bg: totalActualCost > totalBudgetedCost && totalBudgetedCost > 0 ? "#FEF2F2" : "#FFFBEB",
-                      },
-                    ].map(({ label, value, sub, color, bg }) => (
+                    {([
+                      { label: "VP — Valor Planejado",  value: plannedValue !== null ? fmtBRL(plannedValue) : "—", sub: "Previsto até hoje",                                                   color: "#7B2FBE", bg: "#FAF5FF" },
+                      { label: "VE — Valor Agregado",   value: earnedValue > 0 ? fmtBRL(earnedValue) : "—",       sub: totalBudgetedCost > 0 ? `${Math.round((earnedValue/totalBudgetedCost)*100)}% realizado` : "—", color: "#2463FF", bg: "#EFF6FF" },
+                      { label: "CR — Custo Real",       value: totalActualCost > 0 ? fmtBRL(totalActualCost) : "—", sub: totalBudgetedCost > 0 && totalActualCost > 0 ? `${Math.round((totalActualCost/totalBudgetedCost)*100)}% do orçado` : "Sem dados", color: totalActualCost > totalBudgetedCost && totalBudgetedCost > 0 ? "#DC2626" : "#D97706", bg: totalActualCost > totalBudgetedCost && totalBudgetedCost > 0 ? "#FEF2F2" : "#FFFBEB" },
+                    ] as {label:string;value:string;sub:string;color:string;bg:string}[]).map(({ label, value, sub, color, bg }) => (
                       <div key={label} className="px-4 py-3 text-center" style={{ background: bg }}>
-                        <p className="text-[9px] font-bold uppercase tracking-widest mb-1" style={{ color }}>{label}</p>
-                        <p className="text-base font-black" style={{ color }}>{value}</p>
-                        <p className="text-[10px] mt-0.5" style={{ color: color + "99" }}>{sub}</p>
+                        <p className="text-[8px] font-bold uppercase tracking-widest mb-1 leading-tight" style={{ color }}>{label}</p>
+                        <p className="text-sm font-black" style={{ color }}>{value}</p>
+                        <p className="text-[9px] mt-0.5" style={{ color: color + "90" }}>{sub}</p>
                       </div>
                     ))}
                   </div>
@@ -795,21 +857,22 @@ export default async function ProjectDetailPage({
                   {project.budget && project.budget > 0 && totalActualCost > 0 && (
                     <div className="px-5 py-3 bg-slate-50" style={{ borderTop: "1px solid #F1F5F9" }}>
                       <div className="flex justify-between text-[9px] font-semibold mb-1.5">
-                        <span className="text-slate-400">Consumo do Budget</span>
-                        <span style={{ color: (budgetUsedPct ?? 0) > 100 ? "#DC2626" : "#64748B" }}>
+                        <span className="text-slate-400">Consumo do Budget Total</span>
+                        <span className="font-black" style={{ color: (budgetUsedPct ?? 0) > 100 ? "#DC2626" : (budgetUsedPct ?? 0) > 85 ? "#D97706" : "#059669" }}>
                           {budgetUsedPct}% utilizado
                         </span>
                       </div>
-                      <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-700"
-                          style={{
-                            width: `${Math.min(100, budgetUsedPct ?? 0)}%`,
-                            background: (budgetUsedPct ?? 0) > 100 ? "linear-gradient(90deg,#EF4444,#DC2626)"
-                              : (budgetUsedPct ?? 0) > 85 ? "linear-gradient(90deg,#D97706,#F59E0B)"
-                              : "linear-gradient(90deg,#059669,#10B981)",
-                          }}
-                        />
+                      <div className="h-2.5 rounded-full bg-slate-200 overflow-hidden">
+                        <div className="h-full rounded-full transition-all duration-700" style={{
+                          width: `${Math.min(100, budgetUsedPct ?? 0)}%`,
+                          background: (budgetUsedPct ?? 0) > 100 ? "linear-gradient(90deg,#EF4444,#DC2626)"
+                            : (budgetUsedPct ?? 0) > 85 ? "linear-gradient(90deg,#D97706,#F59E0B)"
+                            : "linear-gradient(90deg,#059669,#10B981)",
+                        }} />
+                      </div>
+                      <div className="flex justify-between text-[8px] mt-1 text-slate-300">
+                        <span>R$0</span>
+                        <span>{fmtBRL(project.budget)}</span>
                       </div>
                     </div>
                   )}

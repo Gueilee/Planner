@@ -694,11 +694,12 @@ function ProjectHistoryView({ data }: { data: NonNullable<FullHistory> }) {
                     {budget > 0 && <p className="text-sm font-black text-white">Budget: {fmtBRL(budget)}</p>}
                   </div>
                   {idc !== null ? (
-                    <div className="flex flex-col items-center px-4 py-2 rounded-xl" style={{ background: idcBg }}>
-                      <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: idcColor }}>IDC</span>
+                    <div className="flex flex-col items-center px-4 py-2 rounded-xl" style={{ background: idcBg, border: `1.5px solid ${idcColor}40` }}>
+                      <span className="text-[8px] font-black uppercase tracking-widest" style={{ color: idcColor }}>IDC</span>
+                      <span className="text-[9px] font-semibold mb-1" style={{ color: idcColor + "BB" }}>Desempenho de Custo</span>
                       <span className="text-2xl font-black" style={{ color: idcColor }}>{idc.toFixed(2)}</span>
-                      <span className="text-[9px] font-semibold mt-0.5" style={{ color: idcColor }}>
-                        {idc >= 1.0 ? "✓ Dentro do orçamento" : idc >= 0.85 ? "⚠ Atenção" : "✕ Em risco"}
+                      <span className="text-[9px] font-semibold mt-1" style={{ color: idcColor }}>
+                        {idc >= 1.0 ? "▲ Dentro do orçamento" : idc >= 0.85 ? "▼ Atenção" : "✕ Em risco"}
                       </span>
                     </div>
                   ) : (
