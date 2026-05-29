@@ -64,7 +64,7 @@ export default async function ProjectDetailPage({
    db.project.findUnique({
     where: { id },
     include: {
-      members: { include: { user: { select: { id: true, name: true, email: true, role: true, department: true } } } },
+      members: { include: { user: { select: { id: true, name: true, email: true, role: true, department: true, image: true } } } },
       wbsAreas: {
         orderBy: { order: "asc" },
         include: {
@@ -1074,10 +1074,12 @@ export default async function ProjectDetailPage({
                   {project.members.map((m) => (
                     <div key={m.id} className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50/50 transition-colors">
                       <div
-                        className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black text-white shrink-0"
-                        style={{ background: "linear-gradient(135deg, #2463FF, #8B2FFF)" }}
+                        className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center text-sm font-black text-white shrink-0"
+                        style={{ background: m.user.image ? "transparent" : "linear-gradient(135deg, #2463FF, #8B2FFF)" }}
                       >
-                        {m.user.name?.charAt(0).toUpperCase()}
+                        {m.user.image
+                          ? <img src={m.user.image} alt={m.user.name} className="w-full h-full object-cover" />
+                          : m.user.name?.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-[#0F172A] truncate">{m.user.name}</p>

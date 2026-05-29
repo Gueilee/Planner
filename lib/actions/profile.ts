@@ -1,0 +1,114 @@
+"use server"
+
+import { db } from "@/lib/db"
+import { auth } from "@/auth"
+import { revalidatePath } from "next/cache"
+import bcrypt from "bcryptjs"
+
+export type ProfileInput = {
+  name:       string
+  department: string
+  phone:      string
+  image:      string | null
+}
+
+// ─── Get any user's profile (admin) or own profile ───────────────────────────
+
+export async function getMyProfile() {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+  return db.user.findUnique({
+    where:  { id: session.user.id },
+    select: { id: true, name: true, email: true, department: true, phone: true, image: true, role: true, active: true, createdAt: true },
+  })
+}
+
+export async function getAllUsers() {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+  if (session.user.role !== "ADMIN") throw new Error("Acesso restrito a administradores")
+  return db.user.findMany({
+    orderBy: { name: "asc" },
+    select:  { id: true, name: true, email: true, department: true, phone: true, image: true, role: true, active: true },
+  })
+}
+
+// ─── Update own profile ───────────────────────────────────────────────────────
+
+export async function updateProfile(data: ProfileInput) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+
+  const updated = await db.user.update({
+    where: { id: session.user.id },
+    data: {
+      name:       data.name.trim(),
+      department: data.department.trim() || null,
+      phone:      data.phone.trim()      || null,
+      image:      data.image             || null,
+    },
+    select: { id: true, name: true, image: true, department: true },
+  })
+
+  revalidatePath("/settings")
+  return updated
+}
+
+// ─── Admin: update any user's profile ────────────────────────────────────────
+
+export async function updateUserById(userId: string, data: ProfileInput & { role?: string; active?: boolean }) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+  if (session.user.role !== "ADMIN") throw new Error("Acesso restrito a administradores")
+
+  const updated = await db.user.update({
+    where: { id: userId },
+    data: {
+      name:       data.name.trim(),
+      department: data.department.trim() || null,
+      phone:      data.phone.trim()      || null,
+      image:      data.image             || null,
+      ...(data.role   !== undefined && { role:   data.role   as never }),
+      ...(data.active !== undefined && { active: data.active }),
+    },
+    select: { id: true, name: true, image: true, department: true, role: true, active: true },
+  })
+
+  revalidatePath("/settings")
+  return updated
+}
+
+// ─── Change password ──────────────────────────────────────────────────────────
+
+export async function changePassword(currentPassword: string, newPassword: string) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+
+  const user = await db.user.findUnique({
+    where:  { id: session.user.id },
+    select: { password: true },
+  })
+  if (!user) throw new Error("Usuário não encontrado")
+
+  const match = await bcrypt.compare(currentPassword, user.password)
+  if (!match) throw new Error("Senha atual incorreta")
+
+  if (newPassword.length < 6) throw new Error("Nova senha deve ter no mínimo 6 caracteres")
+
+  const hash = await bcrypt.hash(newPassword, 10)
+  await db.user.update({ where: { id: session.user.id }, data: { password: hash } })
+  return { success: true }
+}
+
+// ─── Admin: reset any user's password ────────────────────────────────────────
+
+export async function resetUserPassword(userId: string, newPassword: string) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+  if (session.user.role !== "ADMIN") throw new Error("Acesso restrito a administradores")
+  if (newPassword.length < 6) throw new Error("Senha deve ter no mínimo 6 caracteres")
+
+  const hash = await bcrypt.hash(newPassword, 10)
+  await db.user.update({ where: { id: userId }, data: { password: hash } })
+  return { success: true }
+}

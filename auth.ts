@@ -67,19 +67,41 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
+      // First login: persist all fields
       if (user) {
-        token.id = user.id ?? token.sub ?? ""
-        token.role = (user as { role: UserRole }).role
-        token.department = (user as { department?: string | null }).department
+        token.id         = user.id ?? token.sub ?? ""
+        token.role       = (user as { role: UserRole }).role
+        token.department = (user as { department?: string | null }).department ?? null
+        token.image      = (user as { image?: string | null }).image ?? null
+        token.name       = user.name ?? null
+      }
+      // Session update triggered (e.g. after profile save): refresh from DB
+      if (trigger === "update" && token.id) {
+        try {
+          const turso = getTursoClient()
+          const res = await turso.execute({
+            sql:  `SELECT name, image, department FROM "User" WHERE id = ? LIMIT 1`,
+            args: [token.id],
+          })
+          await turso.close()
+          if (res.rows.length > 0) {
+            const row     = res.rows[0]
+            token.name       = (row.name       as string | null) ?? token.name
+            token.image      = (row.image      as string | null) ?? null
+            token.department = (row.department as string | null) ?? null
+          }
+        } catch { /* best effort */ }
       }
       return token
     },
     async session({ session, token }) {
       if (token && session.user) {
-        session.user.id = token.id as string
-        session.user.role = token.role as UserRole
+        session.user.id         = token.id as string
+        session.user.role       = token.role as UserRole
         session.user.department = token.department as string | null
+        session.user.image      = (token.image as string | null) ?? null
+        if (token.name) session.user.name = token.name as string
       }
       return session
     },
@@ -106,8 +128,10 @@ declare module "next-auth" {
 
 declare module "next-auth/jwt" {
   interface JWT {
-    id: string
-    role: UserRole
+    id:          string
+    role:        UserRole
     department?: string | null
+    image?:      string | null
+    name?:       string | null
   }
 }
