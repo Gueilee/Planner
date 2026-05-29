@@ -1,4 +1,12 @@
-export type AncestorUpdate = { id: string; progress: number; status: string }
+export type AncestorUpdate = {
+  id: string
+  progress: number
+  status: string
+  startDate?:   string | null
+  endDate?:     string | null
+  actualStart?: string | null
+  actualEnd?:   string | null
+}
 
 export function deriveStatus(progress: number, currentStatus: string): string {
   if ((currentStatus === "DELAYED" || currentStatus === "ON_HOLD") && progress < 100) return currentStatus

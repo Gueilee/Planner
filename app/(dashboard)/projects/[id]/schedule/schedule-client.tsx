@@ -1201,13 +1201,25 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
   }
   function openEdit(t: Task) { setPanel({ mode: "edit", task: t }) }
 
+  function applyAncestor(existing: Task, anc: AncestorUpdate): Task {
+    return {
+      ...existing,
+      progress: anc.progress,
+      status:   anc.status as Task["status"],
+      ...(anc.startDate   !== undefined && { startDate:   anc.startDate }),
+      ...(anc.endDate     !== undefined && { endDate:     anc.endDate }),
+      ...(anc.actualStart !== undefined && { actualStart: anc.actualStart }),
+      ...(anc.actualEnd   !== undefined && { actualEnd:   anc.actualEnd }),
+    }
+  }
+
   function applyTaskUpdates(task: Task, ancestors: AncestorUpdate[]) {
     setTasks(prev => {
       const map = new Map(prev.map(t => [t.id, t]))
       map.set(task.id, { ...map.get(task.id) ?? task, ...task })
       for (const anc of ancestors) {
         const existing = map.get(anc.id)
-        if (existing) map.set(anc.id, { ...existing, progress: anc.progress, status: anc.status as Task["status"] })
+        if (existing) map.set(anc.id, applyAncestor(existing, anc))
       }
       return [...map.values()]
     })
@@ -1220,7 +1232,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
       : [...latest, t]
     const withAncestors = base.map(x => {
       const anc = ancestors.find(a => a.id === x.id)
-      return anc ? { ...x, progress: anc.progress, status: anc.status as Task["status"] } : x
+      return anc ? applyAncestor(x, anc) : x
     })
     setTasks(withAncestors)
     if (t.parentId) {

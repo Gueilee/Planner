@@ -86,31 +86,63 @@ export async function createTask(data: TaskInput) {
     include: INCLUDE,
   })
 
+  if (data.parentId) await propagateParentUp(data.parentId)
   revalidatePath(`/projects/${data.projectId}/schedule`)
   return serialize(task)
 }
 
-async function propagateProgressUp(taskId: string, collected: AncestorUpdate[] = []): Promise<AncestorUpdate[]> {
-  const child = await db.scheduleTask.findUnique({ where: { id: taskId }, select: { parentId: true } })
-  if (!child?.parentId) return collected
-
-  const siblings = await db.scheduleTask.findMany({
-    where: { parentId: child.parentId },
-    select: { progress: true },
+// Propagates progress AND dates up the parent chain.
+// parentId = the direct parent of the task that just changed.
+async function propagateParentUp(parentId: string, collected: AncestorUpdate[] = []): Promise<AncestorUpdate[]> {
+  const children = await db.scheduleTask.findMany({
+    where: { parentId },
+    select: { progress: true, startDate: true, endDate: true, actualStart: true, actualEnd: true },
   })
-  const avg = Math.round(siblings.reduce((s, t) => s + t.progress, 0) / siblings.length)
+  if (!children.length) return collected
 
-  const parent = await db.scheduleTask.findUnique({ where: { id: child.parentId }, select: { status: true } })
+  const avg = Math.round(children.reduce((s, t) => s + t.progress, 0) / children.length)
+
+  const startDates   = children.map(t => t.startDate).filter((d): d is Date => d !== null)
+  const endDates     = children.map(t => t.endDate).filter((d): d is Date => d !== null)
+  const actualStarts = children.map(t => t.actualStart).filter((d): d is Date => d !== null)
+  const actualEnds   = children.map(t => t.actualEnd).filter((d): d is Date => d !== null)
+
+  const minStart       = startDates.length   ? new Date(Math.min(...startDates.map(d => d.getTime())))   : null
+  const maxEnd         = endDates.length     ? new Date(Math.max(...endDates.map(d => d.getTime())))     : null
+  const minActualStart = actualStarts.length ? new Date(Math.min(...actualStarts.map(d => d.getTime()))) : null
+  const maxActualEnd   = actualEnds.length   ? new Date(Math.max(...actualEnds.map(d => d.getTime())))   : null
+
+  const parent = await db.scheduleTask.findUnique({
+    where: { id: parentId },
+    select: { status: true, parentId: true },
+  })
   if (!parent) return collected
 
   const newStatus = deriveStatus(avg, parent.status)
   await db.scheduleTask.update({
-    where: { id: child.parentId },
-    data: { progress: avg, status: newStatus as never },
+    where: { id: parentId },
+    data: {
+      progress: avg,
+      status:      newStatus as never,
+      startDate:   minStart,
+      endDate:     maxEnd,
+      actualStart: minActualStart,
+      actualEnd:   maxActualEnd,
+    },
   })
 
-  collected.push({ id: child.parentId, progress: avg, status: newStatus })
-  return propagateProgressUp(child.parentId, collected)
+  collected.push({
+    id: parentId,
+    progress: avg,
+    status: newStatus,
+    startDate:   minStart?.toISOString()       ?? null,
+    endDate:     maxEnd?.toISOString()         ?? null,
+    actualStart: minActualStart?.toISOString() ?? null,
+    actualEnd:   maxActualEnd?.toISOString()   ?? null,
+  })
+
+  if (parent.parentId) return propagateParentUp(parent.parentId, collected)
+  return collected
 }
 
 export async function updateTask(id: string, projectId: string, data: Partial<TaskInput>) {
@@ -155,7 +187,8 @@ export async function updateTask(id: string, projectId: string, data: Partial<Ta
     include: INCLUDE,
   })
 
-  const ancestors = await propagateProgressUp(id)
+  const updated = await db.scheduleTask.findUnique({ where: { id }, select: { parentId: true } })
+  const ancestors = updated?.parentId ? await propagateParentUp(updated.parentId) : []
   revalidatePath(`/projects/${projectId}/schedule`)
   return { task: serialize(task), ancestors }
 }
@@ -163,8 +196,10 @@ export async function updateTask(id: string, projectId: string, data: Partial<Ta
 export async function deleteTask(id: string, projectId: string) {
   const session = await auth()
   if (!session?.user) throw new Error("Não autorizado")
+  const task = await db.scheduleTask.findUnique({ where: { id }, select: { parentId: true } })
   await db.scheduleTask.deleteMany({ where: { parentId: id } })
   await db.scheduleTask.delete({ where: { id } })
+  if (task?.parentId) await propagateParentUp(task.parentId)
   revalidatePath(`/projects/${projectId}/schedule`)
 }
 
