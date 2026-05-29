@@ -71,10 +71,10 @@ function schedColor(s: string): string {
 }
 
 function devioColor(d: number | null): string {
-  if (d === null)    return C.slate
-  if (d <= 0)        return C.green
-  if (d <= 0.2)      return C.amber
-  return C.red
+  if (d === null)  return C.slate
+  if (d >= 0)      return C.green   // adiantado ou exato
+  if (d >= -0.2)   return C.amber   // até 20pp atrasado
+  return C.red                       // mais de 20pp atrasado
 }
 
 function truncate(s: string, n: number): string {
@@ -180,13 +180,23 @@ function DevioTooltip({ active, payload }: TooltipContentProps): React.ReactElem
   const rawVal = d.value
   const pct = typeof rawVal === "number" ? Math.round(rawVal) : 0
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const fullName = (d as any).payload?.fullName as string | undefined
+  const entry = (d as any).payload as { fullName?: string; planned?: number; actual?: number }
+  const color = pct >= 0 ? C.green : pct >= -20 ? C.amber : C.red
+  const label = pct > 0 ? "Adiantado" : pct < 0 ? "Atrasado" : "No prazo"
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-lg px-3 py-2 text-xs">
-      <p className="font-bold text-slate-800 mb-1">{fullName}</p>
-      <p style={{ color: pct > 0 ? C.red : pct < 0 ? C.green : C.slate }}>
-        Desvio: {pct >= 0 ? "+" : ""}{pct}%
+    <div className="bg-white rounded-xl border border-slate-200 shadow-lg px-3 py-2.5 text-xs space-y-1 min-w-[180px]">
+      <p className="font-bold text-slate-800">{entry.fullName}</p>
+      <div className="h-px bg-slate-100" />
+      <p style={{ color }} className="font-semibold">
+        {label}: {pct >= 0 ? "+" : ""}{pct}pp
       </p>
+      {entry.planned != null && (
+        <p className="text-slate-400">Progresso planejado: <span className="font-semibold text-slate-600">{entry.planned}%</span></p>
+      )}
+      {entry.actual != null && (
+        <p className="text-slate-400">Progresso real: <span className="font-semibold text-slate-600">{entry.actual}%</span></p>
+      )}
+      <p className="text-slate-300 text-[10px]">pp = pontos percentuais</p>
     </div>
   )
 }
@@ -253,12 +263,20 @@ export function AnalyticsClient({ projects }: { projects: ProjectIndicator[] }) 
   // ── Devio chart data ──────────────────────────────────────────
   const devioData = filtered
     .filter((p) => p.devio !== null)
-    .map((p) => ({
-      name:     truncate(p.title, 20),
-      fullName: p.title,
-      devio:    Math.round((p.devio ?? 0) * 100),
-      color:    devioColor(p.devio),
-    }))
+    .map((p) => {
+      const devPct   = Math.round((p.devio ?? 0) * 100)
+      // Reconstruir progresso planejado = progresso_real - devio_pp
+      const actual   = p.progress
+      const planned  = Math.max(0, Math.min(100, actual - devPct))
+      return {
+        name:     truncate(p.title, 20),
+        fullName: p.title,
+        devio:    devPct,
+        color:    devioColor(p.devio),
+        planned,
+        actual,
+      }
+    })
     .sort((a, b) => b.devio - a.devio)
 
   // ── Pie data ──────────────────────────────────────────────────
@@ -445,9 +463,31 @@ export function AnalyticsClient({ projects }: { projects: ProjectIndicator[] }) 
 
               {/* LEFT: Diverging Bar Chart */}
               <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-                <p className="text-xs font-black text-slate-700 mb-4 uppercase tracking-wide">
-                  Desvio de Prazo por Projeto
-                </p>
+                {/* Title + subtitle */}
+                <div className="mb-4">
+                  <p className="text-xs font-black text-slate-700 uppercase tracking-wide">
+                    Desvio de Prazo por Projeto
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Diferença entre progresso real e progresso esperado para a data de hoje
+                  </p>
+                </div>
+
+                {/* Color legend */}
+                <div className="flex flex-wrap items-center gap-3 mb-4 text-[10px] font-semibold text-slate-500">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-sm" style={{ background: C.green }} />
+                    Adiantado (barra → direita)
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-sm" style={{ background: C.amber }} />
+                    Até 20pp atrasado
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-sm" style={{ background: C.red }} />
+                    Mais de 20pp atrasado (barra → esquerda)
+                  </span>
+                </div>
 
                 {devioData.length === 0 ? (
                   <div className="h-48 flex flex-col items-center justify-center text-slate-400 gap-2">
@@ -455,31 +495,43 @@ export function AnalyticsClient({ projects }: { projects: ProjectIndicator[] }) 
                     <span className="text-xs">Nenhum projeto com datas configuradas</span>
                   </div>
                 ) : (
-                  <ResponsiveContainer width="100%" height={Math.max(200, devioData.length * 40)}>
+                  <ResponsiveContainer width="100%" height={Math.max(200, devioData.length * 44)}>
                     <BarChart
                       data={devioData}
                       layout="vertical"
-                      margin={{ top: 4, right: 40, left: 0, bottom: 4 }}
+                      margin={{ top: 4, right: 48, left: 0, bottom: 20 }}
                     >
                       <CartesianGrid horizontal={false} stroke="#F1F5F9" />
                       <XAxis
                         type="number"
                         tick={{ fontSize: 10, fill: "#94A3B8" }}
-                        tickFormatter={(v: number) => `${v}%`}
+                        tickFormatter={(v: number) => `${v > 0 ? "+" : ""}${v}pp`}
                         axisLine={false}
                         tickLine={false}
+                        label={{
+                          value: "← Atrasado    |    Adiantado →",
+                          position: "insideBottom",
+                          offset: -12,
+                          style: { fontSize: 10, fill: "#94A3B8", fontWeight: 600 },
+                        }}
                       />
                       <YAxis
                         type="category"
                         dataKey="name"
-                        width={150}
+                        width={155}
                         tick={{ fontSize: 10, fill: "#475569" }}
                         axisLine={false}
                         tickLine={false}
                       />
                       <Tooltip content={DevioTooltip} />
-                      <ReferenceLine x={0} stroke="#CBD5E1" strokeWidth={1.5} />
-                      <Bar dataKey="devio" radius={[0, 4, 4, 0]} maxBarSize={22}>
+                      <ReferenceLine
+                        x={0}
+                        stroke="#94A3B8"
+                        strokeWidth={2}
+                        strokeDasharray="4 2"
+                        label={{ value: "0", position: "top", style: { fontSize: 9, fill: "#94A3B8" } }}
+                      />
+                      <Bar dataKey="devio" radius={[0, 4, 4, 0]} maxBarSize={22} label={{ position: "right", fontSize: 9, fill: "#64748B", formatter: (v: unknown) => { const n = Number(v); return n !== 0 ? `${n > 0 ? "+" : ""}${n}pp` : "" } }}>
                         {devioData.map((entry, i) => (
                           <Cell key={i} fill={entry.color} />
                         ))}
@@ -706,10 +758,14 @@ export function AnalyticsClient({ projects }: { projects: ProjectIndicator[] }) 
                           <td className="px-4 py-3 text-center">
                             {devVal !== null ? (
                               <span
-                                className="text-xs font-bold"
-                                style={{ color: devioColor(p.devio) }}
+                                className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold"
+                                style={{
+                                  background: `${devioColor(p.devio)}15`,
+                                  color: devioColor(p.devio),
+                                }}
+                                title={devVal >= 0 ? `Adiantado ${devVal}pp` : `Atrasado ${Math.abs(devVal)}pp`}
                               >
-                                {devVal >= 0 ? "+" : ""}{devVal}%
+                                {devVal >= 0 ? "+" : ""}{devVal}pp
                               </span>
                             ) : (
                               <span className="text-slate-300 text-[10px]">—</span>

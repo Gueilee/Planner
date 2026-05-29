@@ -59,20 +59,26 @@ export default async function AnalyticsPage() {
         ? 100
         : 0
 
-    // ── Devio de Prazo ────────────────────────────────────────────
+    // ── Desvio de Prazo: variação entre progresso real e progresso planejado
+    // devio > 0 → adiantado (fez mais do que o tempo sugeria)
+    // devio < 0 → atrasado  (fez menos do que deveria para esta data)
+    // devio = (progresso_real% − progresso_planejado%) / 100
     let devio: number | null = null
     let scheduleStatus: ProjectIndicator["scheduleStatus"] = "ND"
 
     if (p.status === "COMPLETED" && !p.expectedStart && !p.expectedEnd) {
       scheduleStatus = "ON_TIME"
     } else if (p.expectedStart && p.expectedEnd) {
-      const referenceEnd = p.actualEnd ?? today
       const totalDays = differenceInDays(p.expectedEnd, p.expectedStart)
       if (totalDays > 0) {
-        devio = differenceInDays(referenceEnd, p.expectedEnd) / totalDays
-        if (devio <= 0) scheduleStatus = "ON_TIME"
-        else if (devio <= 0.2) scheduleStatus = "AT_RISK"
-        else scheduleStatus = "DELAYED"
+        // Para projetos concluídos usa actualEnd (se disponível) como referência
+        const referenceDate = (p.status === "COMPLETED" && p.actualEnd) ? p.actualEnd : today
+        const elapsedDays   = differenceInDays(referenceDate, p.expectedStart)
+        const plannedPct    = Math.min(100, Math.max(0, (elapsedDays / totalDays) * 100))
+        devio = (progress - plannedPct) / 100   // -1 a +1
+        if (devio >= 0)       scheduleStatus = "ON_TIME"
+        else if (devio >= -0.2) scheduleStatus = "AT_RISK"
+        else                    scheduleStatus = "DELAYED"
       }
     }
 
