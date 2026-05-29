@@ -51,13 +51,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
           if (!passwordMatch) return null
 
+          const uid = row.id as string
+          const rawImage = row.image as string | null
           return {
-            id:         row.id         as string,
+            id:         uid,
             name:       row.name       as string,
             email:      row.email      as string,
             role:       row.role       as UserRole,
             department: row.department as string | null,
-            image:      row.image      as string | null,
+            // Armazena só o path — nunca o base64 — para o JWT não estourar o cookie
+            image:      rawImage ? `/api/avatar/${uid}` : null,
           }
         } catch (err) {
           console.error("[auth] authorize error:", err)
@@ -86,10 +89,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           })
           await turso.close()
           if (res.rows.length > 0) {
-            const row     = res.rows[0]
+            const row = res.rows[0]
             token.name       = (row.name       as string | null) ?? token.name
-            token.image      = (row.image      as string | null) ?? null
             token.department = (row.department as string | null) ?? null
+            // Sempre armazena o path do endpoint, não o base64, para não inflar o JWT
+            const rawImg = row.image as string | null
+            token.image  = rawImg ? `/api/avatar/${token.id}` : null
           }
         } catch { /* best effort */ }
       }
