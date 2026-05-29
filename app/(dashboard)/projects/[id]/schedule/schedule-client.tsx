@@ -36,8 +36,8 @@ const HDR_H   = 64
 const LEFT_W  = 600
 // List view: fixed column widths so header and rows always share the same total width
 const COL_NAME  = 280
-// 24+72+84+280+130+120+88+88+88+88+64+64+68+68+100
-const LIST_MIN_W = 1426
+// 24+72+84+280+130+160+88+88+88+88+64+64+68+68+100
+const LIST_MIN_W = 1466
 const BAR_H   = 24
 const BAR_PAD = 8
 
@@ -1492,7 +1492,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
               <div style={{ width: 84, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Ações</div>
               <div style={{ width: COL_NAME, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest px-2">Nome da Atividade</div>
               <div style={{ width: 130, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Status</div>
-              <div style={{ width: 120, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest px-3">Responsável</div>
+              <div style={{ width: 160, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest px-3">Responsável</div>
               <div style={{ width: 88, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Início Plan.</div>
               <div style={{ width: 88, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Fim Plan.</div>
               <div style={{ width: 88, flexShrink: 0 }} className="text-[10px] font-black text-emerald-400/60 uppercase tracking-widest text-center">Início Real</div>
@@ -1815,10 +1815,10 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                     </div>
 
                     {/* Responsible */}
-                    <div style={{ width: 120, flexShrink: 0 }} className="px-1">
+                    <div style={{ width: 160, flexShrink: 0 }} className="px-1">
                       <div className="flex items-center gap-1.5">
                         {t.responsible && inlineAdd?.taskId !== t.id && (
-                          <div className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black text-white shrink-0"
+                          <div className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-black text-white shrink-0"
                             style={{ background: areaColor ?? color }}>
                             {initials(t.responsible.name)}
                           </div>
@@ -1857,6 +1857,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                             style={{ border: "1.5px solid #7B2FBE", background: "#F5F3FF" }}
                           />
                         ) : (
+                          <div className="relative flex-1 min-w-0">
                           <select
                             value={t.responsibleId ?? ""}
                             onChange={(e) => {
@@ -1866,7 +1867,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                                 saveTaskField(t.id, { responsibleId: e.target.value || null })
                               }
                             }}
-                            className="flex-1 min-w-0 text-[10px] text-slate-600 bg-transparent border-0 outline-none cursor-pointer"
+                            className="w-full text-[10px] text-slate-600 bg-transparent border-0 outline-none cursor-pointer appearance-none pr-4"
                             title={t.responsible?.name ?? "Sem responsável"}
                           >
                             <option value="">— Sem responsável</option>
@@ -1875,6 +1876,8 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                             ))}
                             <option value="__other__">+ Outro (cadastrar)…</option>
                           </select>
+                          <ChevronDown className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none shrink-0" />
+                          </div>
                         )}
                       </div>
                     </div>
