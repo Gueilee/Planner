@@ -1,0 +1,1666 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Especificação Técnica — Planner</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@page { size: A4; margin: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', 'Segoe UI', Arial, sans-serif; font-size: 10.5pt; color: #1E293B; background: #fff; }
+
+/* ── COVER ── */
+.cover {
+  width: 210mm; height: 297mm;
+  background: linear-gradient(160deg, #0A0F1E 0%, #0F172A 40%, #1a1040 75%, #1E1B4B 100%);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  position: relative; overflow: hidden; page-break-after: always;
+}
+.cover-grid {
+  position: absolute; inset: 0;
+  background-image: linear-gradient(rgba(36,99,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(36,99,255,0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+.cover-orb1 { position:absolute; width:600px; height:600px; border-radius:50%; top:-200px; right:-150px; background:radial-gradient(circle,rgba(36,99,255,0.18) 0%,transparent 65%); }
+.cover-orb2 { position:absolute; width:500px; height:500px; border-radius:50%; bottom:-150px; left:-100px; background:radial-gradient(circle,rgba(123,47,190,0.15) 0%,transparent 65%); }
+.cover-orb3 { position:absolute; width:300px; height:300px; border-radius:50%; top:40%; right:5%; background:radial-gradient(circle,rgba(0,196,224,0.10) 0%,transparent 70%); }
+.cover-line { position:absolute; top:0; left:0; right:0; height:4px; background:linear-gradient(90deg,#00C4E0,#2463FF,#7B2FBE,#A855F7,#EC4899); }
+.cover-content { position:relative; z-index:2; text-align:center; padding:60px; }
+.cover-logo { height:70px; width:auto; margin-bottom:40px; filter:brightness(1.1); }
+.cover-type { display:inline-flex; align-items:center; gap:8px; padding:6px 18px; border-radius:20px; font-size:8.5pt; font-weight:700; letter-spacing:2.5px; text-transform:uppercase; color:rgba(255,255,255,0.45); border:1px solid rgba(255,255,255,0.12); margin-bottom:20px; background:rgba(255,255,255,0.03); }
+.cover-type-dot { width:6px; height:6px; border-radius:50%; background:linear-gradient(135deg,#2463FF,#00C4E0); display:inline-block; }
+.cover-title { font-size:34pt; font-weight:900; color:#fff; line-height:1.05; letter-spacing:-1px; margin-bottom:10px; }
+.cover-title span { background:linear-gradient(90deg,#60A5FA,#A78BFA); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+.cover-subtitle { font-size:12pt; color:rgba(255,255,255,0.45); font-weight:400; margin-bottom:40px; letter-spacing:0.3px; }
+.cover-divider { width:80px; height:2px; background:linear-gradient(90deg,#2463FF,#7B2FBE,#00C4E0); border-radius:2px; margin:0 auto 40px; }
+.cover-stack { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; margin-bottom:36px; }
+.cover-stack-item { padding:5px 12px; border-radius:20px; font-size:7.5pt; font-weight:700; letter-spacing:0.5px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.10); color:rgba(255,255,255,0.60); }
+.cover-meta { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:20px; text-align:center; }
+.cover-meta-item { background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:12px; }
+.cover-meta-item label { display:block; font-size:7pt; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; color:rgba(255,255,255,0.30); margin-bottom:4px; }
+.cover-meta-item span { font-size:10pt; font-weight:700; color:rgba(255,255,255,0.80); }
+.cover-footer { position:absolute; bottom:28px; left:0; right:0; text-align:center; font-size:7.5pt; color:rgba(255,255,255,0.20); letter-spacing:1.5px; text-transform:uppercase; }
+
+/* ── PAGE LAYOUT ── */
+.page { width:210mm; min-height:297mm; padding:24mm 22mm 22mm 22mm; position:relative; }
+.page + .page { border-top:1px solid #F1F5F9; }
+
+/* ── HEADER ── */
+.page-header { display:flex; align-items:center; justify-content:space-between; padding-bottom:10pt; margin-bottom:18pt; border-bottom:1.5pt solid #E2E8F0; }
+.page-header-logo { height:22px; width:auto; opacity:0.65; }
+.page-header-title { font-size:7.5pt; color:#94A3B8; font-weight:600; letter-spacing:0.3px; }
+.page-header-section { font-size:7.5pt; color:#2463FF; font-weight:700; }
+
+/* ── TOC ── */
+.toc-title { font-size:20pt; font-weight:900; color:#0F172A; margin-bottom:22pt; }
+.toc-group { margin-bottom:4pt; }
+.toc-item { display:flex; align-items:baseline; gap:0; padding:3pt 0; border-bottom:1pt dotted #E2E8F0; }
+.toc-num { font-size:9pt; font-weight:700; color:#2463FF; width:44pt; flex-shrink:0; }
+.toc-text { font-size:9pt; color:#334155; flex:1; }
+.toc-page { font-size:9pt; color:#94A3B8; text-align:right; font-weight:500; }
+.toc-section-title { font-size:7.5pt; font-weight:800; text-transform:uppercase; letter-spacing:1.8px; color:#CBD5E1; margin:14pt 0 4pt; }
+.toc-sub { padding-left:14pt; }
+.toc-sub .toc-num { color:#7B2FBE; font-size:8.5pt; }
+.toc-sub .toc-text { font-size:8.5pt; color:#64748B; }
+
+/* ── SECTION HEADERS ── */
+.section-header { margin-bottom:18pt; page-break-after:avoid; }
+.section-num { font-size:8pt; font-weight:800; text-transform:uppercase; letter-spacing:2.5px; color:#2463FF; margin-bottom:4pt; }
+.section-title { font-size:20pt; font-weight:900; color:#0F172A; line-height:1.1; }
+.section-title-bar { height:3pt; width:56pt; background:linear-gradient(90deg,#2463FF,#7B2FBE,#00C4E0); border-radius:2pt; margin-top:8pt; }
+.section-intro { font-size:10pt; color:#64748B; margin-top:12pt; line-height:1.65; }
+
+/* ── SUBSECTIONS ── */
+h3 { font-size:12pt; font-weight:800; color:#0F172A; margin:20pt 0 8pt; padding-bottom:4pt; border-bottom:1pt solid #E2E8F0; page-break-after:avoid; }
+h4 { font-size:10.5pt; font-weight:700; color:#1E293B; margin:14pt 0 6pt; page-break-after:avoid; }
+h5 { font-size:9pt; font-weight:700; color:#334155; text-transform:uppercase; letter-spacing:1px; margin:10pt 0 4pt; }
+p { margin:4pt 0; line-height:1.65; }
+ul, ol { margin:5pt 0 8pt 20pt; }
+li { margin:2.5pt 0; line-height:1.55; }
+
+/* ── TABLES ── */
+table { width:100%; border-collapse:collapse; font-size:9pt; margin:8pt 0 14pt; page-break-inside:avoid; }
+thead th { background:#0F172A; color:#fff; padding:6pt 9pt; text-align:left; font-weight:700; font-size:8pt; text-transform:uppercase; letter-spacing:0.8px; }
+thead th.th-blue { background:#1D4ED8; }
+thead th.th-teal { background:#0F766E; }
+tbody td { padding:5pt 9pt; border-bottom:0.5pt solid #E2E8F0; vertical-align:top; line-height:1.5; }
+tbody tr:nth-child(even) td { background:#F8FAFC; }
+.table-caption { font-size:8pt; color:#94A3B8; margin-bottom:4pt; font-style:italic; }
+
+/* ── CODE BLOCKS ── */
+pre { background:#0F172A; border-radius:6pt; padding:10pt 12pt; margin:8pt 0; overflow-x:auto; page-break-inside:avoid; }
+code { font-family:'JetBrains Mono','Fira Code','Consolas',monospace; font-size:8.5pt; color:#E2E8F0; line-height:1.6; }
+.code-inline { font-family:'JetBrains Mono','Fira Code','Consolas',monospace; font-size:8pt; background:#F1F5F9; color:#1D4ED8; padding:1pt 4pt; border-radius:3pt; }
+.code-label { font-size:7.5pt; font-weight:700; color:#64748B; text-transform:uppercase; letter-spacing:1px; margin-bottom:4pt; }
+.code-comment { color:#64748B; }
+.code-key { color:#A78BFA; }
+.code-str { color:#86EFAC; }
+.code-num { color:#FCA5A5; }
+.code-kw { color:#60A5FA; }
+.code-fn { color:#FCD34D; }
+
+/* ── ARCH BOXES ── */
+.arch-layer { border:1pt solid #E2E8F0; border-radius:8pt; margin:8pt 0; overflow:hidden; page-break-inside:avoid; }
+.arch-layer-header { padding:7pt 12pt; font-size:8.5pt; font-weight:800; text-transform:uppercase; letter-spacing:1px; display:flex; align-items:center; gap:8pt; }
+.arch-layer-header.blue { background:linear-gradient(90deg,#EFF6FF,#DBEAFE); color:#1D4ED8; }
+.arch-layer-header.purple { background:linear-gradient(90deg,#F5F3FF,#EDE9FE); color:#5B21B6; }
+.arch-layer-header.teal { background:linear-gradient(90deg,#F0FDFA,#CCFBF1); color:#0F766E; }
+.arch-layer-header.slate { background:linear-gradient(90deg,#F8FAFC,#F1F5F9); color:#334155; }
+.arch-layer-header.amber { background:linear-gradient(90deg,#FFFBEB,#FEF3C7); color:#92400E; }
+.arch-layer-header.red { background:linear-gradient(90deg,#FFF5F5,#FEE2E2); color:#991B1B; }
+.arch-layer-body { padding:10pt 12pt; }
+.arch-dot { width:8pt; height:8pt; border-radius:50%; flex-shrink:0; }
+.arch-dot.blue { background:#3B82F6; }
+.arch-dot.purple { background:#7B2FBE; }
+.arch-dot.teal { background:#14B8A6; }
+.arch-dot.slate { background:#64748B; }
+.arch-dot.amber { background:#F59E0B; }
+.arch-dot.red { background:#EF4444; }
+
+/* ── HIGHLIGHT BOXES ── */
+.info-box { background:#EFF6FF; border:1pt solid #BFDBFE; border-left:3pt solid #3B82F6; border-radius:4pt; padding:10pt 14pt; margin:10pt 0; page-break-inside:avoid; }
+.info-box-title { font-size:8.5pt; font-weight:800; color:#1D4ED8; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:4pt; }
+.warn-box { background:#FFFBEB; border:1pt solid #FDE68A; border-left:3pt solid #F59E0B; border-radius:4pt; padding:10pt 14pt; margin:10pt 0; page-break-inside:avoid; }
+.warn-box-title { font-size:8.5pt; font-weight:800; color:#B45309; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:4pt; }
+.success-box { background:#F0FDF4; border:1pt solid #BBF7D0; border-left:3pt solid #22C55E; border-radius:4pt; padding:10pt 14pt; margin:10pt 0; page-break-inside:avoid; }
+.success-box-title { font-size:8.5pt; font-weight:800; color:#166534; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:4pt; }
+.tech-box { background:#F5F3FF; border:1pt solid #DDD6FE; border-left:3pt solid #7B2FBE; border-radius:4pt; padding:10pt 14pt; margin:10pt 0; page-break-inside:avoid; }
+.tech-box-title { font-size:8.5pt; font-weight:800; color:#5B21B6; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:4pt; }
+
+/* ── ENDPOINT CARDS ── */
+.endpoint { border:1pt solid #E2E8F0; border-radius:6pt; margin:8pt 0; overflow:hidden; page-break-inside:avoid; }
+.endpoint-header { display:flex; align-items:center; gap:8pt; padding:7pt 10pt; background:#F8FAFC; border-bottom:1pt solid #E2E8F0; }
+.method { font-family:'JetBrains Mono',monospace; font-size:8pt; font-weight:800; padding:2pt 7pt; border-radius:3pt; }
+.method-get { background:#DCFCE7; color:#166534; }
+.method-post { background:#DBEAFE; color:#1D4ED8; }
+.method-put { background:#FEF3C7; color:#92400E; }
+.method-patch { background:#FEF3C7; color:#92400E; }
+.method-delete { background:#FEE2E2; color:#991B1B; }
+.endpoint-path { font-family:'JetBrains Mono',monospace; font-size:9pt; color:#0F172A; font-weight:600; }
+.endpoint-desc { font-size:8.5pt; color:#64748B; margin-left:auto; }
+.endpoint-body { padding:8pt 10pt; }
+.endpoint-row { display:flex; gap:8pt; margin:3pt 0; }
+.endpoint-label { font-size:8pt; font-weight:700; color:#94A3B8; text-transform:uppercase; letter-spacing:0.5px; width:80pt; flex-shrink:0; }
+.endpoint-val { font-size:8.5pt; color:#334155; flex:1; line-height:1.5; }
+
+/* ── STATUS BADGE ── */
+.badge { display:inline-block; padding:1.5pt 7pt; border-radius:3pt; font-size:7.5pt; font-weight:700; }
+.badge-purple { background:#EDE9FE; color:#5B21B6; }
+.badge-blue   { background:#DBEAFE; color:#1D4ED8; }
+.badge-green  { background:#DCFCE7; color:#166534; }
+.badge-red    { background:#FEE2E2; color:#991B1B; }
+.badge-amber  { background:#FEF3C7; color:#92400E; }
+.badge-teal   { background:#CCFBF1; color:#0F766E; }
+.badge-slate  { background:#F1F5F9; color:#475569; }
+
+/* ── DB SCHEMA ── */
+.db-table { border:1.5pt solid #CBD5E1; border-radius:6pt; margin:10pt 0; overflow:hidden; page-break-inside:avoid; }
+.db-table-header { padding:7pt 12pt; background:linear-gradient(90deg,#0F172A,#1E293B); color:#fff; display:flex; align-items:center; justify-content:space-between; }
+.db-table-name { font-family:'JetBrains Mono',monospace; font-size:10pt; font-weight:700; color:#E2E8F0; }
+.db-table-info { font-size:7.5pt; color:#94A3B8; }
+.db-field { display:grid; grid-template-columns:160pt 90pt 60pt 1fr; gap:8pt; padding:4pt 12pt; border-bottom:0.5pt solid #F1F5F9; font-size:8.5pt; align-items:center; }
+.db-field:nth-child(even) { background:#F8FAFC; }
+.db-field-name { font-family:'JetBrains Mono',monospace; color:#1D4ED8; font-weight:600; }
+.db-field-type { font-family:'JetBrains Mono',monospace; color:#7B2FBE; font-size:8pt; }
+.db-field-constraint { font-size:7.5pt; color:#94A3B8; }
+.db-field-desc { font-size:8pt; color:#64748B; }
+.db-pk { color:#F59E0B; font-size:7pt; font-weight:800; background:#FFFBEB; padding:1pt 4pt; border-radius:2pt; }
+.db-fk { color:#2563EB; font-size:7pt; font-weight:800; background:#DBEAFE; padding:1pt 4pt; border-radius:2pt; }
+.db-idx { color:#059669; font-size:7pt; font-weight:800; background:#DCFCE7; padding:1pt 4pt; border-radius:2pt; }
+.db-field-header { background:#1E293B; color:#94A3B8; font-size:7.5pt; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; }
+
+/* ── FLOW DIAGRAM ── */
+.flow { display:flex; flex-direction:column; gap:4pt; margin:8pt 0; }
+.flow-item { display:flex; align-items:flex-start; gap:10pt; }
+.flow-num { width:20pt; height:20pt; border-radius:50%; background:linear-gradient(135deg,#2463FF,#7B2FBE); color:#fff; font-size:8pt; font-weight:800; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.flow-arrow { font-size:10pt; color:#CBD5E1; text-align:center; margin-left:6pt; }
+.flow-content { flex:1; padding:5pt 0; }
+.flow-content strong { font-size:9pt; color:#0F172A; }
+.flow-content p { font-size:8.5pt; color:#64748B; margin:1pt 0 0; }
+
+/* ── SEC DIVIDER ── */
+.sec-divider { border:none; border-top:2pt solid #F1F5F9; margin:20pt 0; }
+.page-break { page-break-before:always; }
+
+/* ── SCREEN / PRINT ── */
+@media screen {
+  html { background: #E2E8F0; }
+  body { background: transparent; padding: 32px 0 48px; }
+  .cover { margin: 0 auto 24px; border-radius: 6px; box-shadow: 0 8px 40px rgba(0,0,0,0.28); }
+  .page { margin: 0 auto 16px; background: #fff; border-radius: 4px; box-shadow: 0 2px 16px rgba(0,0,0,0.08); }
+}
+@media print {
+  body { -webkit-print-color-adjust:exact; print-color-adjust:exact; background:#fff; padding:0; }
+  .cover { page-break-after:always; border-radius:0; box-shadow:none; margin:0; }
+  .page { box-shadow:none; border-radius:0; margin:0; }
+  .no-break { page-break-inside:avoid; }
+  h3, h4 { page-break-after:avoid; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════ CAPA ═══════════════════════ -->
+<div class="cover">
+  <div class="cover-grid"></div>
+  <div class="cover-line"></div>
+  <div class="cover-orb1"></div>
+  <div class="cover-orb2"></div>
+  <div class="cover-orb3"></div>
+  <div class="cover-content">
+    <img src="/logo_v4.png" alt="Planner" class="cover-logo" onerror="this.style.display='none'">
+    <div class="cover-type"><span class="cover-type-dot"></span>Documento Técnico Oficial</div>
+    <div class="cover-title">Especificação<br><span>Técnica</span></div>
+    <div class="cover-subtitle">Sistema de Gestão de Projetos Corporativos</div>
+    <div class="cover-divider"></div>
+    <div class="cover-stack">
+      <span class="cover-stack-item">Next.js 16</span>
+      <span class="cover-stack-item">React 19</span>
+      <span class="cover-stack-item">TypeScript 5</span>
+      <span class="cover-stack-item">Tailwind CSS 4</span>
+      <span class="cover-stack-item">Prisma 7</span>
+      <span class="cover-stack-item">libsql / Turso</span>
+      <span class="cover-stack-item">NextAuth v5</span>
+      <span class="cover-stack-item">Vercel</span>
+      <span class="cover-stack-item">Vercel Blob</span>
+      <span class="cover-stack-item">TanStack Query 5</span>
+      <span class="cover-stack-item">Zustand 5</span>
+    </div>
+    <div class="cover-meta">
+      <div class="cover-meta-item"><label>Versão</label><span>1.0.0</span></div>
+      <div class="cover-meta-item"><label>Data</label><span>Maio / 2026</span></div>
+      <div class="cover-meta-item"><label>Status</label><span>Aprovado</span></div>
+      <div class="cover-meta-item"><label>Acesso</label><span>Administrador</span></div>
+    </div>
+  </div>
+  <div class="cover-footer">PLANNER — SISTEMA DE GESTÃO DE PROJETOS &nbsp;|&nbsp; ESPECIFICAÇÃO TÉCNICA — CONFIDENCIAL</div>
+</div>
+
+<!-- ═══════════════════════ SUMÁRIO ═══════════════════════ -->
+<div class="page">
+  <div class="page-header">
+    <img src="/logo_v4.png" alt="Planner" class="page-header-logo" onerror="">
+    <span class="page-header-title">Especificação Técnica — v1.0.0</span>
+    <span class="page-header-section">Sumário</span>
+  </div>
+  <div class="toc-title">Sumário</div>
+
+  <div class="toc-section-title">Fundamentos Técnicos</div>
+  <div class="toc-group">
+    <div class="toc-item"><span class="toc-num">1</span><span class="toc-text">Visão Geral Técnica</span><span class="toc-page">3</span></div>
+    <div class="toc-item"><span class="toc-num">2</span><span class="toc-text">Arquitetura do Sistema</span><span class="toc-page">5</span></div>
+    <div class="toc-item"><span class="toc-num">3</span><span class="toc-text">Estrutura de Banco de Dados</span><span class="toc-page">9</span></div>
+    <div class="toc-item"><span class="toc-num">4</span><span class="toc-text">APIs e Integrações</span><span class="toc-page">15</span></div>
+  </div>
+
+  <div class="toc-section-title">Segurança e Infraestrutura</div>
+  <div class="toc-group">
+    <div class="toc-item"><span class="toc-num">5</span><span class="toc-text">Segurança e Controle de Acesso</span><span class="toc-page">19</span></div>
+    <div class="toc-item"><span class="toc-num">6</span><span class="toc-text">Infraestrutura e Deploy</span><span class="toc-page">22</span></div>
+  </div>
+
+  <div class="toc-section-title">Desenvolvimento e Qualidade</div>
+  <div class="toc-group">
+    <div class="toc-item"><span class="toc-num">7</span><span class="toc-text">Estrutura do Código</span><span class="toc-page">25</span></div>
+    <div class="toc-item"><span class="toc-num">8</span><span class="toc-text">Performance e Escalabilidade</span><span class="toc-page">28</span></div>
+    <div class="toc-item"><span class="toc-num">9</span><span class="toc-text">Logs e Monitoramento</span><span class="toc-page">30</span></div>
+  </div>
+
+  <div class="toc-section-title">Operação e Evolução</div>
+  <div class="toc-group">
+    <div class="toc-item"><span class="toc-num">10</span><span class="toc-text">Pipeline CI/CD e DevOps</span><span class="toc-page">32</span></div>
+    <div class="toc-item"><span class="toc-num">11</span><span class="toc-text">Requisitos Não Funcionais (RNF)</span><span class="toc-page">34</span></div>
+    <div class="toc-item"><span class="toc-num">12</span><span class="toc-text">Plano Técnico de Evolução</span><span class="toc-page">36</span></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ SEÇÃO 1 — VISÃO GERAL TÉCNICA ═══════════════════════ -->
+<div class="page page-break">
+  <div class="page-header">
+    <img src="/logo_v4.png" alt="Planner" class="page-header-logo" onerror="">
+    <span class="page-header-title">Especificação Técnica — v1.0.0</span>
+    <span class="page-header-section">1. Visão Geral Técnica</span>
+  </div>
+
+  <div class="section-header">
+    <div class="section-num">Seção 01</div>
+    <div class="section-title">Visão Geral Técnica</div>
+    <div class="section-title-bar"></div>
+    <div class="section-intro">Esta seção apresenta o objetivo técnico do sistema Planner, a visão arquitetural de alto nível, as estratégias de escalabilidade e as diretrizes gerais de segurança que orientam todas as decisões de implementação.</div>
+  </div>
+
+  <h3>1.1 Objetivo Técnico</h3>
+  <p>O Planner é uma aplicação web <strong>full-stack moderna</strong>, construída sobre o paradigma de <strong>Server-Side Rendering (SSR) híbrido com hidratação no cliente</strong>, que provê uma plataforma corporativa de gestão de projetos. Tecnicamente, o sistema foi projetado para:</p>
+  <ul>
+    <li>Entregar interfaces de alta fidelidade com tempo de carregamento inicial abaixo de 1,5 s (LCP) utilizando renderização no servidor via Next.js App Router com React Server Components (RSC)</li>
+    <li>Persistir dados relacionais com integridade referencial por meio de Prisma ORM sobre banco de dados SQLite distribuído (libsql/Turso), com migração transparente para PostgreSQL em ambientes de alta concorrência</li>
+    <li>Garantir autenticação segura baseada em sessões JWT assinadas com rotação automática via NextAuth v5, com suporte a múltiplos provedores de identidade</li>
+    <li>Gerenciar uploads de arquivos e evidências de forma segura e escalável por meio do Vercel Blob (CDN-backed object storage), com URLs assinadas e controle de acesso por projeto</li>
+    <li>Suportar múltiplas organizações por meio de configuração singleton (<span class="code-inline">OrgConfig</span>), permitindo parametrização de identidade visual, logotipo e nomenclaturas</li>
+  </ul>
+
+  <h3>1.2 Stack Tecnológico Completo</h3>
+  <table>
+    <thead><tr><th>Camada</th><th>Tecnologia</th><th>Versão</th><th>Responsabilidade</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Runtime Framework</strong></td><td>Next.js</td><td>16.2.4</td><td>SSR, SSG, App Router, API Routes, Middleware</td></tr>
+      <tr><td><strong>UI Library</strong></td><td>React</td><td>19.2.4</td><td>Componentes reativos, RSC, Concurrent Features</td></tr>
+      <tr><td><strong>Linguagem</strong></td><td>TypeScript</td><td>5.x</td><td>Tipagem estática, contratos de interface, type safety</td></tr>
+      <tr><td><strong>CSS Framework</strong></td><td>Tailwind CSS</td><td>4.x</td><td>Utility-first styling, design tokens, responsividade</td></tr>
+      <tr><td><strong>Componentes UI</strong></td><td>Shadcn UI + Base UI</td><td>4.5 / 1.4</td><td>Sistema de componentes acessíveis e customizáveis</td></tr>
+      <tr><td><strong>ORM</strong></td><td>Prisma</td><td>7.8.0</td><td>Mapeamento objeto-relacional, migrações, type-safe queries</td></tr>
+      <tr><td><strong>Banco de Dados</strong></td><td>libsql (Turso)</td><td>0.17.3</td><td>SQLite distribuído com replicação global</td></tr>
+      <tr><td><strong>Autenticação</strong></td><td>NextAuth v5</td><td>5.0.0-beta</td><td>Sessões JWT, adaptador Prisma, hash de senhas</td></tr>
+      <tr><td><strong>Hash de Senha</strong></td><td>bcryptjs</td><td>3.0.3</td><td>Hashing adaptativo de senhas com salt</td></tr>
+      <tr><td><strong>Object Storage</strong></td><td>Vercel Blob</td><td>2.4.0</td><td>Uploads de arquivos, PDFs, evidências</td></tr>
+      <tr><td><strong>Estado Global</strong></td><td>Zustand</td><td>5.0.12</td><td>Estado cliente, stores por domínio</td></tr>
+      <tr><td><strong>Cache/Query</strong></td><td>TanStack Query</td><td>5.100.5</td><td>Cache de dados, invalidação, prefetch, retry</td></tr>
+      <tr><td><strong>Formulários</strong></td><td>React Hook Form + Zod</td><td>7.74 / 4.3</td><td>Validação declarativa, schemas de dados</td></tr>
+      <tr><td><strong>Editor Rico</strong></td><td>Tiptap</td><td>3.22.4</td><td>WYSIWYG para conteúdo de reuniões e lições aprendidas</td></tr>
+      <tr><td><strong>Drag-and-Drop</strong></td><td>DnD Kit</td><td>6.3.1</td><td>Kanban de tarefas, reordenação de atividades</td></tr>
+      <tr><td><strong>Gráficos</strong></td><td>Recharts</td><td>3.8.1</td><td>Dashboards EVM, analytics de portfólio</td></tr>
+      <tr><td><strong>Animações</strong></td><td>Framer Motion</td><td>12.38.0</td><td>Transições de UI, microinterações</td></tr>
+      <tr><td><strong>Ícones</strong></td><td>Lucide React</td><td>1.11.0</td><td>Biblioteca de ícones SVG consistente</td></tr>
+      <tr><td><strong>Parse de Arquivos</strong></td><td>ExcelJS + Mammoth</td><td>4.4 / 1.12</td><td>Importação de cronogramas .xlsx e documentos .docx</td></tr>
+      <tr><td><strong>Deploy/Hosting</strong></td><td>Vercel</td><td>—</td><td>Edge Network, CDN global, Preview Deployments</td></tr>
+    </tbody>
+  </table>
+
+  <h3>1.3 Arquitetura Geral — Visão de Alto Nível</h3>
+  <p>O sistema segue o padrão <strong>Monolito Modular</strong> (modular monolith) dentro do Next.js App Router, onde cada domínio funcional possui seu próprio conjunto de rotas, componentes, stores e tipos. Esta abordagem permite escalabilidade de equipe sem os custos operacionais de microsserviços prematuros.</p>
+
+  <div class="arch-layer">
+    <div class="arch-layer-header blue"><div class="arch-dot blue"></div> Camada de Apresentação (Client Layer)</div>
+    <div class="arch-layer-body">
+      <p>React 19 com Concurrent Features, Server Components para renderização estática e Client Components para interatividade. Tailwind CSS 4 com design system baseado em tokens. Zustand para estado global, TanStack Query para cache e sincronização de dados servidor-cliente.</p>
+    </div>
+  </div>
+  <div class="arch-layer">
+    <div class="arch-layer-header purple"><div class="arch-dot purple"></div> Camada de Aplicação (App Layer — Next.js)</div>
+    <div class="arch-layer-body">
+      <p>App Router com layouts aninhados, grupos de rotas por contexto <span class="code-inline">(dashboard)</span>, <span class="code-inline">(print)</span>, <span class="code-inline">(auth)</span>. Route Handlers para APIs REST internas. Middleware de autenticação para proteção de rotas. Server Actions para mutações diretas sem API explícita.</p>
+    </div>
+  </div>
+  <div class="arch-layer">
+    <div class="arch-layer-header teal"><div class="arch-dot teal"></div> Camada de Dados (Data Layer — Prisma + libsql)</div>
+    <div class="arch-layer-body">
+      <p>Prisma ORM como abstração de banco de dados com 16 modelos relacionais. libsql com Turso para SQLite distribuído com replicação multi-região. Migrações versionadas e gerenciadas pelo Prisma Migrate. Seed de dados via script TypeScript.</p>
+    </div>
+  </div>
+  <div class="arch-layer">
+    <div class="arch-layer-header slate"><div class="arch-dot slate"></div> Camada de Armazenamento (Storage Layer — Vercel Blob)</div>
+    <div class="arch-layer-body">
+      <p>Vercel Blob para storage de objetos (arquivos, imagens, PDFs gerados). URLs públicas com CDN global. Integração nativa com o ecossistema Vercel. Sem limite prático de tamanho de arquivo configurado.</p>
+    </div>
+  </div>
+  <div class="arch-layer">
+    <div class="arch-layer-header amber"><div class="arch-dot amber"></div> Camada de Identidade (Auth Layer — NextAuth v5)</div>
+    <div class="arch-layer-body">
+      <p>NextAuth v5 com Prisma Adapter para persistência de sessões. JWT assinado com segredo NEXTAUTH_SECRET. Hash de senhas com bcryptjs (salt rounds: 12). RBAC implementado via campo <span class="code-inline">UserRole</span> no modelo User com 6 papéis distintos.</p>
+    </div>
+  </div>
+
+  <h3>1.4 Estratégia de Escalabilidade</h3>
+  <table>
+    <thead><tr><th>Dimensão</th><th>Estratégia Atual</th><th>Estratégia de Crescimento</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Banco de Dados</strong></td><td>SQLite via libsql (Turso) com replicação</td><td>Migração para PostgreSQL (Neon/Supabase) via troca de adapter Prisma</td></tr>
+      <tr><td><strong>Storage</strong></td><td>Vercel Blob com CDN automático</td><td>AWS S3 + CloudFront para volume elevado ou requisitos de compliance</td></tr>
+      <tr><td><strong>Compute</strong></td><td>Serverless Functions na Vercel (Edge/Node)</td><td>Migração para containers Docker em Kubernetes (EKS/GKE)</td></tr>
+      <tr><td><strong>Cache</strong></td><td>TanStack Query + Next.js Data Cache</td><td>Redis (Upstash) para cache distribuído entre serverless invocations</td></tr>
+      <tr><td><strong>Busca</strong></td><td>Queries SQL com LIKE/full-text</td><td>Algolia ou Typesense para busca facetada de portfólio</td></tr>
+      <tr><td><strong>Auth</strong></td><td>NextAuth com Credentials Provider</td><td>Clerk ou Auth0 para SSO corporativo (SAML/OIDC)</td></tr>
+      <tr><td><strong>Notificações</strong></td><td>Polling + banco de dados</td><td>WebSockets (Pusher/Ably) para notificações em tempo real</td></tr>
+    </tbody>
+  </table>
+
+  <h3>1.5 Princípios Técnicos Adotados</h3>
+  <ul>
+    <li><strong>Type Safety End-to-End:</strong> TypeScript em toda a stack com inferência de tipos Prisma gerados automaticamente, eliminando classes de erros em runtime</li>
+    <li><strong>Server-First:</strong> Dados sensíveis processados no servidor via RSC e Route Handlers; cliente apenas exibe e interage</li>
+    <li><strong>Zero-Secrets-on-Client:</strong> Nenhuma credencial, chave de API ou segredo exposto ao bundle do cliente</li>
+    <li><strong>Validação em Duas Camadas:</strong> Zod no cliente (UX imediato) e Zod no servidor (segurança real), nunca confiando apenas no cliente</li>
+    <li><strong>Otimismo Controlado:</strong> TanStack Query com optimistic updates para percepção de velocidade; rollback automático em caso de erro do servidor</li>
+    <li><strong>Convenção sobre Configuração:</strong> Estrutura de pastas Next.js App Router seguida rigorosamente, reduzindo curva de onboarding de novos desenvolvedores</li>
+  </ul>
+</div>
+
+<!-- ═══════════════════════ SEÇÃO 2 — ARQUITETURA ═══════════════════════ -->
+<div class="page page-break">
+  <div class="page-header">
+    <img src="/logo_v4.png" alt="Planner" class="page-header-logo" onerror="">
+    <span class="page-header-title">Especificação Técnica — v1.0.0</span>
+    <span class="page-header-section">2. Arquitetura do Sistema</span>
+  </div>
+
+  <div class="section-header">
+    <div class="section-num">Seção 02</div>
+    <div class="section-title">Arquitetura do Sistema</div>
+    <div class="section-title-bar"></div>
+    <div class="section-intro">Detalhamento da arquitetura completa do Planner, incluindo estrutura de rotas, componentes, stores, fluxo de dados, padrões de comunicação entre camadas e integração dos serviços externos.</div>
+  </div>
+
+  <h3>2.1 Estrutura de Rotas — App Router</h3>
+  <p>O Next.js App Router organiza as rotas em grupos lógicos com layouts compartilhados, usando a convenção de pastas com parênteses para agrupamentos sem impacto na URL:</p>
+
+  <div class="code-label">Estrutura de Diretórios — app/</div>
+  <pre><code><span class="code-kw">app/</span>
+├── <span class="code-fn">(auth)/</span>                    <span class="code-comment">← Grupo: autenticação (sem dashboard layout)</span>
+│   └── login/page.tsx
+├── <span class="code-fn">(dashboard)/</span>               <span class="code-comment">← Grupo: área logada (com sidebar + header)</span>
+│   ├── layout.tsx             <span class="code-comment">← Layout compartilhado: sidebar, header, providers</span>
+│   ├── dashboard/page.tsx     <span class="code-comment">← Portfólio (Kanban de projetos)</span>
+│   ├── projects/
+│   │   ├── page.tsx           <span class="code-comment">← Lista de projetos</span>
+│   │   ├── new/page.tsx       <span class="code-comment">← Criação de projeto (formulário multietapa)</span>
+│   │   └── [id]/              <span class="code-comment">← Detalhe do projeto (rota dinâmica)</span>
+│   │       ├── page.tsx
+│   │       ├── schedule/      <span class="code-comment">← Cronograma / WBS / EAP</span>
+│   │       ├── kanban/        <span class="code-comment">← Kanban de atividades</span>
+│   │       ├── meetings/      <span class="code-comment">← Reuniões e ATAs</span>
+│   │       ├── risks/         <span class="code-comment">← Gestão de riscos</span>
+│   │       ├── financial/     <span class="code-comment">← Controle financeiro / EVM</span>
+│   │       ├── status-report/ <span class="code-comment">← Status Report semafórico</span>
+│   │       ├── post-golive/   <span class="code-comment">← Monitoramento pós Go Live</span>
+│   │       └── lessons/       <span class="code-comment">← Lições aprendidas</span>
+│   ├── analytics/page.tsx     <span class="code-comment">← Dashboard executivo</span>
+│   ├── users/page.tsx         <span class="code-comment">← Gestão de usuários (ADMIN)</span>
+│   ├── docs/page.tsx          <span class="code-comment">← Documentos do sistema (ADMIN)</span>
+│   └── settings/page.tsx      <span class="code-comment">← Configurações da organização</span>
+├── <span class="code-fn">(print)/</span>                   <span class="code-comment">← Grupo: renderização para impressão/PDF</span>
+│   └── closure/page.tsx       <span class="code-comment">← Documento de encerramento para impressão</span>
+├── <span class="code-fn">api/</span>                       <span class="code-comment">← Route Handlers (REST API interna)</span>
+│   ├── auth/[...nextauth]/    <span class="code-comment">← NextAuth handlers (GET + POST)</span>
+│   ├── upload/route.ts        <span class="code-comment">← Upload para Vercel Blob</span>
+│   ├── parse-file/route.ts    <span class="code-comment">← Parser de .xlsx e .docx</span>
+│   └── org-config/route.ts   <span class="code-comment">← Configuração singleton da organização</span>
+└── layout.tsx                 <span class="code-comment">← Root layout: providers globais, fonts, theme</span></code></pre>
+
+  <h3>2.2 Padrão de Comunicação entre Camadas</h3>
+  <div class="flow">
+    <div class="flow-item">
+      <div class="flow-num">1</div>
+      <div class="flow-content"><strong>Browser → Next.js Server</strong><p>O usuário interage com Client Components que disparam mutations via TanStack Query (<span class="code-inline">useMutation</span>) para as Route Handlers da API interna, ou via Server Actions para operações diretas no servidor.</p></div>
+    </div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-item">
+      <div class="flow-num">2</div>
+      <div class="flow-content"><strong>Middleware de Autenticação</strong><p>O arquivo <span class="code-inline">middleware.ts</span> intercede em cada request, verificando a sessão JWT via NextAuth. Rotas protegidas redirecionam para <span class="code-inline">/login</span> se não autenticado.</p></div>
+    </div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-item">
+      <div class="flow-num">3</div>
+      <div class="flow-content"><strong>Route Handler → Prisma → libsql</strong><p>As Route Handlers utilizam o cliente singleton do Prisma (<span class="code-inline">lib/db.ts</span>) para executar queries type-safe. O adapter libsql traduz as queries Prisma para SQL SQLite executado no Turso.</p></div>
+    </div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-item">
+      <div class="flow-num">4</div>
+      <div class="flow-content"><strong>Resposta e Cache</strong><p>O Route Handler retorna <span class="code-inline">NextResponse.json()</span>. No cliente, o TanStack Query armazena em cache e invalida automaticamente as queries relacionadas após mutations bem-sucedidas.</p></div>
+    </div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-item">
+      <div class="flow-num">5</div>
+      <div class="flow-content"><strong>Reatividade</strong><p>Zustand stores mantêm estado local (modais abertos, seleção de itens, filtros) sem necessidade de prop drilling. Componentes se inscrevem apenas nos slices do estado que necessitam, evitando re-renders desnecessários.</p></div>
+    </div>
+  </div>
+
+  <h3>2.3 Componentes e Organização</h3>
+  <div class="code-label">Estrutura de Componentes — components/</div>
+  <pre><code><span class="code-kw">components/</span>
+├── <span class="code-fn">layout/</span>               <span class="code-comment">← Header, Sidebar, Navigation</span>
+├── <span class="code-fn">ui/</span>                   <span class="code-comment">← Primitivos: Button, Input, Dialog, Badge...</span>
+├── <span class="code-fn">projects/</span>             <span class="code-comment">← ProjectCard, ProjectKanban, StatusBadge...</span>
+├── <span class="code-fn">schedule/</span>             <span class="code-comment">← GanttView, WbsTree, TaskCard, EVM panel</span>
+├── <span class="code-fn">kanban/</span>               <span class="code-comment">← KanbanBoard, KanbanColumn, DraggableCard</span>
+├── <span class="code-fn">meetings/</span>             <span class="code-comment">← MeetingForm, ATAViewer, ParticipantList</span>
+├── <span class="code-fn">financial/</span>            <span class="code-comment">← EVMChart, BudgetTable, IDCIndicator</span>
+├── <span class="code-fn">analytics/</span>            <span class="code-comment">← PortfolioMetrics, AreaChart, StatusBreakdown</span>
+└── <span class="code-fn">shared/</span>               <span class="code-comment">← FileUpload, RichEditor, ConfirmDialog...</span></code></pre>
+
+  <h3>2.4 Stores Zustand — Estado Global do Cliente</h3>
+  <table>
+    <thead><tr><th>Store</th><th>Responsabilidade</th><th>Estado Principal</th></tr></thead>
+    <tbody>
+      <tr><td><span class="code-inline">useProjectStore</span></td><td>Projeto atualmente selecionado/em edição</td><td>projeto corrente, aba ativa, modo de edição</td></tr>
+      <tr><td><span class="code-inline">useKanbanStore</span></td><td>Estado do Kanban de atividades</td><td>colunas, drag source/target, filtros ativos</td></tr>
+      <tr><td><span class="code-inline">useScheduleStore</span></td><td>Cronograma e WBS</td><td>área selecionada, modo de visualização (Gantt/Tree)</td></tr>
+      <tr><td><span class="code-inline">useUIStore</span></td><td>Estado de interface global</td><td>modais abertos, sidebar collapsed, temas</td></tr>
+      <tr><td><span class="code-inline">useNotificationStore</span></td><td>Notificações em tempo real</td><td>fila de notificações, contagem não lida</td></tr>
+    </tbody>
+  </table>
+
+  <h3>2.5 Fluxo de Autenticação</h3>
+  <p>O sistema usa NextAuth v5 com o provider <span class="code-inline">Credentials</span>, suportando login com e-mail e senha. O fluxo completo:</p>
+  <ol>
+    <li>Usuário submete credenciais no formulário <span class="code-inline">/login</span></li>
+    <li>NextAuth executa o callback <span class="code-inline">authorize()</span>: busca usuário no banco via Prisma, compara senha com bcrypt</li>
+    <li>Se válido, cria sessão JWT contendo <span class="code-inline">{ id, email, name, role, image }</span> assinado com <span class="code-inline">NEXTAUTH_SECRET</span></li>
+    <li>Cookie <span class="code-inline">authjs.session-token</span> armazenado como <span class="code-inline">HttpOnly; Secure; SameSite=Lax</span></li>
+    <li>Middleware valida o JWT em cada request subsequente sem consultar o banco de dados</li>
+    <li>Server Components acessam sessão via <span class="code-inline">await auth()</span>; Client Components via <span class="code-inline">useSession()</span></li>
+  </ol>
+
+  <div class="info-box">
+    <div class="info-box-title">Observação de Arquitetura</div>
+    <p>A abordagem Credentials Provider (email+senha) é a mais simples e foi escolhida para o contexto corporativo fechado onde o administrador gerencia os usuários manualmente. Para expansão futura com SSO corporativo (Microsoft Entra ID / Google Workspace), NextAuth v5 suporta adição de OAuth Providers sem refatoração da arquitetura de sessão.</p>
+  </div>
+
+  <h3>2.6 Geração de Documentos PDF</h3>
+  <p>A geração de ATAs e relatórios em PDF utiliza uma abordagem <strong>HTML-to-Print</strong> sem dependências de bibliotecas pesadas de PDF no servidor. O fluxo é:</p>
+  <ol>
+    <li>O sistema monta um documento HTML completo (com estilos inline e dados do projeto) dentro de um grupo de rotas <span class="code-inline">(print)</span></li>
+    <li>O usuário acessa a rota de impressão em nova aba (<span class="code-inline">window.open</span>)</li>
+    <li>O browser renderiza o documento com <span class="code-inline">@media print</span> CSS optimizado para papel A4</li>
+    <li>O usuário utiliza <span class="code-inline">Ctrl+P → Salvar como PDF</span> com configurações pre-definidas (sem cabeçalho/rodapé do browser)</li>
+    <li>Opcionalmente, o sistema pode armazenar o PDF gerado no Vercel Blob para arquivamento</li>
+  </ol>
+
+  <div class="tech-box">
+    <div class="tech-box-title">Vantagem da Abordagem HTML-to-Print</div>
+    <p>Sem dependência de <span class="code-inline">puppeteer</span>, <span class="code-inline">wkhtmltopdf</span> ou bibliotecas de PDF no servidor (que consomem memória e adicionam cold start). O browser nativo gera PDFs de alta qualidade com suporte completo a fontes, gradientes e layout A4. Esta abordagem é compatível com o ambiente serverless da Vercel.</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════ SEÇÃO 3 — BANCO DE DADOS ═══════════════════════ -->
+<div class="page page-break">
+  <div class="page-header">
+    <img src="/logo_v4.png" alt="Planner" class="page-header-logo" onerror="">
+    <span class="page-header-title">Especificação Técnica — v1.0.0</span>
+    <span class="page-header-section">3. Banco de Dados</span>
+  </div>
+
+  <div class="section-header">
+    <div class="section-num">Seção 03</div>
+    <div class="section-title">Estrutura de Banco de Dados</div>
+    <div class="section-title-bar"></div>
+    <div class="section-intro">Modelagem completa do banco de dados do Planner, com todos os modelos, campos, tipos de dados, constraints, índices e relacionamentos. O banco é gerenciado integralmente pelo Prisma ORM com libsql/Turso como engine.</div>
+  </div>
+
+  <h3>3.1 Diagrama de Entidades — Visão de Relacionamentos</h3>
+  <p>O banco possui <strong>16 modelos principais</strong> organizados em 5 domínios funcionais:</p>
+  <table>
+    <thead><tr><th>Domínio</th><th>Modelos</th><th>Descrição</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Identidade</strong></td><td>User, OrgConfig</td><td>Usuários do sistema e configuração da organização</td></tr>
+      <tr><td><strong>Projetos</strong></td><td>Project, ProjectMember</td><td>Projetos corporativos e membros da equipe</td></tr>
+      <tr><td><strong>Cronograma</strong></td><td>WbsArea, ScheduleTask</td><td>Estrutura Analítica do Projeto e tarefas com EVM</td></tr>
+      <tr><td><strong>Reuniões</strong></td><td>Meeting, MeetingParticipant, StatusReport, ProjectDocument</td><td>ATAs, relatórios e documentos oficiais</td></tr>
+      <tr><td><strong>Qualidade</strong></td><td>Risk, PostGoLiveItem, LessonLearned, Comment, Attachment, Notification, NotificationPreference</td><td>Riscos, monitoramento pós-GoLive, lições, comentários, arquivos</td></tr>
+    </tbody>
+  </table>
+
+  <h3>3.2 Modelo: User</h3>
+  <div class="db-table">
+    <div class="db-table-header">
+      <span class="db-table-name">User</span>
+      <span class="db-table-info">Tabela de usuários do sistema — autenticação e perfil</span>
+    </div>
+    <div class="db-field db-field-header"><span>Campo</span><span>Tipo</span><span>Constraint</span><span>Descrição</span></div>
+    <div class="db-field"><span class="db-field-name">id</span><span class="db-field-type">String</span><span><span class="db-pk">PK</span></span><span class="db-field-desc">CUID gerado automaticamente</span></div>
+    <div class="db-field"><span class="db-field-name">name</span><span class="db-field-type">String</span><span>NOT NULL</span><span class="db-field-desc">Nome completo do usuário</span></div>
+    <div class="db-field"><span class="db-field-name">email</span><span class="db-field-type">String</span><span>UNIQUE</span><span class="db-field-desc">E-mail único — usado para login</span></div>
+    <div class="db-field"><span class="db-field-name">emailVerified</span><span class="db-field-type">DateTime?</span><span>NULLABLE</span><span class="db-field-desc">Data de verificação do e-mail</span></div>
+    <div class="db-field"><span class="db-field-name">image</span><span class="db-field-type">String?</span><span>NULLABLE</span><span class="db-field-desc">URL do avatar do usuário</span></div>
+    <div class="db-field"><span class="db-field-name">password</span><span class="db-field-type">String</span><span>NOT NULL</span><span class="db-field-desc">Hash bcrypt da senha (salt 12)</span></div>
+    <div class="db-field"><span class="db-field-name">role</span><span class="db-field-type">UserRole</span><span>DEFAULT MEMBER</span><span class="db-field-desc">ADMIN | DIRECTOR | PROJECT_MANAGER | PROJECT_MEMBER | SPONSOR | CLIENT</span></div>
+    <div class="db-field"><span class="db-field-name">department</span><span class="db-field-type">String?</span><span>NULLABLE</span><span class="db-field-desc">Departamento ou área da organização</span></div>
+    <div class="db-field"><span class="db-field-name">phone</span><span class="db-field-type">String?</span><span>NULLABLE</span><span class="db-field-desc">Telefone de contato</span></div>
+    <div class="db-field"><span class="db-field-name">active</span><span class="db-field-type">Boolean</span><span>DEFAULT true</span><span class="db-field-desc">Usuário ativo ou inativado</span></div>
+    <div class="db-field"><span class="db-field-name">createdAt</span><span class="db-field-type">DateTime</span><span>DEFAULT now()</span><span class="db-field-desc">Data de criação do registro</span></div>
+    <div class="db-field"><span class="db-field-name">updatedAt</span><span class="db-field-type">DateTime</span><span>@updatedAt</span><span class="db-field-desc">Atualizado automaticamente pelo Prisma</span></div>
+  </div>
+
+  <p><strong>Índices:</strong> <span class="code-inline">email</span> (UNIQUE — usado em toda autenticação). <strong>Relações:</strong> ProjectMember[], ScheduleTask[] (responsável), Meeting[] (criador), Comment[], StatusReport[], ProjectDocument[], Notification[], LessonLearned[], MeetingParticipant[].</p>
+
+  <h3>3.3 Modelo: Project</h3>
+  <div class="db-table">
+    <div class="db-table-header">
+      <span class="db-table-name">Project</span>
+      <span class="db-table-info">Entidade central — armazena todos os dados do projeto</span>
+    </div>
+    <div class="db-field db-field-header"><span>Campo</span><span>Tipo</span><span>Constraint</span><span>Descrição</span></div>
+    <div class="db-field"><span class="db-field-name">id</span><span class="db-field-type">String</span><span><span class="db-pk">PK</span></span><span class="db-field-desc">CUID gerado automaticamente</span></div>
+    <div class="db-field"><span class="db-field-name">title</span><span class="db-field-type">String</span><span>NOT NULL</span><span class="db-field-desc">Nome do projeto</span></div>
+    <div class="db-field"><span class="db-field-name">description</span><span class="db-field-type">String?</span><span>NULLABLE</span><span class="db-field-desc">Descrição resumida</span></div>
+    <div class="db-field"><span class="db-field-name">status</span><span class="db-field-type">ProjectStatus</span><span>DEFAULT PLANNING</span><span class="db-field-desc">Status do ciclo de vida do projeto</span></div>
+    <div class="db-field"><span class="db-field-name">projectArea</span><span class="db-field-type">ProjectArea</span><span>DEFAULT TECNOLOGIA</span><span class="db-field-desc">TECNOLOGIA | QUALIDADE | ESTRATEGICO</span></div>
+    <div class="db-field"><span class="db-field-name">origin</span><span class="db-field-type">String?</span><span>NULLABLE</span><span class="db-field-desc">Origem / motivação do projeto (Termo de Abertura)</span></div>
+    <div class="db-field"><span class="db-field-name">scope</span><span class="db-field-type">String?</span><span>NULLABLE</span><span class="db-field-desc">Escopo definido</span></div>
+    <div class="db-field"><span class="db-field-name">asIs / toBe</span><span class="db-field-type">String?</span><span>NULLABLE</span><span class="db-field-desc">Situação atual e situação desejada</span></div>
+    <div class="db-field"><span class="db-field-name">assumptions / restrictions</span><span class="db-field-type">String?</span><span>NULLABLE</span><span class="db-field-desc">Premissas e restrições do projeto</span></div>
+    <div class="db-field"><span class="db-field-name">budget</span><span class="db-field-type">Float?</span><span>NULLABLE</span><span class="db-field-desc">Orçamento aprovado total do projeto (R$)</span></div>
+    <div class="db-field"><span class="db-field-name">estimatedCosts</span><span class="db-field-type">Float?</span><span>NULLABLE</span><span class="db-field-desc">Custo estimado pela equipe (R$)</span></div>
+    <div class="db-field"><span class="db-field-name">economy</span><span class="db-field-type">Float?</span><span>NULLABLE</span><span class="db-field-desc">Economia / ROI esperado (R$)</span></div>
+    <div class="db-field"><span class="db-field-name">expectedStart / expectedEnd</span><span class="db-field-type">DateTime?</span><span>NULLABLE</span><span class="db-field-desc">Datas planejadas pelo solicitante</span></div>
+    <div class="db-field"><span class="db-field-name">suggestedStart / suggestedEnd</span><span class="db-field-type">DateTime?</span><span>NULLABLE</span><span class="db-field-desc">Datas sugeridas pela equipe de TI após análise</span></div>
+    <div class="db-field"><span class="db-field-name">actualStart / actualEnd</span><span class="db-field-type">DateTime?</span><span>NULLABLE</span><span class="db-field-desc">Datas reais de início e encerramento</span></div>
+    <div class="db-field"><span class="db-field-name">goLiveDate / goLiveActual</span><span class="db-field-type">DateTime?</span><span>NULLABLE</span><span class="db-field-desc">Data planejada e real do Go Live</span></div>
+    <div class="db-field"><span class="db-field-name">sponsorId</span><span class="db-field-type">String?</span><span><span class="db-fk">FK → User</span></span><span class="db-field-desc">Patrocinador do projeto</span></div>
+    <div class="db-field"><span class="db-field-name">priority / priorityLabel</span><span class="db-field-type">Int? / String?</span><span>NULLABLE</span><span class="db-field-desc">Ordenação de prioridade no portfólio</span></div>
+    <div class="db-field"><span class="db-field-name">roadmapOrder / Year / Quarter</span><span class="db-field-type">Int?</span><span>NULLABLE</span><span class="db-field-desc">Posição no roadmap estratégico</span></div>
+    <div class="db-field"><span class="db-field-name">reportStatusCost/Schedule/Resources/Overall</span><span class="db-field-type">String</span><span>DEFAULT "GREEN"</span><span class="db-field-desc">Semáforo do Status Report: GREEN | YELLOW | RED</span></div>
+    <div class="db-field"><span class="db-field-name">createdAt / updatedAt</span><span class="db-field-type">DateTime</span><span>AUTO</span><span class="db-field-desc">Timestamps automáticos</span></div>
+  </div>
+
+  <h3>3.4 Modelo: ScheduleTask (Cronograma / EAP)</h3>
+  <div class="db-table">
+    <div class="db-table-header">
+      <span class="db-table-name">ScheduleTask</span>
+      <span class="db-table-info">Atividades do cronograma com campos EVM para controle financeiro</span>
+    </div>
+    <div class="db-field db-field-header"><span>Campo</span><span>Tipo</span><span>Constraint</span><span>Descrição</span></div>
+    <div class="db-field"><span class="db-field-name">id</span><span class="db-field-type">String</span><span><span class="db-pk">PK</span></span><span class="db-field-desc">CUID</span></div>
+    <div class="db-field"><span class="db-field-name">projectId</span><span class="db-field-type">String</span><span><span class="db-fk">FK → Project</span></span><span class="db-field-desc">Projeto ao qual a tarefa pertence</span></div>
+    <div class="db-field"><span class="db-field-name">wbsAreaId</span><span class="db-field-type">String?</span><span><span class="db-fk">FK → WbsArea</span></span><span class="db-field-desc">Área da EAP (opcional)</span></div>
+    <div class="db-field"><span class="db-field-name">parentId</span><span class="db-field-type">String?</span><span><span class="db-fk">FK → ScheduleTask</span></span><span class="db-field-desc">Subtarefa: referência à tarefa pai (hierarquia)</span></div>
+    <div class="db-field"><span class="db-field-name">responsibleId</span><span class="db-field-type">String?</span><span><span class="db-fk">FK → User</span></span><span class="db-field-desc">Responsável pela execução</span></div>
+    <div class="db-field"><span class="db-field-name">startDate / endDate</span><span class="db-field-type">DateTime?</span><span>NULLABLE</span><span class="db-field-desc">Datas planejadas da atividade</span></div>
+    <div class="db-field"><span class="db-field-name">actualStart / actualEnd</span><span class="db-field-type">DateTime?</span><span>NULLABLE</span><span class="db-field-desc">Datas reais de execução</span></div>
+    <div class="db-field"><span class="db-field-name">estimatedEffort</span><span class="db-field-type">Float?</span><span>NULLABLE</span><span class="db-field-desc">Esforço estimado em horas</span></div>
+    <div class="db-field"><span class="db-field-name">actualEffort</span><span class="db-field-type">Float?</span><span>NULLABLE</span><span class="db-field-desc">Esforço real realizado em horas</span></div>
+    <div class="db-field"><span class="db-field-name">budgetedCost</span><span class="db-field-type">Float?</span><span>NULLABLE</span><span class="db-field-desc"><strong>EVM:</strong> Valor Orçado (VO) para esta atividade (R$)</span></div>
+    <div class="db-field"><span class="db-field-name">actualCost</span><span class="db-field-type">Float?</span><span>NULLABLE</span><span class="db-field-desc"><strong>EVM:</strong> Custo Real (CR) gasto nesta atividade (R$)</span></div>
+    <div class="db-field"><span class="db-field-name">status</span><span class="db-field-type">TaskStatus</span><span>DEFAULT PLANNING</span><span class="db-field-desc">INITIATIVE | PLANNING | IN_PROGRESS | VALIDATION | COMPLETED | ON_HOLD | DELAYED</span></div>
+    <div class="db-field"><span class="db-field-name">progress</span><span class="db-field-type">Int</span><span>DEFAULT 0</span><span class="db-field-desc">Percentual de conclusão (0–100)</span></div>
+    <div class="db-field"><span class="db-field-name">riskStatus</span><span class="db-field-type">RiskLevel</span><span>DEFAULT LOW</span><span class="db-field-desc">Nível de risco da atividade</span></div>
+    <div class="db-field"><span class="db-field-name">dependencies</span><span class="db-field-type">String?</span><span>JSON Array</span><span class="db-field-desc">IDs das tarefas predecessoras (armazenado como JSON)</span></div>
+    <div class="db-field"><span class="db-field-name">order</span><span class="db-field-type">Int</span><span>DEFAULT 0</span><span class="db-field-desc">Posição de ordenação dentro da área</span></div>
+  </div>
+
+  <h3>3.5 Demais Modelos — Resumo</h3>
+  <table>
+    <thead><tr><th>Modelo</th><th>Campos Principais</th><th>Relacionamentos</th></tr></thead>
+    <tbody>
+      <tr><td><strong>WbsArea</strong></td><td>name, color, order, projectId</td><td>Project (N:1), ScheduleTask[] (1:N)</td></tr>
+      <tr><td><strong>Risk</strong></td><td>description, probability, impact, mitigation, status, owner</td><td>Project (N:1)</td></tr>
+      <tr><td><strong>Meeting</strong></td><td>type, title, date, location, content, decisions, nextActions, observations</td><td>Project (N:1), User (criador), MeetingParticipant[], Attachment[]</td></tr>
+      <tr><td><strong>MeetingParticipant</strong></td><td>meetingId, userId</td><td>Meeting (N:1), User (N:1) — UNIQUE(meetingId, userId)</td></tr>
+      <tr><td><strong>StatusReport</strong></td><td>periodStart/End, summary, highlights, risks, nextSteps, overallStatus, tasksTotal/Completed/Pending/Delayed, budgetUsed</td><td>Project (N:1), User (criador)</td></tr>
+      <tr><td><strong>ProjectDocument</strong></td><td>type, title, content, pdfUrl, version, meetingId</td><td>Project (N:1), User (criador)</td></tr>
+      <tr><td><strong>PostGoLiveItem</strong></td><td>date, type (ADJUSTMENT/IMPROVEMENT/ISSUE/KPI), description, status, kpiData</td><td>Project (N:1)</td></tr>
+      <tr><td><strong>LessonLearned</strong></td><td>phase, area, responsible, occurrence, influence, impact, lesson, tags</td><td>Project (N:1), User (criador)</td></tr>
+      <tr><td><strong>Comment</strong></td><td>content, taskId, userId</td><td>ScheduleTask (N:1), User (N:1), Attachment[]</td></tr>
+      <tr><td><strong>Attachment</strong></td><td>fileName, fileUrl, fileType, fileSize</td><td>Polimórfico: taskId | commentId | meetingId | projectId</td></tr>
+      <tr><td><strong>Notification</strong></td><td>type, title, message, read, link</td><td>User (N:1)</td></tr>
+      <tr><td><strong>NotificationPreference</strong></td><td>emailEnabled, inAppEnabled, preferenceJson</td><td>User (1:1)</td></tr>
+      <tr><td><strong>OrgConfig</strong></td><td>id="singleton", name, logoUrl</td><td>— (registro único)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>3.6 Enums do Sistema</h3>
+  <table>
+    <thead><tr><th>Enum</th><th>Valores</th></tr></thead>
+    <tbody>
+      <tr><td><strong>UserRole</strong></td><td>ADMIN, DIRECTOR, PROJECT_MANAGER, PROJECT_MEMBER, SPONSOR, CLIENT</td></tr>
+      <tr><td><strong>ProjectStatus</strong></td><td>PENDING_GO_NO_GO, PLANNING, IN_PROGRESS, PILOT, RAMP_UP, GO_LIVE, POST_GOLIVE, COMPLETED, CANCELLED, ON_HOLD, FUTURE_ANALYSIS</td></tr>
+      <tr><td><strong>TaskStatus</strong></td><td>INITIATIVE, PLANNING, IN_PROGRESS, VALIDATION, COMPLETED, ON_HOLD, DELAYED</td></tr>
+      <tr><td><strong>RiskLevel</strong></td><td>LOW, MEDIUM, HIGH, CRITICAL</td></tr>
+      <tr><td><strong>MeetingType</strong></td><td>CHECKPOINT, STATUS_REPORT, GO_NO_GO, KICKOFF, PILOT, GO_LIVE, POST_GOLIVE, LESSONS_LEARNED, PROJECT_CLOSURE, OTHER</td></tr>
+      <tr><td><strong>DocumentType</strong></td><td>PROJECT_OPENING, PROJECT_CLOSURE, LESSONS_LEARNED_DOC, STATUS_REPORT_DOC, GO_NO_GO_DECISION, TECHNICAL_PRESENTATION, KICKOFF, MEETING_ATA</td></tr>
+      <tr><td><strong>ProjectArea</strong></td><td>TECNOLOGIA, QUALIDADE, ESTRATEGICO</td></tr>
+      <tr><td><strong>ProjectPhase</strong></td><td>INITIATION, PLANNING, EXECUTION, MONITORING, CLOSURE</td></tr>
+      <tr><td><strong>LessonInfluence</strong></td><td>POSITIVE, NEGATIVE, NEUTRAL</td></tr>
+      <tr><td><strong>LessonImpact</strong></td><td>HIGH, MEDIUM, LOW</td></tr>
+      <tr><td><strong>PostGoLiveItemType</strong></td><td>ADJUSTMENT, IMPROVEMENT, ISSUE, KPI</td></tr>
+      <tr><td><strong>LessonType</strong></td><td>GOOD_PRACTICE, PROBLEM</td></tr>
+    </tbody>
+  </table>
+
+  <h3>3.7 Índices e Performance do Banco</h3>
+  <table>
+    <thead><tr><th>Tabela</th><th>Índice</th><th>Tipo</th><th>Motivação</th></tr></thead>
+    <tbody>
+      <tr><td>User</td><td>email</td><td>UNIQUE</td><td>Login e lookup de usuário — query mais frequente de autenticação</td></tr>
+      <tr><td>ProjectMember</td><td>(projectId, userId)</td><td>UNIQUE COMPOSITE</td><td>Previne duplicação de membro; lookup por projeto</td></tr>
+      <tr><td>MeetingParticipant</td><td>(meetingId, userId)</td><td>UNIQUE COMPOSITE</td><td>Previne duplicação de participante</td></tr>
+      <tr><td>ScheduleTask</td><td>projectId</td><td>INDEX</td><td>Filtro de tarefas por projeto (query principal do cronograma)</td></tr>
+      <tr><td>ScheduleTask</td><td>wbsAreaId</td><td>INDEX</td><td>Agrupamento por área da WBS</td></tr>
+      <tr><td>Meeting</td><td>projectId</td><td>INDEX</td><td>Listagem de reuniões por projeto</td></tr>
+      <tr><td>Risk</td><td>projectId</td><td>INDEX</td><td>Filtro de riscos por projeto</td></tr>
+      <tr><td>Notification</td><td>userId</td><td>INDEX</td><td>Busca de notificações do usuário</td></tr>
+    </tbody>
+  </table>
+
+  <div class="warn-box">
+    <div class="warn-box-title">Limitação Atual — SQLite</div>
+    <p>O SQLite (via libsql/Turso) não suporta concorrência de escrita nativa como PostgreSQL. Em ambientes com alto volume de escritas simultâneas (>100 req/s de mutação), recomendar migração para PostgreSQL via troca do datasource no schema Prisma e adição do adapter <span class="code-inline">@prisma/adapter-neon</span> ou <span class="code-inline">@prisma/adapter-pg</span>. O Prisma Schema permanece 100% compatível.</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════ SEÇÃO 4 — APIs ═══════════════════════ -->
+<div class="page page-break">
+  <div class="page-header">
+    <img src="/logo_v4.png" alt="Planner" class="page-header-logo" onerror="">
+    <span class="page-header-title">Especificação Técnica — v1.0.0</span>
+    <span class="page-header-section">4. APIs e Integrações</span>
+  </div>
+
+  <div class="section-header">
+    <div class="section-num">Seção 04</div>
+    <div class="section-title">APIs e Integrações</div>
+    <div class="section-title-bar"></div>
+    <div class="section-intro">Documentação completa das APIs REST internas expostas pelo Planner, incluindo endpoints, métodos, payloads, respostas, autenticação, tratamento de erros e integrações com serviços externos.</div>
+  </div>
+
+  <h3>4.1 Convenções Gerais da API</h3>
+  <table>
+    <thead><tr><th>Aspecto</th><th>Convenção</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Base URL</strong></td><td><span class="code-inline">/api/*</span> (relativo ao domínio do deployment)</td></tr>
+      <tr><td><strong>Formato</strong></td><td>JSON (Content-Type: application/json)</td></tr>
+      <tr><td><strong>Autenticação</strong></td><td>Cookie de sessão NextAuth (<span class="code-inline">authjs.session-token</span>) — verificado via <span class="code-inline">await auth()</span> em cada handler</td></tr>
+      <tr><td><strong>Autorização</strong></td><td>RBAC verificado no handler com base em <span class="code-inline">session.user.role</span></td></tr>
+      <tr><td><strong>Erros</strong></td><td>HTTP status codes semanticamente corretos + body <span class="code-inline">{ error: string }</span></td></tr>
+      <tr><td><strong>IDs</strong></td><td>CUID (Collision-resistant Unique Identifier) — string de 25 caracteres</td></tr>
+      <tr><td><strong>Datas</strong></td><td>ISO 8601 (<span class="code-inline">2026-05-29T14:30:00.000Z</span>)</td></tr>
+      <tr><td><strong>Paginação</strong></td><td>Não implementada na v1 (dataset corporativo fechado, &lt;500 projetos)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>4.2 Códigos de Resposta HTTP</h3>
+  <table>
+    <thead><tr><th>Status</th><th>Semântica</th><th>Quando Usado</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge badge-green">200</span></td><td>OK</td><td>Leitura e update bem-sucedidos</td></tr>
+      <tr><td><span class="badge badge-blue">201</span></td><td>Created</td><td>Recurso criado com sucesso (POST)</td></tr>
+      <tr><td><span class="badge badge-slate">204</span></td><td>No Content</td><td>Exclusão bem-sucedida (DELETE)</td></tr>
+      <tr><td><span class="badge badge-amber">400</span></td><td>Bad Request</td><td>Payload inválido, campos obrigatórios ausentes</td></tr>
+      <tr><td><span class="badge badge-amber">401</span></td><td>Unauthorized</td><td>Sessão inválida ou expirada</td></tr>
+      <tr><td><span class="badge badge-amber">403</span></td><td>Forbidden</td><td>Papel insuficiente (RBAC)</td></tr>
+      <tr><td><span class="badge badge-red">404</span></td><td>Not Found</td><td>Recurso não encontrado</td></tr>
+      <tr><td><span class="badge badge-red">409</span></td><td>Conflict</td><td>Duplicação (ex: membro já cadastrado)</td></tr>
+      <tr><td><span class="badge badge-red">500</span></td><td>Internal Server Error</td><td>Erro não tratado no servidor</td></tr>
+    </tbody>
+  </table>
+
+  <h3>4.3 Endpoints da API</h3>
+
+  <div class="endpoint">
+    <div class="endpoint-header">
+      <span class="method method-get">GET</span>
+      <span class="endpoint-path">/api/auth/[...nextauth]</span>
+      <span class="endpoint-desc">NextAuth handlers — signin, signout, session, CSRF</span>
+    </div>
+    <div class="endpoint-body">
+      <div class="endpoint-row"><span class="endpoint-label">Auth</span><span class="endpoint-val">Público (gerenciado internamente pelo NextAuth)</span></div>
+      <div class="endpoint-row"><span class="endpoint-label">POST body</span><span class="endpoint-val"><span class="code-inline">{ email: string, password: string }</span> para signin</span></div>
+      <div class="endpoint-row"><span class="endpoint-label">Response</span><span class="endpoint-val">Cookie <span class="code-inline">authjs.session-token</span> (HttpOnly) + redirect</span></div>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header">
+      <span class="method method-post">POST</span>
+      <span class="endpoint-path">/api/upload</span>
+      <span class="endpoint-desc">Upload de arquivo para Vercel Blob</span>
+    </div>
+    <div class="endpoint-body">
+      <div class="endpoint-row"><span class="endpoint-label">Auth</span><span class="endpoint-val">Sessão válida (qualquer role)</span></div>
+      <div class="endpoint-row"><span class="endpoint-label">Body</span><span class="endpoint-val"><span class="code-inline">FormData</span> com campo <span class="code-inline">file</span> (multipart/form-data)</span></div>
+      <div class="endpoint-row"><span class="endpoint-label">Response 200</span><span class="endpoint-val"><span class="code-inline">{ url: string, pathname: string, contentType: string, size: number }</span></span></div>
+      <div class="endpoint-row"><span class="endpoint-label">Serviço</span><span class="endpoint-val">Vercel Blob <span class="code-inline">put()</span> — retorna URL pública com CDN</span></div>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header">
+      <span class="method method-post">POST</span>
+      <span class="endpoint-path">/api/parse-file</span>
+      <span class="endpoint-desc">Parser de arquivo Excel (.xlsx) ou Word (.docx)</span>
+    </div>
+    <div class="endpoint-body">
+      <div class="endpoint-row"><span class="endpoint-label">Auth</span><span class="endpoint-val">Sessão válida</span></div>
+      <div class="endpoint-row"><span class="endpoint-label">Body</span><span class="endpoint-val"><span class="code-inline">FormData</span> com campo <span class="code-inline">file</span></span></div>
+      <div class="endpoint-row"><span class="endpoint-label">Response .xlsx</span><span class="endpoint-val">Array de objetos com colunas como chaves, extraídos via ExcelJS</span></div>
+      <div class="endpoint-row"><span class="endpoint-label">Response .docx</span><span class="endpoint-val">HTML extraído do documento Word via Mammoth.js</span></div>
+      <div class="endpoint-row"><span class="endpoint-label">Uso</span><span class="endpoint-val">Importação de cronograma em planilha para criação em massa de ScheduleTasks</span></div>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header">
+      <span class="method method-get">GET</span>
+      <span class="endpoint-path">/api/org-config</span>
+      <span class="endpoint-desc">Retorna configuração da organização (nome, logo)</span>
+    </div>
+    <div class="endpoint-body">
+      <div class="endpoint-row"><span class="endpoint-label">Auth</span><span class="endpoint-val">Público (usado no layout para exibir logo correto)</span></div>
+      <div class="endpoint-row"><span class="endpoint-label">Response 200</span><span class="endpoint-val"><span class="code-inline">{ name: string, logoUrl: string | null }</span></span></div>
+      <div class="endpoint-row"><span class="endpoint-label">Singleton</span><span class="endpoint-val">Sempre retorna o registro <span class="code-inline">id = "singleton"</span> do modelo OrgConfig</span></div>
+    </div>
+  </div>
+
+  <h3>4.4 Padrão de API Prisma — Exemplos de Queries</h3>
+  <p>Internamente, os Route Handlers e Server Actions utilizam o padrão de queries Prisma com seleção explícita de campos:</p>
+
+  <div class="code-label">Exemplo — Busca de Projeto com Relações</div>
+  <pre><code><span class="code-kw">const</span> project = <span class="code-kw">await</span> db.project.<span class="code-fn">findUnique</span>({
+  where: { id: projectId },
+  include: {
+    members:    { include: { user: <span class="code-kw">true</span> } },
+    tasks:      { include: { responsible: <span class="code-kw">true</span>, wbsArea: <span class="code-kw">true</span> } },
+    meetings:   { orderBy: { date: <span class="code-str">"desc"</span> } },
+    risks:      <span class="code-kw">true</span>,
+    statusReports: { orderBy: { createdAt: <span class="code-str">"desc"</span> }, take: <span class="code-num">5</span> },
+  }
+})</code></pre>
+
+  <div class="code-label">Exemplo — Cálculo EVM na API</div>
+  <pre><code><span class="code-comment">// Índice de Desempenho de Custo (IDC) = Valor Agregado / Custo Real</span>
+<span class="code-kw">const</span> tasks = <span class="code-kw">await</span> db.scheduleTask.<span class="code-fn">findMany</span>({ where: { projectId } })
+<span class="code-kw">const</span> valorAgregado = tasks.<span class="code-fn">reduce</span>((s, t) =>
+  s + (t.budgetedCost ?? <span class="code-num">0</span>) * (t.progress / <span class="code-num">100</span>), <span class="code-num">0</span>)
+<span class="code-kw">const</span> custoReal = tasks.<span class="code-fn">reduce</span>((s, t) => s + (t.actualCost ?? <span class="code-num">0</span>), <span class="code-num">0</span>)
+<span class="code-kw">const</span> idc = custoReal > <span class="code-num">0</span> ? valorAgregado / custoReal : <span class="code-num">1</span></code></pre>
+
+  <h3>4.5 Integração com Vercel Blob</h3>
+  <table>
+    <thead><tr><th>Operação</th><th>SDK Method</th><th>Descrição</th></tr></thead>
+    <tbody>
+      <tr><td>Upload de arquivo</td><td><span class="code-inline">put(filename, file, { access: 'public' })</span></td><td>Salva no Blob Storage e retorna URL CDN</td></tr>
+      <tr><td>Listagem</td><td><span class="code-inline">list({ prefix: 'project-id/' })</span></td><td>Lista arquivos de um projeto</td></tr>
+      <tr><td>Remoção</td><td><span class="code-inline">del(url)</span></td><td>Remove arquivo pelo URL</td></tr>
+    </tbody>
+  </table>
+
+  <div class="info-box">
+    <div class="info-box-title">Estratégia de Nomeação de Blobs</div>
+    <p>Arquivos são nomeados com o padrão <span class="code-inline">{projectId}/{timestamp}-{filename}</span> para garantir unicidade e organização por projeto. A URL pública retornada pelo Blob é armazenada no campo <span class="code-inline">fileUrl</span> do modelo Attachment ou <span class="code-inline">pdfUrl</span> nos modelos StatusReport e ProjectDocument.</p>
+  </div>
+
+  <h3>4.6 Rate Limiting</h3>
+  <p>Na infraestrutura Vercel atual, o rate limiting é gerenciado pela plataforma (límites por plano). Para ambientes de alto volume ou migração futura, a estratégia recomendada é:</p>
+  <ul>
+    <li>Implementação de middleware de rate limiting baseado em IP usando <span class="code-inline">@upstash/ratelimit</span> com Redis (Upstash)</li>
+    <li>Limites recomendados: 100 req/min por IP para endpoints públicos, 300 req/min por usuário autenticado</li>
+    <li>Headers de resposta: <span class="code-inline">X-RateLimit-Limit</span>, <span class="code-inline">X-RateLimit-Remaining</span>, <span class="code-inline">Retry-After</span></li>
+    <li>Resposta <span class="code-inline">429 Too Many Requests</span> com body <span class="code-inline">{ error: "Rate limit exceeded" }</span></li>
+  </ul>
+
+<!-- ═══════════════════════ SEÇÃO 5 — SEGURANÇA ═══════════════════════ -->
+<div class="page page-break">
+  <div class="page-header">
+    <img src="/logo_v4.png" alt="Planner" class="page-header-logo" onerror="">
+    <span class="page-header-title">Especificação Técnica — v1.0.0</span>
+    <span class="page-header-section">5. Segurança</span>
+  </div>
+
+  <div class="section-header">
+    <div class="section-num">Seção 05</div>
+    <div class="section-title">Segurança e Controle de Acesso</div>
+    <div class="section-title-bar"></div>
+    <div class="section-intro">Especificação completa do modelo de segurança do Planner, abrangendo autenticação, autorização por papel, proteção de dados, criptografia, conformidade com LGPD e rastreabilidade de ações.</div>
+  </div>
+
+  <h3>5.1 Autenticação — NextAuth v5</h3>
+  <p>O sistema usa <strong>NextAuth v5 (Auth.js)</strong> com Credentials Provider, implementando autenticação stateless via JWT:</p>
+  <table>
+    <thead><tr><th>Aspecto</th><th>Implementação</th><th>Detalhes</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Algoritmo JWT</strong></td><td>HS256 (HMAC-SHA256)</td><td>Token assinado com <span class="code-inline">NEXTAUTH_SECRET</span> (env var, 32+ chars)</td></tr>
+      <tr><td><strong>Duração da Sessão</strong></td><td>30 dias (padrão NextAuth)</td><td>Renovada automaticamente a cada request</td></tr>
+      <tr><td><strong>Armazenamento</strong></td><td>Cookie HttpOnly</td><td><span class="code-inline">authjs.session-token</span> — inacessível via JavaScript no browser</td></tr>
+      <tr><td><strong>Flags do Cookie</strong></td><td>HttpOnly; Secure; SameSite=Lax</td><td>Previne XSS e ataques CSRF básicos</td></tr>
+      <tr><td><strong>Hash de Senha</strong></td><td>bcrypt (salt rounds: 12)</td><td>~300ms de hashing intencional — resistente a brute-force</td></tr>
+      <tr><td><strong>CSRF Protection</strong></td><td>CSRF token via NextAuth</td><td>Gerado automaticamente para formulários de autenticação</td></tr>
+      <tr><td><strong>Payload JWT</strong></td><td><span class="code-inline">{ id, email, name, role, image }</span></td><td>Dados mínimos suficientes para RBAC sem consulta ao banco</td></tr>
+    </tbody>
+  </table>
+
+  <h3>5.2 Controle de Acesso por Papel (RBAC)</h3>
+  <p>O sistema implementa <strong>Role-Based Access Control</strong> com 6 papéis hierárquicos. O papel é verificado em dois pontos: no middleware de rota e dentro de cada Route Handler.</p>
+  <table>
+    <thead><tr><th>Papel</th><th>Nível</th><th>Permissões Principais</th></tr></thead>
+    <tbody>
+      <tr><td><strong>ADMIN</strong></td><td>1 — Máximo</td><td>Acesso total: gerenciar usuários, configurar organização, acessar documentos técnicos, excluir qualquer registro</td></tr>
+      <tr><td><strong>DIRECTOR</strong></td><td>2</td><td>Visualizar portfólio completo, aprovar/reprovar Go/No-Go, definir prioridades e roadmap, acessar analytics executivo</td></tr>
+      <tr><td><strong>PROJECT_MANAGER</strong></td><td>3</td><td>Criar e gerenciar projetos, registrar reuniões, editar cronograma, gerenciar riscos e EVM</td></tr>
+      <tr><td><strong>PROJECT_MEMBER</strong></td><td>4</td><td>Visualizar projetos dos quais é membro, atualizar progresso de atividades atribuídas, adicionar comentários e evidências</td></tr>
+      <tr><td><strong>SPONSOR</strong></td><td>5</td><td>Visualizar projetos que patrocina, acompanhar Status Reports, participar de reuniões de Go/No-Go</td></tr>
+      <tr><td><strong>CLIENT</strong></td><td>6 — Mínimo</td><td>Apenas visualização de projetos explicitamente compartilhados</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Proteção de Rotas por Papel</h4>
+  <div class="code-label">Verificação de Papel em Página Servidor</div>
+  <pre><code><span class="code-comment">// app/(dashboard)/docs/page.tsx</span>
+<span class="code-kw">export default async function</span> <span class="code-fn">DocsPage</span>() {
+  <span class="code-kw">const</span> session = <span class="code-kw">await</span> <span class="code-fn">auth</span>()
+  <span class="code-kw">if</span> (session?.user?.role !== <span class="code-str">"ADMIN"</span>) {
+    <span class="code-fn">redirect</span>(<span class="code-str">"/dashboard"</span>)   <span class="code-comment">// Silently redirect — não expõe endpoint</span>
+  }
+  <span class="code-kw">return</span> &lt;DocsViewer /&gt;
+}</code></pre>
+
+  <div class="code-label">Verificação de Papel em Route Handler</div>
+  <pre><code><span class="code-kw">export async function</span> <span class="code-fn">DELETE</span>(req, { params }) {
+  <span class="code-kw">const</span> session = <span class="code-kw">await</span> <span class="code-fn">auth</span>()
+  <span class="code-kw">if</span> (!session) <span class="code-kw">return</span> <span class="code-fn">NextResponse</span>.json(
+    { error: <span class="code-str">"Unauthorized"</span> }, { status: <span class="code-num">401</span> })
+  <span class="code-kw">if</span> (![ <span class="code-str">"ADMIN"</span>, <span class="code-str">"PROJECT_MANAGER"</span> ].includes(session.user.role))
+    <span class="code-kw">return</span> <span class="code-fn">NextResponse</span>.json(
+      { error: <span class="code-str">"Forbidden"</span> }, { status: <span class="code-num">403</span> })
+  <span class="code-comment">// ... prossegue com a operação</span>
+}</code></pre>
+
+  <h3>5.3 Proteção contra Vulnerabilidades Comuns</h3>
+  <table>
+    <thead><tr><th>Vulnerabilidade</th><th>Mitigação Implementada</th></tr></thead>
+    <tbody>
+      <tr><td><strong>SQL Injection</strong></td><td>Prisma ORM usa queries parametrizadas 100% — nenhuma interpolação de SQL raw</td></tr>
+      <tr><td><strong>XSS (Cross-Site Scripting)</strong></td><td>React escapa automaticamente valores no DOM; CSP headers configurados no Next.js</td></tr>
+      <tr><td><strong>CSRF</strong></td><td>SameSite=Lax no cookie + CSRF token do NextAuth para mutações de autenticação</td></tr>
+      <tr><td><strong>Clickjacking</strong></td><td>Header <span class="code-inline">X-Frame-Options: SAMEORIGIN</span> via next.config.js headers</td></tr>
+      <tr><td><strong>Credential Exposure</strong></td><td>Todas as env vars em <span class="code-inline">.env.local</span> (gitignored); apenas vars <span class="code-inline">NEXT_PUBLIC_*</span> vão ao cliente</td></tr>
+      <tr><td><strong>Mass Assignment</strong></td><td>Validação Zod em cada endpoint antes de passar dados para o Prisma</td></tr>
+      <tr><td><strong>Insecure File Upload</strong></td><td>Validação de tipo MIME e extensão antes do upload; arquivos servidos via CDN Vercel (isolados do código)</td></tr>
+      <tr><td><strong>Broken Access Control</strong></td><td>RBAC verificado em cada Route Handler — nunca confiar apenas no middleware de rota</td></tr>
+    </tbody>
+  </table>
+
+  <h3>5.4 Criptografia e Proteção de Dados</h3>
+  <ul>
+    <li><strong>Em Trânsito:</strong> HTTPS/TLS 1.3 obrigatório — fornecido automaticamente pelo Vercel em todos os deployments. Certificados Let's Encrypt gerenciados pela plataforma</li>
+    <li><strong>Em Repouso (Senhas):</strong> bcrypt com salt único por usuário, cost factor 12 (~300ms). Senhas nunca armazenadas em texto claro ou reversíveis</li>
+    <li><strong>Em Repouso (Banco):</strong> Turso (libsql) criptografa dados em repouso por padrão no plano cloud (AES-256)</li>
+    <li><strong>Secrets:</strong> Gerenciados via Vercel Environment Variables (encrypted at rest, never in source code)</li>
+    <li><strong>JWT Secret:</strong> <span class="code-inline">NEXTAUTH_SECRET</span> — string de 64 caracteres gerada via <span class="code-inline">openssl rand -base64 48</span></li>
+  </ul>
+
+  <h3>5.5 Conformidade com LGPD</h3>
+  <table>
+    <thead><tr><th>Requisito LGPD</th><th>Implementação no Planner</th></tr></thead>
+    <tbody>
+      <tr><td>Dados pessoais minimizados</td><td>Apenas nome, e-mail, telefone e departamento coletados — sem dados sensíveis (CPF, endereço)</td></tr>
+      <tr><td>Finalidade específica</td><td>Dados usados exclusivamente para gestão de projetos corporativos internos</td></tr>
+      <tr><td>Direito de acesso e exclusão</td><td>ADMIN pode inativar (<span class="code-inline">active = false</span>) ou excluir usuários; exclusão em cascata via Prisma</td></tr>
+      <tr><td>Rastreabilidade</td><td>Campos <span class="code-inline">createdAt</span>, <span class="code-inline">updatedAt</span>, <span class="code-inline">createdById</span> em todos os modelos sensíveis</td></tr>
+      <tr><td>Acesso controlado</td><td>RBAC garante que dados de projetos são acessíveis apenas a membros autorizados</td></tr>
+      <tr><td>Retenção de dados</td><td>Política de retenção configurável pelo ADMIN; não há retenção automática por tempo definido na v1</td></tr>
+    </tbody>
+  </table>
+
+  <h3>5.6 Auditoria e Rastreabilidade</h3>
+  <p>O sistema mantém auditoria implícita via campos de rastreamento em todos os modelos críticos:</p>
+  <ul>
+    <li><strong>createdAt / updatedAt:</strong> Timestamps automáticos do Prisma em todos os modelos</li>
+    <li><strong>createdById:</strong> FK para User em Meeting, StatusReport, ProjectDocument, LessonLearned — rastreamento de autoria</li>
+    <li><strong>Logs do Servidor:</strong> Vercel captura automaticamente logs de cada request (stdout/stderr) com timestamp, status e duração</li>
+    <li><strong>Histórico de Status:</strong> Cada StatusReport é um registro imutável com período, criador e semáforo — formando histórico temporal</li>
+  </ul>
+
+  <div class="warn-box">
+    <div class="warn-box-title">Evolução de Segurança Recomendada</div>
+    <p>Para ambientes regulados ou com requisitos de compliance avançado: implementar uma tabela <span class="code-inline">AuditLog</span> com trigger Prisma middleware que registra todas as mutations (create/update/delete) com usuário, timestamp, entidade e diff dos campos. Integrações com SIEM (ex: Datadog, Splunk) via webhook de logs.</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════ SEÇÃO 6 — INFRAESTRUTURA ═══════════════════════ -->
+<div class="page page-break">
+  <div class="page-header">
+    <img src="/logo_v4.png" alt="Planner" class="page-header-logo" onerror="">
+    <span class="page-header-title">Especificação Técnica — v1.0.0</span>
+    <span class="page-header-section">6. Infraestrutura e Deploy</span>
+  </div>
+
+  <div class="section-header">
+    <div class="section-num">Seção 06</div>
+    <div class="section-title">Infraestrutura e Deploy</div>
+    <div class="section-title-bar"></div>
+    <div class="section-intro">Arquitetura de infraestrutura do Planner sobre a Vercel Platform, incluindo ambientes, CI/CD, pipeline de build, variáveis de ambiente, estratégias de rollback e disaster recovery.</div>
+  </div>
+
+  <h3>6.1 Visão da Infraestrutura</h3>
+  <div class="arch-layer">
+    <div class="arch-layer-header blue"><div class="arch-dot blue"></div> CDN / Edge Network — Vercel Global</div>
+    <div class="arch-layer-body"><p>Assets estáticos (JS, CSS, imagens) servidos da Edge Network Vercel em mais de 70 PoPs globais. Next.js Static Generation entrega páginas pré-renderizadas com latência &lt;50ms. Edge Middleware executa autenticação no edge sem cold start.</p></div>
+  </div>
+  <div class="arch-layer">
+    <div class="arch-layer-header purple"><div class="arch-dot purple"></div> Serverless Functions — Vercel Functions (Node.js Runtime)</div>
+    <div class="arch-layer-body"><p>Cada Route Handler é uma Serverless Function isolada com Node.js 20 LTS. Auto-scaling instantâneo — sem configuração de servidores. Cold start de ~200ms na primeira invocação. Timeout configurado para 30s (suficiente para queries complexas).</p></div>
+  </div>
+  <div class="arch-layer">
+    <div class="arch-layer-header teal"><div class="arch-dot teal"></div> Banco de Dados — Turso (libsql)</div>
+    <div class="arch-layer-body"><p>SQLite distribuído com replicação em múltiplas regiões. Primary database na região mais próxima do deployment (ex: GRU para Brasil). Read replicas nas regiões secundárias para leituras. Backups automáticos gerenciados pelo Turso.</p></div>
+  </div>
+  <div class="arch-layer">
+    <div class="arch-layer-header amber"><div class="arch-dot amber"></div> Object Storage — Vercel Blob</div>
+    <div class="arch-layer-body"><p>Storage de objetos gerenciado pela Vercel com CDN automático. URLs permanentes para arquivos públicos. Sem configuração de buckets ou ACLs. Integração nativa com o token da Vercel.</p></div>
+  </div>
+
+  <h3>6.2 Ambientes de Execução</h3>
+  <table>
+    <thead><tr><th>Ambiente</th><th>Branch</th><th>URL</th><th>Banco de Dados</th><th>Propósito</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Development</strong></td><td>feature/*</td><td>localhost:3000</td><td>SQLite local (.db file)</td><td>Desenvolvimento local dos desenvolvedores</td></tr>
+      <tr><td><strong>Preview</strong></td><td>Pull Requests</td><td>*.vercel.app (auto)</td><td>Turso (branch de banco)</td><td>Review de PRs, QA, aprovação antes de merge</td></tr>
+      <tr><td><strong>Staging (HML)</strong></td><td>staging</td><td>planner-hml.vercel.app</td><td>Turso (banco de staging)</td><td>Homologação, testes de aceitação do usuário</td></tr>
+      <tr><td><strong>Production (PRD)</strong></td><td>main</td><td>planner.vendemmia.com.br</td><td>Turso (banco de produção)</td><td>Sistema em produção para usuários reais</td></tr>
+    </tbody>
+  </table>
+
+  <h3>6.3 Variáveis de Ambiente</h3>
+  <table>
+    <thead><tr><th>Variável</th><th>Ambiente</th><th>Descrição</th></tr></thead>
+    <tbody>
+      <tr><td><span class="code-inline">TURSO_DATABASE_URL</span></td><td>Server</td><td>URL do banco libsql (<span class="code-inline">libsql://db.turso.io</span>)</td></tr>
+      <tr><td><span class="code-inline">TURSO_AUTH_TOKEN</span></td><td>Server</td><td>Token de autenticação do Turso</td></tr>
+      <tr><td><span class="code-inline">NEXTAUTH_SECRET</span></td><td>Server</td><td>Segredo para assinar JWTs (64 chars)</td></tr>
+      <tr><td><span class="code-inline">NEXTAUTH_URL</span></td><td>Server</td><td>URL base do sistema (ex: https://planner.vendemmia.com.br)</td></tr>
+      <tr><td><span class="code-inline">BLOB_READ_WRITE_TOKEN</span></td><td>Server</td><td>Token de acesso ao Vercel Blob</td></tr>
+      <tr><td><span class="code-inline">NEXT_PUBLIC_APP_NAME</span></td><td>Client+Server</td><td>Nome exibido no sistema (ex: "Planner")</td></tr>
+    </tbody>
+  </table>
+
+  <h3>6.4 Pipeline de Build</h3>
+  <p>O build do Planner é executado automaticamente pela Vercel a cada push/PR com o seguinte pipeline:</p>
+  <div class="flow">
+    <div class="flow-item">
+      <div class="flow-num">1</div>
+      <div class="flow-content"><strong>git push → Vercel Build Trigger</strong><p>Push para qualquer branch dispara o pipeline. Main branch vai para produção; outros branches criam Preview Deployments.</p></div>
+    </div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-item">
+      <div class="flow-num">2</div>
+      <div class="flow-content"><strong>prisma generate</strong><p>Gera os tipos TypeScript do Prisma Client baseados no schema.prisma. Obrigatório antes do build Next.js para que os tipos estejam disponíveis.</p></div>
+    </div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-item">
+      <div class="flow-num">3</div>
+      <div class="flow-content"><strong>next build</strong><p>Compilação TypeScript, bundling com Turbopack, geração de páginas estáticas (SSG) onde aplicável, otimização de imagens, code splitting por rota.</p></div>
+    </div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-item">
+      <div class="flow-num">4</div>
+      <div class="flow-content"><strong>Deploy para Edge Network</strong><p>Assets estáticos distribuídos para todos os PoPs da Edge. Serverless Functions provisionadas na região de origem. Atomic deploy — troca instantânea sem downtime.</p></div>
+    </div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-item">
+      <div class="flow-num">5</div>
+      <div class="flow-content"><strong>Health Check + Alias</strong><p>Vercel executa health check na nova versão. Se bem-sucedido, o alias de domínio é apontado para o novo deployment atomicamente.</p></div>
+    </div>
+  </div>
+
+  <h3>6.5 Estratégia de Rollback</h3>
+  <ul>
+    <li><strong>Rollback Instantâneo:</strong> Vercel mantém histórico de todos os deployments. Rollback para versão anterior via dashboard ou CLI em &lt;30 segundos</li>
+    <li><strong>Rollback de Banco:</strong> Migrações Prisma são irreversíveis por padrão. Estratégia: migrations sempre aditivas (nunca DROP de coluna) + backup pré-migração via Turso snapshot</li>
+    <li><strong>Feature Flags:</strong> Para features de alto risco, usar variáveis de ambiente como feature flags simples (<span class="code-inline">NEXT_PUBLIC_FEATURE_X=true</span>) sem deploy adicional</li>
+  </ul>
+
+  <h3>6.6 Backup e Disaster Recovery</h3>
+  <table>
+    <thead><tr><th>Componente</th><th>Estratégia de Backup</th><th>RTO</th><th>RPO</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Banco de Dados</strong></td><td>Turso automated backups (daily) + Point-in-Time Recovery</td><td>&lt;1h</td><td>&lt;24h</td></tr>
+      <tr><td><strong>Arquivos (Blob)</strong></td><td>Vercel Blob com replicação geo-redundante automática</td><td>&lt;5min</td><td>~0 (replicado)</td></tr>
+      <tr><td><strong>Código</strong></td><td>Git (GitHub) + Vercel deployment history</td><td>&lt;5min</td><td>último commit</td></tr>
+      <tr><td><strong>Configuração</strong></td><td>Env vars versionadas no Vercel dashboard</td><td>&lt;30min</td><td>configurado manualmente</td></tr>
+    </tbody>
+  </table>
+
+  <div class="success-box">
+    <div class="success-box-title">Vantagem do Modelo Serverless</div>
+    <p>A arquitetura serverless da Vercel elimina a necessidade de gerenciamento de servidores, provisionamento de capacidade e patching de SO. Alta disponibilidade (99.99% SLA Vercel) sem configuração adicional. Auto-scaling automático — de 0 a milhares de requisições simultâneas sem intervenção.</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════ SEÇÃO 7 — ESTRUTURA DO CÓDIGO ═══════════════════════ -->
+<div class="page page-break">
+  <div class="page-header">
+    <img src="/logo_v4.png" alt="Planner" class="page-header-logo" onerror="">
+    <span class="page-header-title">Especificação Técnica — v1.0.0</span>
+    <span class="page-header-section">7. Estrutura do Código</span>
+  </div>
+
+  <div class="section-header">
+    <div class="section-num">Seção 07</div>
+    <div class="section-title">Estrutura do Código</div>
+    <div class="section-title-bar"></div>
+    <div class="section-intro">Padrões arquiteturais, organização de pastas, convenções de nomenclatura, princípios de design de código e diretrizes de desenvolvimento aplicados no Planner.</div>
+  </div>
+
+  <h3>7.1 Estrutura Completa de Pastas</h3>
+  <pre><code><span class="code-kw">kronex/</span>                          <span class="code-comment">← raiz do projeto</span>
+├── <span class="code-fn">app/</span>                         <span class="code-comment">← Next.js App Router</span>
+│   ├── (auth)/                  <span class="code-comment">← Rotas públicas de autenticação</span>
+│   ├── (dashboard)/             <span class="code-comment">← Rotas protegidas (dashboard)</span>
+│   ├── (print)/                 <span class="code-comment">← Rotas de impressão/PDF</span>
+│   └── api/                     <span class="code-comment">← Route Handlers REST</span>
+├── <span class="code-fn">components/</span>                  <span class="code-comment">← Componentes React reutilizáveis</span>
+│   ├── layout/                  <span class="code-comment">← Estrutura visual global</span>
+│   ├── ui/                      <span class="code-comment">← Primitivos de UI (Shadcn)</span>
+│   └── [domain]/                <span class="code-comment">← Componentes por domínio</span>
+├── <span class="code-fn">lib/</span>                         <span class="code-comment">← Utilitários, configurações, tipos</span>
+│   ├── db.ts                    <span class="code-comment">← Cliente Prisma singleton</span>
+│   ├── auth.ts                  <span class="code-comment">← Configuração NextAuth</span>
+│   ├── utils.ts                 <span class="code-comment">← Helpers gerais (cn, formatters)</span>
+│   ├── types/                   <span class="code-comment">← Tipos TypeScript compartilhados</span>
+│   └── generated/prisma/        <span class="code-comment">← Client Prisma gerado (auto)</span>
+├── <span class="code-fn">prisma/</span>                      <span class="code-comment">← ORM e banco de dados</span>
+│   ├── schema.prisma            <span class="code-comment">← Schema do banco (fonte da verdade)</span>
+│   ├── migrations/              <span class="code-comment">← Histórico de migrações SQL</span>
+│   └── seed.ts                  <span class="code-comment">← Script de seed inicial</span>
+├── <span class="code-fn">public/</span>                      <span class="code-comment">← Assets estáticos públicos</span>
+│   ├── logo_v4.png              <span class="code-comment">← Logo do sistema</span>
+│   ├── favicon.png
+│   └── docs/                    <span class="code-comment">← Documentos HTML (admin-only)</span>
+│       ├── especificacao-funcional.html
+│       └── especificacao-tecnica.html
+├── <span class="code-fn">hooks/</span>                       <span class="code-comment">← Custom React Hooks</span>
+├── <span class="code-fn">stores/</span>                      <span class="code-comment">← Zustand stores por domínio</span>
+├── auth.ts                      <span class="code-comment">← Export do handler NextAuth</span>
+├── middleware.ts                 <span class="code-comment">← Proteção de rotas global</span>
+├── next.config.ts               <span class="code-comment">← Configuração Next.js</span>
+├── tailwind.config.ts           <span class="code-comment">← Design tokens Tailwind</span>
+└── tsconfig.json                <span class="code-comment">← Configuração TypeScript strict mode</span></code></pre>
+
+  <h3>7.2 Padrões Arquiteturais Aplicados</h3>
+  <table>
+    <thead><tr><th>Padrão</th><th>Aplicação no Planner</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Server Components</strong></td><td>Páginas e layouts são RSC por padrão. Dados buscados no servidor sem waterfall cliente-servidor.</td></tr>
+      <tr><td><strong>Client Components</strong></td><td>Apenas componentes com interatividade (useState, useEffect, event handlers) são marcados com <span class="code-inline">"use client"</span>.</td></tr>
+      <tr><td><strong>Co-location</strong></td><td>Arquivos de uma rota (page.tsx, loading.tsx, error.tsx, components) ficam juntos na pasta da rota.</td></tr>
+      <tr><td><strong>Singleton Pattern</strong></td><td>Cliente Prisma (<span class="code-inline">lib/db.ts</span>) usa singleton para evitar múltiplas conexões em desenvolvimento hot-reload.</td></tr>
+      <tr><td><strong>Repository via ORM</strong></td><td>Prisma age como camada de acesso a dados. Queries complexas encapsuladas em funções helper em <span class="code-inline">lib/</span>.</td></tr>
+      <tr><td><strong>Schema Validation</strong></td><td>Schemas Zod definidos em <span class="code-inline">lib/types/</span> são compartilhados entre formulários e Route Handlers.</td></tr>
+      <tr><td><strong>Optimistic Updates</strong></td><td>TanStack Query com <span class="code-inline">onMutate</span> atualiza UI antes da confirmação do servidor para percepção de velocidade.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>7.3 Convenções de Código</h3>
+  <h5>Nomenclatura</h5>
+  <ul>
+    <li>Componentes React: PascalCase (<span class="code-inline">ProjectCard</span>, <span class="code-inline">MeetingForm</span>)</li>
+    <li>Hooks: camelCase com prefixo <span class="code-inline">use</span> (<span class="code-inline">useProjectData</span>, <span class="code-inline">useKanban</span>)</li>
+    <li>Stores Zustand: camelCase com prefixo <span class="code-inline">use</span> + sufixo <span class="code-inline">Store</span> (<span class="code-inline">useProjectStore</span>)</li>
+    <li>Variáveis de ambiente: SCREAMING_SNAKE_CASE (<span class="code-inline">TURSO_DATABASE_URL</span>)</li>
+    <li>Arquivos de rotas: kebab-case para URLs (<span class="code-inline">status-report/</span>, <span class="code-inline">post-golive/</span>)</li>
+    <li>Tipos TypeScript: PascalCase com sufixo semântico (<span class="code-inline">ProjectWithMembers</span>, <span class="code-inline">MeetingFormData</span>)</li>
+  </ul>
+
+  <h5>TypeScript — Configuração Strict</h5>
+  <div class="code-label">tsconfig.json — flags críticos</div>
+  <pre><code>{
+  <span class="code-key">"strict"</span>: <span class="code-kw">true</span>,              <span class="code-comment">← ativa noImplicitAny, strictNullChecks, etc.</span>
+  <span class="code-key">"noUncheckedIndexedAccess"</span>: <span class="code-kw">true</span>,  <span class="code-comment">← array access sempre retorna T | undefined</span>
+  <span class="code-key">"exactOptionalPropertyTypes"</span>: <span class="code-kw">true</span>  <span class="code-comment">← diferencia undefined de ausente</span>
+}</code></pre>
+
+  <h3>7.4 Prisma Client Singleton</h3>
+  <div class="code-label">lib/db.ts — Padrão Singleton</div>
+  <pre><code><span class="code-kw">import</span> { PrismaClient } from <span class="code-str">"./generated/prisma"</span>
+<span class="code-kw">import</span> { PrismaLibSQL } from <span class="code-str">"@prisma/adapter-libsql"</span>
+<span class="code-kw">import</span> { createClient } from <span class="code-str">"@libsql/client"</span>
+
+<span class="code-kw">const</span> globalForPrisma = globalThis <span class="code-kw">as</span> { prisma?: PrismaClient }
+
+<span class="code-kw">export const</span> db = globalForPrisma.prisma ?? <span class="code-kw">new</span> <span class="code-fn">PrismaClient</span>({
+  adapter: <span class="code-kw">new</span> <span class="code-fn">PrismaLibSQL</span>(<span class="code-fn">createClient</span>({
+    url:       process.env.<span class="code-fn">TURSO_DATABASE_URL</span>!,
+    authToken: process.env.<span class="code-fn">TURSO_AUTH_TOKEN</span>!,
+  }))
+})
+
+<span class="code-kw">if</span> (process.env.<span class="code-fn">NODE_ENV</span> !== <span class="code-str">"production"</span>)
+  globalForPrisma.prisma = db    <span class="code-comment">← evita múltiplas instâncias em hot-reload</span></code></pre>
+
+  <h3>7.5 Princípios de Qualidade</h3>
+  <ul>
+    <li><strong>DRY (Don't Repeat Yourself):</strong> Componentes UI reutilizáveis em <span class="code-inline">components/ui/</span>; helpers compartilhados em <span class="code-inline">lib/utils.ts</span></li>
+    <li><strong>YAGNI (You Aren't Gonna Need It):</strong> Sem abstrações prematuras; funcionalidade construída conforme necessidade real</li>
+    <li><strong>Single Responsibility:</strong> Cada componente tem uma única responsabilidade; lógica de negócio separada da UI</li>
+    <li><strong>Fail Fast:</strong> Validações Zod no início de cada handler retornam 400 imediatamente em dados inválidos</li>
+    <li><strong>Observability First:</strong> <span class="code-inline">console.error</span> estruturado em todos os blocos catch dos handlers para captura nos logs da Vercel</li>
+  </ul>
+</div>
+
+<!-- ═══════════════════════ SEÇÃO 8 — PERFORMANCE ═══════════════════════ -->
+<div class="page page-break">
+  <div class="page-header">
+    <img src="/logo_v4.png" alt="Planner" class="page-header-logo" onerror="">
+    <span class="page-header-title">Especificação Técnica — v1.0.0</span>
+    <span class="page-header-section">8. Performance e Escalabilidade</span>
+  </div>
+
+  <div class="section-header">
+    <div class="section-num">Seção 08</div>
+    <div class="section-title">Performance e Escalabilidade</div>
+    <div class="section-title-bar"></div>
+    <div class="section-intro">Estratégias de otimização de performance, caching, code splitting, lazy loading e escalabilidade aplicadas no Planner para garantir experiência fluida mesmo sob carga.</div>
+  </div>
+
+  <h3>8.1 Métricas de Performance Alvo (Core Web Vitals)</h3>
+  <table>
+    <thead><tr><th>Métrica</th><th>Meta</th><th>Estratégia de Alcance</th></tr></thead>
+    <tbody>
+      <tr><td><strong>LCP (Largest Contentful Paint)</strong></td><td>&lt; 1,5s</td><td>SSR no servidor, imagens otimizadas, CDN global</td></tr>
+      <tr><td><strong>FID / INP (Interaction)</strong></td><td>&lt; 100ms</td><td>React 19 Concurrent, Zustand para estado local, sem bloqueio de main thread</td></tr>
+      <tr><td><strong>CLS (Layout Shift)</strong></td><td>&lt; 0,05</td><td>Skeleton loaders, dimensões fixas em imagens, Suspense boundaries</td></tr>
+      <tr><td><strong>TTFB (Time to First Byte)</strong></td><td>&lt; 200ms</td><td>Edge Network, pre-renderização de páginas estáticas</td></tr>
+      <tr><td><strong>Bundle Size</strong></td><td>&lt; 150KB gzipped</td><td>Code splitting automático por rota, tree-shaking, dynamic imports</td></tr>
+    </tbody>
+  </table>
+
+  <h3>8.2 Estratégias de Cache</h3>
+  <h5>Cache no Cliente — TanStack Query</h5>
+  <ul>
+    <li><strong>staleTime:</strong> Dados considerados frescos por 30 segundos — sem re-fetch desnecessário em navegações rápidas</li>
+    <li><strong>gcTime:</strong> Cache mantido por 5 minutos após o componente desmontar — dados disponíveis ao voltar para a página</li>
+    <li><strong>Invalidação por Mutation:</strong> Após qualquer criação/edição/exclusão, <span class="code-inline">queryClient.invalidateQueries()</span> garante dados frescos</li>
+    <li><strong>Query Keys:</strong> Estruturadas hierarquicamente (<span class="code-inline">['projects', projectId, 'tasks']</span>) para invalidação granular</li>
+  </ul>
+
+  <h5>Cache no Servidor — Next.js Data Cache</h5>
+  <ul>
+    <li>Dados buscados em Server Components usam o cache do Next.js com <span class="code-inline">{ next: { revalidate: 60 } }</span> para dados semi-estáticos</li>
+    <li>Dados dinâmicos (projetos em edição) usam <span class="code-inline">{ cache: 'no-store' }</span> para garantir freshness</li>
+    <li>OrgConfig (nome/logo da organização) cacheado por 3600s — muda raramente</li>
+  </ul>
+
+  <h3>8.3 Code Splitting e Lazy Loading</h3>
+  <ul>
+    <li><strong>Rota-baseado (automático):</strong> Next.js cria chunks separados por rota. Usuário baixa apenas o código da página atual</li>
+    <li><strong>Dynamic Imports:</strong> Componentes pesados (editor Tiptap, charts Recharts, DnD Kit) carregados sob demanda com <span class="code-inline">next/dynamic</span></li>
+    <li><strong>Suspense Boundaries:</strong> Loading states explícitos com <span class="code-inline">&lt;Suspense fallback={&lt;Skeleton /&gt;}&gt;</span> para cada seção da UI</li>
+    <li><strong>Imagens:</strong> Componente <span class="code-inline">next/image</span> para otimização automática (WebP, lazy loading, blur placeholder)</td></li>
+  </ul>
+
+  <h3>8.4 Otimizações de Banco de Dados</h3>
+  <ul>
+    <li><strong>Select explícito:</strong> Queries Prisma com <span class="code-inline">select: {}</span> retornam apenas campos necessários, reduzindo payload e tempo de deserialização</li>
+    <li><strong>Include seletivo:</strong> Relations carregadas apenas quando necessárias para a view — evita N+1 queries</li>
+    <li><strong>Índices estratégicos:</strong> Colunas usadas em WHERE, ORDER BY e JOIN têm índices definidos no schema</li>
+    <li><strong>Soft Deletes:</strong> Campo <span class="code-inline">active</span> em User evita hard-delete com cascata; queries filtram <span class="code-inline">active: true</span></li>
+    <li><strong>Batch Operations:</strong> Múltiplas criações (ex: importar cronograma de Excel) usam <span class="code-inline">createMany()</span> em única transação</li>
+  </ul>
+
+  <h3>8.5 Escalabilidade Horizontal</h3>
+  <p>A arquitetura serverless da Vercel escala horizontalmente de forma nativa:</p>
+  <table>
+    <thead><tr><th>Dimensão</th><th>Como Escala</th><th>Limite Atual</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Concurrent Requests</strong></td><td>Vercel provisiona instâncias serverless automaticamente (até milhares)</td><td>Ilimitado no plano Pro</td></tr>
+      <tr><td><strong>Banco de Dados</strong></td><td>Turso read replicas por região; primary para escritas</td><td>~100 conexões simultâneas por replica</td></tr>
+      <tr><td><strong>Storage</strong></td><td>Vercel Blob escala automaticamente — sem configuração</td><td>Ilimitado (custo por GB)</td></tr>
+      <tr><td><strong>CDN</strong></td><td>Edge Network global — cache automático em 70+ PoPs</td><td>Ilimitado</td></tr>
+    </tbody>
+  </table>
+
+  <div class="info-box">
+    <div class="info-box-title">Ponto de Atenção — Cold Start Serverless</div>
+    <p>Serverless Functions podem ter cold start de ~200-500ms na primeira invocação após período de inatividade. Mitigações: (1) Prisma Client com singleton evita re-conexão; (2) Vercel Function Warming (plano Enterprise); (3) Para APIs críticas de UX, considerar Edge Runtime que elimina cold start completamente.</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════ SEÇÃO 9 — LOGS E MONITORAMENTO ═══════════════════════ -->
+<div class="page page-break">
+  <div class="page-header">
+    <img src="/logo_v4.png" alt="Planner" class="page-header-logo" onerror="">
+    <span class="page-header-title">Especificação Técnica — v1.0.0</span>
+    <span class="page-header-section">9. Logs e Monitoramento</span>
+  </div>
+
+  <div class="section-header">
+    <div class="section-num">Seção 09</div>
+    <div class="section-title">Logs e Monitoramento</div>
+    <div class="section-title-bar"></div>
+    <div class="section-intro">Estratégia de observabilidade do Planner, incluindo logging estruturado, métricas de runtime, alertas, tracing e integração com ferramentas de monitoramento externas.</div>
+  </div>
+
+  <h3>9.1 Logging Atual — Vercel Log Draining</h3>
+  <p>A Vercel captura automaticamente todos os logs de stdout/stderr de cada Function invocation:</p>
+  <table>
+    <thead><tr><th>Tipo de Log</th><th>Origem</th><th>Disponibilidade</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Function Logs</strong></td><td>console.log / console.error em Route Handlers</td><td>Dashboard Vercel, últimas 24h</td></tr>
+      <tr><td><strong>Build Logs</strong></td><td>Saída do processo de build (prisma generate + next build)</td><td>Dashboard Vercel, por deployment</td></tr>
+      <tr><td><strong>Edge Logs</strong></td><td>Middleware executions, redirects, rewrites</td><td>Dashboard Vercel, em tempo real</td></tr>
+      <tr><td><strong>Access Logs</strong></td><td>Requisições HTTP (método, path, status, duração)</td><td>Via Log Draining para Datadog/Axiom</td></tr>
+    </tbody>
+  </table>
+
+  <h3>9.2 Padrão de Log Estruturado</h3>
+  <div class="code-label">Padrão recomendado em Route Handlers</div>
+  <pre><code><span class="code-kw">try</span> {
+  <span class="code-comment">// ... operação</span>
+  console.<span class="code-fn">log</span>(JSON.<span class="code-fn">stringify</span>({
+    event:  <span class="code-str">"project.created"</span>,
+    userId: session.user.id,
+    projectId: project.id,
+    ts:     <span class="code-kw">new</span> <span class="code-fn">Date</span>().toISOString()
+  }))
+} <span class="code-kw">catch</span> (error) {
+  console.<span class="code-fn">error</span>(JSON.<span class="code-fn">stringify</span>({
+    event:   <span class="code-str">"project.create.error"</span>,
+    userId:  session?.user?.id,
+    message: error instanceof Error ? error.message : <span class="code-str">"unknown"</span>,
+    ts:      <span class="code-kw">new</span> <span class="code-fn">Date</span>().toISOString()
+  }))
+  <span class="code-kw">return</span> <span class="code-fn">NextResponse</span>.json({ error: <span class="code-str">"Internal error"</span> }, { status: <span class="code-num">500</span> })
+}</code></pre>
+
+  <h3>9.3 Métricas de Negócio Monitoradas</h3>
+  <table>
+    <thead><tr><th>Métrica</th><th>Como Medir</th><th>Alerta</th></tr></thead>
+    <tbody>
+      <tr><td>Projetos criados por dia</td><td>Contagem de events <span class="code-inline">project.created</span> nos logs</td><td>Queda &gt;50% vs média 7 dias</td></tr>
+      <tr><td>Erros 500 por hora</td><td>Log Draining + filtro status:500</td><td>Mais de 10 erros/hora</td></tr>
+      <tr><td>Latência de API (p95)</td><td>Vercel Analytics / Datadog APM</td><td>p95 &gt; 3s por mais de 5 min</td></tr>
+      <tr><td>Falhas de autenticação</td><td>Events <span class="code-inline">auth.failed</span> nos logs</td><td>Mais de 20 falhas/min (possível ataque)</td></tr>
+      <tr><td>Uploads falhos</td><td>Events <span class="code-inline">upload.error</span> nos logs</td><td>Taxa &gt; 5% dos uploads</td></tr>
+    </tbody>
+  </table>
+
+  <h3>9.4 Integração com Ferramentas Externas</h3>
+  <table>
+    <thead><tr><th>Ferramenta</th><th>Integração</th><th>Uso</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Vercel Analytics</strong></td><td>Nativo — 1 linha no layout.tsx</td><td>Core Web Vitals por página, usuários únicos, pageviews</td></tr>
+      <tr><td><strong>Vercel Speed Insights</strong></td><td>Nativo — componente &lt;SpeedInsights /&gt;</td><td>Real User Monitoring (RUM) de performance</td></tr>
+      <tr><td><strong>Datadog</strong></td><td>Log Drain via webhook Vercel</td><td>Centralização de logs, dashboards operacionais, alertas</td></tr>
+      <tr><td><strong>Sentry</strong></td><td><span class="code-inline">@sentry/nextjs</span></td><td>Error tracking com stack traces, replay de sessão para erros</td></tr>
+      <tr><td><strong>Axiom</strong></td><td>Log Drain nativo Vercel</td><td>Busca de logs estruturados, queries SQL sobre logs</td></tr>
+    </tbody>
+  </table>
+
+  <h3>9.5 Alertas e Resposta a Incidentes</h3>
+  <p>Processo recomendado para resposta a incidentes no Planner:</p>
+  <ol>
+    <li><strong>Detecção:</strong> Alerta automático via Datadog/Sentry para o canal #incidentes-planner no Slack/Teams</li>
+    <li><strong>Diagnóstico:</strong> Acesso aos logs da Vercel Dashboard ou Axiom com busca pelo request ID do erro</li>
+    <li><strong>Isolamento:</strong> Feature flags ou rollback via Vercel dashboard (&lt;30s)</li>
+    <li><strong>Resolução:</strong> Hot-fix em branch dedicada, PR, deploy via pipeline normal</li>
+    <li><strong>Post-mortem:</strong> Registro no sistema de gestão de incidentes com causa-raiz e ações preventivas</li>
+  </ol>
+
+<!-- ═══════════════════════ SEÇÃO 10 — CI/CD ═══════════════════════ -->
+<div class="page page-break">
+  <div class="page-header">
+    <img src="/logo_v4.png" alt="Planner" class="page-header-logo" onerror="">
+    <span class="page-header-title">Especificação Técnica — v1.0.0</span>
+    <span class="page-header-section">10. Pipeline CI/CD e DevOps</span>
+  </div>
+
+  <div class="section-header">
+    <div class="section-num">Seção 10</div>
+    <div class="section-title">Pipeline CI/CD e DevOps</div>
+    <div class="section-title-bar"></div>
+    <div class="section-intro">Definição do pipeline de integração e entrega contínua, estratégias de versionamento, gestão de branches, ambientes de deploy e boas práticas de operação do Planner.</div>
+  </div>
+
+  <h3>10.1 Fluxo de Desenvolvimento (GitFlow Adaptado)</h3>
+  <table>
+    <thead><tr><th>Branch</th><th>Origem</th><th>Destino de Merge</th><th>Propósito</th></tr></thead>
+    <tbody>
+      <tr><td><span class="code-inline">main</span></td><td>—</td><td>—</td><td>Código em produção. Protegida — merge apenas via PR aprovado</td></tr>
+      <tr><td><span class="code-inline">staging</span></td><td>main</td><td>main</td><td>Homologação. Mirror de produção com dados de teste</td></tr>
+      <tr><td><span class="code-inline">feature/nome</span></td><td>main</td><td>main (via PR)</td><td>Desenvolvimento de novas funcionalidades</td></tr>
+      <tr><td><span class="code-inline">fix/nome</span></td><td>main</td><td>main (via PR)</td><td>Correções de bugs não críticos</td></tr>
+      <tr><td><span class="code-inline">hotfix/nome</span></td><td>main</td><td>main (direto)</td><td>Correções urgentes em produção — aprovação expedita</td></tr>
+    </tbody>
+  </table>
+
+  <h3>10.2 Pipeline CI/CD — Vercel + GitHub</h3>
+  <p>O pipeline é configurado via integração nativa entre GitHub e Vercel. Cada evento no repositório dispara ações automáticas:</p>
+
+  <div class="arch-layer">
+    <div class="arch-layer-header blue"><div class="arch-dot blue"></div> Push em feature/* ou fix/* → Preview Deployment</div>
+    <div class="arch-layer-body">
+      <p><strong>1.</strong> Vercel detecta o push via GitHub webhook. <strong>2.</strong> Executa o build (<span class="code-inline">prisma generate &amp;&amp; next build</span>) com as env vars do ambiente Preview. <strong>3.</strong> Deploy em URL única (ex: <span class="code-inline">kronex-abc123.vercel.app</span>). <strong>4.</strong> Vercel comenta no PR com o link do Preview. <strong>5.</strong> Equipe valida a feature no Preview antes de aprovar o merge.</p>
+    </div>
+  </div>
+
+  <div class="arch-layer">
+    <div class="arch-layer-header purple"><div class="arch-dot purple"></div> Pull Request → Code Review Obrigatório</div>
+    <div class="arch-layer-body">
+      <p><strong>Checklist de PR:</strong> TypeScript sem erros (<span class="code-inline">tsc --noEmit</span>), ESLint sem warnings bloqueantes, Preview Deployment aprovado, ao menos 1 aprovação de revisor. Merge squash para manter histórico limpo no <span class="code-inline">main</span>.</p>
+    </div>
+  </div>
+
+  <div class="arch-layer">
+    <div class="arch-layer-header teal"><div class="arch-dot teal"></div> Merge em main → Deploy Automático em Produção</div>
+    <div class="arch-layer-body">
+      <p><strong>1.</strong> Build em produção com env vars de PRD. <strong>2.</strong> Migrações pendentes do Prisma executadas via script de migração (separado do deploy — executado manualmente antes do merge para evitar downtime). <strong>3.</strong> Deploy atômico na Edge Network. <strong>4.</strong> Health check automático. <strong>5.</strong> Notificação no Slack/Teams com link do deployment.</p>
+    </div>
+  </div>
+
+  <h3>10.3 Scripts npm Disponíveis</h3>
+  <table>
+    <thead><tr><th>Comando</th><th>Ação</th><th>Quando Usar</th></tr></thead>
+    <tbody>
+      <tr><td><span class="code-inline">npm run dev</span></td><td>Inicia Next.js com Turbopack em modo desenvolvimento</td><td>Desenvolvimento local diário</td></tr>
+      <tr><td><span class="code-inline">npm run build</span></td><td><span class="code-inline">prisma generate &amp;&amp; next build</span></td><td>Validar build antes do deploy</td></tr>
+      <tr><td><span class="code-inline">npm run lint</span></td><td>ESLint com regras Next.js</td><td>CI ou pre-commit hook</td></tr>
+      <tr><td><span class="code-inline">npm run db:seed</span></td><td>Popula banco com dados iniciais</td><td>Setup de novo ambiente</td></tr>
+      <tr><td><span class="code-inline">npm run db:reset</span></td><td>Dropa, migra e re-seed o banco</td><td>Reset de ambiente de desenvolvimento</td></tr>
+      <tr><td><span class="code-inline">npm run db:studio</span></td><td>Abre Prisma Studio (GUI do banco)</td><td>Inspeção e edição manual de dados</td></tr>
+    </tbody>
+  </table>
+
+  <h3>10.4 Gestão de Migrações de Banco</h3>
+  <div class="flow">
+    <div class="flow-item">
+      <div class="flow-num">1</div>
+      <div class="flow-content"><strong>Alterar schema.prisma</strong><p>Desenvolvedor modifica o arquivo de schema com a nova tabela, campo ou relação desejada.</p></div>
+    </div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-item">
+      <div class="flow-num">2</div>
+      <div class="flow-content"><strong>npx prisma migrate dev --name descricao</strong><p>Gera o arquivo SQL de migração em <span class="code-inline">prisma/migrations/</span> e aplica no banco de desenvolvimento local. Nunca usar <span class="code-inline">prisma db push</span> em produção.</p></div>
+    </div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-item">
+      <div class="flow-num">3</div>
+      <div class="flow-content"><strong>Commit da migração junto ao código</strong><p>O arquivo de migração é versionado no Git junto com o código que o requer. Nunca separar migração de código.</p></div>
+    </div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-item">
+      <div class="flow-num">4</div>
+      <div class="flow-content"><strong>npx prisma migrate deploy (pré-deploy)</strong><p>Antes do merge em main, executar <span class="code-inline">migrate deploy</span> no banco de staging e produção. Este comando aplica apenas migrações pendentes, de forma idempotente.</p></div>
+    </div>
+  </div>
+
+  <div class="warn-box">
+    <div class="warn-box-title">Regra de Ouro — Migrações Seguras</div>
+    <p>Nunca remover ou renomear colunas diretamente em uma migração de deploy. Sempre seguir o padrão de 3 passos: (1) adicionar nova coluna nullable, (2) migrar dados, (3) remover coluna antiga em release separado. Isso garante zero downtime e rollback seguro.</p>
+  </div>
+
+  <h3>10.5 Estratégia de Versionamento</h3>
+  <p>O sistema adota <strong>Semantic Versioning (SemVer)</strong> para releases:</p>
+  <ul>
+    <li><strong>MAJOR (x.0.0):</strong> Mudanças incompatíveis de API ou banco de dados — breaking changes</li>
+    <li><strong>MINOR (0.x.0):</strong> Novas funcionalidades retrocompatíveis</li>
+    <li><strong>PATCH (0.0.x):</strong> Correções de bugs sem novos comportamentos</li>
+  </ul>
+  <p>Releases são criados como GitHub Releases com changelog automático baseado nas mensagens de commit (Conventional Commits).</p>
+
+  <h3>10.6 Qualidade — Linting e Formatação</h3>
+  <table>
+    <thead><tr><th>Ferramenta</th><th>Configuração</th><th>Aplicação</th></tr></thead>
+    <tbody>
+      <tr><td><strong>ESLint</strong></td><td>eslint-config-next + regras customizadas</td><td>Análise estática em CI e no editor (VSCode)</td></tr>
+      <tr><td><strong>TypeScript Compiler</strong></td><td>strict mode ativo</td><td>Validação de tipos em build — falha o CI se houver erros de tipo</td></tr>
+      <tr><td><strong>Prettier</strong></td><td>Integrado ao ESLint (recomendado)</td><td>Formatação automática consistente entre devs</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══════════════════════ SEÇÃO 11 — RNF ═══════════════════════ -->
+<div class="page page-break">
+  <div class="page-header">
+    <img src="/logo_v4.png" alt="Planner" class="page-header-logo" onerror="">
+    <span class="page-header-title">Especificação Técnica — v1.0.0</span>
+    <span class="page-header-section">11. Requisitos Não Funcionais</span>
+  </div>
+
+  <div class="section-header">
+    <div class="section-num">Seção 11</div>
+    <div class="section-title">Requisitos Não Funcionais (RNF)</div>
+    <div class="section-title-bar"></div>
+    <div class="section-intro">Especificação dos requisitos de qualidade do sistema, incluindo disponibilidade, performance, segurança, usabilidade, manutenibilidade e conformidade — critérios mensuráveis que definem o nível de serviço esperado.</div>
+  </div>
+
+  <h3>11.1 Disponibilidade e Confiabilidade</h3>
+  <table>
+    <thead><tr><th>Requisito</th><th>Meta</th><th>Como Garantir</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Disponibilidade (SLA)</strong></td><td>99,9% mensal (~43 min/mês de downtime)</td><td>Vercel Pro SLA 99,99%; Turso SLA 99,9%; redundância geo-distribuída</td></tr>
+      <tr><td><strong>MTTR (Mean Time to Recovery)</strong></td><td>&lt; 30 minutos</td><td>Rollback automático via Vercel + runbook de incidentes documentado</td></tr>
+      <tr><td><strong>MTBF (Mean Time Between Failures)</strong></td><td>&gt; 720 horas</td><td>Testes automatizados, Preview Deployments, code review obrigatório</td></tr>
+      <tr><td><strong>Janela de Manutenção</strong></td><td>Zero downtime deploys</td><td>Atomic deployments Vercel + migrações de banco executadas antes do deploy</td></tr>
+      <tr><td><strong>Disaster Recovery</strong></td><td>RTO &lt; 1h, RPO &lt; 24h</td><td>Backups diários Turso + código versionado + Vercel deployment history</td></tr>
+    </tbody>
+  </table>
+
+  <h3>11.2 Performance</h3>
+  <table>
+    <thead><tr><th>Requisito</th><th>Meta</th><th>Estratégia</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Tempo de resposta de API (p50)</strong></td><td>&lt; 200ms</td><td>Queries Prisma otimizadas, índices de banco, connection pooling</td></tr>
+      <tr><td><strong>Tempo de resposta de API (p95)</strong></td><td>&lt; 1.000ms</td><td>Cache TanStack Query, select seletivo, sem N+1 queries</td></tr>
+      <tr><td><strong>Carregamento inicial da página (LCP)</strong></td><td>&lt; 1,5s</td><td>SSR no servidor, CDN global, code splitting por rota</td></tr>
+      <tr><td><strong>Interatividade (INP)</strong></td><td>&lt; 100ms</td><td>React 19 Concurrent, Zustand local state, without layout thrashing</td></tr>
+      <tr><td><strong>Concorrência simultânea</strong></td><td>Até 500 usuários simultâneos</td><td>Serverless auto-scaling Vercel (ilimitado); Turso read replicas</td></tr>
+      <tr><td><strong>Tamanho máximo de upload</strong></td><td>50 MB por arquivo</td><td>Validação no Route Handler antes do Vercel Blob put()</td></tr>
+      <tr><td><strong>Tamanho do bundle JS (gzipped)</strong></td><td>&lt; 200KB initial load</td><td>Dynamic imports, tree-shaking, code splitting automático Next.js</td></tr>
+    </tbody>
+  </table>
+
+  <h3>11.3 Segurança</h3>
+  <table>
+    <thead><tr><th>Requisito</th><th>Meta</th><th>Implementação</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Autenticação</strong></td><td>Obrigatória para todas as rotas</td><td>Middleware Next.js + NextAuth session check em cada handler</td></tr>
+      <tr><td><strong>Autorização</strong></td><td>RBAC em 100% dos endpoints</td><td>Verificação de role em cada Route Handler, sem exceções</td></tr>
+      <tr><td><strong>Criptografia em trânsito</strong></td><td>TLS 1.3 obrigatório</td><td>Vercel força HTTPS em todos os domínios — HTTP redireciona para HTTPS</td></tr>
+      <tr><td><strong>Criptografia de senhas</strong></td><td>bcrypt, salt 12</td><td>Nenhuma senha armazenada em texto claro ou hash fraco (MD5/SHA1)</td></tr>
+      <tr><td><strong>Exposição de dados</strong></td><td>Zero campos sensíveis no cliente</td><td>Secrets apenas em env vars server-side; sem <span class="code-inline">NEXT_PUBLIC_</span> para credenciais</td></tr>
+      <tr><td><strong>Injeção SQL</strong></td><td>Zero tolerância</td><td>Prisma parametrizado 100%; sem queries SQL raw com interpolação</td></tr>
+      <tr><td><strong>Headers de segurança</strong></td><td>OWASP Top 10 mitigado</td><td>X-Frame-Options, X-Content-Type-Options, Referrer-Policy via next.config</td></tr>
+    </tbody>
+  </table>
+
+  <h3>11.4 Usabilidade e Acessibilidade</h3>
+  <table>
+    <thead><tr><th>Requisito</th><th>Meta</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Responsividade</strong></td><td>Interface funcional em telas a partir de 1280px de largura (foco desktop corporativo)</td></tr>
+      <tr><td><strong>Compatibilidade de Browsers</strong></td><td>Últimas 2 versões de Chrome, Edge, Firefox e Safari</td></tr>
+      <tr><td><strong>Acessibilidade</strong></td><td>WCAG 2.1 AA — componentes Shadcn/Base UI nativamente acessíveis (ARIA, foco, navegação por teclado)</td></tr>
+      <tr><td><strong>Tema</strong></td><td>Suporte a modo claro e escuro via next-themes</td></tr>
+      <tr><td><strong>Internacionalização</strong></td><td>Sistema em português brasileiro (pt-BR) na versão 1.0; i18n preparado para expansão</td></tr>
+      <tr><td><strong>Feedback ao Usuário</strong></td><td>Toast de confirmação em todas as ações críticas (criar, editar, excluir); loading states visíveis</td></tr>
+    </tbody>
+  </table>
+
+  <h3>11.5 Manutenibilidade</h3>
+  <table>
+    <thead><tr><th>Requisito</th><th>Meta</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Cobertura de Tipos</strong></td><td>100% do código TypeScript — zero uso de <span class="code-inline">any</span> explícito</td></tr>
+      <tr><td><strong>Lint Zero Warnings</strong></td><td>Build falha se ESLint reportar erros (warnings aceitáveis em desenvolvimento)</td></tr>
+      <tr><td><strong>Tempo de onboarding de dev</strong></td><td>&lt; 1 dia para novo dev estar rodando o sistema localmente</td></tr>
+      <tr><td><strong>Complexidade ciclomática</strong></td><td>Máximo 10 por função — funções longas devem ser decompostas</td></tr>
+      <tr><td><strong>Documentação de código</strong></td><td>Tipos Prisma auto-documentados; JSDoc apenas em funções de lógica de negócio não óbvia</td></tr>
+    </tbody>
+  </table>
+
+  <h3>11.6 Conformidade Regulatória</h3>
+  <table>
+    <thead><tr><th>Regulação</th><th>Requisito</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td><strong>LGPD (Lei 13.709/2018)</strong></td><td>Dados pessoais minimizados, base legal definida, direito de exclusão implementado</td><td><span class="badge badge-green">Atendido</span></td></tr>
+      <tr><td><strong>OWASP Top 10</strong></td><td>Proteção contra as 10 principais vulnerabilidades web</td><td><span class="badge badge-green">Atendido</span></td></tr>
+      <tr><td><strong>PCI-DSS</strong></td><td>N/A — sistema não processa dados de pagamento</td><td><span class="badge badge-slate">N/A</span></td></tr>
+      <tr><td><strong>ISO 27001</strong></td><td>Controles de segurança da informação documentados</td><td><span class="badge badge-amber">Parcial</span></td></tr>
+      <tr><td><strong>SOC 2</strong></td><td>Vercel e Turso possuem certificação SOC 2 Type II (infraestrutura)</td><td><span class="badge badge-green">Infraestrutura OK</span></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══════════════════════ SEÇÃO 12 — EVOLUÇÃO ═══════════════════════ -->
+<div class="page page-break">
+  <div class="page-header">
+    <img src="/logo_v4.png" alt="Planner" class="page-header-logo" onerror="">
+    <span class="page-header-title">Especificação Técnica — v1.0.0</span>
+    <span class="page-header-section">12. Plano Técnico de Evolução</span>
+  </div>
+
+  <div class="section-header">
+    <div class="section-num">Seção 12</div>
+    <div class="section-title">Plano Técnico de Evolução</div>
+    <div class="section-title-bar"></div>
+    <div class="section-intro">Roadmap técnico de evolução do Planner, com iniciativas priorizadas por impacto e complexidade, cobrindo migrações de infraestrutura, novas capacidades técnicas e modularização da arquitetura para suportar crescimento organizacional.</div>
+  </div>
+
+  <h3>12.1 Roadmap Técnico — Horizonte 18 Meses</h3>
+  <table>
+    <thead><tr><th>Horizonte</th><th>Iniciativa</th><th>Impacto</th><th>Complexidade</th></tr></thead>
+    <tbody>
+      <tr><td><strong>0–3 meses</strong></td><td>Testes automatizados (Vitest + Playwright E2E)</td><td><span class="badge badge-green">Alto</span></td><td><span class="badge badge-blue">Média</span></td></tr>
+      <tr><td><strong>0–3 meses</strong></td><td>Audit Log — tabela de rastreamento de mutations</td><td><span class="badge badge-green">Alto</span></td><td><span class="badge badge-green">Baixa</span></td></tr>
+      <tr><td><strong>0–3 meses</strong></td><td>Integração Sentry para error tracking em produção</td><td><span class="badge badge-green">Alto</span></td><td><span class="badge badge-green">Baixa</span></td></tr>
+      <tr><td><strong>3–6 meses</strong></td><td>Notificações em tempo real (WebSockets via Pusher/Ably)</td><td><span class="badge badge-green">Alto</span></td><td><span class="badge badge-amber">Alta</span></td></tr>
+      <tr><td><strong>3–6 meses</strong></td><td>Migração de banco para PostgreSQL (Neon) — maior concorrência</td><td><span class="badge badge-green">Alto</span></td><td><span class="badge badge-blue">Média</span></td></tr>
+      <tr><td><strong>3–6 meses</strong></td><td>Cache Redis (Upstash) para queries de dashboard pesadas</td><td><span class="badge badge-blue">Médio</span></td><td><span class="badge badge-blue">Média</span></td></tr>
+      <tr><td><strong>6–12 meses</strong></td><td>SSO Corporativo — Microsoft Entra ID / Google Workspace (OIDC)</td><td><span class="badge badge-green">Alto</span></td><td><span class="badge badge-amber">Alta</span></td></tr>
+      <tr><td><strong>6–12 meses</strong></td><td>API pública REST para integrações externas (ERP, BI)</td><td><span class="badge badge-blue">Médio</span></td><td><span class="badge badge-amber">Alta</span></td></tr>
+      <tr><td><strong>6–12 meses</strong></td><td>Exportação de relatórios PDF via servidor (Puppeteer/headless)</td><td><span class="badge badge-blue">Médio</span></td><td><span class="badge badge-blue">Média</span></td></tr>
+      <tr><td><strong>12–18 meses</strong></td><td>Multi-tenancy — suporte a múltiplas organizações isoladas</td><td><span class="badge badge-green">Alto</span></td><td><span class="badge badge-red">Muito Alta</span></td></tr>
+      <tr><td><strong>12–18 meses</strong></td><td>Mobile App (React Native) — consulta e aprovações mobile</td><td><span class="badge badge-blue">Médio</span></td><td><span class="badge badge-amber">Alta</span></td></tr>
+      <tr><td><strong>12–18 meses</strong></td><td>IA Generativa — assistente de criação de plano de projeto e análise de riscos</td><td><span class="badge badge-green">Alto</span></td><td><span class="badge badge-amber">Alta</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>12.2 Migração de Banco — SQLite para PostgreSQL</h3>
+  <p>A migração de libsql para PostgreSQL requer apenas 3 alterações no codebase, sem impacto nos modelos ou queries Prisma:</p>
+  <div class="code-label">schema.prisma — antes e depois</div>
+  <pre><code><span class="code-comment">// ANTES (atual)</span>
+datasource db {
+  provider = <span class="code-str">"sqlite"</span>
+  url      = env(<span class="code-str">"TURSO_DATABASE_URL"</span>)
+}
+
+<span class="code-comment">// DEPOIS (PostgreSQL — Neon ou Supabase)</span>
+datasource db {
+  provider  = <span class="code-str">"postgresql"</span>
+  url       = env(<span class="code-str">"DATABASE_URL"</span>)
+  directUrl = env(<span class="code-str">"DIRECT_URL"</span>)  <span class="code-comment">← para migrations</span>
+}</code></pre>
+  <p>O adapter libsql em <span class="code-inline">lib/db.ts</span> é removido e substituído pelo Prisma Client padrão. Todos os 16 modelos, relações e queries permanecem idênticos. Tempo estimado de migração: <strong>1 dia de trabalho</strong> + janela de migração de dados.</p>
+
+  <h3>12.3 Implementação de Testes Automatizados</h3>
+  <table>
+    <thead><tr><th>Tipo</th><th>Ferramenta</th><th>Cobertura Alvo</th><th>Foco</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Unit Tests</strong></td><td>Vitest</td><td>80% de funções de lógica de negócio</td><td>Cálculos EVM, formatadores, helpers, validações Zod</td></tr>
+      <tr><td><strong>Integration Tests</strong></td><td>Vitest + Prisma test client</td><td>100% dos Route Handlers críticos</td><td>CRUD de projetos, autenticação, uploads</td></tr>
+      <tr><td><strong>E2E Tests</strong></td><td>Playwright</td><td>Fluxos críticos do usuário</td><td>Login, criar projeto, registrar reunião, gerar ATA</td></tr>
+      <tr><td><strong>Visual Regression</strong></td><td>Chromatic (Storybook)</td><td>Componentes UI principais</td><td>Previne regressões visuais em updates de dependências</td></tr>
+    </tbody>
+  </table>
+
+  <h3>12.4 API Pública — Estratégia de Extensão</h3>
+  <p>Para suportar integrações com sistemas externos (ERP, Power BI, ferramentas de BI), a evolução natural é expor uma API REST pública documentada:</p>
+  <ul>
+    <li><strong>Autenticação:</strong> API Keys (tokens de longa duração) gerenciadas pelo ADMIN via interface de configuração</li>
+    <li><strong>Documentação:</strong> OpenAPI 3.0 gerada automaticamente via <span class="code-inline">zod-to-openapi</span> + Swagger UI em <span class="code-inline">/api/docs</span></li>
+    <li><strong>Versionamento:</strong> Prefixo de versão na URL (<span class="code-inline">/api/v1/projects</span>) para compatibilidade retroativa</li>
+    <li><strong>Rate Limiting:</strong> Upstash Redis com limites por API Key (ex: 1.000 req/hora)</li>
+    <li><strong>Webhooks:</strong> Notificação de eventos (projeto criado, status alterado) para sistemas externos via HTTP POST</li>
+  </ul>
+
+  <h3>12.5 Multi-tenancy — Isolamento por Organização</h3>
+  <p>Para suportar múltiplas organizações no mesmo deployment (modelo SaaS), a estratégia recomendada é <strong>Row-Level Security (RLS)</strong> com campo <span class="code-inline">orgId</span> em todos os modelos:</p>
+  <ul>
+    <li>Adicionar modelo <span class="code-inline">Organization</span> e campo <span class="code-inline">orgId</span> em User, Project e demais modelos</li>
+    <li>Middleware Prisma que injeta automaticamente <span class="code-inline">where: { orgId: session.user.orgId }</span> em todas as queries</li>
+    <li>Subdomínio por organização (<span class="code-inline">vendemmia.planner.com.br</span>) resolvido via middleware Next.js</li>
+    <li>Isolamento de dados garantido em nível de ORM — sem possibilidade de vazamento entre organizações</li>
+  </ul>
+
+  <h3>12.6 Integração com IA Generativa</h3>
+  <p>A plataforma está bem posicionada para incorporar IA generativa em funcionalidades de alto valor:</p>
+  <table>
+    <thead><tr><th>Funcionalidade</th><th>Tecnologia</th><th>Descrição</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Geração de Plano de Projeto</strong></td><td>Claude API (Anthropic)</td><td>A partir do escopo descrito, gerar WBS, cronograma sugerido e identificação de riscos automaticamente</td></tr>
+      <tr><td><strong>Análise de Riscos</strong></td><td>Claude API</td><td>Analisar descrição do projeto e sugerir riscos com probabilidade/impacto e mitigações</td></tr>
+      <tr><td><strong>Resumo de ATA</strong></td><td>Claude API</td><td>Sintetizar conteúdo de reunião em bullet points executivos para o Status Report</td></tr>
+      <tr><td><strong>Previsão de Prazo (EVM)</strong></td><td>ML / regressão linear</td><td>Prever data de conclusão baseada no histórico de progresso e IDC/IDP atuais</td></tr>
+    </tbody>
+  </table>
+
+  <h3>12.7 Considerações Finais de Arquitetura</h3>
+  <div class="tech-box">
+    <div class="tech-box-title">Princípio Orientador de Evolução</div>
+    <p>O Planner foi construído com a filosofia de <strong>"simplicidade agora, extensibilidade depois"</strong>. A escolha do Next.js monolito modular permite que o time entregue valor rapidamente sem overhead de microsserviços. Quando um domínio crescer suficientemente (ex: Analytics, Notificações, API Pública), ele pode ser extraído para um serviço dedicado sem refatorar o restante do sistema. O Prisma Schema é a fonte única da verdade — qualquer refatoração de infraestrutura começa e termina ali.</p>
+  </div>
+
+  <div class="success-box">
+    <div class="success-box-title">Resumo do Posicionamento Técnico</div>
+    <p>O Planner está implementado sobre um stack moderno, production-ready e alinhado com as melhores práticas da indústria (2025/2026). A combinação Next.js + Prisma + Vercel oferece velocidade de desenvolvimento 3-5× superior a stacks tradicionais (Java/Spring, .NET MVC), com escalabilidade suficiente para suportar centenas de usuários simultâneos sem custo de operações (DevOps). A arquitetura está preparada para crescer junto com as necessidades da Vendemmia.</p>
+  </div>
+
+  <table>
+    <thead><tr><th colspan="2" style="text-align:center; background:#0F172A;">Ficha Técnica do Sistema — Resumo Executivo</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Framework</strong></td><td>Next.js 16 App Router com React 19 e TypeScript 5</td></tr>
+      <tr><td><strong>Banco de Dados</strong></td><td>SQLite distribuído via Turso/libsql + Prisma 7 ORM</td></tr>
+      <tr><td><strong>Autenticação</strong></td><td>NextAuth v5 — JWT + bcrypt + RBAC (6 papéis)</td></tr>
+      <tr><td><strong>Armazenamento</strong></td><td>Vercel Blob — CDN global, sem configuração</td></tr>
+      <tr><td><strong>Hospedagem</strong></td><td>Vercel — serverless, Edge Network, 99,99% SLA</td></tr>
+      <tr><td><strong>Modelos de Dados</strong></td><td>16 modelos Prisma + 12 enums tipados</td></tr>
+      <tr><td><strong>SLA de Disponibilidade</strong></td><td>99,9% mensal (~43 min/mês de downtime máximo)</td></tr>
+      <tr><td><strong>Conformidade</strong></td><td>LGPD, OWASP Top 10, SOC 2 (infraestrutura)</td></tr>
+      <tr><td><strong>Versão</strong></td><td>1.0.0 — Maio/2026</td></tr>
+      <tr><td><strong>Acesso ao Documento</strong></td><td>Restrito — Administrador do sistema</td></tr>
+    </tbody>
+  </table>
+</div>
+
+</body>
+</html>
