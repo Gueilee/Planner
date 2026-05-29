@@ -24,12 +24,7 @@ export default async function StatusReportPage() {
     orderBy: { createdAt: "asc" },
     include: {
       sponsor: { select: { name: true } },
-      members: {
-        select: {
-          role: true,
-          user: { select: { name: true } },
-        },
-      },
+      members: { select: { role: true, user: { select: { name: true } } } },
       tasks: {
         select: {
           title: true, status: true, progress: true,
@@ -54,9 +49,7 @@ export default async function StatusReportPage() {
         take: 1,
         select: { date: true, title: true, location: true, content: true, decisions: true, nextActions: true },
       },
-      _count: {
-        select: { meetings: true },
-      },
+      _count: { select: { meetings: true } },
     },
   })
 
@@ -74,20 +67,23 @@ export default async function StatusReportPage() {
       ? Math.round(tasks.reduce((s, t) => s + t.progress, 0) / total)
       : (p.status === "COMPLETED" ? 100 : 0)
 
-    // EVM
+    // IDC
     const earnedValue   = tasks.reduce((s, t) => s + (t.budgetedCost ?? 0) * (t.progress / 100), 0)
     const actualCostSum = tasks.reduce((s, t) => s + (t.actualCost ?? 0), 0)
     const idc = actualCostSum > 0 ? Math.round((earnedValue / actualCostSum) * 100) / 100 : null
 
+    // IDP — usa datas em cascata: actual → suggested → expected
     let idp: number | null = null
     let timelineProgress: number | null = null
-    if (p.expectedStart && p.expectedEnd) {
-      const totalDays   = differenceInDays(p.expectedEnd, p.expectedStart)
-      const elapsedDays = differenceInDays(today, p.expectedStart)
+    const pStart = p.actualStart ?? p.suggestedStart ?? p.expectedStart
+    const pEnd   = p.expectedEnd  ?? p.suggestedEnd
+    if (pStart && pEnd) {
+      const totalDays   = differenceInDays(pEnd, pStart)
+      const elapsedDays = differenceInDays(today, pStart)
       if (totalDays > 0) {
         const plannedPct = Math.min(100, Math.max(0, (elapsedDays / totalDays) * 100))
         timelineProgress = Math.round(plannedPct)
-        if (plannedPct > 5) idp = Math.round((avgProgress / plannedPct) * 100) / 100
+        if (plannedPct > 2) idp = Math.round((avgProgress / plannedPct) * 100) / 100
       }
     }
 
@@ -113,10 +109,39 @@ export default async function StatusReportPage() {
     }
     atRiskTasks.sort((a, b) => b.daysLate - a.daysLate)
 
-    const daysLeft   = p.expectedEnd ? differenceInDays(p.expectedEnd, today) : null
-    const lastMtg    = p.meetings[0] ?? null
-    const rawSteps   = lastMtg?.nextActions || lastMtg?.decisions || null
-    const nextSteps  = rawSteps
+    // Task details — com responsável e datas
+    const taskDetails: ProjectSlideData["taskDetails"] = {
+      recentlyCompleted: completed.slice(-5).map((t) => ({ title: t.title })),
+      inProgress: inProgress.slice(0, 6).map((t) => ({
+        title:       t.title,
+        responsible: t.responsible?.name ?? null,
+        endDate:     t.endDate?.toISOString() ?? null,
+      })),
+      delayed: delayed.slice(0, 5).map((t) => {
+        const ref = t.endDate ?? t.startDate
+        return {
+          title:       t.title,
+          responsible: t.responsible?.name ?? null,
+          endDate:     ref?.toISOString() ?? null,
+          daysLate:    ref ? Math.max(0, differenceInDays(today, new Date(ref))) : 0,
+        }
+      }),
+      upcoming: tasks
+        .filter((t) => (t.status === "PLANNING" || t.status === "IN_PROGRESS") && t.endDate && new Date(t.endDate) >= today)
+        .sort((a, b) => (a.endDate?.getTime() ?? 0) - (b.endDate?.getTime() ?? 0))
+        .slice(0, 5)
+        .map((t) => ({
+          title:       t.title,
+          responsible: t.responsible?.name ?? null,
+          daysUntil:   t.endDate ? differenceInDays(new Date(t.endDate), today) : 0,
+          endDate:     t.endDate?.toISOString() ?? null,
+        })),
+    }
+
+    const daysLeft = pEnd ? differenceInDays(pEnd, today) : null
+    const lastMtg  = p.meetings[0] ?? null
+    const rawSteps = lastMtg?.nextActions || lastMtg?.decisions || null
+    const nextSteps = rawSteps
       ?.split("\n").map((l) => l.replace(/^[-•*\d.]\s*/, "").trim()).filter(Boolean).slice(0, 5) ?? []
 
     const wbsSummary = p.wbsAreas
@@ -143,6 +168,7 @@ export default async function StatusReportPage() {
         inProgressTitles: inProgress.slice(0, 5).map((t) => t.title),
         plannedTitles:    planning.slice(0, 4).map((t) => t.title),
       },
+      taskDetails,
       risks: {
         critical: p.risks.filter((r) => r.status === "CRITICAL").length,
         high:     p.risks.filter((r) => r.status === "HIGH").length,
@@ -152,18 +178,15 @@ export default async function StatusReportPage() {
       economy: p.economy,
       budget:  p.budget,
       lastCheckpoint: lastMtg ? {
-        date:       lastMtg.date.toISOString(),
-        title:      lastMtg.title,
-        location:   lastMtg.location ?? null,
-        highlights: lastMtg.content  ?? null,
-        decisions:  lastMtg.decisions ?? null,
-        nextSteps,
+        date: lastMtg.date.toISOString(), title: lastMtg.title,
+        location: lastMtg.location ?? null, highlights: lastMtg.content ?? null,
+        decisions: lastMtg.decisions ?? null, nextSteps,
       } : null,
       atRiskTasks: atRiskTasks.slice(0, 6),
       wbsAreas: wbsSummary,
       dates: {
         start:  p.actualStart?.toISOString()  ?? p.expectedStart?.toISOString() ?? null,
-        end:    p.expectedEnd?.toISOString()   ?? null,
+        end:    pEnd?.toISOString()            ?? null,
         goLive: p.goLiveDate?.toISOString()    ?? null,
       },
       reportStatus: {
