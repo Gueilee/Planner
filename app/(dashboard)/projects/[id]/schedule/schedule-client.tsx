@@ -16,6 +16,7 @@ import {
   Loader2, X, Check, CalendarDays, AlertTriangle, Layers,
   List, BarChart2, Search, FolderOpen, Paperclip,
   Link2, Lock, ArrowRight, GripVertical, FileSpreadsheet, ArrowUpDown,
+  Upload, Download, FileText, FileImage, FileArchive,
 } from "lucide-react"
 import {
   createTask, updateTask, deleteTask, createArea,
@@ -35,8 +36,8 @@ const HDR_H   = 64
 const LEFT_W  = 600
 // List view: fixed column widths so header and rows always share the same total width
 const COL_NAME  = 280
-// 24+72+60+280+130+120+88+88+88+88+64+64+68+68+100
-const LIST_MIN_W = 1402
+// 24+72+84+280+130+120+88+88+88+88+64+64+68+68+100
+const LIST_MIN_W = 1426
 const BAR_H   = 24
 const BAR_PAD = 8
 
@@ -717,6 +718,135 @@ function TaskForm({ mode, initial, areas, members, allTasks, onSave, onDelete, o
   )
 }
 
+// ─── Evidence Panel ───────────────────────────────────────────────────────────
+
+function EvidencePanel({ taskId, projectId, taskTitle, onClose, onUploaded }: {
+  taskId: string
+  projectId: string
+  taskTitle: string
+  onClose: () => void
+  onUploaded: (count: number) => void
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [atts, setAtts] = useState<{ id: string; fileName: string; fileUrl: string; fileType: string; fileSize: number | null }[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [loading,   setLoading]   = useState(true)
+
+  useEffect(() => {
+    getTaskAttachments(taskId).then((data) => { setAtts(data); setLoading(false) }).catch(() => setLoading(false))
+  }, [taskId])
+
+  async function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? [])
+    if (!files.length) return
+    e.target.value = ""
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      for (const f of files) fd.append("files", f)
+      const res  = await fetch("/api/upload", { method: "POST", body: fd })
+      const json = await res.json() as { files: { name: string; url: string; size: number }[] }
+      const uploads: AttachmentUpload[] = json.files.map((f, i) => ({
+        fileName: f.name,
+        fileUrl:  f.url,
+        fileType: files[i]?.type ?? "application/octet-stream",
+        fileSize: f.size,
+      }))
+      await addTaskAttachments(taskId, projectId, uploads)
+      const refreshed = await getTaskAttachments(taskId)
+      onUploaded(refreshed.length)
+      setAtts(refreshed)
+    } catch {}
+    setUploading(false)
+  }
+
+  function attIcon(fileName: string) {
+    const ext = fileName.split(".").pop()?.toLowerCase() ?? ""
+    if (["jpg","jpeg","png","gif","webp","svg"].includes(ext)) return FileImage
+    if (["zip","rar","7z","tar"].includes(ext)) return FileArchive
+    if (["pdf","doc","docx","xls","xlsx","ppt","pptx"].includes(ext)) return FileText
+    return Paperclip
+  }
+
+  function fmtSize(bytes: number | null) {
+    if (!bytes) return ""
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  return (
+    <div className="fixed inset-y-0 right-0 z-50 flex flex-col bg-white shadow-2xl" style={{ width: 360, borderLeft: "1px solid #E2E8F0" }}>
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+        <div className="min-w-0">
+          <h3 className="font-black text-[#0F172A] text-sm flex items-center gap-2">
+            <Paperclip className="w-4 h-4 text-violet-500 shrink-0" />
+            Evidências da Conclusão
+          </h3>
+          <p className="text-[10px] text-slate-400 mt-0.5 truncate">{taskTitle}</p>
+        </div>
+        <button onClick={onClose} className="text-slate-400 hover:text-[#0F172A] transition-colors shrink-0 ml-2">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* List */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-2" style={{ scrollbarWidth: "thin" }}>
+        {loading ? (
+          <div className="flex items-center justify-center h-24">
+            <Loader2 className="w-5 h-5 animate-spin text-violet-400" />
+          </div>
+        ) : atts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-slate-300 text-center">
+            <Paperclip className="w-10 h-10 mb-3" />
+            <p className="text-sm font-semibold text-slate-400">Nenhuma evidência ainda</p>
+            <p className="text-xs text-slate-300 mt-1">Faça upload de arquivos que comprovem a conclusão desta atividade</p>
+          </div>
+        ) : (
+          atts.map((att) => {
+            const Icon = attIcon(att.fileName)
+            return (
+              <a
+                key={att.id}
+                href={att.fileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                download={att.fileName}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white border border-slate-100 hover:border-violet-200 hover:shadow-sm transition-all group"
+              >
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                  style={{ background: "linear-gradient(135deg, rgba(123,47,190,0.08), rgba(147,51,234,0.12))" }}>
+                  <Icon className="w-4 h-4 text-violet-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-slate-700 truncate group-hover:text-violet-700 transition-colors">{att.fileName}</p>
+                  {att.fileSize && <p className="text-[10px] text-slate-400 mt-0.5">{fmtSize(att.fileSize)}</p>}
+                </div>
+                <Download className="w-3.5 h-3.5 text-slate-300 group-hover:text-violet-500 transition-colors shrink-0" />
+              </a>
+            )
+          })
+        )}
+      </div>
+
+      {/* Footer upload */}
+      <div className="px-4 py-4 border-t border-slate-100 space-y-2">
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="w-full flex items-center justify-center gap-2 h-10 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 hover:opacity-90 active:scale-[0.98]"
+          style={{ background: "linear-gradient(135deg, #7B2FBE, #2463FF)", boxShadow: "0 4px 12px rgba(123,47,190,0.25)" }}
+        >
+          {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+          {uploading ? "Enviando..." : "Adicionar Evidência"}
+        </button>
+        <p className="text-center text-[10px] text-slate-300">Excel · PDF · Imagens · Word · Qualquer formato</p>
+        <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFiles} />
+      </div>
+    </div>
+  )
+}
+
 // ─── Area Form ────────────────────────────────────────────────────────────────
 
 function AreaForm({ projectId, onSave, onClose }: { projectId: string; onSave: (a: Area) => void; onClose: () => void }) {
@@ -893,6 +1023,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
   const [zoom, setZoom] = useState<Zoom>("week")
 
   const [panel, setPanel]         = useState<{ mode: "add" | "edit"; task: Partial<Task> & { projectId: string } } | null>(null)
+  const [evidencePanel, setEvidencePanel] = useState<{ taskId: string; title: string } | null>(null)
   const [pending, start]          = useTransition()
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
@@ -1346,7 +1477,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
             <div className="flex items-center border-b border-slate-100 bg-[#0F172A]" style={{ height: 44, minWidth: LIST_MIN_W }}>
               <div style={{ width: 24, flexShrink: 0 }} />
               <div style={{ width: 72, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest pl-4">EAP</div>
-              <div style={{ width: 60, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Ações</div>
+              <div style={{ width: 84, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Ações</div>
               <div style={{ width: COL_NAME, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest px-2">Nome da Atividade</div>
               <div style={{ width: 130, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Status</div>
               <div style={{ width: 120, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest px-3">Responsável</div>
@@ -1417,7 +1548,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                       </div>
 
                       {/* Inline actions for area */}
-                      <div style={{ width: 60 }} className="flex items-center justify-center gap-0.5 shrink-0">
+                      <div style={{ width: 84 }} className="flex items-center justify-center gap-0.5 shrink-0">
                         {row.id !== "__ungrouped__" && (
                           <button
                             onClick={() => openAdd(undefined, row.id)}
@@ -1526,7 +1657,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                     </div>
 
                     {/* Inline action buttons — always visible, between EAP and name */}
-                    <div style={{ width: 60 }} className="flex items-center justify-center gap-0.5 shrink-0">
+                    <div style={{ width: 84 }} className="flex items-center justify-center gap-0.5 shrink-0">
                       {!isTarefa && (
                         <button
                           onClick={() => openAdd(t.id)}
@@ -1544,6 +1675,18 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                         style={{ background: "#FEF9C3", color: "#CA8A04" }}
                       >
                         <Pencil className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={() => setEvidencePanel({ taskId: t.id, title: t.title })}
+                        title="Evidências da conclusão"
+                        className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
+                        style={
+                          t._count.attachments > 0
+                            ? { background: "#EDE9FE", color: "#7C3AED" }
+                            : { background: "#F1F5F9", color: "#94A3B8" }
+                        }
+                      >
+                        <Paperclip className="w-3 h-3" />
                       </button>
                       <button
                         onClick={() => handleDelete(t.id)}
@@ -2364,6 +2507,26 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
             onSave={handleSaved}
             onDelete={panel.mode === "edit" && panel.task.id ? () => handleDelete(panel.task.id!) : undefined}
             onClose={() => setPanel(null)}
+          />
+        </>
+      )}
+
+      {/* ── Evidence panel ───────────────────────────────────────────────── */}
+      {evidencePanel && (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[1px]" onClick={() => setEvidencePanel(null)} />
+          <EvidencePanel
+            taskId={evidencePanel.taskId}
+            projectId={project.id}
+            taskTitle={evidencePanel.title}
+            onClose={() => setEvidencePanel(null)}
+            onUploaded={(count) => {
+              setTasks((prev) => prev.map((t) =>
+                t.id === evidencePanel.taskId
+                  ? { ...t, _count: { ...t._count, attachments: count } }
+                  : t
+              ))
+            }}
           />
         </>
       )}

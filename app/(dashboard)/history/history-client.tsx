@@ -700,6 +700,7 @@ function ProjectHistoryView({ data }: { data: NonNullable<FullHistory> }) {
                     ? `${(att.fileSize / 1024).toFixed(1)} KB`
                     : `${(att.fileSize / (1024 * 1024)).toFixed(1)} MB`
                   : ""
+                const taskTitle = "task" in att && att.task ? (att.task as { title: string }).title : null
                 return (
                   <a
                     key={att.id}
@@ -718,6 +719,11 @@ function ProjectHistoryView({ data }: { data: NonNullable<FullHistory> }) {
                         {att.fileName}
                       </p>
                       <p className="text-[10px] text-gray-400 mt-0.5">
+                        {taskTitle && (
+                          <span className="inline-flex items-center gap-0.5 mr-1.5 px-1.5 py-0.5 rounded-md font-bold text-violet-500 bg-violet-50">
+                            Evidência · {taskTitle}
+                          </span>
+                        )}
                         {att.fileType.toUpperCase()}{sizeFmt ? ` · ${sizeFmt}` : ""}
                         {" · "}{new Date(att.uploadedAt).toLocaleDateString("pt-BR")}
                       </p>

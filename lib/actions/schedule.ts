@@ -189,7 +189,7 @@ export async function addTaskAttachments(taskId: string, projectId: string, atta
 
   for (const att of attachments) {
     await db.attachment.create({
-      data: { taskId, fileName: att.fileName, fileUrl: att.fileUrl, fileType: att.fileType, fileSize: att.fileSize },
+      data: { taskId, projectId, fileName: att.fileName, fileUrl: att.fileUrl, fileType: att.fileType, fileSize: att.fileSize },
     })
   }
 

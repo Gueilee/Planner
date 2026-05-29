@@ -64,7 +64,10 @@ export async function getProjectFullHistory(projectId: string) {
       },
       documents: { orderBy: { createdAt: "asc" } },
       statusReports: { orderBy: { createdAt: "asc" } },
-      attachments: { orderBy: { uploadedAt: "asc" } },
+      attachments: {
+        orderBy: { uploadedAt: "asc" },
+        include: { task: { select: { title: true } } },
+      },
     },
   })
 }
