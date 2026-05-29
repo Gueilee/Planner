@@ -23,6 +23,11 @@ export default async function DashboardPage() {
     ProjectStatus.ON_HOLD, ProjectStatus.FUTURE_ANALYSIS,
   ]
 
+  const ACTIVE: ProjectStatus[] = [
+    ProjectStatus.IN_PROGRESS, ProjectStatus.PILOT, ProjectStatus.RAMP_UP,
+    ProjectStatus.GO_LIVE, ProjectStatus.POST_GOLIVE,
+  ]
+
   const taskSel = {
     id: true, title: true, endDate: true, status: true,
     project:     { select: { id: true, title: true } },
@@ -36,13 +41,15 @@ export default async function DashboardPage() {
     upcomingProjects,
     overdueTasks,
     upcomingTasks,
+    onHoldProjects,
+    riskProjects,
   ] = await Promise.all([
     db.project.findMany({ select: { status: true } }),
 
     db.project.findMany({
       where: { expectedEnd: { lt: today }, status: { in: NOT_DONE } },
       orderBy: { expectedEnd: "asc" },
-      take: 8,
+      take: 6,
       select: {
         id: true, title: true, status: true, expectedEnd: true,
         sponsor: { select: { name: true } },
@@ -69,6 +76,31 @@ export default async function DashboardPage() {
       take: 6,
       select: taskSel,
     }),
+
+    // Projetos em espera (ON_HOLD)
+    db.project.findMany({
+      where: { status: ProjectStatus.ON_HOLD },
+      orderBy: { updatedAt: "desc" },
+      take: 5,
+      select: { id: true, title: true, expectedEnd: true, sponsor: { select: { name: true } } },
+    }),
+
+    // Projetos ativos com pelo menos 1 risco ALTO ou CRÍTICO
+    db.project.findMany({
+      where: {
+        status: { in: ACTIVE },
+        risks: { some: { status: { in: ["HIGH", "CRITICAL"] } } },
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 5,
+      select: {
+        id: true, title: true, status: true,
+        risks: {
+          where: { status: { in: ["HIGH", "CRITICAL"] } },
+          select: { status: true },
+        },
+      },
+    }),
   ])
 
   const countByStatus: Record<string, number> = {}
@@ -76,10 +108,6 @@ export default async function DashboardPage() {
     countByStatus[p.status] = (countByStatus[p.status] ?? 0) + 1
   }
 
-  const ACTIVE = [
-    ProjectStatus.IN_PROGRESS, ProjectStatus.PILOT, ProjectStatus.RAMP_UP,
-    ProjectStatus.GO_LIVE, ProjectStatus.POST_GOLIVE,
-  ]
   const totalProjects = allStatuses.length
   const inProgress    = ACTIVE.reduce((s, k) => s + (countByStatus[k] ?? 0), 0)
   const completed     = countByStatus[ProjectStatus.COMPLETED] ?? 0
@@ -117,6 +145,18 @@ export default async function DashboardPage() {
             project:     t.project,
             responsible: t.responsible,
             wbsArea:     t.wbsArea,
+          }))}
+          onHoldProjects={onHoldProjects.map((p) => ({
+            id: p.id, title: p.title,
+            expectedEnd: toISO(p.expectedEnd),
+            sponsorName: p.sponsor?.name ?? null,
+          }))}
+          riskProjects={riskProjects.map((p) => ({
+            id:           p.id,
+            title:        p.title,
+            status:       p.status,
+            criticalCount: p.risks.filter((r) => r.status === "CRITICAL").length,
+            highCount:     p.risks.filter((r) => r.status === "HIGH").length,
           }))}
         />
       </div>

@@ -6,7 +6,7 @@ import { ptBR } from "date-fns/locale"
 import {
   FolderKanban, TrendingUp, CheckCircle2, Activity, Target,
   ChevronRight, AlertTriangle, CalendarClock, Zap,
-  ArrowRight, Clock, User, CircleDot,
+  ArrowRight, Clock, User, CircleDot, PauseCircle, ShieldAlert,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
@@ -26,10 +26,12 @@ interface DashboardClientProps {
   user: { name: string; email: string; role: string }
   stats: { totalProjects: number; inProgress: number; completed: number; successRate: number }
   countByStatus: Record<string, number>
-  overdueProjects: Array<{ id: string; title: string; status: string; expectedEnd: string | null; sponsorName?: string | null }>
+  overdueProjects:  Array<{ id: string; title: string; status: string; expectedEnd: string | null; sponsorName?: string | null }>
   upcomingProjects: Array<{ id: string; title: string; status: string; expectedEnd: string | null }>
-  overdueTasks: TaskItem[]
-  upcomingTasks: TaskItem[]
+  overdueTasks:     TaskItem[]
+  upcomingTasks:    TaskItem[]
+  onHoldProjects:   Array<{ id: string; title: string; expectedEnd: string | null; sponsorName?: string | null }>
+  riskProjects:     Array<{ id: string; title: string; status: string; criticalCount: number; highCount: number }>
 }
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -153,6 +155,7 @@ export function DashboardClient({
   user, stats, countByStatus,
   overdueProjects, upcomingProjects,
   overdueTasks, upcomingTasks,
+  onHoldProjects, riskProjects,
 }: DashboardClientProps) {
   const firstName = user.name.split(" ")[0]
   const hour      = new Date().getHours()
@@ -343,63 +346,132 @@ export function DashboardClient({
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
 
         {/* Atenção Necessária */}
-        <div
-          className="rounded-2xl p-5"
-          style={{ background: "#fff", border: "1px solid #F1F5F9", boxShadow: "0 1px 8px rgba(0,0,0,0.04)" }}
-        >
-          <SectionHeader
-            title="Atenção Necessária"
-            sub={overdueProjects.length > 0 ? `${overdueProjects.length} projetos com prazo vencido` : "Nenhum prazo vencido"}
-            href="/projects"
-          />
+        {(() => {
+          // Build unified alert list sorted by severity
+          type AlertKind = "OVERDUE" | "ON_HOLD" | "CRITICAL_RISK" | "HIGH_RISK"
+          type AlertItem = { id: string; title: string; kind: AlertKind; meta: string; sub: string; severity: number }
 
-          {overdueProjects.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 gap-2 text-slate-300">
-              <CheckCircle2 className="w-8 h-8 text-emerald-300" />
-              <p className="text-sm font-semibold text-slate-400">Tudo em dia!</p>
-              <p className="text-xs text-slate-300">Nenhum projeto com prazo vencido</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {overdueProjects.map((p) => {
-                const days  = daysFromNow(p.expectedEnd)
-                const color = urgencyColor(days)
-                const bg    = urgencyBg(days)
-                return (
-                  <Link key={p.id} href={`/projects/${p.id}`}>
-                    <div
-                      className="flex items-center gap-3 p-3 rounded-xl transition-all hover:shadow-sm group"
-                      style={{ background: bg, border: `1px solid ${color}20` }}
-                    >
-                      <div className="w-1.5 h-10 rounded-full shrink-0" style={{ background: color }} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold text-[#0F172A] truncate group-hover:text-[#7B2FBE] transition-colors">
-                          {p.title}
-                        </p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">
-                          {STATUS_LABEL[p.status] ?? p.status}
-                          {p.sponsorName ? ` • ${p.sponsorName}` : ""}
-                        </p>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <span
-                          className="text-[10px] font-black px-2 py-0.5 rounded-full"
-                          style={{ background: `${color}15`, color }}>
-                          {Math.abs(days)}d atraso
-                        </span>
-                        {p.expectedEnd && (
-                          <p className="text-[9px] text-slate-400 mt-0.5">
-                            {format(parseISO(p.expectedEnd), "dd/MM/yy")}
-                          </p>
-                        )}
-                      </div>
+          const alerts: AlertItem[] = [
+            ...overdueProjects.map((p) => {
+              const d = Math.abs(daysFromNow(p.expectedEnd))
+              return {
+                id: p.id, title: p.title, kind: "OVERDUE" as AlertKind,
+                meta: `${d}d atraso`,
+                sub:  p.sponsorName ? `${STATUS_LABEL[p.status] ?? p.status} · ${p.sponsorName}` : (STATUS_LABEL[p.status] ?? p.status),
+                severity: 1,
+              }
+            }),
+            ...riskProjects
+              .filter((p) => p.criticalCount > 0)
+              .map((p) => ({
+                id: p.id, title: p.title, kind: "CRITICAL_RISK" as AlertKind,
+                meta: `${p.criticalCount} crítico${p.criticalCount > 1 ? "s" : ""}`,
+                sub:  STATUS_LABEL[p.status] ?? p.status,
+                severity: 1,
+              })),
+            ...riskProjects
+              .filter((p) => p.criticalCount === 0 && p.highCount > 0)
+              .map((p) => ({
+                id: p.id, title: p.title, kind: "HIGH_RISK" as AlertKind,
+                meta: `${p.highCount} risco${p.highCount > 1 ? "s" : ""} alto${p.highCount > 1 ? "s" : ""}`,
+                sub:  STATUS_LABEL[p.status] ?? p.status,
+                severity: 2,
+              })),
+            ...onHoldProjects.map((p) => ({
+              id: p.id, title: p.title, kind: "ON_HOLD" as AlertKind,
+              meta: "Em Espera",
+              sub:  p.expectedEnd ? `Prazo: ${format(parseISO(p.expectedEnd), "dd/MM/yy")}` : "Sem prazo definido",
+              severity: 3,
+            })),
+          ].sort((a, b) => a.severity - b.severity)
+
+          const KIND_CFG: Record<AlertKind, { color: string; bg: string; border: string; icon: React.ElementType; label: string }> = {
+            OVERDUE:       { color: "#EF4444", bg: "#FEF2F2", border: "#FECACA", icon: AlertTriangle, label: "Prazo vencido"   },
+            CRITICAL_RISK: { color: "#DC2626", bg: "#FEF2F2", border: "#FECACA", icon: ShieldAlert,   label: "Risco crítico"  },
+            HIGH_RISK:     { color: "#F97316", bg: "#FFF7ED", border: "#FED7AA", icon: ShieldAlert,   label: "Risco alto"     },
+            ON_HOLD:       { color: "#7C3AED", bg: "#F5F3FF", border: "#DDD6FE", icon: PauseCircle,   label: "Em espera"      },
+          }
+
+          const totalAlerts = alerts.length
+
+          return (
+            <div
+              className="rounded-2xl p-5"
+              style={{ background: "#fff", border: "1px solid #F1F5F9", boxShadow: "0 1px 8px rgba(0,0,0,0.04)" }}
+            >
+              <SectionHeader
+                title="Atenção Necessária"
+                sub={totalAlerts > 0 ? `${totalAlerts} ponto${totalAlerts > 1 ? "s" : ""} requer${totalAlerts === 1 ? "" : "em"} atenção` : "Tudo sob controle"}
+                href="/projects"
+              />
+
+              {totalAlerts === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 gap-2">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+                  <p className="text-sm font-semibold text-slate-500">Tudo em dia!</p>
+                  <p className="text-xs text-slate-300">Nenhum projeto com prazo vencido,<br />em espera ou com risco crítico</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {alerts.map((a) => {
+                    const cfg  = KIND_CFG[a.kind]
+                    const Icon = cfg.icon
+                    return (
+                      <Link key={`${a.kind}-${a.id}`} href={`/projects/${a.id}`}>
+                        <div
+                          className="flex items-center gap-3 p-3 rounded-xl transition-all hover:shadow-sm group cursor-pointer"
+                          style={{ background: cfg.bg, border: `1px solid ${cfg.border}` }}
+                        >
+                          {/* Icon */}
+                          <div
+                            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+                            style={{ background: `${cfg.color}15` }}
+                          >
+                            <Icon className="w-3.5 h-3.5" style={{ color: cfg.color }} />
+                          </div>
+
+                          {/* Info */}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-[#0F172A] truncate group-hover:text-[#7B2FBE] transition-colors">
+                              {a.title}
+                            </p>
+                            <p className="text-[10px] text-slate-400 mt-0.5 truncate">{a.sub}</p>
+                          </div>
+
+                          {/* Badge */}
+                          <span
+                            className="text-[10px] font-black px-2 py-0.5 rounded-full shrink-0 whitespace-nowrap"
+                            style={{ background: `${cfg.color}15`, color: cfg.color }}
+                          >
+                            {a.meta}
+                          </span>
+                        </div>
+                      </Link>
+                    )
+                  })}
+
+                  {/* Legend */}
+                  {alerts.length > 0 && (
+                    <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-50 mt-1">
+                      {(["OVERDUE","CRITICAL_RISK","HIGH_RISK","ON_HOLD"] as AlertKind[])
+                        .filter((k) => alerts.some((a) => a.kind === k))
+                        .map((k) => {
+                          const cfg = KIND_CFG[k]
+                          const count = alerts.filter((a) => a.kind === k).length
+                          return (
+                            <span key={k} className="flex items-center gap-1 text-[10px] font-semibold" style={{ color: cfg.color }}>
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: cfg.color }} />
+                              {cfg.label} ({count})
+                            </span>
+                          )
+                        })}
                     </div>
-                  </Link>
-                )
-              })}
+                  )}
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          )
+        })()}
 
         {/* Próximas Entregas */}
         <div
