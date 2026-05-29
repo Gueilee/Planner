@@ -25,7 +25,6 @@ const NAV_ITEMS = [
   { label: "Consulta de Projetos", href: "/history",       icon: History },
 ]
 const SYSTEM_ITEMS = [
-  { label: "Usuários",      href: "/users",    icon: Users },
   { label: "Configurações", href: "/settings", icon: Settings },
 ]
 
