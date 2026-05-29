@@ -38,7 +38,14 @@ function fmtDate(d: Date): string {
 }
 
 function fmtDateTime(d: Date): string {
-  return format(d, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+  // Força fuso horário de Brasília (UTC-3) independente do servidor
+  const parts = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  }).formatToParts(d)
+  const get = (t: string) => parts.find(p => p.type === t)?.value ?? ""
+  return `${get("day")}/${get("month")}/${get("year")} às ${get("hour")}:${get("minute")}`
 }
 
 function section(num: number, title: string, body: string): string {
@@ -57,11 +64,9 @@ function hr(): string { return "\n\n---\n\n" }
 
 function encerramento(registeredBy: string, projectTitle: string): string {
   return (
-    `Não havendo mais assuntos a tratar, foi encerrada a presente reunião, ` +
-    `da qual eu, **${registeredBy}**, lavrei a presente ata que, depois de lida e aprovada, ` +
-    `será assinada pelos presentes.\n\n` +
-    `_O presente documento constitui registro formal das deliberações realizadas no âmbito ` +
-    `do projeto **${projectTitle}**._`
+    `Encerramos a reunião, onde eu, **${registeredBy}**, validei a ATA que será ` +
+    `encaminhada por e-mail aos participantes para registro.\n\n` +
+    `_O documento mostra as ações realizadas no projeto **${projectTitle}**._`
   )
 }
 
@@ -442,7 +447,7 @@ function buildDocument(opts: {
 
   const footer =
     `---\n\n` +
-    `_Documento gerado automaticamente pelo sistema Kronex em ${opts.generatedAt}_\n` +
+    `_Documento gerado automaticamente pelo sistema Planner em ${opts.generatedAt}_\n` +
     `_Projeto: ${opts.projectTitle} | ${opts.typeLabel}_`
 
   return header + hr() + opts.sections.join(hr()) + hr() + footer
