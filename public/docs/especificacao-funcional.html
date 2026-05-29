@@ -121,10 +121,28 @@ tbody tr:nth-child(even) td { background:#F8FAFC; }
 /* ── PAGE FOOTER ── */
 .page-footer { position:fixed; bottom:0; left:22mm; right:22mm; height:14mm; display:flex; align-items:center; justify-content:space-between; border-top:0.5pt solid #E2E8F0; font-size:7.5pt; color:#94A3B8; }
 
+/* ── SCREEN VIEWER (centraliza e adiciona fundo cinza) ── */
+@media screen {
+  html { background: #E2E8F0; }
+  body { background: transparent; padding: 32px 0 48px; }
+  .cover {
+    margin: 0 auto 24px;
+    border-radius: 6px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.22);
+  }
+  .page {
+    margin: 0 auto 16px;
+    background: #fff;
+    border-radius: 4px;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+  }
+}
+
 /* ── PRINT ── */
 @media print {
-  body { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-  .cover { page-break-after:always; }
+  body { -webkit-print-color-adjust:exact; print-color-adjust:exact; background:#fff; padding:0; }
+  .cover { page-break-after:always; border-radius:0; box-shadow:none; margin:0; }
+  .page { box-shadow:none; border-radius:0; margin:0; }
   .no-break { page-break-inside:avoid; }
   h3, h4 { page-break-after:avoid; }
 }
