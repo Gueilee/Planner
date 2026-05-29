@@ -325,9 +325,10 @@ model Meeting {
   title       String
   date        DateTime
   location    String?
-  content     String?
-  decisions   String?
-  nextActions String?
+  content      String?
+  decisions    String?
+  nextActions  String?
+  observations String?
 
   createdById String
   createdBy   User    @relation("MeetingCreator", fields: [createdById], references: [id])

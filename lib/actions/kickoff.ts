@@ -59,6 +59,7 @@ export async function saveKickOff(data: KickOffData) {
     attendeeIds: data.attendeeIds,
     externalAttendees: data.externalAttendees ?? [],
     notes: data.notes,
+    observations: data.observations ?? "",
     registeredAt: data.registeredAt,
   })
 
@@ -105,6 +106,7 @@ export async function registerKickOff(data: KickOffData) {
     attendeeIds: data.attendeeIds,
     externalAttendees: data.externalAttendees ?? [],
     notes: data.notes,
+    observations: data.observations ?? "",
     registeredAt,
   })
 
@@ -161,6 +163,7 @@ export async function registerKickOff(data: KickOffData) {
         location: data.location || null,
         content: data.objectives || null,
         decisions: data.notes || null,
+        observations: data.observations?.trim() || null,
         createdById: session.user.id,
       },
     })

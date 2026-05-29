@@ -125,7 +125,8 @@ async function buildCheckpointATA(
     section(3, "Atualização de Atividades", actSection),
     section(4, "Impedimentos Identificados", meeting.nextActions ?? ""),
     section(5, "Próximas Ações e Responsabilidades", meeting.decisions ?? ""),
-    section(6, "Encerramento", encerramento(meeting.createdBy.name, projectTitle)),
+    section(6, "Observações", meeting.observations ?? ""),
+    section(7, "Encerramento", encerramento(meeting.createdBy.name, projectTitle)),
   ]
 
   return buildDocument({
@@ -167,7 +168,8 @@ async function buildGoNoGoATA(
       (meeting.decisions ? `**Justificativa e Considerações:**\n\n${meeting.decisions}` : "")
     ),
     section(4, "Impacto e Próximos Passos", decisionInfo.impact),
-    section(5, "Encerramento", encerramento(meeting.createdBy.name, projectTitle)),
+    section(5, "Observações", meeting.observations ?? ""),
+    section(6, "Encerramento", encerramento(meeting.createdBy.name, projectTitle)),
   ]
 
   return buildDocument({
@@ -198,6 +200,7 @@ async function buildKickOffATA(
   let milestonesContent = ""
   let externalAttendees = ""
   let notes = meeting.decisions ?? ""
+  let observations = meeting.observations ?? ""
 
   if (kickoffDoc?.content) {
     try {
@@ -207,9 +210,11 @@ async function buildKickOffATA(
         milestones?: { label: string; date?: string; status?: string; description?: string }[]
         externalAttendees?: { name: string; role?: string }[]
         notes?: string
+        observations?: string
       }
-      if (data.objectives) objectives = data.objectives
-      if (data.notes)       notes      = data.notes
+      if (data.objectives)   objectives   = data.objectives
+      if (data.notes)        notes        = data.notes
+      if (data.observations) observations = data.observations
 
       if (data.eapAreas?.length) {
         eapContent = data.eapAreas.map((a, i) => {
@@ -234,14 +239,16 @@ async function buildKickOffATA(
     } catch { /* ignore parse error, use meeting fields */ }
   }
 
+  const base = externalAttendees ? 1 : 0
   const sections = [
     section(1, "Participantes Internos", participantTable(participants)),
     ...(externalAttendees ? [section(2, "Participantes Externos / Convidados", externalAttendees)] : []),
-    section(externalAttendees ? 3 : 2, "Objetivos do Projeto", objectives),
-    section(externalAttendees ? 4 : 3, "Estrutura Analítica do Projeto (EAP)", eapContent || "_EAP não detalhada neste registro_"),
-    section(externalAttendees ? 5 : 4, "Marcos e Milestones", milestonesContent || "_Marcos não informados_"),
-    section(externalAttendees ? 6 : 5, "Deliberações e Encaminhamentos", notes || "_Ver notas da reunião_"),
-    section(externalAttendees ? 7 : 6, "Encerramento", encerramento(meeting.createdBy.name, projectTitle)),
+    section(2 + base, "Objetivos do Projeto", objectives),
+    section(3 + base, "Estrutura Analítica do Projeto (EAP)", eapContent || "_EAP não detalhada neste registro_"),
+    section(4 + base, "Marcos e Milestones", milestonesContent || "_Marcos não informados_"),
+    section(5 + base, "Deliberações e Encaminhamentos", notes || "_Ver notas da reunião_"),
+    section(6 + base, "Observações", observations),
+    section(7 + base, "Encerramento", encerramento(meeting.createdBy.name, projectTitle)),
   ]
 
   return buildDocument({
@@ -381,7 +388,8 @@ async function buildClosureATA(
     section(3, "Avaliação Final e Entregáveis", meeting.content ?? ""),
     section(4, "Decisões e Deliberações Finais", meeting.decisions ?? ""),
     section(5, "Ações e Responsabilidades Pós-Projeto", meeting.nextActions ?? ""),
-    section(6, "Declaração Formal de Encerramento",
+    section(6, "Observações", meeting.observations ?? ""),
+    section(7, "Declaração Formal de Encerramento",
       `O projeto **${projectTitle}** está formalmente encerrado a partir desta data. ` +
       "Todos os entregáveis foram aceitos, os sistemas estão em operação e as responsabilidades " +
       "de suporte foram transferidas às equipes de operação." +
@@ -456,18 +464,19 @@ function buildDocument(opts: {
 // ─── Meeting type ─────────────────────────────────────────────────────────────
 
 type MeetingWithRelations = {
-  id:          string
-  projectId:   string
-  type:        string
-  title:       string
-  date:        Date
-  location:    string | null
-  content:     string | null
-  decisions:   string | null
-  nextActions: string | null
-  createdBy:   { name: string }
+  id:           string
+  projectId:    string
+  type:         string
+  title:        string
+  date:         Date
+  location:     string | null
+  content:      string | null
+  decisions:    string | null
+  nextActions:  string | null
+  observations: string | null
+  createdBy:    { name: string }
   participants: { user: { name: string; department: string | null } }[]
-  project:     { title: string }
+  project:      { title: string }
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -560,17 +569,18 @@ export async function generateMeetingATA(meetingId: string) {
 // ─── Direct Checkpoint ATA (uses session data, not DB reconstruction) ─────────
 
 export async function generateCheckpointATADirect(ctx: {
-  meetingId:    string
-  projectId:    string
-  date:         Date
-  frequency:    string
-  location:     string
-  highlights:   string
-  blockers:     string
-  nextSteps:    string
-  registeredBy: string
-  participants: { name: string; department: string | null }[]
-  taskUpdates:  {
+  meetingId:     string
+  projectId:     string
+  date:          Date
+  frequency:     string
+  location:      string
+  highlights:    string
+  blockers:      string
+  nextSteps:     string
+  observations?: string
+  registeredBy:  string
+  participants:  { name: string; department: string | null }[]
+  taskUpdates:   {
     title: string; areaName: string; responsible: string
     startDate: string | null; endDate: string | null
     oldStatus: string; oldProgress: number
@@ -629,7 +639,8 @@ export async function generateCheckpointATADirect(ctx: {
     section(3, "Atividades Atualizadas nesta Reunião", taskSection),
     section(4, "Impedimentos e Bloqueios Identificados", ctx.blockers || "_Nenhum impedimento registrado_"),
     section(5, "Próximos Passos e Responsabilidades", ctx.nextSteps || "_Não informado_"),
-    section(6, "Encerramento", encerramento(ctx.registeredBy, projectTitle)),
+    section(6, "Observações", ctx.observations || ""),
+    section(7, "Encerramento", encerramento(ctx.registeredBy, projectTitle)),
   ]
 
   const content = buildDocument({
@@ -706,6 +717,7 @@ export async function getAllMeetingsForProject(projectId: string) {
     title:        m.title,
     date:         m.date.toISOString(),
     location:     m.location,
+    observations: m.observations ?? null,
     registeredBy: m.createdBy.name,
     participants: m.participants.map((p) => ({ name: p.user.name, department: p.user.department })),
     participantCount: m._count.participants,

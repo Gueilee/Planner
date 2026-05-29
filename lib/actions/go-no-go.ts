@@ -10,6 +10,7 @@ export async function saveGoNoGoDecision(data: {
   projectId: string
   decision: "GO" | "NO_GO" | "STAND_BY"
   notes: string
+  observations?: string
   attendeeIds: string[]
   meetingDate: string
 }) {
@@ -40,6 +41,7 @@ export async function saveGoNoGoDecision(data: {
         title: `Reunião Go/No-Go — ${decisionLabel}`,
         date: new Date(data.meetingDate),
         decisions: data.notes || null,
+        observations: data.observations?.trim() || null,
         createdById: session.user.id,
         ...(uniqueIds.length > 0
           ? { participants: { create: uniqueIds.map((userId) => ({ userId })) } }

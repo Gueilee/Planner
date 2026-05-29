@@ -123,9 +123,9 @@ function SectionHeader({ icon: Icon, label }: { icon: React.ElementType; label: 
 
 // ─── KPI Chip ─────────────────────────────────────────────────────────────────
 function KpiChip({
-  label, value, color, icon: Icon,
+  label, value, color, icon: Icon, subtitle,
 }: {
-  label: string; value: string | number; color: string; icon: React.ElementType
+  label: string; value: string | number; color: string; icon: React.ElementType; subtitle?: string
 }) {
   return (
     <div
@@ -139,6 +139,9 @@ function KpiChip({
       </div>
       <div>
         <p className="text-xs text-slate-500 leading-tight">{label}</p>
+        {subtitle && (
+          <p className="text-[10px] text-slate-400 leading-tight mt-0.5">{subtitle}</p>
+        )}
         <p className="text-sm font-bold leading-tight mt-0.5" style={{ color }}>{value}</p>
       </div>
     </div>
@@ -420,12 +423,14 @@ export function AnalyticsClient({ projects }: { projects: ProjectIndicator[] }) 
             />
             <KpiChip
               label="IDP Médio"
+              subtitle="Índice de Desempenho de Prazo"
               value={avgIdp !== null ? avgIdp.toFixed(2) : "N/D"}
               color={idpColor(avgIdp)}
               icon={Target}
             />
             <KpiChip
               label="IDC Médio"
+              subtitle="Índice de Desempenho de Custo"
               value={avgIdc !== null ? avgIdc.toFixed(2) : "N/D"}
               color={idcColor(avgIdc)}
               icon={DollarSign}

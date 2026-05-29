@@ -15,6 +15,7 @@ type MeetingItem = {
   title: string
   date: string
   location: string | null
+  observations: string | null
   registeredBy: string
   participantCount: number
   attachmentCount: number
@@ -201,6 +202,22 @@ export function MeetingsClient({ project, meetings: initialMeetings }: MeetingsC
                       <p style={{ fontSize: "11px", color: "#10B981", fontWeight: 600, margin: "6px 0 0" }}>
                         ATA gerada em {format(new Date(meeting.ataUpdatedAt), "dd/MM/yyyy 'às' HH:mm")}
                       </p>
+                    )}
+
+                    {meeting.observations && (
+                      <div style={{
+                        marginTop: "10px",
+                        padding: "8px 12px",
+                        borderRadius: "8px",
+                        background: "#F8FAFC",
+                        border: "1px solid #E2E8F0",
+                        fontSize: "12px",
+                        color: "#475569",
+                        lineHeight: "1.5",
+                      }}>
+                        <span style={{ fontWeight: 700, color: "#64748B", textTransform: "uppercase", fontSize: "10px", letterSpacing: "0.08em" }}>Observações</span>
+                        <p style={{ margin: "4px 0 0", whiteSpace: "pre-wrap" }}>{meeting.observations}</p>
+                      </div>
                     )}
                   </div>
 

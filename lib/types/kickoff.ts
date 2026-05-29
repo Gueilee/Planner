@@ -45,5 +45,6 @@ export type KickOffData = {
   attendeeIds: string[]
   externalAttendees: ExternalAttendee[]
   notes: string
+  observations?: string
   registeredAt?: string
 }

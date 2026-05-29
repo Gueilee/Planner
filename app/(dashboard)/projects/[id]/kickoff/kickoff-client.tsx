@@ -13,6 +13,9 @@ import {
 } from "lucide-react"
 import { saveKickOff, registerKickOff } from "@/lib/actions/kickoff"
 import type { KickOffData, EAPArea, EAPTask, Milestone, KickOffAttachment, ExternalAttendee } from "@/lib/types/kickoff"
+import {
+  ParticipantCard, NewParticipantForm, NewParticipantTrigger,
+} from "@/components/meeting-new-participant"
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -542,10 +545,8 @@ export function KickOffClient({ project, existing, allUsers }: KickOffClientProp
     existing?.externalAttendees ?? []
   )
   const [addingExternal, setAddingExternal] = useState(false)
-  const [extName, setExtName]   = useState("")
-  const [extRole, setExtRole]   = useState("")
-  const [extType, setExtType]   = useState<"EXTERNAL" | "INTERNAL">("EXTERNAL")
   const [notes, setNotes] = useState(existing?.notes ?? "")
+  const [observations, setObservations] = useState(existing?.observations ?? "")
   const [uploading, setUploading] = useState(false)
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle")
   const [showSuccess, setShowSuccess] = useState(false)
@@ -566,15 +567,13 @@ export function KickOffClient({ project, existing, allUsers }: KickOffClientProp
       attendeeIds,
       externalAttendees,
       notes,
+      observations,
     }
   }
 
-  function confirmExternal() {
-    if (!extName.trim()) return
-    setExternalAttendees((prev) => [...prev, { id: uid(), name: extName.trim(), role: extRole.trim(), type: extType }])
-    setExtName("")
-    setExtRole("")
-    setExtType("EXTERNAL")
+  function confirmExternal(name: string, area: string, kind: "INTERNO" | "EXTERNO" | "FORNECEDOR") {
+    const type: ExternalAttendee["type"] = kind === "INTERNO" ? "INTERNAL" : "EXTERNAL"
+    setExternalAttendees((prev) => [...prev, { id: uid(), name, role: area, type }])
     setAddingExternal(false)
   }
 
@@ -910,115 +909,29 @@ export function KickOffClient({ project, existing, allUsers }: KickOffClientProp
                     )
                   })}
 
-                  {/* External/Internal attendees already added */}
-                  {externalAttendees.map((ext) => {
-                    const initials = ext.name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()
-                    const isInternal = ext.type === "INTERNAL"
-                    return (
-                      <div
-                        key={ext.id}
-                        className={`flex items-center gap-2.5 p-3 rounded-xl text-left border-2 relative ${
-                          isInternal
-                            ? "bg-indigo-50 border-indigo-200"
-                            : "bg-emerald-50 border-emerald-200"
-                        }`}
-                      >
-                        <div
-                          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black text-white shrink-0"
-                          style={{ background: isInternal ? "linear-gradient(135deg, #4F46E5, #7B2FBE)" : "linear-gradient(135deg, #059669, #0891B2)" }}
-                        >
-                          {initials}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className={`text-xs font-semibold truncate ${isInternal ? "text-indigo-800" : "text-emerald-800"}`}>{ext.name}</p>
-                          <p className={`text-[10px] truncate ${isInternal ? "text-indigo-500" : "text-emerald-600"}`}>{ext.role || (isInternal ? "Interno" : "Externo")}</p>
-                        </div>
-                        <span className={`text-[8px] font-black uppercase tracking-widest shrink-0 hidden sm:block ${isInternal ? "text-indigo-400" : "text-emerald-500"}`}>
-                          {isInternal ? "Int." : "Ext."}
-                        </span>
-                        <button
-                          onClick={() => removeExternal(ext.id)}
-                          className={`absolute top-1.5 right-1.5 w-4 h-4 rounded-full flex items-center justify-center transition-colors ${
-                            isInternal ? "bg-indigo-100 hover:bg-red-100" : "bg-emerald-100 hover:bg-red-100"
-                          }`}
-                        >
-                          <X className={`w-2.5 h-2.5 hover:text-red-500 ${isInternal ? "text-indigo-400" : "text-emerald-500"}`} />
-                        </button>
-                      </div>
-                    )
-                  })}
+                  {/* Additional participants */}
+                  {externalAttendees.map((ext) => (
+                    <ParticipantCard
+                      key={ext.id}
+                      participant={{
+                        id:   ext.id,
+                        name: ext.name,
+                        area: ext.role ?? "",
+                        kind: ext.type === "INTERNAL" ? "INTERNO" : "EXTERNO",
+                      }}
+                      onRemove={() => removeExternal(ext.id)}
+                    />
+                  ))}
 
-                  {/* Add participant card */}
                   {addingExternal ? (
-                    <div className="flex flex-col gap-2 p-3 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 col-span-2 sm:col-span-1">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Novo participante</p>
-                      {/* Type selector */}
-                      <div className="flex gap-1.5">
-                        <button
-                          onClick={() => setExtType("INTERNAL")}
-                          className={`flex-1 py-1.5 text-[10px] font-black rounded-lg border transition-all ${
-                            extType === "INTERNAL"
-                              ? "bg-indigo-600 text-white border-indigo-600"
-                              : "bg-white text-slate-500 border-slate-200 hover:border-indigo-300"
-                          }`}
-                        >
-                          Interno – Vendemmia
-                        </button>
-                        <button
-                          onClick={() => setExtType("EXTERNAL")}
-                          className={`flex-1 py-1.5 text-[10px] font-black rounded-lg border transition-all ${
-                            extType === "EXTERNAL"
-                              ? "bg-emerald-600 text-white border-emerald-600"
-                              : "bg-white text-slate-500 border-slate-200 hover:border-emerald-300"
-                          }`}
-                        >
-                          Externo
-                        </button>
-                      </div>
-                      <input
-                        autoFocus
-                        value={extName}
-                        onChange={(e) => setExtName(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && confirmExternal()}
-                        placeholder="Nome completo"
-                        className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-200 bg-white outline-none focus:border-[#7B2FBE] placeholder-slate-300"
+                    <div className="col-span-2 sm:col-span-3">
+                      <NewParticipantForm
+                        onAdd={(p) => confirmExternal(p.name, p.area, p.kind)}
+                        onCancel={() => setAddingExternal(false)}
                       />
-                      <input
-                        value={extRole}
-                        onChange={(e) => setExtRole(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && confirmExternal()}
-                        placeholder={extType === "INTERNAL" ? "Área da Vendemmia" : "Empresa / Cargo"}
-                        className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-200 bg-white outline-none focus:border-[#7B2FBE] placeholder-slate-300"
-                      />
-                      <div className="flex gap-1.5">
-                        <button
-                          onClick={confirmExternal}
-                          disabled={!extName.trim()}
-                          className="flex-1 py-1.5 text-[11px] font-black rounded-lg text-white transition-all disabled:opacity-40"
-                          style={{ background: extType === "INTERNAL" ? "linear-gradient(135deg, #4F46E5, #7B2FBE)" : "linear-gradient(135deg, #059669, #0891B2)" }}
-                        >
-                          Adicionar
-                        </button>
-                        <button
-                          onClick={() => { setAddingExternal(false); setExtName(""); setExtRole(""); setExtType("EXTERNAL") }}
-                          className="px-3 py-1.5 text-[11px] font-semibold rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
-                        >
-                          Cancelar
-                        </button>
-                      </div>
                     </div>
                   ) : (
-                    <button
-                      onClick={() => setAddingExternal(true)}
-                      className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border-2 border-dashed border-slate-200 bg-white hover:border-[#7B2FBE] hover:bg-violet-50 transition-all group min-h-[64px]"
-                    >
-                      <div className="w-7 h-7 rounded-full flex items-center justify-center bg-slate-100 group-hover:bg-violet-100 transition-colors">
-                        <Plus className="w-3.5 h-3.5 text-slate-400 group-hover:text-[#7B2FBE] transition-colors" />
-                      </div>
-                      <p className="text-[10px] font-bold text-slate-400 group-hover:text-[#7B2FBE] transition-colors text-center leading-tight">
-                        Adicionar<br />participante
-                      </p>
-                    </button>
+                    <NewParticipantTrigger onClick={() => setAddingExternal(true)} />
                   )}
                 </div>
 
@@ -1030,6 +943,17 @@ export function KickOffClient({ project, existing, allUsers }: KickOffClientProp
                     rows={4}
                     placeholder="Ações definidas, decisões tomadas, próximos passos..."
                     className="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200 bg-white text-[#0F172A] outline-none focus:border-[#7B2FBE] transition-colors resize-y placeholder-slate-300 leading-relaxed"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-700 uppercase tracking-widest text-slate-400 mb-1.5">Observações</label>
+                  <textarea
+                    value={observations}
+                    onChange={(e) => setObservations(e.target.value)}
+                    rows={3}
+                    placeholder="Comentários livres sobre esta reunião (aparecerá na ATA)..."
+                    className="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200 bg-white text-[#0F172A] outline-none focus:border-violet-400 transition-colors resize-y placeholder-slate-300 leading-relaxed"
                   />
                 </div>
               </div>

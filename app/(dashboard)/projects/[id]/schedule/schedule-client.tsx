@@ -1589,7 +1589,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                       <div style={{ width: 130, flexShrink: 0 }} className="flex justify-center">
                         <span className="text-[10px] text-slate-400 font-medium">{row.doneCount}/{row.taskCount}</span>
                       </div>
-                      <div style={{ width: 120, flexShrink: 0 }} />
+                      <div style={{ width: 160, flexShrink: 0 }} />
                       <div style={{ width: 88, flexShrink: 0 }} />
                       <div style={{ width: 88, flexShrink: 0 }} />
                       <div style={{ width: 88, flexShrink: 0 }} />

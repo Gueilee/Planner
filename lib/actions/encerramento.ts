@@ -8,13 +8,14 @@ import { ptBR } from "date-fns/locale"
 import { generateMeetingATA } from "@/lib/actions/ata"
 
 export type ClosureMeetingInput = {
-  projectId:    string
-  date:         string
-  location?:    string
-  content?:     string
-  decisions?:   string
-  nextActions?: string
-  attendeeIds:  string[]
+  projectId:     string
+  date:          string
+  location?:     string
+  content?:      string
+  decisions?:    string
+  nextActions?:  string
+  observations?: string
+  attendeeIds:   string[]
   closingNotes?: string
 }
 
@@ -96,11 +97,12 @@ export async function registerClosureMeeting(data: ClosureMeetingInput) {
         type:        "PROJECT_CLOSURE",
         title:       `Reunião de Encerramento — ${format(meetingDate, "dd/MM/yyyy", { locale: ptBR })}`,
         date:        meetingDate,
-        location:    data.location?.trim() || null,
-        content:     data.content?.trim() || null,
-        decisions:   data.decisions?.trim() || null,
-        nextActions: data.nextActions?.trim() || null,
-        createdById: session.user.id,
+        location:     data.location?.trim()     || null,
+        content:      data.content?.trim()      || null,
+        decisions:    data.decisions?.trim()    || null,
+        nextActions:  data.nextActions?.trim()  || null,
+        observations: data.observations?.trim() || null,
+        createdById:  session.user.id,
       },
     })
 

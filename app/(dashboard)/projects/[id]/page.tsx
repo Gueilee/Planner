@@ -15,6 +15,8 @@ import {
 import { DeleteProjectButton } from "./delete-project-button"
 import { SuggestedDatesPanel } from "./suggested-dates-panel"
 import { ReopenProjectButton } from "./reopen-project-button"
+import { ProjectLessonsTab } from "./project-lessons-tab"
+import { ProjectHistoryTab, buildHistoryEvents } from "./project-history-tab"
 import Link from "next/link"
 import { format, differenceInDays } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -79,7 +81,28 @@ export default async function ProjectDetailPage({
           responsible: { select: { name: true } },
         },
       },
-      risks: true,
+      risks: { orderBy: { createdAt: "asc" } },
+      meetings: {
+        orderBy: { date: "asc" },
+        include: {
+          createdBy: { select: { name: true } },
+          _count: { select: { participants: true } },
+        },
+      },
+      lessonsLearned: {
+        orderBy: { createdAt: "desc" },
+        include: {
+          createdBy: { select: { id: true, name: true } },
+          project:   { select: { id: true, title: true } },
+        },
+      },
+      documents: {
+        orderBy: { createdAt: "asc" },
+      },
+      statusReports: {
+        orderBy: { createdAt: "asc" },
+        include: { createdBy: { select: { name: true } } },
+      },
       _count: { select: { tasks: true, risks: true, meetings: true } },
     },
    }),
@@ -632,6 +655,8 @@ export default async function ProjectDetailPage({
                 { value: "schedule",  label: `Cronograma (${tasksTotal})` },
                 { value: "risks",     label: `Riscos (${project.risks.length})` },
                 { value: "team",      label: `Equipe (${project.members.length})` },
+                { value: "lessons",   label: `Lições Aprendidas (${project.lessonsLearned.length})` },
+                { value: "history",   label: "Histórico" },
               ].map((tab) => (
                 <TabsTrigger
                   key={tab.value}
@@ -1066,6 +1091,42 @@ export default async function ProjectDetailPage({
                   ))}
                 </div>
               </div>
+            </TabsContent>
+
+            {/* Lessons */}
+            <TabsContent value="lessons" className="mt-4">
+              <ProjectLessonsTab
+                project={{ id: project.id, title: project.title, status: project.status }}
+                members={project.members.map((m) => ({ id: m.user.id, name: m.user.name }))}
+                initialLessons={project.lessonsLearned.map((l) => ({
+                  id:           l.id,
+                  phase:        l.phase,
+                  area:         l.area,
+                  responsible:  l.responsible,
+                  occurrence:   l.occurrence,
+                  influence:    l.influence,
+                  impact:       l.impact,
+                  lesson:       l.lesson,
+                  identifiedAt: l.identifiedAt.toISOString(),
+                  tags:         l.tags ? (JSON.parse(l.tags) as string[]) : [],
+                  project:      { id: project.id, title: project.title },
+                  createdBy:    { id: l.createdBy.id, name: l.createdBy.name },
+                }))}
+              />
+            </TabsContent>
+
+            {/* History */}
+            <TabsContent value="history" className="mt-4">
+              <ProjectHistoryTab
+                events={buildHistoryEvents({
+                  createdAt:      project.createdAt,
+                  meetings:       project.meetings,
+                  lessonsLearned: project.lessonsLearned,
+                  risks:          project.risks,
+                  documents:      project.documents,
+                  statusReports:  project.statusReports,
+                })}
+              />
             </TabsContent>
           </Tabs>
 

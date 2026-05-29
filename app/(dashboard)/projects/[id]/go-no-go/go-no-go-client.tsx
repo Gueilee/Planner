@@ -12,6 +12,9 @@ import { format, differenceInDays } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import Link from "next/link"
 import { saveGoNoGoDecision } from "@/lib/actions/go-no-go"
+import {
+  NewParticipantForm, type NewParticipant,
+} from "@/components/meeting-new-participant"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -676,17 +679,54 @@ function SlideRisks({ risks }: { risks: RiskItem[] }) {
   )
 }
 
+// ── Dark-themed "Novo" trigger for Go-No-Go ───────────────────────────────────
+function GngNewParticipant({ onAdd }: { onAdd: (p: Omit<NewParticipant, "id">) => void }) {
+  const [open, setOpen] = useState(false)
+  if (open) {
+    return (
+      <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.12)", padding: "12px" }}>
+        <NewParticipantForm
+          onAdd={(p) => { onAdd(p); setOpen(false) }}
+          onCancel={() => setOpen(false)}
+        />
+      </div>
+    )
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => setOpen(true)}
+      style={{
+        display: "flex", alignItems: "center", gap: "6px",
+        padding: "7px 14px", borderRadius: "8px",
+        background: "rgba(255,255,255,0.05)", border: "1px dashed rgba(255,255,255,0.20)",
+        fontSize: "11px", fontWeight: 700, color: "rgba(248,250,252,0.50)",
+        cursor: "pointer", transition: "all 0.15s",
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#7B2FBE"; e.currentTarget.style.color = "#A78BFA"; e.currentTarget.style.background = "rgba(123,47,190,0.10)" }}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.20)"; e.currentTarget.style.color = "rgba(248,250,252,0.50)"; e.currentTarget.style.background = "rgba(255,255,255,0.05)" }}
+    >
+      + Novo Participante
+    </button>
+  )
+}
+
 function SlideDecision({
   decision, onDecision, attendees, onToggleAttendee,
-  notes, onNotes, meetingDate, onMeetingDate,
+  extraAttendees, onExtraAttendees,
+  notes, onNotes, observations, onObservations, meetingDate, onMeetingDate,
   users, onSubmit, isPending, submitted,
 }: {
   decision: Decision | null
   onDecision: (d: Decision) => void
   attendees: string[]
   onToggleAttendee: (id: string) => void
+  extraAttendees: NewParticipant[]
+  onExtraAttendees: (list: NewParticipant[]) => void
   notes: string
   onNotes: (v: string) => void
+  observations: string
+  onObservations: (v: string) => void
   meetingDate: string
   onMeetingDate: (v: string) => void
   users: AttendeeUser[]
@@ -724,13 +764,16 @@ function SlideDecision({
           {/* Attendees */}
           <div style={{ marginBottom: "1.5rem" }}>
             <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: "rgba(248,250,252,0.45)", textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: "8px" }}>
-              Participantes ({attendees.length} selecionado{attendees.length !== 1 ? "s" : ""})
+              Participantes ({attendees.length + extraAttendees.length} selecionado{(attendees.length + extraAttendees.length) !== 1 ? "s" : ""})
             </label>
+
+            {/* System users list */}
             <div style={{
-              maxHeight: "180px", overflowY: "auto",
+              maxHeight: "160px", overflowY: "auto",
               background: "rgba(255,255,255,0.03)", borderRadius: "10px",
               border: "1px solid rgba(255,255,255,0.08)",
               display: "flex", flexDirection: "column",
+              marginBottom: "8px",
             }}>
               {users.map((u) => {
                 const checked = attendees.includes(u.id)
@@ -768,10 +811,48 @@ function SlideDecision({
                 )
               })}
             </div>
+
+            {/* Extra participants added via "Novo" */}
+            {extraAttendees.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "8px" }}>
+                {extraAttendees.map((p) => (
+                  <div key={p.id} style={{
+                    display: "flex", alignItems: "center", gap: "6px",
+                    padding: "5px 10px", borderRadius: "20px",
+                    background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)",
+                  }}>
+                    <div style={{
+                      width: "20px", height: "20px", borderRadius: "50%", flexShrink: 0,
+                      background: p.kind === "INTERNO" ? "#4338CA" : p.kind === "FORNECEDOR" ? "#D97706" : "#059669",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: "8px", fontWeight: 900, color: "white",
+                    }}>
+                      {p.name.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase()}
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ fontSize: "11px", fontWeight: 600, color: "rgba(248,250,252,0.85)", margin: 0 }}>{p.name.split(" ")[0]}</p>
+                      {p.area && <p style={{ fontSize: "9px", color: "rgba(248,250,252,0.35)", margin: 0 }}>{p.area}</p>}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onExtraAttendees(extraAttendees.filter((x) => x.id !== p.id))}
+                      style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: "rgba(248,250,252,0.35)", lineHeight: 1 }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* "Novo" button or form */}
+            <GngNewParticipant
+              onAdd={(p) => onExtraAttendees([...extraAttendees, { ...p, id: Math.random().toString(36).slice(2) }])}
+            />
           </div>
 
           {/* Notes */}
-          <div>
+          <div style={{ marginBottom: "1.5rem" }}>
             <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: "rgba(248,250,252,0.45)", textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: "8px" }}>
               Observações da Decisão
             </label>
@@ -780,6 +861,25 @@ function SlideDecision({
               onChange={(e) => onNotes(e.target.value)}
               rows={3}
               placeholder="Registre as observações, condições ou justificativas..."
+              style={{
+                width: "100%", padding: "10px 14px", borderRadius: "10px", fontSize: "13px",
+                background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)",
+                color: "#f8fafc", outline: "none", resize: "vertical", fontFamily: "inherit",
+                lineHeight: "1.6",
+              }}
+            />
+          </div>
+
+          {/* Observations */}
+          <div>
+            <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: "rgba(248,250,252,0.45)", textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: "8px" }}>
+              Observações
+            </label>
+            <textarea
+              value={observations}
+              onChange={(e) => onObservations(e.target.value)}
+              rows={3}
+              placeholder="Comentários livres sobre esta reunião (aparecerá na ATA)..."
               style={{
                 width: "100%", padding: "10px 14px", borderRadius: "10px", fontSize: "13px",
                 background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)",
@@ -988,7 +1088,9 @@ export function GoNoGoClient({
 
   const [decision, setDecision] = useState<Decision | null>(null)
   const [attendees, setAttendees] = useState<string[]>([currentUserId])
+  const [extraAttendees, setExtraAttendees] = useState<NewParticipant[]>([])
   const [notes, setNotes] = useState("")
+  const [observations, setObservations] = useState("")
   const [meetingDate, setMeetingDate] = useState(() => new Date().toISOString().split("T")[0])
 
   const risks: RiskItem[] = project.risks
@@ -1062,6 +1164,7 @@ export function GoNoGoClient({
           projectId: project.id,
           decision,
           notes,
+          observations,
           attendeeIds: attendees,
           meetingDate,
         })
@@ -1087,7 +1190,9 @@ export function GoNoGoClient({
         <SlideDecision
           decision={decision} onDecision={setDecision}
           attendees={attendees} onToggleAttendee={toggleAttendee}
+          extraAttendees={extraAttendees} onExtraAttendees={setExtraAttendees}
           notes={notes} onNotes={setNotes}
+          observations={observations} onObservations={setObservations}
           meetingDate={meetingDate} onMeetingDate={setMeetingDate}
           users={users} onSubmit={handleSubmit}
           isPending={isPending} submitted={submitted}

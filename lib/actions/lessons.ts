@@ -70,6 +70,7 @@ export async function createLesson(data: LessonInput) {
   })
 
   revalidatePath(`/projects/${data.projectId}/lessons`)
+  revalidatePath(`/projects/${data.projectId}`)
   revalidatePath("/knowledge")
   return serializeLesson(lesson)
 }
@@ -95,6 +96,7 @@ export async function updateLesson(id: string, projectId: string, data: Partial<
   })
 
   revalidatePath(`/projects/${projectId}/lessons`)
+  revalidatePath(`/projects/${projectId}`)
   revalidatePath("/knowledge")
   return serializeLesson(lesson)
 }
@@ -104,6 +106,7 @@ export async function deleteLesson(id: string, projectId: string) {
   if (!session?.user) throw new Error("Não autorizado")
   await db.lessonLearned.delete({ where: { id } })
   revalidatePath(`/projects/${projectId}/lessons`)
+  revalidatePath(`/projects/${projectId}`)
   revalidatePath("/knowledge")
 }
 

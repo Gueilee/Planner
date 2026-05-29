@@ -40,6 +40,7 @@ export type CheckpointInput = {
   highlights:            string
   blockers:              string
   nextSteps:             string
+  observations?:         string
   attendeeIds:           string[]
   externalAttendeesStr?: string
   taskUpdates:           TaskUpdateInput[]
@@ -81,11 +82,12 @@ export async function saveCheckpoint(data: CheckpointInput) {
         type:        "CHECKPOINT",
         title:       `Checkpoint ${freq} — ${format(meetingDate, "dd/MM/yyyy", { locale: ptBR })}`,
         date:        meetingDate,
-        location:    data.location    || null,
-        content:     data.highlights  || null,
-        decisions:   data.nextSteps   || null,
-        nextActions: data.blockers    || null,
-        createdById: session.user.id,
+        location:     data.location              || null,
+        content:      data.highlights            || null,
+        decisions:    data.nextSteps             || null,
+        nextActions:  data.blockers              || null,
+        observations: data.observations?.trim()  || null,
+        createdById:  session.user.id,
       },
     })
 
@@ -163,6 +165,7 @@ export async function saveCheckpoint(data: CheckpointInput) {
       highlights:   data.highlights,
       blockers:     data.blockers,
       nextSteps:    data.nextSteps,
+      observations: data.observations,
       registeredBy: registeredBy?.name ?? "Sistema",
       participants: [
         ...participantUsers,
