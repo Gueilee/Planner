@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Plus, FolderKanban, ChevronRight, Search, X, ChevronLeft } from "lucide-react"
 import { StatusBadge } from "@/components/kronex/status-badge"
+import { UserAvatar } from "@/components/ui/user-avatar"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -263,14 +264,13 @@ export function ProjectsClient({ projects }: { projects: ProjectRow[] }) {
                   {/* Team */}
                   <div className="flex -space-x-1.5">
                     {project.members.slice(0, 4).map((m) => (
-                      <div
+                      <UserAvatar
                         key={m.id}
-                        title={m.user.name}
-                        className="w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-[9px] font-bold text-white shrink-0"
-                        style={{ background: "linear-gradient(135deg, #2463FF, #8B2FFF)" }}
-                      >
-                        {m.user.name?.charAt(0).toUpperCase()}
-                      </div>
+                        name={m.user.name}
+                        image={m.user.image}
+                        size={28}
+                        style={{ border: "2px solid white" }}
+                      />
                     ))}
                     {project.members.length > 4 && (
                       <div className="w-7 h-7 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[9px] font-bold text-slate-500">

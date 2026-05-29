@@ -28,6 +28,7 @@ import {
 import { deriveStatus, deriveProgress, type AncestorUpdate } from "@/lib/utils/task-progress"
 import { isHoliday, isWeekend as isWknd, getHolidayName, nextWorkingDay } from "@/lib/working-days"
 import { WorkingDayPicker } from "@/components/working-day-picker"
+import { UserAvatar } from "@/components/ui/user-avatar"
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -67,7 +68,7 @@ const AREA_PALETTE = [
 type Task = {
   id: string; projectId: string; wbsAreaId: string | null; parentId: string | null
   title: string; description: string | null; responsibleId: string | null
-  responsible: { id: string; name: string } | null
+  responsible: { id: string; name: string; image: string | null } | null
   wbsArea: { id: string; name: string; color: string | null } | null
   startDate: string | null; endDate: string | null
   actualStart: string | null; actualEnd: string | null
@@ -1842,10 +1843,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                     <div style={{ width: 160, flexShrink: 0 }} className="px-1">
                       <div className="flex items-center gap-1.5">
                         {t.responsible && inlineAdd?.taskId !== t.id && (
-                          <div className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-black text-white shrink-0"
-                            style={{ background: areaColor ?? color }}>
-                            {initials(t.responsible.name)}
-                          </div>
+                          <UserAvatar name={t.responsible.name} image={t.responsible.image} size={20} />
                         )}
                         {inlineAdd?.taskId === t.id ? (
                           <input
@@ -2380,9 +2378,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                         <div style={{ width: 110, flexShrink: 0 }} className="px-2">
                           {t.responsible ? (
                             <div className="flex items-center gap-1.5 justify-end">
-                              <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black text-white shrink-0" style={{ background: color }}>
-                                {initials(t.responsible.name)}
-                              </div>
+                              <UserAvatar name={t.responsible.name} image={t.responsible.image} size={20} />
                               <span className="text-[10px] text-slate-500 truncate">{t.responsible.name.split(" ")[0]}</span>
                             </div>
                           ) : <span className="text-[10px] text-slate-300 block text-right">—</span>}

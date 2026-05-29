@@ -28,7 +28,7 @@ export type TaskInput = {
 }
 
 const INCLUDE = {
-  responsible: { select: { id: true, name: true } },
+  responsible: { select: { id: true, name: true, image: true } },
   wbsArea: { select: { id: true, name: true, color: true } },
   _count: { select: { comments: true, attachments: true } },
 } as const
@@ -41,7 +41,7 @@ function serialize(t: {
   status: string; riskStatus: string; progress: number; order: number
   budgetedCost: number | null; actualCost: number | null
   dependencies: string | null; createdAt: Date; updatedAt: Date
-  responsible: { id: string; name: string } | null
+  responsible: { id: string; name: string; image: string | null } | null
   wbsArea: { id: string; name: string; color: string | null } | null
   _count: { comments: number; attachments: number }
 }) {

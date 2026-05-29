@@ -16,7 +16,7 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
     db.scheduleTask.findMany({
       where: { projectId: id },
       include: {
-        responsible: { select: { id: true, name: true } },
+        responsible: { select: { id: true, name: true, image: true } },
         wbsArea: { select: { id: true, name: true, color: true } },
         _count: { select: { comments: true, attachments: true } },
       },

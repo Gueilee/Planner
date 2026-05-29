@@ -11,7 +11,7 @@ export async function getProjectTasksForKanban(projectId: string) {
     orderBy: [{ order: "asc" }],
     include: {
       wbsArea:     { select: { name: true, color: true } },
-      responsible: { select: { id: true, name: true } },
+      responsible: { select: { id: true, name: true, image: true } },
       _count:      { select: { subtasks: true } },
     },
   })
@@ -91,7 +91,7 @@ export async function getAllProjectsForKanban() {
       expectedStart: true,
       projectArea:   true,
       sponsor:  { select: { name: true, department: true } },
-      members:  { take: 5, include: { user: { select: { id: true, name: true } } } },
+      members:  { take: 5, include: { user: { select: { id: true, name: true, image: true } } } },
       _count:   { select: { members: true } },
       tasks:    { where: { subtasks: { none: {} } }, select: { status: true, progress: true } },
       risks:    { select: { status: true } },
@@ -114,7 +114,7 @@ export async function getTaskDetail(taskId: string) {
           id:        true,
           content:   true,
           createdAt: true,
-          user: { select: { id: true, name: true } },
+          user: { select: { id: true, name: true, image: true } },
         },
       },
       attachments: {
@@ -186,7 +186,7 @@ export async function addTaskComment(taskId: string, projectId: string, content:
       id:        true,
       content:   true,
       createdAt: true,
-      user: { select: { id: true, name: true } },
+      user: { select: { id: true, name: true, image: true } },
     },
   })
 

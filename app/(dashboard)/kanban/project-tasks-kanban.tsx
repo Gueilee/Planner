@@ -23,6 +23,7 @@ import {
   getTaskDetail, updateTaskKanban, addTaskComment, addTaskAttachmentKanban,
 } from "@/lib/actions/kanban"
 import { todayStr } from "@/lib/date-utils"
+import { UserAvatar } from "@/components/ui/user-avatar"
 import { TaskStatus } from "@/lib/generated/prisma/enums"
 import type { KanbanProject } from "./kanban-client"
 
@@ -36,7 +37,7 @@ export type TaskItem = {
   startDate:   string | null
   endDate:     string | null
   wbsArea:     { name: string; color: string | null } | null
-  responsible: { id: string; name: string } | null
+  responsible: { id: string; name: string; image: string | null } | null
   parentId:    string | null
   childCount:  number
 }
@@ -182,12 +183,11 @@ function TaskCard({
           <div className="flex items-center justify-between">
             {task.responsible ? (
               <div className="flex items-center gap-1.5">
-                <div
-                  className="w-5 h-5 rounded-full flex items-center justify-center text-[7px] font-black text-white shrink-0"
-                  style={{ background: memberColor(task.responsible.name) }}
-                >
-                  {initials(task.responsible.name)}
-                </div>
+                <UserAvatar
+                  name={task.responsible.name}
+                  image={task.responsible.image}
+                  size={20}
+                />
                 <span className="text-[10px] text-slate-400 truncate max-w-[90px]">
                   {task.responsible.name.split(" ")[0]}
                 </span>
@@ -629,12 +629,7 @@ function TaskDetailPanel({
                     style={{ background: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}
                   >
                     <div className="flex items-center gap-2 mb-1.5">
-                      <div
-                        className="w-5 h-5 rounded-full flex items-center justify-center text-[7px] font-black text-white shrink-0"
-                        style={{ background: memberColor(c.user.name) }}
-                      >
-                        {initials(c.user.name)}
-                      </div>
+                      <UserAvatar name={c.user.name} image={(c.user as { image?: string | null }).image} size={20} />
                       <span className="text-[10px] font-bold text-slate-600">{c.user.name.split(" ")[0]}</span>
                       <span className="text-[9px] text-slate-400 ml-auto">
                         {format(new Date(c.createdAt), "dd/MM HH:mm", { locale: ptBR })}
