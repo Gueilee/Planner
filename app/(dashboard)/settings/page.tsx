@@ -42,6 +42,7 @@ export default async function SettingsPage() {
         }}
         notifications={notifications}
         orgConfig={orgConfig}
+        currentUserId={profile.id}
       />
     </div>
   )

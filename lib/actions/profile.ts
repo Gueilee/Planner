@@ -78,6 +78,71 @@ export async function updateUserById(userId: string, data: ProfileInput & { role
   return updated
 }
 
+// ─── Admin: create new user ───────────────────────────────────────────────────
+
+export async function createUser(data: {
+  name:        string
+  email:       string
+  password:    string
+  role:        string
+  department?: string
+  phone?:      string
+}) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+  if (session.user.role !== "ADMIN") throw new Error("Acesso restrito a administradores")
+
+  if (!data.name.trim())     throw new Error("Nome é obrigatório")
+  if (!data.email.trim())    throw new Error("E-mail é obrigatório")
+  if (data.password.length < 6) throw new Error("Senha deve ter no mínimo 6 caracteres")
+
+  const exists = await db.user.findUnique({ where: { email: data.email.trim().toLowerCase() } })
+  if (exists) throw new Error("Já existe um usuário com este e-mail")
+
+  const hash = await bcrypt.hash(data.password, 10)
+  const user = await db.user.create({
+    data: {
+      name:       data.name.trim(),
+      email:      data.email.trim().toLowerCase(),
+      password:   hash,
+      role:       data.role as never,
+      department: data.department?.trim() || null,
+      phone:      data.phone?.trim()      || null,
+      active:     true,
+    },
+    select: { id: true, name: true, email: true, department: true, phone: true, image: true, role: true, active: true },
+  })
+
+  revalidatePath("/settings")
+  return user
+}
+
+// ─── Admin: toggle active ─────────────────────────────────────────────────────
+
+export async function toggleUserActive(userId: string, active: boolean) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+  if (session.user.role !== "ADMIN") throw new Error("Acesso restrito a administradores")
+  if (userId === session.user.id && !active) throw new Error("Você não pode desativar sua própria conta")
+
+  await db.user.update({ where: { id: userId }, data: { active } })
+  revalidatePath("/settings")
+  return { success: true }
+}
+
+// ─── Admin: delete user ───────────────────────────────────────────────────────
+
+export async function deleteUser(userId: string) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+  if (session.user.role !== "ADMIN") throw new Error("Acesso restrito a administradores")
+  if (userId === session.user.id) throw new Error("Você não pode excluir sua própria conta")
+
+  await db.user.delete({ where: { id: userId } })
+  revalidatePath("/settings")
+  return { success: true }
+}
+
 // ─── Change password ──────────────────────────────────────────────────────────
 
 export async function changePassword(currentPassword: string, newPassword: string) {

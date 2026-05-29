@@ -5,6 +5,7 @@ import { User, Bell, Building2, Users, ChevronRight, Lock } from "lucide-react"
 import { ProfileTab } from "./profile-tab"
 import { NotificationsTab } from "./notifications-tab"
 import { OrganizationTab } from "./organization-tab"
+import { UsersTab } from "./users-tab"
 import type { NotificationPreferenceData } from "@/lib/actions/notification-preferences"
 import type { OrgConfigData } from "@/lib/actions/org-config"
 
@@ -31,6 +32,7 @@ type Props = {
   preferences:   NotificationPreferenceData
   notifications: NotifItem[]
   orgConfig:     OrgConfigData
+  currentUserId: string
 }
 
 // ─── Tab config ───────────────────────────────────────────────────────────────
@@ -49,19 +51,19 @@ const TABS: Tab[] = [
   { id: "profile",       label: "Meu Perfil",    icon: User,      ready: true  },
   { id: "notifications", label: "Notificações",  icon: Bell,      ready: true  },
   { id: "organization",  label: "Organização",   icon: Building2, ready: true,  adminOnly: true },
-  { id: "users",         label: "Usuários",      icon: Users,     ready: false, adminOnly: true },
+  { id: "users",         label: "Usuários",      icon: Users,     ready: true,  adminOnly: true },
 ]
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function SettingsClient({ profile, allUsers, isAdmin, preferences, notifications, orgConfig }: Props) {
+export function SettingsClient({ profile, allUsers, isAdmin, preferences, notifications, orgConfig, currentUserId }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>("profile")
 
   const visibleTabs = TABS.filter((t) => !t.adminOnly || isAdmin)
 
   return (
     <div className="flex-1 min-h-0 overflow-auto" style={{ background: "#F7F6F2" }}>
-      <div className="max-w-5xl mx-auto px-6 py-8">
+      <div className={`mx-auto px-6 py-8 ${activeTab === "users" ? "max-w-6xl" : "max-w-5xl"}`}>
         <div className="flex gap-6 items-start">
 
           {/* ── Sidebar nav ───────────────────────────────────────────────── */}
@@ -125,6 +127,9 @@ export function SettingsClient({ profile, allUsers, isAdmin, preferences, notifi
             )}
             {activeTab === "organization" && isAdmin && (
               <OrganizationTab initial={orgConfig} />
+            )}
+            {activeTab === "users" && isAdmin && (
+              <UsersTab initialUsers={allUsers} currentUserId={currentUserId} />
             )}
 
             {/* Placeholder for future tabs */}
