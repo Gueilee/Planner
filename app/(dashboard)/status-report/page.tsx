@@ -8,11 +8,8 @@ import { ReportClient, type ProjectSlideData } from "./report-client"
 export const metadata = { title: "Status Report" }
 
 const ACTIVE_STATUSES: ProjectStatus[] = [
-  ProjectStatus.IN_PROGRESS,
-  ProjectStatus.PILOT,
-  ProjectStatus.RAMP_UP,
-  ProjectStatus.GO_LIVE,
-  ProjectStatus.POST_GOLIVE,
+  ProjectStatus.IN_PROGRESS, ProjectStatus.PILOT, ProjectStatus.RAMP_UP,
+  ProjectStatus.GO_LIVE, ProjectStatus.POST_GOLIVE,
 ]
 
 export default async function StatusReportPage() {
@@ -23,8 +20,8 @@ export default async function StatusReportPage() {
     where:   { status: { in: ACTIVE_STATUSES } },
     orderBy: { createdAt: "asc" },
     include: {
-      sponsor: { select: { name: true } },
-      members: { select: { role: true, user: { select: { name: true } } } },
+      sponsor:  { select: { name: true } },
+      members:  { select: { role: true, user: { select: { name: true, image: true } } } },
       tasks: {
         select: {
           title: true, status: true, progress: true,
@@ -44,10 +41,8 @@ export default async function StatusReportPage() {
         include: { tasks: { select: { status: true, title: true } } },
       },
       meetings: {
-        where:   { type: "CHECKPOINT" },
         orderBy: { date: "desc" },
-        take: 1,
-        select: { date: true, title: true, location: true, content: true, decisions: true, nextActions: true },
+        select: { type: true, date: true, title: true, location: true, content: true, decisions: true, nextActions: true },
       },
       _count: { select: { meetings: true } },
     },
@@ -72,7 +67,7 @@ export default async function StatusReportPage() {
     const actualCostSum = tasks.reduce((s, t) => s + (t.actualCost ?? 0), 0)
     const idc = actualCostSum > 0 ? Math.round((earnedValue / actualCostSum) * 100) / 100 : null
 
-    // IDP — usa datas em cascata: actual → suggested → expected
+    // IDP — cascata de datas
     let idp: number | null = null
     let timelineProgress: number | null = null
     const pStart = p.actualStart ?? p.suggestedStart ?? p.expectedStart
@@ -109,19 +104,21 @@ export default async function StatusReportPage() {
     }
     atRiskTasks.sort((a, b) => b.daysLate - a.daysLate)
 
-    // Task details — com responsável e datas
+    // Task details com startDate nas in-progress
     const taskDetails: ProjectSlideData["taskDetails"] = {
       recentlyCompleted: completed.slice(-5).map((t) => ({ title: t.title })),
       inProgress: inProgress.slice(0, 6).map((t) => ({
-        title:       t.title,
+        title: t.title,
         responsible: t.responsible?.name ?? null,
-        endDate:     t.endDate?.toISOString() ?? null,
+        startDate: t.startDate?.toISOString() ?? null,
+        endDate:   t.endDate?.toISOString()   ?? null,
       })),
       delayed: delayed.slice(0, 5).map((t) => {
         const ref = t.endDate ?? t.startDate
         return {
           title:       t.title,
           responsible: t.responsible?.name ?? null,
+          startDate:   t.startDate?.toISOString() ?? null,
           endDate:     ref?.toISOString() ?? null,
           daysLate:    ref ? Math.max(0, differenceInDays(today, new Date(ref))) : 0,
         }
@@ -134,12 +131,18 @@ export default async function StatusReportPage() {
           title:       t.title,
           responsible: t.responsible?.name ?? null,
           daysUntil:   t.endDate ? differenceInDays(new Date(t.endDate), today) : 0,
-          endDate:     t.endDate?.toISOString() ?? null,
+          startDate:   t.startDate?.toISOString() ?? null,
+          endDate:     t.endDate?.toISOString()   ?? null,
         })),
     }
 
+    // Meetings por tipo (todas as reuniões)
+    const meetingsByType = p.meetings
+      .reduce((acc, m) => { acc[m.type] = (acc[m.type] ?? 0) + 1; return acc }, {} as Record<string, number>)
+
     const daysLeft = pEnd ? differenceInDays(pEnd, today) : null
-    const lastMtg  = p.meetings[0] ?? null
+    // Último checkpoint = primeira reunião do tipo CHECKPOINT (já ordenado por date desc)
+    const lastMtg  = p.meetings.find((m) => m.type === "CHECKPOINT") ?? null
     const rawSteps = lastMtg?.nextActions || lastMtg?.decisions || null
     const nextSteps = rawSteps
       ?.split("\n").map((l) => l.replace(/^[-•*\d.]\s*/, "").trim()).filter(Boolean).slice(0, 5) ?? []
@@ -158,9 +161,10 @@ export default async function StatusReportPage() {
       sponsor:  p.sponsor?.name ?? null,
       progress: avgProgress,
       idc, idp, timelineProgress,
-      meetingsCount: p._count.meetings,
-      team: p.members.length,
-      members: p.members.map((m) => ({ name: m.user.name, role: m.role })),
+      meetingsCount:  p._count.meetings,
+      meetingsByType,
+      team:    p.members.length,
+      members: p.members.map((m) => ({ name: m.user.name, role: m.role, image: m.user.image })),
       tasks: {
         total, completed: completed.length, inProgress: inProgress.length,
         delayed: delayed.length, planning: planning.length,
@@ -174,13 +178,13 @@ export default async function StatusReportPage() {
         high:     p.risks.filter((r) => r.status === "HIGH").length,
         items:    p.risks.map((r) => ({ level: r.status, description: r.description, mitigation: r.mitigation ?? null, owner: r.owner ?? null })),
       },
-      daysLeft,
-      economy: p.economy,
-      budget:  p.budget,
+      daysLeft, economy: p.economy, budget: p.budget,
       lastCheckpoint: lastMtg ? {
         date: lastMtg.date.toISOString(), title: lastMtg.title,
-        location: lastMtg.location ?? null, highlights: lastMtg.content ?? null,
-        decisions: lastMtg.decisions ?? null, nextSteps,
+        location: lastMtg.location ?? null,
+        highlights: lastMtg.content  ?? null,
+        decisions:  lastMtg.decisions ?? null,
+        nextSteps,
       } : null,
       atRiskTasks: atRiskTasks.slice(0, 6),
       wbsAreas: wbsSummary,
