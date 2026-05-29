@@ -526,7 +526,7 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
       </div>
 
       {/* ── Body — 2 columns ── */}
-      <div className="relative z-10 flex-1 grid gap-2.5 px-7 pb-3 min-h-0 overflow-hidden" style={{gridTemplateColumns:"1fr 1.3fr"}}>
+      <div className="relative z-10 flex-1 grid gap-2.5 px-7 pb-0 min-h-0 overflow-hidden" style={{gridTemplateColumns:"1fr 1.3fr"}}>
 
         {/* ── LEFT: Semaphore + EVM + Budget + Team ── */}
         <div className="flex flex-col gap-2 min-h-0 overflow-hidden">
@@ -829,6 +829,84 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
           )}
         </div>
       </div>
+
+      {/* ── Último Checkpoint — sempre visível no rodapé ── */}
+      {data.lastCheckpoint && (() => {
+        const cp = data.lastCheckpoint!
+        const cpDate = format(new Date(cp.date), "dd 'de' MMM 'de' yyyy", { locale: ptBR })
+        // Textos truncados para caber no rodapé compacto
+        const highlightText = cp.highlights
+          ? cp.highlights.replace(/<[^>]+>/g, "").trim().slice(0, 200)
+          : null
+        const decisionsText = cp.decisions
+          ? cp.decisions.replace(/<[^>]+>/g, "").replace(/^[-•*\d.]\s*/gm, "").trim().slice(0, 200)
+          : null
+        return (
+          <div className="relative z-10 shrink-0 px-7 pb-3 pt-1.5">
+            <div style={{
+              background: "rgba(255,255,255,0.055)",
+              border: "1px solid rgba(255,255,255,0.12)",
+              borderLeft: "3px solid rgba(192,132,252,0.70)",
+              borderRadius: 10,
+              padding: "9px 14px",
+            }}>
+              {/* Header row */}
+              <div className="flex items-center gap-3 mb-1.5">
+                <Calendar style={{width:11,height:11,color:"#C084FC",flexShrink:0}}/>
+                <span style={{fontSize:8,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.16em",color:"#C084FC"}}>
+                  Último Checkpoint
+                </span>
+                <span style={{fontSize:8.5,color:"rgba(200,220,255,0.60)",fontWeight:600}}>
+                  {cpDate}
+                  {cp.title ? ` · ${cp.title}` : ""}
+                  {cp.location ? ` · 📍 ${cp.location}` : ""}
+                </span>
+              </div>
+              {/* Content row */}
+              <div className="flex gap-4">
+                {highlightText && (
+                  <div style={{flex:1,minWidth:0}}>
+                    <p style={{fontSize:8,fontWeight:700,color:"rgba(148,185,255,0.45)",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:3}}>Destaques</p>
+                    <p style={{fontSize:9,color:"rgba(200,220,255,0.70)",lineHeight:1.45,
+                      overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as const}}>
+                      {highlightText}{highlightText.length>=200?"…":""}
+                    </p>
+                  </div>
+                )}
+                {decisionsText && decisionsText !== highlightText && (
+                  <div style={{flex:1,minWidth:0}}>
+                    <p style={{fontSize:8,fontWeight:700,color:"rgba(148,185,255,0.45)",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:3}}>Decisões</p>
+                    <p style={{fontSize:9,color:"rgba(200,220,255,0.70)",lineHeight:1.45,
+                      overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as const}}>
+                      {decisionsText}{decisionsText.length>=200?"…":""}
+                    </p>
+                  </div>
+                )}
+                {cp.nextSteps.length>0 && (
+                  <div style={{flex:1,minWidth:0}}>
+                    <p style={{fontSize:8,fontWeight:700,color:"rgba(148,185,255,0.45)",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:3}}>Próximos Passos</p>
+                    <div className="flex flex-col gap-0.5">
+                      {cp.nextSteps.slice(0,3).map((s,i)=>(
+                        <div key={i} className="flex items-start gap-1.5">
+                          <ArrowRight style={{width:8,height:8,color:"#C084FC",flexShrink:0,marginTop:2}}/>
+                          <span style={{fontSize:8.5,color:"rgba(200,220,255,0.72)",lineHeight:1.35,
+                            overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const}}>
+                            {s}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* Quando só há nextSteps e nada mais */}
+                {!highlightText && !decisionsText && cp.nextSteps.length===0 && (
+                  <p style={{fontSize:9,color:"rgba(200,220,255,0.45)"}}>Reunião registrada sem detalhamento de conteúdo.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
