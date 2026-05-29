@@ -11,16 +11,29 @@ import type { UserProfile } from "./settings-client"
 import { ROLE_LABELS } from "@/lib/permissions"
 import { UserRole } from "@/lib/generated/prisma/enums"
 
-// ─── Avatar upload helper ────────────────────────────────────────────────────
+// ─── Avatar → base64 (resized, no external storage needed) ──────────────────
 
-async function uploadAvatar(file: File): Promise<string> {
-  const fd = new FormData()
-  fd.append("files", file)
-  const res = await fetch("/api/upload", { method: "POST", body: fd })
-  if (!res.ok) throw new Error("Falha no upload da imagem")
-  const data = await res.json() as { files: { url: string }[] }
-  if (!data.files?.[0]?.url) throw new Error("URL não retornada pelo servidor")
-  return data.files[0].url
+function imageToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const objectUrl = URL.createObjectURL(file)
+    img.onload = () => {
+      const MAX = 300
+      const ratio = Math.min(MAX / img.width, MAX / img.height, 1)
+      const w = Math.round(img.width  * ratio)
+      const h = Math.round(img.height * ratio)
+      const canvas = document.createElement("canvas")
+      canvas.width  = w
+      canvas.height = h
+      const ctx = canvas.getContext("2d")
+      if (!ctx) { reject(new Error("Canvas não suportado")); return }
+      ctx.drawImage(img, 0, 0, w, h)
+      URL.revokeObjectURL(objectUrl)
+      resolve(canvas.toDataURL("image/jpeg", 0.82))
+    }
+    img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error("Falha ao ler imagem")) }
+    img.src = objectUrl
+  })
 }
 
 function initials(name: string) {
@@ -255,11 +268,12 @@ export function ProfileTab({ profile, allUsers, isAdmin }: Props) {
 
   async function handleAvatarUpload(file: File) {
     setUploading(true)
+    setError(null)
     try {
-      const url = await uploadAvatar(file)
-      setImageUrl(url)
+      const dataUrl = await imageToBase64(file)
+      setImageUrl(dataUrl)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Erro no upload")
+      setError(e instanceof Error ? e.message : "Erro ao processar imagem")
     } finally {
       setUploading(false)
     }
