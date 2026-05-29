@@ -176,55 +176,139 @@ export function MeetingAtaModal({ content, title = "ATA de Reunião", onClose }:
     const win = window.open("", "_blank")
     if (!win) return
 
-    // Convert markdown to a minimal print-ready HTML
-    const htmlContent = content
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/^# (.+)$/gm, "<h1>$1</h1>")
-      .replace(/^## (.+)$/gm, "<h2>$1</h2>")
-      .replace(/^---$/gm, "<hr>")
-      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-      .replace(/_(.+?)_/g, "<em>$1</em>")
-      .replace(/^\| /gm, "TABLE_ROW_START| ")
-      .split("\n")
-      .map((line) => {
-        if (line.startsWith("TABLE_ROW_START")) {
-          return line.replace("TABLE_ROW_START", "")
-        }
-        if (line.startsWith("<h") || line.startsWith("<hr")) return line
-        if (line.trim() === "") return "<br>"
-        if (line.startsWith("- ") || line.startsWith("* ")) return `<li>${line.slice(2)}</li>`
-        return `<p>${line}</p>`
-      })
-      .join("\n")
+    const logoUrl = window.location.origin + "/logo_v4.png"
+    const now     = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })
 
-    win.document.write(`
-      <!DOCTYPE html>
-      <html lang="pt-BR">
-      <head>
-        <meta charset="UTF-8">
-        <title>${title}</title>
-        <style>
-          body { font-family: 'Times New Roman', serif; font-size: 12pt; color: #000; margin: 2cm; }
-          h1 { font-size: 16pt; font-weight: bold; border-bottom: 2pt solid #000; padding-bottom: 4pt; margin-top: 0; }
-          h2 { font-size: 11pt; font-weight: bold; text-transform: uppercase; letter-spacing: 1pt; margin-top: 18pt; }
-          hr { border: none; border-top: 1pt solid #999; margin: 12pt 0; }
-          p { line-height: 1.6; margin: 4pt 0; font-size: 11pt; }
-          li { margin-bottom: 3pt; }
-          table { width: 100%; border-collapse: collapse; font-size: 10pt; margin: 8pt 0; }
-          th { background: #f0f0f0; padding: 4pt 8pt; text-align: left; border: 1pt solid #ccc; font-weight: bold; }
-          td { padding: 4pt 8pt; border: 1pt solid #ccc; }
-          strong { font-weight: bold; }
-          em { font-style: italic; }
-        </style>
-      </head>
-      <body>${htmlContent}</body>
-      </html>
-    `)
+    // Markdown → HTML conversion (improved)
+    const processTable = (tableLines: string[]) => {
+      const rows = tableLines.filter(l => !l.match(/^\|[\s\-|:]+\|$/))
+      if (!rows.length) return ""
+      return "<table>" + rows.map((row, ri) => {
+        const cells = row.split("|").slice(1, -1).map(c => c.trim())
+        const tag = ri === 0 ? "th" : "td"
+        return "<tr>" + cells.map(c => `<${tag}>${c}</${tag}>`).join("") + "</tr>"
+      }).join("") + "</table>"
+    }
+
+    const lines = content.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").split("\n")
+    const htmlParts: string[] = []
+    let i = 0
+    while (i < lines.length) {
+      const line = lines[i]
+      if (line.startsWith("# "))  { htmlParts.push(`<h1>${line.slice(2)}</h1>`);  i++; continue }
+      if (line.startsWith("## ")) { htmlParts.push(`<h2>${line.slice(3)}</h2>`); i++; continue }
+      if (line.trim() === "---")  { htmlParts.push("<hr>"); i++; continue }
+      if (line.startsWith("|")) {
+        const tl: string[] = []
+        while (i < lines.length && lines[i].startsWith("|")) { tl.push(lines[i]); i++ }
+        htmlParts.push(processTable(tl)); continue
+      }
+      if (line.startsWith("- ") || line.startsWith("* ")) {
+        const items: string[] = []
+        while (i < lines.length && (lines[i].startsWith("- ") || lines[i].startsWith("* "))) {
+          items.push(`<li>${lines[i].slice(2).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/_(.+?)_/g, "<em>$1</em>")}</li>`)
+          i++
+        }
+        htmlParts.push("<ul>" + items.join("") + "</ul>"); continue
+      }
+      if (line.trim() === "") { htmlParts.push("<div class='spacer'></div>"); i++; continue }
+      htmlParts.push(`<p>${line.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/_(.+?)_/g, "<em>$1</em>")}</p>`)
+      i++
+    }
+    const htmlContent = htmlParts.join("\n")
+
+    win.document.write(`<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>${title}</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 2.2cm 2cm 2.5cm 2cm;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      font-size: 10.5pt;
+      color: #1a1a1a;
+      margin: 0;
+      line-height: 1.55;
+    }
+
+    /* ── Document header (logo + title) ── */
+    .doc-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 14pt;
+      margin-bottom: 10pt;
+      border-bottom: 2.5pt solid #0F172A;
+    }
+    .doc-header img { height: 42pt; width: auto; object-fit: contain; }
+    .doc-header-text { text-align: right; }
+    .doc-title { font-size: 14pt; font-weight: 800; color: #0F172A; margin: 0 0 2pt; letter-spacing: -0.3pt; }
+    .doc-meta  { font-size: 8pt; color: #64748B; margin: 0; }
+
+    /* ── Content ── */
+    h1 {
+      font-size: 13pt; font-weight: 800; color: #0F172A;
+      border-left: 4pt solid #2463FF; padding-left: 8pt;
+      margin: 20pt 0 8pt; page-break-after: avoid;
+    }
+    h2 {
+      font-size: 9.5pt; font-weight: 700; color: #1E3A5F;
+      text-transform: uppercase; letter-spacing: 0.8pt;
+      margin: 16pt 0 5pt; padding-bottom: 3pt;
+      border-bottom: 1pt solid #CBD5E1; page-break-after: avoid;
+    }
+    hr { border: none; border-top: 1pt solid #E2E8F0; margin: 12pt 0; }
+    .spacer { margin: 3pt 0; }
+    p  { margin: 3pt 0 5pt; font-size: 10.5pt; }
+    ul { margin: 4pt 0 6pt 18pt; padding: 0; }
+    li { margin: 2pt 0; font-size: 10pt; }
+    strong { font-weight: 700; }
+    em { font-style: italic; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin: 8pt 0; page-break-inside: avoid; }
+    th { background: #0F172A; color: #fff; padding: 5pt 7pt; text-align: left; font-weight: 700; font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.5pt; }
+    td { padding: 4.5pt 7pt; border-bottom: 0.5pt solid #E2E8F0; }
+    tr:nth-child(even) td { background: #F8FAFC; }
+
+    /* ── Footer ── */
+    .doc-footer {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      border-top: 1pt solid #E2E8F0;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 5pt 0 0;
+      font-size: 7.5pt; color: #94A3B8;
+    }
+    @media print {
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="doc-header">
+    <img src="${logoUrl}" alt="Kronex" onerror="this.style.display='none'" />
+    <div class="doc-header-text">
+      <p class="doc-title">${title}</p>
+      <p class="doc-meta">Documento oficial gerado automaticamente &nbsp;|&nbsp; ${now}</p>
+    </div>
+  </div>
+
+  ${htmlContent}
+
+  <div class="doc-footer">
+    <span>Kronex — Sistema de Gestão de Projetos</span>
+    <span>Gerado em ${now}</span>
+  </div>
+</body>
+</html>`)
     win.document.close()
     win.focus()
-    setTimeout(() => { win.print(); win.close() }, 250)
+    setTimeout(() => { win.print() }, 400)
   }, [content, title])
 
   return (
@@ -256,66 +340,67 @@ export function MeetingAtaModal({ content, title = "ATA de Reunião", onClose }:
         {/* Header */}
         <div style={{
           display: "flex", alignItems: "center", gap: "12px",
-          padding: "14px 20px",
+          padding: "12px 16px",
           borderBottom: "1px solid #E2E8F0",
-          background: "#F8FAFC",
+          background: "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)",
           borderRadius: "16px 16px 0 0",
           flexShrink: 0,
         }}>
-          <div style={{
-            width: "34px", height: "34px", borderRadius: "8px",
-            background: "linear-gradient(135deg, #0F172A, #1E293B)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            flexShrink: 0,
-          }}>
-            <FileText size={16} color="#fff" />
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontSize: "13px", fontWeight: 800, color: "#0F172A", margin: 0 }}>{title}</p>
-            <p style={{ fontSize: "11px", color: "#64748B", margin: 0 }}>Documento gerado automaticamente</p>
+          {/* Logo */}
+          <img
+            src="/logo_v4.png"
+            alt="Kronex"
+            style={{ height: "32px", width: "auto", objectFit: "contain", flexShrink: 0 }}
+            onError={(e) => { (e.target as HTMLImageElement).style.display = "none" }}
+          />
+          <div style={{ flex: 1, minWidth: 0, marginLeft: "4px" }}>
+            <p style={{ fontSize: "13px", fontWeight: 800, color: "#fff", margin: 0, lineHeight: 1.2 }}>{title}</p>
+            <p style={{ fontSize: "10px", color: "rgba(255,255,255,0.45)", margin: "2px 0 0" }}>
+              Documento oficial gerado automaticamente pelo sistema
+            </p>
           </div>
 
           <button
             onClick={handleCopy}
-            title="Copiar texto"
+            title="Copiar texto da ATA"
             style={{
-              display: "flex", alignItems: "center", gap: "6px",
-              padding: "6px 12px", borderRadius: "8px",
-              border: "1px solid #E2E8F0", background: "#fff",
-              fontSize: "12px", fontWeight: 600, color: "#475569",
-              cursor: "pointer", transition: "all 0.15s",
+              display: "flex", alignItems: "center", gap: "5px",
+              padding: "5px 10px", borderRadius: "8px",
+              border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.08)",
+              fontSize: "11px", fontWeight: 600, color: "rgba(255,255,255,0.75)",
+              cursor: "pointer", transition: "all 0.15s", flexShrink: 0,
             }}
           >
-            {copied ? <Check size={13} color="#10B981" /> : <Copy size={13} />}
+            {copied ? <Check size={12} color="#10B981" /> : <Copy size={12} />}
             {copied ? "Copiado!" : "Copiar"}
           </button>
 
           <button
             onClick={handlePrint}
-            title="Imprimir"
+            title="Gerar PDF e imprimir"
             style={{
-              display: "flex", alignItems: "center", gap: "6px",
-              padding: "6px 12px", borderRadius: "8px",
-              border: "1px solid #0F172A", background: "#0F172A",
-              fontSize: "12px", fontWeight: 600, color: "#fff",
-              cursor: "pointer", transition: "all 0.15s",
+              display: "flex", alignItems: "center", gap: "5px",
+              padding: "5px 12px", borderRadius: "8px",
+              border: "1.5px solid #2463FF", background: "#2463FF",
+              fontSize: "11px", fontWeight: 700, color: "#fff",
+              cursor: "pointer", transition: "all 0.15s", flexShrink: 0,
             }}
           >
-            <Printer size={13} />
-            Imprimir
+            <Printer size={12} />
+            Baixar PDF
           </button>
 
           <button
             onClick={onClose}
             title="Fechar"
             style={{
-              width: "30px", height: "30px", borderRadius: "8px",
-              border: "1px solid #E2E8F0", background: "#fff",
+              width: "28px", height: "28px", borderRadius: "8px",
+              border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.08)",
               display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: "pointer", color: "#64748B",
+              cursor: "pointer", color: "rgba(255,255,255,0.6)", flexShrink: 0,
             }}
           >
-            <X size={15} />
+            <X size={14} />
           </button>
         </div>
 

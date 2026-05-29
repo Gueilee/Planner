@@ -29,6 +29,7 @@ export async function updateProjectDetails(id: string, data: {
   origin?:         string
   projectArea?:    string
   budget?:         number | null
+  estimatedCosts?: number | null
   economy?:        number | null
   expectedStart?:  string | null
   expectedEnd?:    string | null
@@ -54,8 +55,9 @@ export async function updateProjectDetails(id: string, data: {
       restrictions:   data.restrictions  ?? undefined,
       origin:         data.origin        ?? undefined,
       projectArea:    data.projectArea   ? (data.projectArea as never) : undefined,
-      budget:         data.budget        !== undefined ? data.budget  : undefined,
-      economy:        data.economy       !== undefined ? data.economy : undefined,
+      budget:         data.budget         !== undefined ? data.budget         : undefined,
+      estimatedCosts: data.estimatedCosts !== undefined ? data.estimatedCosts : undefined,
+      economy:        data.economy        !== undefined ? data.economy        : undefined,
       expectedStart:  toDate(data.expectedStart),
       expectedEnd:    toDate(data.expectedEnd),
       actualStart:    toDate(data.actualStart),

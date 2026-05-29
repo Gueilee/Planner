@@ -300,6 +300,79 @@ function EmptyState() {
 
 // ─── Full Project History View ────────────────────────────────────────────────
 
+function printAtaFromHistory(content: string, title: string) {
+  const win = window.open("", "_blank")
+  if (!win) return
+  const logoUrl = window.location.origin + "/logo_v4.png"
+  const now = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })
+
+  const processTable = (tableLines: string[]) => {
+    const rows = tableLines.filter(l => !l.match(/^\|[\s\-|:]+\|$/))
+    if (!rows.length) return ""
+    return "<table>" + rows.map((row, ri) => {
+      const cells = row.split("|").slice(1, -1).map(c => c.trim())
+      const tag = ri === 0 ? "th" : "td"
+      return "<tr>" + cells.map(c => `<${tag}>${c}</${tag}>`).join("") + "</tr>"
+    }).join("") + "</table>"
+  }
+
+  const lines = content.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").split("\n")
+  const parts: string[] = []
+  let i = 0
+  while (i < lines.length) {
+    const l = lines[i]
+    if (l.startsWith("# "))  { parts.push(`<h1>${l.slice(2)}</h1>`);  i++; continue }
+    if (l.startsWith("## ")) { parts.push(`<h2>${l.slice(3)}</h2>`); i++; continue }
+    if (l.trim() === "---")  { parts.push("<hr>"); i++; continue }
+    if (l.startsWith("|")) {
+      const tl: string[] = []
+      while (i < lines.length && lines[i].startsWith("|")) { tl.push(lines[i]); i++ }
+      parts.push(processTable(tl)); continue
+    }
+    if (l.startsWith("- ") || l.startsWith("* ")) {
+      const items: string[] = []
+      while (i < lines.length && (lines[i].startsWith("- ") || lines[i].startsWith("* "))) {
+        items.push(`<li>${lines[i].slice(2).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")}</li>`)
+        i++
+      }
+      parts.push("<ul>" + items.join("") + "</ul>"); continue
+    }
+    if (l.trim() === "") { parts.push("<div style='margin:3pt'></div>"); i++; continue }
+    parts.push(`<p>${l.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/_(.+?)_/g, "<em>$1</em>")}</p>`)
+    i++
+  }
+
+  win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>${title}</title>
+<style>
+@page { size: A4; margin: 2.2cm 2cm 2.5cm 2cm; }
+* { box-sizing: border-box; }
+body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 10.5pt; color: #1a1a1a; margin: 0; line-height: 1.55; }
+.hdr { display:flex; align-items:center; justify-content:space-between; padding-bottom:14pt; margin-bottom:10pt; border-bottom:2.5pt solid #0F172A; }
+.hdr img { height:42pt; width:auto; }
+.hdr-r { text-align:right; }
+.hdr-t { font-size:14pt; font-weight:800; color:#0F172A; margin:0 0 2pt; }
+.hdr-m { font-size:8pt; color:#64748B; margin:0; }
+h1 { font-size:13pt; font-weight:800; color:#0F172A; border-left:4pt solid #2463FF; padding-left:8pt; margin:20pt 0 8pt; }
+h2 { font-size:9.5pt; font-weight:700; color:#1E3A5F; text-transform:uppercase; letter-spacing:.8pt; margin:16pt 0 5pt; border-bottom:1pt solid #CBD5E1; padding-bottom:3pt; }
+hr { border:none; border-top:1pt solid #E2E8F0; margin:12pt 0; }
+p { margin:3pt 0 5pt; } ul { margin:4pt 0 6pt 18pt; } li { margin:2pt 0; }
+table { width:100%; border-collapse:collapse; font-size:9.5pt; margin:8pt 0; }
+th { background:#0F172A; color:#fff; padding:5pt 7pt; text-align:left; font-weight:700; font-size:8.5pt; text-transform:uppercase; }
+td { padding:4.5pt 7pt; border-bottom:.5pt solid #E2E8F0; } tr:nth-child(even) td { background:#F8FAFC; }
+.ftr { position:fixed; bottom:0; left:0; right:0; border-top:1pt solid #E2E8F0; display:flex; justify-content:space-between; padding:5pt 0 0; font-size:7.5pt; color:#94A3B8; }
+</style></head><body>
+<div class="hdr">
+  <img src="${logoUrl}" alt="Kronex" onerror="this.style.display='none'" />
+  <div class="hdr-r"><p class="hdr-t">${title}</p><p class="hdr-m">Documento oficial &nbsp;|&nbsp; ${now}</p></div>
+</div>
+${parts.join("\n")}
+<div class="ftr"><span>Kronex — Sistema de Gestão de Projetos</span><span>${now}</span></div>
+</body></html>`)
+  win.document.close()
+  win.focus()
+  setTimeout(() => { win.print() }, 400)
+}
+
 function ProjectHistoryView({ data }: { data: NonNullable<FullHistory> }) {
   const p   = data
   const cfg = STATUS_CFG[p.status] ?? STATUS_CFG.PLANNING
@@ -532,23 +605,40 @@ function ProjectHistoryView({ data }: { data: NonNullable<FullHistory> }) {
               </TimelineEvent>
             )}
 
-            {p.documents.filter((doc) => doc.type !== "KICKOFF").map((doc, idx, arr) => (
-              <TimelineEvent key={doc.id} date={doc.createdAt}
-                title={doc.title}
-                subtitle={doc.type === "PROJECT_CLOSURE" ? "Documento de Encerramento" : doc.type === "PROJECT_OPENING" ? "Termo de Abertura" : "Documento"}
-                color={doc.type === "PROJECT_CLOSURE" ? "#0D9488" : "#7C3AED"}
-                icon={FileText}
-                iconBg={doc.type === "PROJECT_CLOSURE" ? "#F0FDFA" : "#F5F3FF"}
-                isLast={idx === arr.length - 1 && !isOpen}>
-                {doc.content && (
-                  <TCard color={doc.type === "PROJECT_CLOSURE" ? "#0D9488" : "#7C3AED"}>
-                    <div className="px-4 py-3">
-                      <p className="text-xs leading-relaxed text-gray-600">{doc.content.slice(0, 250)}{doc.content.length > 250 ? "…" : ""}</p>
+            {p.documents.filter((doc) => doc.type !== "KICKOFF").map((doc, idx, arr) => {
+              const isAta     = doc.type === "MEETING_ATA"
+              const isClosure = doc.type === "PROJECT_CLOSURE"
+              const isOpening = doc.type === "PROJECT_OPENING"
+              const docColor  = isClosure ? "#0D9488" : isAta ? "#2463FF" : "#7C3AED"
+              const docBg     = isClosure ? "#F0FDFA" : isAta ? "#EFF6FF" : "#F5F3FF"
+              const subtitle  = isClosure ? "Documento de Encerramento" : isOpening ? "Termo de Abertura" : isAta ? "ATA de Reunião" : "Documento"
+              return (
+                <TimelineEvent key={doc.id} date={doc.createdAt}
+                  title={doc.title}
+                  subtitle={subtitle}
+                  color={docColor} icon={FileText} iconBg={docBg}
+                  isLast={idx === arr.length - 1 && !isOpen}>
+                  <TCard color={docColor}>
+                    <div className="px-4 py-3 space-y-2">
+                      {isAta && doc.content ? (
+                        <>
+                          <p className="text-xs leading-relaxed text-gray-600 line-clamp-3">{doc.content.slice(0, 200)}{doc.content.length > 200 ? "…" : ""}</p>
+                          <button
+                            onClick={() => printAtaFromHistory(doc.content!, doc.title)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all hover:opacity-80"
+                            style={{ background: "#EFF6FF", color: "#2463FF", border: "1px solid #BFDBFE" }}
+                          >
+                            <Download className="w-3 h-3" /> Baixar PDF da ATA
+                          </button>
+                        </>
+                      ) : doc.content ? (
+                        <p className="text-xs leading-relaxed text-gray-600">{doc.content.slice(0, 250)}{doc.content.length > 250 ? "…" : ""}</p>
+                      ) : null}
                     </div>
                   </TCard>
-                )}
-              </TimelineEvent>
-            ))}
+                </TimelineEvent>
+              )
+            })}
 
             {isOpen && (
               <>
@@ -748,7 +838,41 @@ function ProjectHistoryView({ data }: { data: NonNullable<FullHistory> }) {
           )
         })()}
 
-        {/* 7. Documentos */}
+        {/* 7. ATAs das Reuniões */}
+        {(() => {
+          const atas = p.documents.filter(d => d.type === "MEETING_ATA" && d.content)
+          if (!atas.length) return null
+          return (
+            <section>
+              <SectionTitle icon={FileText} title={`ATAs das Reuniões (${atas.length})`} />
+              <div className="mt-4 grid grid-cols-1 gap-2">
+                {atas.map(ata => (
+                  <div key={ata.id} className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white border border-gray-100 shadow-sm hover:border-blue-200 transition-all group">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                      style={{ background: "linear-gradient(135deg, rgba(36,99,255,0.08), rgba(96,165,250,0.12))" }}>
+                      <FileText className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-800 truncate group-hover:text-blue-700 transition-colors">{ata.title}</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">
+                        ATA de Reunião · {new Date(ata.createdAt).toLocaleDateString("pt-BR")}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => printAtaFromHistory(ata.content!, ata.title)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold shrink-0 transition-all hover:opacity-80"
+                      style={{ background: "#EFF6FF", color: "#2463FF", border: "1px solid #BFDBFE" }}
+                    >
+                      <Download className="w-3 h-3" /> Baixar PDF
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )
+        })()}
+
+        {/* 8. Documentos */}
         <section>
           <SectionTitle icon={FileText} title="Documentos e Relatórios" />
           <div className="mt-4 flex flex-wrap gap-3">

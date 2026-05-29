@@ -33,6 +33,7 @@ type Props = {
     origin: string | null
     projectArea: string
     budget: number | null
+    estimatedCosts: number | null
     economy: number | null
     expectedStart: Date | null
     expectedEnd: Date | null
@@ -467,8 +468,9 @@ export function ProjectEditModal({ project, members, allUsers, risks }: Props) {
     restrictions:  project.restrictions  ?? "",
     origin:        project.origin        ?? "INTERNAL",
     projectArea:   project.projectArea   ?? "TECNOLOGIA",
-    budget:        project.budget        != null ? String(project.budget)  : "",
-    economy:       project.economy       != null ? String(project.economy) : "",
+    budget:         project.budget         != null ? String(project.budget)         : "",
+    estimatedCosts: project.estimatedCosts != null ? String(project.estimatedCosts) : "",
+    economy:        project.economy        != null ? String(project.economy)        : "",
     expectedStart: toInputDate(project.expectedStart),
     expectedEnd:   toInputDate(project.expectedEnd),
     actualStart:   toInputDate(project.actualStart),
@@ -485,8 +487,9 @@ export function ProjectEditModal({ project, members, allUsers, risks }: Props) {
       restrictions:  project.restrictions  ?? "",
       origin:        project.origin        ?? "INTERNAL",
       projectArea:   project.projectArea   ?? "TECNOLOGIA",
-      budget:        project.budget        != null ? String(project.budget)  : "",
-      economy:       project.economy       != null ? String(project.economy) : "",
+      budget:         project.budget         != null ? String(project.budget)         : "",
+      estimatedCosts: project.estimatedCosts != null ? String(project.estimatedCosts) : "",
+      economy:        project.economy        != null ? String(project.economy)        : "",
       expectedStart: toInputDate(project.expectedStart),
       expectedEnd:   toInputDate(project.expectedEnd),
       actualStart:   toInputDate(project.actualStart),
@@ -514,8 +517,9 @@ export function ProjectEditModal({ project, members, allUsers, risks }: Props) {
         restrictions:  form.restrictions.trim() || null,
         origin:        form.origin || undefined,
         projectArea:   form.projectArea || undefined,
-        budget:        parseMoney(form.budget),
-        economy:       parseMoney(form.economy),
+        budget:         parseMoney(form.budget),
+        estimatedCosts: parseMoney(form.estimatedCosts),
+        economy:        parseMoney(form.economy),
         expectedStart: form.expectedStart || null,
         expectedEnd:   form.expectedEnd   || null,
         actualStart:   form.actualStart   || null,
@@ -663,16 +667,23 @@ export function ProjectEditModal({ project, members, allUsers, risks }: Props) {
               {/* ── Financeiro ──────────────────────────────────── */}
               {section === "financial" && (
                 <>
-                  <Field label="Budget (R$)" hint="Valor total do orçamento aprovado">
+                  <Field label="Budget Total (R$)" hint="Valor total do orçamento aprovado para o projeto">
                     <div className="relative">
-                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">R$</span>
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-emerald-500">R$</span>
                       <input type="text" inputMode="decimal" className="lp-inp" style={{ paddingLeft: 36 }}
                         value={form.budget} onChange={set("budget")} placeholder="0,00" />
                     </div>
                   </Field>
+                  <Field label="Custo Estimado (R$)" hint="Estimativa de custo total para execução do projeto">
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-amber-500">R$</span>
+                      <input type="text" inputMode="decimal" className="lp-inp" style={{ paddingLeft: 36 }}
+                        value={form.estimatedCosts} onChange={set("estimatedCosts")} placeholder="0,00" />
+                    </div>
+                  </Field>
                   <Field label="Economia Esperada (R$)" hint="Ganho financeiro estimado com o projeto">
                     <div className="relative">
-                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">R$</span>
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-blue-500">R$</span>
                       <input type="text" inputMode="decimal" className="lp-inp" style={{ paddingLeft: 36 }}
                         value={form.economy} onChange={set("economy")} placeholder="0,00" />
                     </div>
