@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Especificação Funcional — Planner</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@page { size: A4; margin: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', 'Segoe UI', Arial, sans-serif; font-size: 10.5pt; color: #1E293B; background: #fff; }
+
+/* ── COVER ── */
+.cover {
+  width: 210mm; height: 297mm;
+  background: linear-gradient(160deg, #0F172A 0%, #1E1B4B 55%, #2D1B69 100%);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  position: relative; overflow: hidden; page-break-after: always;
+}
+.cover-orb1 { position:absolute; width:500px; height:500px; border-radius:50%; top:-150px; right:-100px; background:radial-gradient(circle,rgba(123,47,190,0.25) 0%,transparent 70%); }
+.cover-orb2 { position:absolute; width:400px; height:400px; border-radius:50%; bottom:-100px; left:-80px; background:radial-gradient(circle,rgba(36,99,255,0.20) 0%,transparent 70%); }
+.cover-line { position:absolute; top:0; left:0; right:0; height:4px; background:linear-gradient(90deg,#00C4E0,#2463FF,#7B2FBE,#A855F7); }
+.cover-content { position:relative; z-index:2; text-align:center; padding:60px; }
+.cover-logo { height:70px; width:auto; margin-bottom:48px; filter:brightness(1.1); }
+.cover-badge { display:inline-block; padding:6px 16px; border-radius:20px; font-size:9pt; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:rgba(255,255,255,0.5); border:1px solid rgba(255,255,255,0.15); margin-bottom:24px; }
+.cover-title { font-size:32pt; font-weight:900; color:#fff; line-height:1.1; letter-spacing:-0.5px; margin-bottom:12px; }
+.cover-subtitle { font-size:14pt; color:rgba(255,255,255,0.55); font-weight:400; margin-bottom:48px; }
+.cover-divider { width:60px; height:3px; background:linear-gradient(90deg,#2463FF,#7B2FBE); border-radius:2px; margin:0 auto 48px; }
+.cover-meta { display:grid; grid-template-columns:1fr 1fr 1fr; gap:24px; text-align:center; }
+.cover-meta-item label { display:block; font-size:7.5pt; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; color:rgba(255,255,255,0.35); margin-bottom:4px; }
+.cover-meta-item span { font-size:10pt; font-weight:600; color:rgba(255,255,255,0.80); }
+.cover-footer { position:absolute; bottom:32px; left:0; right:0; text-align:center; font-size:8pt; color:rgba(255,255,255,0.25); letter-spacing:1px; }
+
+/* ── PAGE LAYOUT ── */
+.page { width:210mm; min-height:297mm; padding:25mm 22mm 22mm 22mm; position:relative; }
+.page + .page { border-top:1px solid #F1F5F9; }
+
+/* ── HEADER repeated ── */
+.page-header { display:flex; align-items:center; justify-content:space-between; padding-bottom:10pt; margin-bottom:18pt; border-bottom:1.5pt solid #E2E8F0; }
+.page-header-logo { height:22px; width:auto; opacity:0.7; }
+.page-header-title { font-size:7.5pt; color:#94A3B8; font-weight:600; letter-spacing:0.5px; }
+.page-header-section { font-size:7.5pt; color:#7B2FBE; font-weight:700; }
+
+/* ── TOC ── */
+.toc-title { font-size:18pt; font-weight:900; color:#0F172A; margin-bottom:24pt; }
+.toc-group { margin-bottom:6pt; }
+.toc-item { display:flex; align-items:baseline; gap:0; padding:3pt 0; border-bottom:1pt dotted #E2E8F0; }
+.toc-num { font-size:9pt; font-weight:700; color:#7B2FBE; width:40pt; flex-shrink:0; }
+.toc-text { font-size:9pt; color:#334155; flex:1; }
+.toc-page { font-size:9pt; color:#94A3B8; text-align:right; font-weight:500; }
+.toc-section-title { font-size:8pt; font-weight:800; text-transform:uppercase; letter-spacing:1.5px; color:#CBD5E1; margin:12pt 0 4pt; }
+
+/* ── SECTION HEADERS ── */
+.section-header { margin-bottom:20pt; page-break-after:avoid; }
+.section-num { font-size:8pt; font-weight:800; text-transform:uppercase; letter-spacing:2px; color:#7B2FBE; margin-bottom:4pt; }
+.section-title { font-size:18pt; font-weight:900; color:#0F172A; line-height:1.1; }
+.section-title-bar { height:3pt; width:48pt; background:linear-gradient(90deg,#2463FF,#7B2FBE); border-radius:2pt; margin-top:8pt; }
+.section-intro { font-size:10pt; color:#64748B; margin-top:12pt; line-height:1.6; }
+
+/* ── SUBSECTIONS ── */
+h3 { font-size:12pt; font-weight:800; color:#0F172A; margin:20pt 0 8pt; padding-bottom:4pt; border-bottom:1pt solid #E2E8F0; page-break-after:avoid; }
+h4 { font-size:10.5pt; font-weight:700; color:#1E293B; margin:14pt 0 6pt; page-break-after:avoid; }
+h5 { font-size:9.5pt; font-weight:700; color:#334155; text-transform:uppercase; letter-spacing:0.8px; margin:10pt 0 5pt; }
+p { margin:4pt 0; line-height:1.65; }
+ul, ol { margin:5pt 0 8pt 20pt; }
+li { margin:2.5pt 0; line-height:1.55; }
+
+/* ── TABLES ── */
+table { width:100%; border-collapse:collapse; font-size:9.5pt; margin:8pt 0 14pt; page-break-inside:avoid; }
+thead th { background:#0F172A; color:#fff; padding:6pt 8pt; text-align:left; font-weight:700; font-size:8.5pt; text-transform:uppercase; letter-spacing:0.6px; }
+tbody td { padding:5pt 8pt; border-bottom:0.5pt solid #E2E8F0; vertical-align:top; }
+tbody tr:nth-child(even) td { background:#F8FAFC; }
+.table-caption { font-size:8pt; color:#94A3B8; margin-bottom:4pt; font-style:italic; }
+
+/* ── REQUIREMENT CARDS ── */
+.req-card { border:1pt solid #E2E8F0; border-radius:8pt; overflow:hidden; margin:10pt 0; page-break-inside:avoid; }
+.req-header { display:flex; align-items:center; gap:10pt; padding:8pt 12pt; background:#F8FAFC; border-bottom:1pt solid #E2E8F0; }
+.req-id { font-size:9pt; font-weight:800; color:#7B2FBE; background:#EDE9FE; padding:2pt 8pt; border-radius:4pt; flex-shrink:0; }
+.req-name { font-size:10pt; font-weight:700; color:#0F172A; }
+.req-body { padding:10pt 12pt; }
+.req-row { display:flex; gap:8pt; margin:4pt 0; }
+.req-label { font-size:8.5pt; font-weight:700; color:#64748B; text-transform:uppercase; letter-spacing:0.5px; width:90pt; flex-shrink:0; }
+.req-val { font-size:9pt; color:#334155; flex:1; }
+
+/* ── RULE CARDS ── */
+.rule-card { border-left:3pt solid #7B2FBE; padding:8pt 12pt; margin:8pt 0; background:#FAFAFA; page-break-inside:avoid; }
+.rule-id { font-size:8pt; font-weight:800; color:#7B2FBE; margin-bottom:2pt; }
+.rule-title { font-size:10pt; font-weight:700; color:#0F172A; margin-bottom:4pt; }
+.rule-body { font-size:9.5pt; color:#475569; line-height:1.55; }
+
+/* ── USE CASE ── */
+.uc-card { border:1pt solid #DBEAFE; border-radius:8pt; overflow:hidden; margin:12pt 0; page-break-inside:avoid; }
+.uc-header { padding:8pt 12pt; background:linear-gradient(135deg,#EFF6FF,#F5F3FF); border-bottom:1pt solid #DBEAFE; display:flex; align-items:center; gap:10pt; }
+.uc-id { font-size:9pt; font-weight:800; color:#2463FF; background:#DBEAFE; padding:2pt 8pt; border-radius:4pt; }
+.uc-name { font-size:10pt; font-weight:700; color:#0F172A; }
+.uc-body { padding:10pt 12pt; }
+.uc-row { margin:6pt 0; display:flex; gap:8pt; }
+.uc-label { font-size:8.5pt; font-weight:700; color:#64748B; width:90pt; flex-shrink:0; text-transform:uppercase; letter-spacing:0.5px; }
+.uc-val { font-size:9pt; color:#334155; flex:1; }
+.flow-step { display:flex; gap:10pt; margin:4pt 0; align-items:baseline; }
+.flow-n { font-size:8.5pt; font-weight:800; color:#2463FF; width:20pt; flex-shrink:0; }
+.flow-txt { font-size:9pt; color:#334155; }
+
+/* ── HIGHLIGHT BOXES ── */
+.info-box { background:#EFF6FF; border:1pt solid #BFDBFE; border-radius:6pt; padding:10pt 14pt; margin:10pt 0; }
+.info-box-title { font-size:8.5pt; font-weight:800; color:#1D4ED8; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:4pt; }
+.warn-box { background:#FFFBEB; border:1pt solid #FDE68A; border-radius:6pt; padding:10pt 14pt; margin:10pt 0; }
+.warn-box-title { font-size:8.5pt; font-weight:800; color:#B45309; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:4pt; }
+.formula-box { background:#F5F3FF; border:1pt solid #DDD6FE; border-radius:6pt; padding:10pt 14pt; margin:10pt 0; font-family:monospace; }
+.formula-title { font-size:8.5pt; font-weight:800; color:#5B21B6; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:6pt; }
+.formula { font-size:10pt; font-weight:700; color:#4C1D95; }
+
+/* ── STATUS BADGE ── */
+.badge { display:inline-block; padding:1.5pt 6pt; border-radius:3pt; font-size:8pt; font-weight:700; }
+.badge-purple { background:#EDE9FE; color:#5B21B6; }
+.badge-blue   { background:#DBEAFE; color:#1D4ED8; }
+.badge-green  { background:#DCFCE7; color:#166534; }
+.badge-red    { background:#FEE2E2; color:#991B1B; }
+.badge-amber  { background:#FEF3C7; color:#92400E; }
+
+/* ── PAGE FOOTER ── */
+.page-footer { position:fixed; bottom:0; left:22mm; right:22mm; height:14mm; display:flex; align-items:center; justify-content:space-between; border-top:0.5pt solid #E2E8F0; font-size:7.5pt; color:#94A3B8; }
+
+/* ── PRINT ── */
+@media print {
+  body { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .cover { page-break-after:always; }
+  .no-break { page-break-inside:avoid; }
+  h3, h4 { page-break-after:avoid; }
+}
+
+/* ── SECTION DIVIDER ── */
+.sec-divider { border:none; border-top:2pt solid #E2E8F0; margin:24pt 0; }
+.page-break { page-break-before:always; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ CAPA ═══════════════ -->
+<div class="cover">
+  <div class="cover-line"></div>
+  <div class="cover-orb1"></div>
+  <div class="cover-orb2"></div>
+  <div class="cover-content">
+    <img src="/logo_v4.png" alt="Planner" class="cover-logo" onerror="this.style.display='none'">
+    <div class="cover-badge">Documento Oficial</div>
+    <div class="cover-title">Especificação<br>Funcional</div>
+    <div class="cover-subtitle">Sistema de Gestão de Projetos Corporativos</div>
+    <div class="cover-divider"></div>
+    <div class="cover-meta">
+      <div class="cover-meta-item">
+        <label>Versão</label>
+        <span>1.0.0</span>
+      </div>
+      <div class="cover-meta-item">
+        <label>Data</label>
+        <span>Maio / 2026</span>
+      </div>
+      <div class="cover-meta-item">
+        <label>Status</label>
+        <span>Aprovado</span>
+      </div>
+    </div>
+  </div>
+  <div class="cover-footer">PLANNER — SISTEMA DE GESTÃO DE PROJETOS &nbsp;|&nbsp; DOCUMENTO CONFIDENCIAL</div>
+</div>
+
+<!-- ═══════════════ ÍNDICE ═══════════════ -->
+<div class="page">
+  <div class="page-header">
+    <img src="/logo_v4.png" alt="Planner" class="page-header-logo" onerror="">
+    <span class="page-header-title">Especificação Funcional — v1.0.0</span>
+    <span class="page-header-section">Sumário</span>
+  </div>
+  <div class="toc-title">Sumário</div>
+
+  <div class="toc-section-title">Visão do Sistema</div>
+  <div class="toc-group">
+    <div class="toc-item"><span class="toc-num">1</span><span class="toc-text">Visão Geral do Sistema</span><span class="toc-page">3</span></div>
+    <div class="toc-item"><span class="toc-num">2</span><span class="toc-text">Perfis de Usuário e Permissões</span><span class="toc-page">4</span></div>
+  </div>
+
+  <div class="toc-section-title">Especificação de Requisitos</div>
+  <div class="toc-group">
+    <div class="toc-item"><span class="toc-num">3</span><span class="toc-text">Requisitos Funcionais</span><span class="toc-page">6</span></div>
+    <div class="toc-item"><span class="toc-num">4</span><span class="toc-text">Regras de Negócio</span><span class="toc-page">12</span></div>
+    <div class="toc-item"><span class="toc-num">5</span><span class="toc-text">Fluxos Operacionais</span><span class="toc-page">16</span></div>
+  </div>
+
+  <div class="toc-section-title">Detalhamento de Telas e Casos de Uso</div>
+  <div class="toc-group">
+    <div class="toc-item"><span class="toc-num">6</span><span class="toc-text">Telas do Sistema</span><span class="toc-page">19</span></div>
+    <div class="toc-item"><span class="toc-num">7</span><span class="toc-text">Casos de Uso</span><span class="toc-page">25</span></div>
+  </div>
+
+  <div class="toc-section-title">Qualidade e Controle</div>
+  <div class="toc-group">
+    <div class="toc-item"><span class="toc-num">8</span><span class="toc-text">Validações e Regras de Preenchimento</span><span class="toc-page">29</span></div>
+    <div class="toc-item"><span class="toc-num">9</span><span class="toc-text">Relatórios, Dashboards e KPIs</span><span class="toc-page">31</span></div>
+    <div class="toc-item"><span class="toc-num">10</span><span class="toc-text">Notificações e Alertas</span><span class="toc-page">33</span></div>
+    <div class="toc-item"><span class="toc-num">11</span><span class="toc-text">Critérios de Aceite</span><span class="toc-page">34</span></div>
+    <div class="toc-item"><span class="toc-num">12</span><span class="toc-text">Requisitos Não Funcionais</span><span class="toc-page">35</span></div>
+  </div>
+</div>
+
+<!-- ═══════════════ SEÇÃO 1 ═══════════════ -->
+<div class="page page-break">
+  <div class="page-header">
+    <img src="/logo_v4.png" alt="Planner" class="page-header-logo" onerror="">
+    <span class="page-header-title">Especificação Funcional — v1.0.0</span>
+    <span class="page-header-section">1. Visão Geral</span>
+  </div>
+
+  <div class="section-header">
+    <div class="section-num">Seção 01</div>
+    <div class="section-title">Visão Geral do Sistema</div>
+    <div class="section-title-bar"></div>
+    <div class="section-intro">O Planner é um sistema corporativo de gestão de projetos desenvolvido para suportar o ciclo de vida completo de projetos organizacionais, desde a solicitação e aprovação até o encerramento formal, com controle financeiro integrado e geração automática de documentos.</div>
+  </div>
+
+  <h3>1.1 Objetivo do Sistema</h3>
+  <p>O Planner tem como objetivo central prover às organizações uma plataforma unificada e integrada para:</p>
+  <ul>
+    <li><strong>Gestão estratégica do portfólio de projetos</strong> — visão consolidada de todos os projetos ativos, concluídos e em análise, organizados por área de atuação (Tecnologia, Qualidade, Estratégico).</li>
+    <li><strong>Controle operacional do ciclo de vida</strong> — acompanhamento completo desde a solicitação formal (Termo de Abertura), passando por reuniões de Go/No-Go, Kick-Off, Checkpoints periódicos, Go Live, Pós Go Live, até o Encerramento e Lições Aprendidas.</li>
+    <li><strong>Rastreabilidade e transparência</strong> — histórico completo de todas as decisões, atualizações, evidências e documentos de cada projeto, acessíveis a qualquer momento pela tela de Consulta de Projetos.</li>
+    <li><strong>Controle financeiro por Earned Value Management (EVM)</strong> — cálculo automático dos indicadores IDC (Índice de Desempenho de Custo) e IDP (Índice de Desempenho de Prazo) com base nos valores orçados e reais de cada atividade.</li>
+    <li><strong>Geração automática de documentos oficiais</strong> — ATAs de reunião geradas automaticamente com informações do sistema, exportáveis em PDF com identidade visual corporativa.</li>
+  </ul>
+
+  <h3>1.2 Escopo do Sistema</h3>
+  <table>
+    <thead><tr><th>Módulo</th><th>Funcionalidades Principais</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Portfólio</strong></td><td>Kanban de projetos, filtros, priorização</td><td><span class="badge badge-green">Incluso</span></td></tr>
+      <tr><td><strong>Solicitação de Projetos</strong></td><td>Formulário multietapa, riscos, orçamento, anexos</td><td><span class="badge badge-green">Incluso</span></td></tr>
+      <tr><td><strong>Reuniões Estruturadas</strong></td><td>Go/No-Go, Kick-Off, Checkpoint, Go Live, Encerramento</td><td><span class="badge badge-green">Incluso</span></td></tr>
+      <tr><td><strong>Cronograma / WBS</strong></td><td>EAP, Gantt, dependências, custo por atividade</td><td><span class="badge badge-green">Incluso</span></td></tr>
+      <tr><td><strong>Kanban de Atividades</strong></td><td>Drag-and-drop, detalhe de tarefa, evidências</td><td><span class="badge badge-green">Incluso</span></td></tr>
+      <tr><td><strong>Controle Financeiro (EVM)</strong></td><td>IDC, IDP, VP, VE, CR, budget x realizado</td><td><span class="badge badge-green">Incluso</span></td></tr>
+      <tr><td><strong>ATAs Automáticas</strong></td><td>Geração, armazenamento, download PDF</td><td><span class="badge badge-green">Incluso</span></td></tr>
+      <tr><td><strong>Evidências e Anexos</strong></td><td>Upload por projeto, reunião, atividade</td><td><span class="badge badge-green">Incluso</span></td></tr>
+      <tr><td><strong>Status Report</strong></td><td>Semáforo automático, relatório visual</td><td><span class="badge badge-green">Incluso</span></td></tr>
+      <tr><td><strong>Consulta de Projetos</strong></td><td>Histórico completo, financeiro, ATAs, anexos</td><td><span class="badge badge-green">Incluso</span></td></tr>
+      <tr><td><strong>Analytics</strong></td><td>Dashboard executivo, indicadores de portfólio</td><td><span class="badge badge-green">Incluso</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>1.3 Problemas que o Sistema Resolve</h3>
+  <ul>
+    <li>Falta de visibilidade consolidada sobre o portfólio de projetos da organização</li>
+    <li>Ausência de processo formal para aprovação e abertura de novos projetos</li>
+    <li>Dificuldade de acompanhamento de prazos e entregas das atividades do cronograma</li>
+    <li>Falta de controle orçamentário por projeto e por atividade com indicadores EVM</li>
+    <li>Geração manual e inconsistente de atas de reunião, sem armazenamento centralizado</li>
+    <li>Ausência de evidências formais das conclusões de atividades</li>
+    <li>Dificuldade de acesso ao histórico completo de decisões e mudanças de cada projeto</li>
+    <li>Falta de indicadores automáticos de saúde do projeto (custo, prazo, recursos)</li>
+  </ul>
+
+  <h3>1.4 Benefícios Esperados</h3>
+  <table>
+    <thead><tr><th>Benefício</th><th>Impacto</th></tr></thead>
+    <tbody>
+      <tr><td>Visão única do portfólio de projetos</td><td>Decisões estratégicas mais rápidas e embasadas</td></tr>
+      <tr><td>Processo padronizado de abertura de projetos</td><td>Redução de projetos não formalizados e sem sponsor</td></tr>
+      <tr><td>Controle de custos por EVM</td><td>Identificação antecipada de desvios orçamentários</td></tr>
+      <tr><td>ATAs automáticas com PDF oficial</td><td>Redução de 90% do tempo de elaboração de atas</td></tr>
+      <tr><td>Status Report automático com semáforo</td><td>Gestão por exceção: foco nos projetos em risco</td></tr>
+      <tr><td>Histórico completo (Consulta)</td><td>Rastreabilidade total para auditorias e lições aprendidas</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══════════════ SEÇÃO 2 ═══════════════ -->
+<div class="page page-break">
+  <div class="page-header">
+    <img src="/logo_v4.png" alt="Planner" class="page-header-logo" onerror="">
+    <span class="page-header-title">Especificação Funcional — v1.0.0</span>
+    <span class="page-header-section">2. Perfis de Usuário</span>
+  </div>
+
+  <div class="section-header">
+    <div class="section-num">Seção 02</div>
+    <div class="section-title">Perfis de Usuário e Permissões</div>
+    <div class="section-title-bar"></div>
+    <div class="section-intro">O sistema adota controle de acesso baseado em perfis (Role-Based Access Control — RBAC), com seis perfis distintos que definem as capacidades de cada usuário dentro do sistema.</div>
+  </div>
+
+  <h3>2.1 Perfis Disponíveis</h3>
+  <table>
+    <thead><tr><th>Perfil</th><th>Código</th><th>Descrição Geral</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Administrador</strong></td><td><code>ADMIN</code></td><td>Acesso irrestrito a todo o sistema, incluindo configurações globais, cadastro de usuários e exclusão de registros</td></tr>
+      <tr><td><strong>Diretor</strong></td><td><code>DIRECTOR</code></td><td>Acesso completo de leitura e aprovação em todos os projetos; participa de Go/No-Go como decisor</td></tr>
+      <tr><td><strong>Gerente de Projetos</strong></td><td><code>PROJECT_MANAGER</code></td><td>Cria, edita e gerencia projetos; registra todas as reuniões; atualiza cronograma e orçamento</td></tr>
+      <tr><td><strong>Membro do Projeto</strong></td><td><code>PROJECT_MEMBER</code></td><td>Atualiza status e progresso de atividades que lhe foram atribuídas; insere evidências e comentários</td></tr>
+      <tr><td><strong>Sponsor / Patrocinador</strong></td><td><code>SPONSOR</code></td><td>Visualiza projetos dos quais é patrocinador; participa de reuniões; aprova documentos</td></tr>
+      <tr><td><strong>Cliente</strong></td><td><code>CLIENT</code></td><td>Acesso somente leitura aos projetos dos quais é parte interessada; sem capacidade de edição</td></tr>
+    </tbody>
+  </table>
+
+  <h3>2.2 Matriz de Permissões Detalhada</h3>
+  <p class="table-caption">Legenda: ✅ Permitido | 🔒 Somente leitura | ❌ Bloqueado | ⚡ Próprios registros</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Funcionalidade</th>
+        <th>ADMIN</th>
+        <th>DIRECTOR</th>
+        <th>MGR</th>
+        <th>MEMBER</th>
+        <th>SPONSOR</th>
+        <th>CLIENT</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>Criar Projeto</strong></td><td>✅</td><td>✅</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td></tr>
+      <tr><td><strong>Editar Projeto</strong></td><td>✅</td><td>✅</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td></tr>
+      <tr><td><strong>Excluir Projeto</strong></td><td>✅</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td></tr>
+      <tr><td><strong>Ver Todos os Projetos</strong></td><td>✅</td><td>✅</td><td>✅</td><td>⚡</td><td>⚡</td><td>⚡</td></tr>
+      <tr><td><strong>Registrar Go/No-Go</strong></td><td>✅</td><td>✅</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td></tr>
+      <tr><td><strong>Registrar Kick-Off</strong></td><td>✅</td><td>✅</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td></tr>
+      <tr><td><strong>Registrar Checkpoint</strong></td><td>✅</td><td>✅</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td></tr>
+      <tr><td><strong>Atualizar Atividades</strong></td><td>✅</td><td>✅</td><td>✅</td><td>⚡</td><td>❌</td><td>❌</td></tr>
+      <tr><td><strong>Inserir Evidências</strong></td><td>✅</td><td>✅</td><td>✅</td><td>⚡</td><td>❌</td><td>❌</td></tr>
+      <tr><td><strong>Editar Cronograma</strong></td><td>✅</td><td>✅</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td></tr>
+      <tr><td><strong>Inserir Custos por Atividade</strong></td><td>✅</td><td>✅</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td></tr>
+      <tr><td><strong>Gerar/Baixar ATA PDF</strong></td><td>✅</td><td>✅</td><td>✅</td><td>🔒</td><td>🔒</td><td>❌</td></tr>
+      <tr><td><strong>Priorizar Projetos</strong></td><td>✅</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td></tr>
+      <tr><td><strong>Gerenciar Usuários</strong></td><td>✅</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td></tr>
+      <tr><td><strong>Ver Analytics</strong></td><td>✅</td><td>✅</td><td>✅</td><td>❌</td><td>🔒</td><td>❌</td></tr>
+      <tr><td><strong>Consulta de Projetos (Histórico)</strong></td><td>✅</td><td>✅</td><td>✅</td><td>⚡</td><td>⚡</td><td>❌</td></tr>
+    </tbody>
+  </table>
+
+  <h3>2.3 Responsabilidades por Perfil</h3>
+  <h4>Administrador (ADMIN)</h4>
+  <ul>
+    <li>Cadastrar, editar e desativar usuários do sistema</li>
+    <li>Definir perfis e permissões de acesso</li>
+    <li>Excluir projetos e registros do sistema</li>
+    <li>Acessar todas as funcionalidades sem restrição</li>
+    <li>Configurar parâmetros globais do sistema</li>
+  </ul>
+
+  <h4>Gerente de Projetos (PROJECT_MANAGER)</h4>
+  <ul>
+    <li>Criar e gerenciar os projetos sob sua responsabilidade</li>
+    <li>Conduzir e registrar todas as reuniões estruturadas do projeto</li>
+    <li>Manter o cronograma (WBS, datas, responsáveis, custos) atualizado</li>
+    <li>Inserir e gerenciar riscos e premissas do projeto</li>
+    <li>Emitir o Status Report e gerar ATAs oficiais</li>
+    <li>Controlar o orçamento e acompanhar os indicadores IDC/IDP</li>
+  </ul>
+
+  <h4>Membro do Projeto (PROJECT_MEMBER)</h4>
+  <ul>
+    <li>Atualizar o status e progresso das atividades atribuídas a ele</li>
+    <li>Registrar os custos reais de suas atividades</li>
+    <li>Inserir comentários e evidências de conclusão em suas tarefas</li>
+    <li>Participar das reuniões como participante registrado</li>
+  </ul>
+</div>
+
+<!-- ═══════════════ SEÇÃO 3 ═══════════════ -->
+<div class="page page-break">
+  <div class="page-header">
+    <img src="/logo_v4.png" alt="Planner" class="page-header-logo" onerror="">
+    <span class="page-header-title">Especificação Funcional — v1.0.0</span>
+    <span class="page-header-section">3. Requisitos Funcionais</span>
+  </div>
+
+  <div class="section-header">
+    <div class="section-num">Seção 03</div>
+    <div class="section-title">Requisitos Funcionais</div>
+    <div class="section-title-bar"></div>
+    <div class="section-intro">Os requisitos funcionais descrevem o comportamento do sistema do ponto de vista do usuário. Cada requisito é identificado por um código único, descrito com suas regras, validações e critério de aceite.</div>
+  </div>
+
+  <h3>3.1 Módulo: Solicitação de Projetos</h3>
+
+  <div class="req-card">
+    <div class="req-header"><span class="req-id">RF-001</span><span class="req-name">Solicitar Novo Projeto</span></div>
+    <div class="req-body">
+      <div class="req-row"><span class="req-label">Descrição</span><span class="req-val">O sistema deve prover formulário multietapa (5 passos) para solicitação de novo projeto, coletando todas as informações necessárias para análise e aprovação.</span></div>
+      <div class="req-row"><span class="req-label">Etapas</span><span class="req-val">1) Identificação (título, portfólio, área, sponsor, origem) → 2) Escopo e Contexto (AS IS / TO BE) → 3) Premissas e Financeiro (datas, orçamento) → 4) Riscos → 5) Documentos e Envio</span></div>
+      <div class="req-row"><span class="req-label">Regras</span><span class="req-val">Campos obrigatórios na Etapa 1: Nome do Projeto, Portfólio, Área Responsável, Sponsor e Origem. Avanço para próxima etapa somente com obrigatórios preenchidos.</span></div>
+      <div class="req-row"><span class="req-label">Critério</span><span class="req-val">Ao submeter, um projeto é criado com status PENDING_GO_NO_GO e o usuário é redirecionado para a página do projeto criado.</span></div>
+    </div>
+  </div>
+
+  <div class="req-card">
+    <div class="req-header"><span class="req-id">RF-002</span><span class="req-name">Anexar Documentos na Solicitação</span></div>
+    <div class="req-body">
+      <div class="req-row"><span class="req-label">Descrição</span><span class="req-val">Na Etapa 5 da solicitação, o usuário pode anexar arquivos de suporte (planilhas, apresentações, PDFs, imagens).</span></div>
+      <div class="req-row"><span class="req-label">Regras</span><span class="req-val">Upload via drag-and-drop ou clique. Formatos aceitos: PDF, DOCX, XLSX, JPG, PNG, ZIP. Limite: 50 MB por arquivo. Os arquivos são salvos no armazenamento em nuvem e vinculados ao projeto.</span></div>
+      <div class="req-row"><span class="req-label">Critério</span><span class="req-val">Os arquivos anexados devem aparecer na seção "Anexos do Projeto" na tela de Consulta de Projetos após a criação.</span></div>
+    </div>
+  </div>
+
+  <h3>3.2 Módulo: Gestão do Portfólio</h3>
+
+  <div class="req-card">
+    <div class="req-header"><span class="req-id">RF-003</span><span class="req-name">Visualizar Portfólio em Kanban</span></div>
+    <div class="req-body">
+      <div class="req-row"><span class="req-label">Descrição</span><span class="req-val">A tela principal do Kanban exibe todos os projetos organizados em colunas por status do projeto. O usuário pode arrastar e soltar projetos entre colunas para alterar o status.</span></div>
+      <div class="req-row"><span class="req-label">Colunas</span><span class="req-val">Aguard. Go/No-Go → Planejamento → Em Andamento → Em Validação → Go Live → Pós Go Live → Concluído</span></div>
+      <div class="req-row"><span class="req-label">Filtros</span><span class="req-val">Portfólio (Tecnologia, Qualidade, Estratégico), busca por nome/sponsor, filtro por área</span></div>
+      <div class="req-row"><span class="req-label">Critério</span><span class="req-val">Ao arrastar o card, o status é atualizado em tempo real no banco de dados com feedback visual de salvamento.</span></div>
+    </div>
+  </div>
+
+  <div class="req-card">
+    <div class="req-header"><span class="req-id">RF-004</span><span class="req-name">Consultar Projetos com Filtros Avançados</span></div>
+    <div class="req-body">
+      <div class="req-row"><span class="req-label">Descrição</span><span class="req-val">A tela de listagem de projetos permite filtrar por múltiplos critérios simultaneamente: status, portfólio, prioridade, origem e sponsor.</span></div>
+      <div class="req-row"><span class="req-label">Filtros</span><span class="req-val">Status (Todos/Ativos/Concluídos/Em Espera), Portfólio, Prioridade (P1-P4), Origem (Interna/Liderança/Cliente), Sponsor/Solicitante</span></div>
+      <div class="req-row"><span class="req-label">Critério</span><span class="req-val">O contador "X de Y projetos" atualiza em tempo real conforme filtros são aplicados. Botão "Limpar Filtros" reseta todos.</span></div>
+    </div>
+  </div>
+
+  <h3>3.3 Módulo: Ciclo de Vida do Projeto</h3>
+
+  <div class="req-card">
+    <div class="req-header"><span class="req-id">RF-005</span><span class="req-name">Conduzir Reunião de Go/No-Go</span></div>
+    <div class="req-body">
+      <div class="req-row"><span class="req-label">Descrição</span><span class="req-val">Tela dedicada para conduzir a reunião de Go/No-Go, com apresentação estruturada em slides, votação formal e registro da decisão.</span></div>
+      <div class="req-row"><span class="req-label">Decisões</span><span class="req-val">GO (projeto aprovado) → status muda para PLANNING. NO-GO (projeto rejeitado) → status muda para CANCELLED. STAND-BY (aguardando) → status permanece PENDING_GO_NO_GO.</span></div>
+      <div class="req-row"><span class="req-label">Automações</span><span class="req-val">Após registro: ATA gerada automaticamente com a decisão, participantes, data e observações. ATA salva no banco e disponível para download em PDF.</span></div>
+      <div class="req-row"><span class="req-label">Critério</span><span class="req-val">O status do projeto é alterado no banco imediatamente após confirmação da decisão.</span></div>
+    </div>
+  </div>
+
+  <div class="req-card">
+    <div class="req-header"><span class="req-id">RF-006</span><span class="req-name">Registrar Kick-Off do Projeto</span></div>
+    <div class="req-body">
+      <div class="req-row"><span class="req-label">Descrição</span><span class="req-val">Formulário estruturado para planejamento e registro da reunião de Kick-Off, incluindo EAP (Estrutura Analítica do Projeto), marcos do cronograma, participantes e documentos.</span></div>
+      <div class="req-row"><span class="req-label">Seções</span><span class="req-val">1) Informações da Reunião → 2) EAP (tabela editável de atividades por área) → 3) Cronograma de Marcos → 4) Documentos e Anexos → 5) Participantes e Notas</span></div>
+      <div class="req-row"><span class="req-label">Automações</span><span class="req-val">Ao "Registrar Kick-Off": a) Status do projeto muda para IN_PROGRESS, b) EAP é importada para o Cronograma como áreas e atividades, c) Reunião de Kick-Off é criada no banco, d) ATA automática é gerada.</span></div>
+      <div class="req-row"><span class="req-label">Critério</span><span class="req-val">Ao registrar com sucesso, exibe tela de confirmação "Projeto Iniciado!" e redireciona para a página do projeto.</span></div>
+    </div>
+  </div>
+
+  <div class="req-card">
+    <div class="req-header"><span class="req-id">RF-007</span><span class="req-name">Realizar Checkpoint do Projeto</span></div>
+    <div class="req-body">
+      <div class="req-row"><span class="req-label">Descrição</span><span class="req-val">Reunião periódica de acompanhamento onde o Gerente atualiza o status, progresso, datas reais e custos de cada atividade do cronograma.</span></div>
+      <div class="req-row"><span class="req-label">Frequências</span><span class="req-val">Diário, Semanal, Quinzenal, Mensal</span></div>
+      <div class="req-row"><span class="req-label">Por Atividade</span><span class="req-val">Status (A Iniciar/Em Andamento/Concluído/Atrasado/Pausado), Progresso (0-100%), Datas Reais (início e término), R$ Orçado, R$ Gasto Real, Comentário, Evidências (upload)</span></div>
+      <div class="req-row"><span class="req-label">Automações</span><span class="req-val">ATA do Checkpoint gerada automaticamente com tabela de atividades (status anterior vs. novo), destaques, impeditivos e próximos passos.</span></div>
+      <div class="req-row"><span class="req-label">Critério</span><span class="req-val">Todas as alterações de atividade propagam automaticamente para o pai (datas MIN/MAX, progresso médio).</span></div>
+    </div>
+  </div>
+
+  <h3>3.4 Módulo: Cronograma e WBS</h3>
+
+  <div class="req-card">
+    <div class="req-header"><span class="req-id">RF-008</span><span class="req-name">Gerenciar Cronograma (Visão Lista)</span></div>
+    <div class="req-body">
+      <div class="req-row"><span class="req-label">Descrição</span><span class="req-val">Tabela hierárquica com EAP, organizando módulos (áreas), atividades e tarefas (subtarefas) com edição inline em todas as colunas.</span></div>
+      <div class="req-row"><span class="req-label">Colunas</span><span class="req-val">EAP | Ações | Nome da Atividade | Status | Responsável | Início Plan. | Fim Plan. | Início Real | Fim Real | Est.h | Real h | % Est. | % Real | Predecessoras | R$ Orç. | R$ Real</span></div>
+      <div class="req-row"><span class="req-label">Regras</span><span class="req-val">Datas da atividade PAI são calculadas automaticamente: Início = MIN(início das filhas), Fim = MAX(fim das filhas). O progresso do pai = média das filhas.</span></div>
+      <div class="req-row"><span class="req-label">Critério</span><span class="req-val">Ao editar qualquer campo de uma tarefa filha, a atividade pai atualiza automaticamente seus campos derivados.</span></div>
+    </div>
+  </div>
+
+  <div class="req-card">
+    <div class="req-header"><span class="req-id">RF-009</span><span class="req-name">Visualizar Gantt do Projeto</span></div>
+    <div class="req-body">
+      <div class="req-row"><span class="req-label">Descrição</span><span class="req-val">Diagrama de Gantt com barras horizontais representando a duração das atividades e linhas de dependência entre tarefas.</span></div>
+      <div class="req-row"><span class="req-label">Zooms</span><span class="req-val">Mês, Semana, Dia — com indicação de feriados nacionais e finais de semana</span></div>
+      <div class="req-row"><span class="req-label">Critério</span><span class="req-val">Linha vertical "Hoje" visível. Dependências violadas exibidas em vermelho tracejado. Botão "Hoje" centraliza a visão na data atual.</span></div>
+    </div>
+  </div>
+
+  <div class="req-card">
+    <div class="req-header"><span class="req-id">RF-010</span><span class="req-name">Anexar Evidências de Conclusão (Cronograma)</span></div>
+    <div class="req-body">
+      <div class="req-row"><span class="req-label">Descrição</span><span class="req-val">Botão de clipe (📎) em cada linha de atividade abre painel lateral de "Evidências da Conclusão", permitindo upload e visualização de arquivos de comprovação.</span></div>
+      <div class="req-row"><span class="req-label">Regras</span><span class="req-val">Anexos ficam vinculados tanto à tarefa quanto ao projeto. Aparecem na tela de Consulta de Projetos com identificação da atividade de origem.</span></div>
+      <div class="req-row"><span class="req-label">Critério</span><span class="req-val">Ícone do clipe muda de cinza para roxo quando há pelo menos um anexo. Todos os anexos disponíveis para download individual.</span></div>
+    </div>
+  </div>
+
+  <h3>3.5 Módulo: Controle Financeiro (EVM)</h3>
+
+  <div class="req-card">
+    <div class="req-header"><span class="req-id">RF-011</span><span class="req-name">Registrar Custo Orçado e Real por Atividade</span></div>
+    <div class="req-body">
+      <div class="req-row"><span class="req-label">Descrição</span><span class="req-val">Cada atividade ou tarefa do cronograma pode ter um valor orçado (planejado) e um valor de custo real registrado. Disponível no Cronograma, Kanban e Checkpoint.</span></div>
+      <div class="req-row"><span class="req-label">Campos</span><span class="req-val">R$ Orçado (budgetedCost), R$ Gasto Real (actualCost). Ambos são opcionais e editáveis a qualquer momento.</span></div>
+      <div class="req-row"><span class="req-label">Critério</span><span class="req-val">Os valores alimentam automaticamente o cálculo de EVM (VE, CR, IDC, IDP) no card de Controle Orçamentário da página do projeto.</span></div>
+    </div>
+  </div>
+
+  <div class="req-card">
+    <div class="req-header"><span class="req-id">RF-012</span><span class="req-name">Exibir Painel de Controle Orçamentário (EVM)</span></div>
+    <div class="req-body">
+      <div class="req-row"><span class="req-label">Descrição</span><span class="req-val">Card dedicado na página do projeto exibe os indicadores de Earned Value Management calculados automaticamente.</span></div>
+      <div class="req-row"><span class="req-label">Indicadores</span><span class="req-val">IDC (Índice de Desempenho de Custo) = VE/CR; IDP (Índice de Desempenho de Prazo) = VE/VP; VP (Valor Planejado); VE (Valor Agregado); CR (Custo Real)</span></div>
+      <div class="req-row"><span class="req-label">Cores</span><span class="req-val">≥ 1.0 = Verde (dentro do orçamento/prazo); 0.85–1.0 = Amarelo (atenção); &lt; 0.85 = Vermelho (risco)</span></div>
+      <div class="req-row"><span class="req-label">Critério</span><span class="req-val">O card só é exibido quando há Budget do projeto ou custos por atividade registrados. Barra de consumo do budget visível quando budget total definido.</span></div>
+    </div>
+  </div>
+
+  <h3>3.6 Módulo: Status Report</h3>
+
+  <div class="req-card">
+    <div class="req-header"><span class="req-id">RF-013</span><span class="req-name">Calcular Status Report Automaticamente</span></div>
+    <div class="req-body">
+      <div class="req-row"><span class="req-label">Descrição</span><span class="req-val">O sistema calcula automaticamente os quatro indicadores do Status Report (Custos, Cronograma, Recursos, Geral) com base nos dados do projeto, sem intervenção manual.</span></div>
+      <div class="req-row"><span class="req-label">CUSTOS</span><span class="req-val">IDC ≥ 1.0 → Verde | IDC 0.85–1.0 → Amarelo | IDC &lt; 0.85 → Vermelho. Fallback: estimatedCosts/budget quando sem dados EVM.</span></div>
+      <div class="req-row"><span class="req-label">CRONOGRAMA</span><span class="req-val">Delta (progresso real − progresso esperado pela timeline): &gt; -10% → Verde | -10% a -25% → Amarelo | &lt; -25% ou prazo vencido → Vermelho.</span></div>
+      <div class="req-row"><span class="req-label">RECURSOS</span><span class="req-val">Taxa de entregas no prazo: ≥ 80% → Verde | 60–80% → Amarelo | &lt; 60% → Vermelho.</span></div>
+      <div class="req-row"><span class="req-label">GERAL</span><span class="req-val">Pior resultado entre os três indicadores acima.</span></div>
+      <div class="req-row"><span class="req-label">Critério</span><span class="req-val">O sistema recalcula e salva no banco a cada acesso à página do projeto. O usuário pode sobrescrever manualmente e salvar.</span></div>
+    </div>
+  </div>
+
+  <h3>3.7 Módulo: ATAs e Documentos</h3>
+
+  <div class="req-card">
+    <div class="req-header"><span class="req-id">RF-014</span><span class="req-name">Gerar ATA Automática de Reunião</span></div>
+    <div class="req-body">
+      <div class="req-row"><span class="req-label">Descrição</span><span class="req-val">Ao registrar qualquer reunião estruturada (Go/No-Go, Kick-Off, Checkpoint, Go Live, Lições Aprendidas, Encerramento), o sistema gera automaticamente uma ATA em formato Markdown.</span></div>
+      <div class="req-row"><span class="req-label">Conteúdo da ATA</span><span class="req-val">Tipo e data da reunião, participantes, pauta, decisões, próximas ações, status das atividades (no Checkpoint: tabela com status anterior vs. novo)</span></div>
+      <div class="req-row"><span class="req-label">Armazenamento</span><span class="req-val">Salva como ProjectDocument do tipo MEETING_ATA vinculado ao projeto</span></div>
+      <div class="req-row"><span class="req-label">Critério</span><span class="req-val">ATA disponível para visualização e download em PDF a qualquer momento pela tela de Consulta de Projetos.</span></div>
+    </div>
+  </div>
+
+  <div class="req-card">
+    <div class="req-header"><span class="req-id">RF-015</span><span class="req-name">Exportar ATA em PDF Profissional</span></div>
+    <div class="req-body">
+      <div class="req-row"><span class="req-label">Descrição</span><span class="req-val">O botão "Baixar PDF" gera um documento A4 formatado com o logotipo do sistema, header, footer e tipografia profissional.</span></div>
+      <div class="req-row"><span class="req-label">Composição</span><span class="req-val">Header: logo + título da ATA + data de geração. Corpo: conteúdo estruturado (H1, H2, tabelas, listas). Footer: "Planner — Sistema de Gestão de Projetos" + data.</span></div>
+      <div class="req-row"><span class="req-label">Critério</span><span class="req-val">PDF gerado via janela de impressão do navegador com CSS @page A4. Disponível tanto no modal de visualização quanto na tela de Consulta.</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ SEÇÃO 4 ═══════════════ -->
+<div class="page page-break">
+  <div class="page-header">
+    <img src="/logo_v4.png" alt="Planner" class="page-header-logo" onerror="">
+    <span class="page-header-title">Especificação Funcional — v1.0.0</span>
+    <span class="page-header-section">4. Regras de Negócio</span>
+  </div>
+
+  <div class="section-header">
+    <div class="section-num">Seção 04</div>
+    <div class="section-title">Regras de Negócio</div>
+    <div class="section-title-bar"></div>
+  </div>
+
+  <h3>4.1 Ciclo de Vida e Status do Projeto</h3>
+
+  <div class="rule-card">
+    <div class="rule-id">RN-001 — Fluxo de Status</div>
+    <div class="rule-title">O projeto deve seguir o fluxo definido de status</div>
+    <div class="rule-body">
+      <strong>Fluxo principal:</strong> PENDING_GO_NO_GO → PLANNING → IN_PROGRESS → PILOT → RAMP_UP → GO_LIVE → POST_GOLIVE → COMPLETED<br>
+      <strong>Status especiais:</strong> ON_HOLD (pausa em qualquer fase), CANCELLED (cancelamento), FUTURE_ANALYSIS (análise futura)<br>
+      <strong>Regra:</strong> O sistema impede que o projeto avance para IN_PROGRESS sem que o Kick-Off tenha sido registrado. O Kick-Off muda o status automaticamente para IN_PROGRESS.
+    </div>
+  </div>
+
+  <div class="rule-card">
+    <div class="rule-id">RN-002 — Priorização do Portfólio</div>
+    <div class="rule-title">Projetos ativos devem ter prioridade definida (P1, P2, P3, P4)</div>
+    <div class="rule-body">
+      P1 = Máxima prioridade (crítico para o negócio). P2 = Alta. P3 = Média. P4 = Baixa.<br>
+      A prioridade é definida pelo DIRECTOR ou ADMIN e fica registrada com data de atualização.<br>
+      O portfólio pode ser ordenado por prioridade na tela de listagem.
+    </div>
+  </div>
+
+  <h3>4.2 Regras do Cronograma</h3>
+
+  <div class="rule-card">
+    <div class="rule-id">RN-003 — Propagação de Datas (Pai ← Filhas)</div>
+    <div class="rule-title">Datas da atividade pai são derivadas automaticamente das tarefas filhas</div>
+    <div class="rule-body">
+      <strong>Início Planejado (pai)</strong> = MIN(startDate das filhas com data definida)<br>
+      <strong>Fim Planejado (pai)</strong> = MAX(endDate das filhas com data definida)<br>
+      <strong>Início Real (pai)</strong> = MIN(actualStart das filhas com data definida)<br>
+      <strong>Fim Real (pai)</strong> = MAX(actualEnd das filhas com data definida)<br>
+      <strong>Disparo:</strong> toda vez que uma tarefa filha é criada, editada ou excluída. Propaga em cascata para avós.
+    </div>
+  </div>
+
+  <div class="rule-card">
+    <div class="rule-id">RN-004 — Propagação de Progresso (Pai ← Filhas)</div>
+    <div class="rule-title">Progresso e status do pai são calculados pela média das filhas</div>
+    <div class="rule-body">
+      <strong>Progresso (pai)</strong> = média aritmética do progresso de todas as filhas<br>
+      <strong>Status derivado:</strong> 0% = PLANNING | 1-89% = IN_PROGRESS | 90-99% = VALIDATION | 100% = COMPLETED<br>
+      <strong>Exceção:</strong> se o status atual for DELAYED ou ON_HOLD, permanece mesmo com progresso avançando.
+    </div>
+  </div>
+
+  <div class="rule-card">
+    <div class="rule-id">RN-005 — Dependências entre Atividades (Predecessoras)</div>
+    <div class="rule-title">Atividade predecessor determina a data de início mínima da sucessora</div>
+    <div class="rule-body">
+      Ao vincular uma predecessora, o sistema sugere automaticamente a data de início da sucessora como o próximo dia útil após o fim da predecessora.<br>
+      <strong>Violação:</strong> se o fim da predecessora for posterior ao início da sucessora, a linha de dependência aparece em vermelho tracejado no Gantt.<br>
+      <strong>Bloqueio:</strong> tarefa cujas predecessoras não estão COMPLETED fica marcada com ícone de cadeado 🔒.
+    </div>
+  </div>
+
+  <h3>4.3 Regras Financeiras (EVM)</h3>
+
+  <div class="formula-box">
+    <div class="formula-title">Fórmulas de Earned Value Management</div>
+    <div class="formula">VE (Valor Agregado)  = Σ (R$_Orçado_tarefa × Progresso% / 100)</div>
+    <div class="formula">VP (Valor Planejado)  = Σ R$_Orçado_total × (dias_decorridos / dias_totais)</div>
+    <div class="formula">CR (Custo Real)       = Σ R$_Gasto_Real_tarefa</div>
+    <div class="formula">IDC (Índice Custo)    = VE / CR</div>
+    <div class="formula">IDP (Índice Prazo)    = VE / VP</div>
+  </div>
+
+  <div class="rule-card">
+    <div class="rule-id">RN-006 — Semáforo do IDC</div>
+    <div class="rule-title">O IDC define a cor do indicador CUSTOS no Status Report</div>
+    <div class="rule-body">
+      IDC ≥ 1.0 → Verde ("Dentro do orçamento" / "Economia vs. planejado")<br>
+      IDC 0.85 a 0.99 → Amarelo ("Atenção: acima do previsto")<br>
+      IDC &lt; 0.85 → Vermelho ("Orçamento em risco")<br>
+      <strong>Fallback:</strong> quando não há dados EVM, usa estimatedCosts / budget como referência.
+    </div>
+  </div>
+
+  <div class="rule-card">
+    <div class="rule-id">RN-007 — VP requer datas e orçamento</div>
+    <div class="rule-title">O IDP só é calculado quando há datas e orçamento por atividade definidos</div>
+    <div class="rule-body">
+      VP = null (e portanto IDP = null) quando: a) não há data de início/fim do projeto definida, ou b) não há atividades com orçamento definido.<br>
+      Quando IDP = null, o indicador mostra "—" e o tooltip explica o que é necessário para ativá-lo.
+    </div>
+  </div>
+
+  <h3>4.4 Regras de Documentos e ATAs</h3>
+
+  <div class="rule-card">
+    <div class="rule-id">RN-008 — ATA é gerada automaticamente e não pode ser editada</div>
+    <div class="rule-title">ATAs são documentos oficiais gerados pelo sistema e armazenados como somente leitura</div>
+    <div class="rule-body">
+      A ATA é gerada no momento do registro da reunião e não pode ser editada posteriormente pelo usuário.<br>
+      Se a reunião for registrada novamente (re-abertura), uma nova versão da ATA é gerada.<br>
+      O usuário pode copiar o texto ou exportar em PDF para distribuição externa.
+    </div>
+  </div>
+
+  <div class="rule-card">
+    <div class="rule-id">RN-009 — Evidências vinculadas ao projeto e à tarefa</div>
+    <div class="rule-title">Anexos enviados como evidência ficam vinculados tanto à tarefa quanto ao projeto</div>
+    <div class="rule-body">
+      Todo arquivo carregado como evidência de conclusão de uma atividade é registrado com:<br>
+      - taskId: referência à tarefa específica<br>
+      - projectId: referência ao projeto<br>
+      Isso garante que apareçam tanto no detalhe da tarefa quanto no histórico completo do projeto na Consulta.
+    </div>
+  </div>
+
+  <div class="rule-card">
+    <div class="rule-id">RN-010 — Anexos do Kick-Off vinculados à reunião e ao projeto</div>
+    <div class="rule-title">Arquivos anexados durante o Kick-Off ficam vinculados à reunião e ao projeto</div>
+    <div class="rule-body">
+      Ao registrar o Kick-Off, cada arquivo é criado com meetingId (reunião de kick-off) e projectId.<br>
+      Isso garante que apareçam na tela de Consulta de Projetos na seção de Anexos.
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ SEÇÃO 5 ═══════════════ -->
+<div class="page page-break">
+  <div class="page-header">
+    <img src="/logo_v4.png" alt="Planner" class="page-header-logo" onerror="">
+    <span class="page-header-title">Especificação Funcional — v1.0.0</span>
+    <span class="page-header-section">5. Fluxos Operacionais</span>
+  </div>
+
+  <div class="section-header">
+    <div class="section-num">Seção 05</div>
+    <div class="section-title">Fluxos Operacionais</div>
+    <div class="section-title-bar"></div>
+  </div>
+
+  <h3>5.1 Fluxo Principal: Ciclo de Vida Completo de um Projeto</h3>
+
+  <table>
+    <thead><tr><th>Etapa</th><th>Ação do Usuário</th><th>Ação do Sistema</th><th>Status Resultante</th></tr></thead>
+    <tbody>
+      <tr><td><strong>1. Solicitação</strong></td><td>PM preenche formulário de 5 etapas e clica "Enviar Solicitação"</td><td>Cria projeto, vincula membros, salva riscos e arquivos</td><td>PENDING_GO_NO_GO</td></tr>
+      <tr><td><strong>2. Go/No-Go</strong></td><td>Diretor conduz reunião de aprovação e registra decisão GO</td><td>Gera ATA automática, salva reunião, atualiza status</td><td>PLANNING</td></tr>
+      <tr><td><strong>3. Kick-Off</strong></td><td>PM preenche EAP, marcos e participantes; clica "Registrar Kick-Off"</td><td>Cria WBS no cronograma, cria reunião, gera ATA, muda status</td><td>IN_PROGRESS</td></tr>
+      <tr><td><strong>4. Execução</strong></td><td>Membros atualizam atividades no Cronograma ou Kanban</td><td>Propaga datas/progresso para atividades pai; atualiza IDC/IDP</td><td>IN_PROGRESS</td></tr>
+      <tr><td><strong>5. Checkpoint</strong></td><td>PM registra checkpoint com atualizações periódicas</td><td>Gera ATA de checkpoint, salva custos reais, atualiza EVM</td><td>IN_PROGRESS</td></tr>
+      <tr><td><strong>6. Validação</strong></td><td>Equipe realiza piloto/validação do entregável</td><td>Status pode ser movido para PILOT ou VALIDATION</td><td>PILOT / RAMP_UP</td></tr>
+      <tr><td><strong>7. Go Live</strong></td><td>PM registra reunião de Go Live com data real</td><td>Cria reunião GO_LIVE, gera ATA, atualiza goLiveActual</td><td>GO_LIVE</td></tr>
+      <tr><td><strong>8. Pós Go Live</strong></td><td>PM registra ajustes e KPIs pós-implantação</td><td>Itens de post go-live salvos; status muda para POST_GOLIVE</td><td>POST_GOLIVE</td></tr>
+      <tr><td><strong>9. Lições Aprendidas</strong></td><td>PM registra boas práticas e pontos de melhoria</td><td>Lições salvas vinculadas ao projeto</td><td>POST_GOLIVE</td></tr>
+      <tr><td><strong>10. Encerramento</strong></td><td>PM registra reunião de encerramento formal</td><td>Gera ATA de encerramento, atualiza actualEnd, status → COMPLETED</td><td>COMPLETED</td></tr>
+    </tbody>
+  </table>
+
+  <h3>5.2 Fluxo: Registro de Checkpoint</h3>
+  <div class="flow-step"><span class="flow-n">01</span><span class="flow-txt">PM acessa o projeto e clica em "Checkpoint" no menu de navegação</span></div>
+  <div class="flow-step"><span class="flow-n">02</span><span class="flow-txt">Sistema carrega a lista de todas as atividades do projeto com seus estados atuais</span></div>
+  <div class="flow-step"><span class="flow-n">03</span><span class="flow-txt">PM define a data, frequência (diário/semanal/quinzenal/mensal) e local da reunião</span></div>
+  <div class="flow-step"><span class="flow-n">04</span><span class="flow-txt">Para cada atividade: PM atualiza status, progresso (%); opcionalmente datas reais, custos orçado/real, comentário e evidências</span></div>
+  <div class="flow-step"><span class="flow-n">05</span><span class="flow-txt">Sistema realiza propagação automática: datas e progresso da atividade pai atualizam com base nas filhas</span></div>
+  <div class="flow-step"><span class="flow-n">06</span><span class="flow-txt">PM preenche highlights, impeditivos, próximos passos e seleciona participantes</span></div>
+  <div class="flow-step"><span class="flow-n">07</span><span class="flow-txt">PM clica em "Registrar Checkpoint"</span></div>
+  <div class="flow-step"><span class="flow-n">08</span><span class="flow-txt">Sistema cria reunião do tipo CHECKPOINT no banco, salva todos os dados de custo e progresso</span></div>
+  <div class="flow-step"><span class="flow-n">09</span><span class="flow-txt">Sistema gera automaticamente a ATA com tabela de atividades (status anterior vs. novo)</span></div>
+  <div class="flow-step"><span class="flow-n">10</span><span class="flow-txt">ATA exibida em modal; PM pode copiar ou baixar em PDF</span></div>
+  <div class="flow-step"><span class="flow-n">11</span><span class="flow-txt">Sistema recalcula Status Report (IDC, IDP, semáforos) com os novos dados</span></div>
+  <div class="flow-step"><span class="flow-n">12</span><span class="flow-txt">Redirecionamento para a página do projeto</span></div>
+
+  <h3>5.3 Fluxo: Controle Financeiro por EVM</h3>
+  <div class="flow-step"><span class="flow-n">01</span><span class="flow-txt">Na criação do projeto, PM define o Budget Total no formulário de solicitação ou no modal de edição</span></div>
+  <div class="flow-step"><span class="flow-n">02</span><span class="flow-txt">No Cronograma, para cada atividade: PM insere R$ Orçado (coluna verde) clicando diretamente na célula</span></div>
+  <div class="flow-step"><span class="flow-n">03</span><span class="flow-txt">Sistema totaliza o orçado por área e exibe no rodapé da linha de módulo</span></div>
+  <div class="flow-step"><span class="flow-n">04</span><span class="flow-txt">Durante a execução, responsável insere R$ Gasto Real (coluna laranja) no Cronograma, Kanban ou Checkpoint</span></div>
+  <div class="flow-step"><span class="flow-n">05</span><span class="flow-txt">Sistema calcula VE = Σ(orçado × progresso%) e CR = Σ(custo real) em tempo real</span></div>
+  <div class="flow-step"><span class="flow-n">06</span><span class="flow-txt">Card de Controle Orçamentário na página do projeto exibe IDC e IDP com cores semafóricas</span></div>
+  <div class="flow-step"><span class="flow-n">07</span><span class="flow-txt">Status Report "CUSTOS" é atualizado automaticamente baseado no IDC calculado</span></div>
+  <div class="flow-step"><span class="flow-n">08</span><span class="flow-txt">Na tela de Consulta de Projetos, seção "Controle Orçamentário" exibe o histórico financeiro completo</span></div>
+</div>
+
+<!-- ═══════════════ SEÇÃO 6 ═══════════════ -->
+<div class="page page-break">
+  <div class="page-header">
+    <img src="/logo_v4.png" alt="Planner" class="page-header-logo" onerror="">
+    <span class="page-header-title">Especificação Funcional — v1.0.0</span>
+    <span class="page-header-section">6. Telas do Sistema</span>
+  </div>
+
+  <div class="section-header">
+    <div class="section-num">Seção 06</div>
+    <div class="section-title">Telas do Sistema</div>
+    <div class="section-title-bar"></div>
+  </div>
+
+  <h3>6.1 Dashboard Principal</h3>
+  <table>
+    <thead><tr><th>Elemento</th><th>Descrição</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Objetivo</strong></td><td>Visão executiva do portfólio com KPIs consolidados</td></tr>
+      <tr><td><strong>KPIs Exibidos</strong></td><td>Total de projetos ativos, concluídos, em risco, progresso médio do portfólio, projetos por portfólio (Tecnologia/Qualidade/Estratégico)</td></tr>
+      <tr><td><strong>Gráficos</strong></td><td>Distribuição por status, progresso por área, projetos por prioridade</td></tr>
+      <tr><td><strong>Acesso Rápido</strong></td><td>Links para projetos recentes, atalhos para Kanban e Consulta</td></tr>
+    </tbody>
+  </table>
+
+  <h3>6.2 Kanban de Projetos</h3>
+  <table>
+    <thead><tr><th>Elemento</th><th>Descrição</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Objetivo</strong></td><td>Visão de portfólio em colunas de status com drag-and-drop</td></tr>
+      <tr><td><strong>Colunas</strong></td><td>Aguard. Go/No-Go | Planejamento | Em Andamento | Em Validação | Go Live | Pós Go Live | Concluído</td></tr>
+      <tr><td><strong>Card do Projeto</strong></td><td>Nome, Sponsor, Progresso (%), Equipe, Dias restantes, Status de risco, Portfólio</td></tr>
+      <tr><td><strong>Filtros</strong></td><td>Por portfólio (chips), busca por nome</td></tr>
+      <tr><td><strong>Ação no Card</strong></td><td>Clique abre modal de Kanban de Atividades do projeto específico</td></tr>
+    </tbody>
+  </table>
+
+  <h3>6.3 Kanban de Atividades do Projeto</h3>
+  <table>
+    <thead><tr><th>Elemento</th><th>Descrição</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Objetivo</strong></td><td>Acompanhamento das tarefas do projeto em colunas de status</td></tr>
+      <tr><td><strong>Colunas</strong></td><td>A Fazer | Em Andamento | Atrasada | Em Validação | Concluída | Pausada</td></tr>
+      <tr><td><strong>Card da Tarefa</strong></td><td>Nome, Área WBS, Responsável, Data fim, Progresso</td></tr>
+      <tr><td><strong>Painel de Detalhe</strong></td><td>Progresso editável, Datas Reais, Financeiro (R$ Orçado/Real + IDC mini), Comentários, Evidências</td></tr>
+      <tr><td><strong>Visões</strong></td><td>Kanban (drag-and-drop) e Lista (agrupada por área)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>6.4 Cronograma (WBS)</h3>
+  <table>
+    <thead><tr><th>Elemento</th><th>Descrição</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Objetivo</strong></td><td>Gestão completa do cronograma hierárquico com edição inline</td></tr>
+      <tr><td><strong>Visões</strong></td><td>Lista (tabela hierárquica) e Gantt (barras temporais)</td></tr>
+      <tr><td><strong>Colunas Lista</strong></td><td>EAP | Ações | Nome | Status | Responsável | Início Plan. | Fim Plan. | Início Real | Fim Real | Est.h | Real h | % Est. | % Real | Predecessoras | R$ Orç. | R$ Real</td></tr>
+      <tr><td><strong>Edição Inline</strong></td><td>Todos os campos editáveis por clique na célula, incluindo custo orçado e real</td></tr>
+      <tr><td><strong>Evidências</strong></td><td>Botão 📎 em cada linha abre painel lateral de evidências da conclusão</td></tr>
+      <tr><td><strong>Ordenação</strong></td><td>Por data de início ou fim. Drag-and-drop para reordenação manual de linhas e módulos</td></tr>
+      <tr><td><strong>Ações</strong></td><td>Nova Área, Nova Atividade, Exportar Excel, Ocultar Concluídos</td></tr>
+    </tbody>
+  </table>
+
+  <h3>6.5 Detalhe do Projeto</h3>
+  <table>
+    <thead><tr><th>Elemento</th><th>Descrição</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Objetivo</strong></td><td>Hub central com todas as informações e ações do projeto</td></tr>
+      <tr><td><strong>Abas</strong></td><td>Visão Geral | Cronograma | Kanban | Reuniões | Riscos | Equipe | Documentos</td></tr>
+      <tr><td><strong>Card de Progresso</strong></td><td>Barra de progresso, contagem de tarefas, dias restantes, semáforo EVM</td></tr>
+      <tr><td><strong>Controle Orçamentário</strong></td><td>IDC, IDP com nome completo e interpretação, VP/VE/CR, barra de consumo do budget</td></tr>
+      <tr><td><strong>Status Report</strong></td><td>4 semáforos (Custos, Cronograma, Recursos, Geral) com badge "Auto"</td></tr>
+      <tr><td><strong>Ações Rápidas</strong></td><td>Go/No-Go, Kick-Off, Checkpoint, Go Live, Encerramento (conforme status)</td></tr>
+      <tr><td><strong>Edição</strong></td><td>Botão "Editar" abre modal com seções: Info, Datas, Financeiro (Budget, Custo Estimado, Economia), Escopo, Equipe, Riscos</td></tr>
+    </tbody>
+  </table>
+
+  <h3>6.6 Consulta de Projetos (Histórico)</h3>
+  <table>
+    <thead><tr><th>Elemento</th><th>Descrição</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Objetivo</strong></td><td>Visão completa e histórica de qualquer projeto com todos os dados consolidados</td></tr>
+      <tr><td><strong>Sidebar Esquerda</strong></td><td>Lista de projetos com filtros (Status, Portfólio, Prioridade, Origem, Sponsor). Filtros com scroll independente.</td></tr>
+      <tr><td><strong>Painel Direito</strong></td><td>Histórico completo do projeto selecionado</td></tr>
+      <tr><td><strong>Seções do Histórico</strong></td><td>1) Identificação e Contexto | 2) Timeline do Projeto | 3) WBS | 4) Equipe | 5) Riscos | 6) Controle Orçamentário | 7) ATAs das Reuniões | 8) Documentos e Relatórios | 9) Anexos do Projeto</td></tr>
+      <tr><td><strong>Timeline</strong></td><td>Linha do tempo com todos os eventos: criação, reuniões, documentos, lições aprendidas</td></tr>
+      <tr><td><strong>ATAs</strong></td><td>Lista de todas as ATAs do projeto com botão "Baixar PDF" individual</td></tr>
+      <tr><td><strong>Anexos</strong></td><td>Todos os arquivos do projeto (da solicitação, kick-off, reuniões, evidências) com identificação da origem e download</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══════════════ SEÇÃO 7 ═══════════════ -->
+<div class="page page-break">
+  <div class="page-header">
+    <img src="/logo_v4.png" alt="Planner" class="page-header-logo" onerror="">
+    <span class="page-header-title">Especificação Funcional — v1.0.0</span>
+    <span class="page-header-section">7. Casos de Uso</span>
+  </div>
+
+  <div class="section-header">
+    <div class="section-num">Seção 07</div>
+    <div class="section-title">Casos de Uso</div>
+    <div class="section-title-bar"></div>
+  </div>
+
+  <div class="uc-card">
+    <div class="uc-header"><span class="uc-id">UC-001</span><span class="uc-name">Abrir Novo Projeto</span></div>
+    <div class="uc-body">
+      <div class="uc-row"><span class="uc-label">Atores</span><span class="uc-val">PROJECT_MANAGER (primário), ADMIN</span></div>
+      <div class="uc-row"><span class="uc-label">Pré-condição</span><span class="uc-val">Usuário autenticado com perfil PM ou ADMIN</span></div>
+      <div class="uc-row"><span class="uc-label">Fluxo Principal</span><span class="uc-val">
+        <div class="flow-step"><span class="flow-n">1.</span><span class="flow-txt">Usuário acessa "Solicitar Novo Projeto" no menu</span></div>
+        <div class="flow-step"><span class="flow-n">2.</span><span class="flow-txt">Preenche Etapa 1: título, portfólio, área, sponsor, origem</span></div>
+        <div class="flow-step"><span class="flow-n">3.</span><span class="flow-txt">Avança para Etapas 2-4 (escopo, premissas, riscos)</span></div>
+        <div class="flow-step"><span class="flow-n">4.</span><span class="flow-txt">Na Etapa 5, opcionalmente anexa documentos</span></div>
+        <div class="flow-step"><span class="flow-n">5.</span><span class="flow-txt">Clica "Enviar Solicitação"</span></div>
+        <div class="flow-step"><span class="flow-n">6.</span><span class="flow-txt">Sistema cria projeto e redireciona para a página do projeto</span></div>
+      </span></div>
+      <div class="uc-row"><span class="uc-label">Fluxo Alt.</span><span class="uc-val">Se campos obrigatórios da Etapa 1 não preenchidos, botão "Próximo" permanece desabilitado</span></div>
+      <div class="uc-row"><span class="uc-label">Pós-condição</span><span class="uc-val">Projeto criado com status PENDING_GO_NO_GO; Sponsor adicionado como membro; riscos salvos</span></div>
+    </div>
+  </div>
+
+  <div class="uc-card">
+    <div class="uc-header"><span class="uc-id">UC-002</span><span class="uc-name">Conduzir Go/No-Go</span></div>
+    <div class="uc-body">
+      <div class="uc-row"><span class="uc-label">Atores</span><span class="uc-val">DIRECTOR, PROJECT_MANAGER, ADMIN</span></div>
+      <div class="uc-row"><span class="uc-label">Pré-condição</span><span class="uc-val">Projeto em status PENDING_GO_NO_GO</span></div>
+      <div class="uc-row"><span class="uc-label">Fluxo Principal</span><span class="uc-val">
+        <div class="flow-step"><span class="flow-n">1.</span><span class="flow-txt">PM acessa o projeto e clica em "Go/No-Go"</span></div>
+        <div class="flow-step"><span class="flow-n">2.</span><span class="flow-txt">Tela de slides exibe informações do projeto para os participantes</span></div>
+        <div class="flow-step"><span class="flow-n">3.</span><span class="flow-txt">Diretor seleciona a decisão: GO, NO-GO ou STAND-BY</span></div>
+        <div class="flow-step"><span class="flow-n">4.</span><span class="flow-txt">Insere observações e seleciona participantes presentes</span></div>
+        <div class="flow-step"><span class="flow-n">5.</span><span class="flow-txt">Clica em "Confirmar Decisão"</span></div>
+        <div class="flow-step"><span class="flow-n">6.</span><span class="flow-txt">Sistema atualiza status, gera ATA e redireciona</span></div>
+      </span></div>
+      <div class="uc-row"><span class="uc-label">Pós-condição (GO)</span><span class="uc-val">Projeto → PLANNING; ATA disponível para download; reunião salva no histórico</span></div>
+      <div class="uc-row"><span class="uc-label">Pós-condição (NO-GO)</span><span class="uc-val">Projeto → CANCELLED; ATA gerada com decisão registrada</span></div>
+    </div>
+  </div>
+
+  <div class="uc-card">
+    <div class="uc-header"><span class="uc-id">UC-003</span><span class="uc-name">Atualizar Atividade no Cronograma</span></div>
+    <div class="uc-body">
+      <div class="uc-row"><span class="uc-label">Atores</span><span class="uc-val">PROJECT_MANAGER, PROJECT_MEMBER (próprias atividades)</span></div>
+      <div class="uc-row"><span class="uc-label">Pré-condição</span><span class="uc-val">Projeto em status IN_PROGRESS. Cronograma com WBS criado.</span></div>
+      <div class="uc-row"><span class="uc-label">Fluxo Principal</span><span class="uc-val">
+        <div class="flow-step"><span class="flow-n">1.</span><span class="flow-txt">Usuário acessa a tela de Cronograma do projeto</span></div>
+        <div class="flow-step"><span class="flow-n">2.</span><span class="flow-txt">Clica na célula da coluna desejada (status, datas, progresso, custo)</span></div>
+        <div class="flow-step"><span class="flow-n">3.</span><span class="flow-txt">Campo torna-se editável inline; usuário insere o valor</span></div>
+        <div class="flow-step"><span class="flow-n">4.</span><span class="flow-txt">Ao sair do campo (blur/Enter), sistema salva automaticamente</span></div>
+        <div class="flow-step"><span class="flow-n">5.</span><span class="flow-txt">Sistema propaga datas e progresso para a atividade pai</span></div>
+        <div class="flow-step"><span class="flow-n">6.</span><span class="flow-txt">IDC/IDP são recalculados na página do projeto</span></div>
+      </span></div>
+      <div class="uc-row"><span class="uc-label">Pós-condição</span><span class="uc-val">Dados persistidos no banco; atividade pai atualizada; EVM recalculado</span></div>
+    </div>
+  </div>
+
+  <div class="uc-card">
+    <div class="uc-header"><span class="uc-id">UC-004</span><span class="uc-name">Gerar e Baixar ATA em PDF</span></div>
+    <div class="uc-body">
+      <div class="uc-row"><span class="uc-label">Atores</span><span class="uc-val">PROJECT_MANAGER, DIRECTOR, ADMIN</span></div>
+      <div class="uc-row"><span class="uc-label">Pré-condição</span><span class="uc-val">Reunião registrada e ATA gerada pelo sistema (automaticamente no registro)</span></div>
+      <div class="uc-row"><span class="uc-label">Fluxo Principal (via Consulta)</span><span class="uc-val">
+        <div class="flow-step"><span class="flow-n">1.</span><span class="flow-txt">Usuário acessa Consulta de Projetos e seleciona o projeto</span></div>
+        <div class="flow-step"><span class="flow-n">2.</span><span class="flow-txt">Localiza a seção "ATAs das Reuniões"</span></div>
+        <div class="flow-step"><span class="flow-n">3.</span><span class="flow-txt">Clica em "Baixar PDF" na ATA desejada</span></div>
+        <div class="flow-step"><span class="flow-n">4.</span><span class="flow-txt">Sistema abre janela de impressão com layout A4 profissional (logo, header, footer)</span></div>
+        <div class="flow-step"><span class="flow-n">5.</span><span class="flow-txt">Usuário seleciona "Salvar como PDF" no diálogo de impressão</span></div>
+      </span></div>
+      <div class="uc-row"><span class="uc-label">Pós-condição</span><span class="uc-val">PDF gerado localmente no dispositivo do usuário, pronto para envio por e-mail</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ SEÇÃO 8 ═══════════════ -->
+<div class="page page-break">
+  <div class="page-header">
+    <img src="/logo_v4.png" alt="Planner" class="page-header-logo" onerror="">
+    <span class="page-header-title">Especificação Funcional — v1.0.0</span>
+    <span class="page-header-section">8–12. Validações / Relatórios / Critérios</span>
+  </div>
+
+  <div class="section-header">
+    <div class="section-num">Seção 08</div>
+    <div class="section-title">Validações e Regras de Preenchimento</div>
+    <div class="section-title-bar"></div>
+  </div>
+
+  <table>
+    <thead><tr><th>Campo</th><th>Obrig.</th><th>Tipo</th><th>Regra de Validação</th></tr></thead>
+    <tbody>
+      <tr><td>Nome do Projeto</td><td>✅</td><td>Texto</td><td>Mínimo 5 caracteres; máximo 200; único por organização</td></tr>
+      <tr><td>Portfólio / Área de Gestão</td><td>✅</td><td>Seleção</td><td>Deve ser: TECNOLOGIA, QUALIDADE ou ESTRATEGICO</td></tr>
+      <tr><td>Área Responsável</td><td>✅</td><td>Seleção</td><td>Lista fixa de áreas organizacionais cadastradas</td></tr>
+      <tr><td>Sponsor / Solicitante</td><td>✅</td><td>Seleção</td><td>Deve ser usuário ativo no sistema</td></tr>
+      <tr><td>Origem do Projeto</td><td>✅</td><td>Seleção</td><td>INTERNAL, SPONSOR ou CLIENT</td></tr>
+      <tr><td>Datas Planejadas</td><td>❌</td><td>Data</td><td>Início deve ser anterior ou igual ao Término. Formato: dd/mm/aaaa. Apenas dias úteis.</td></tr>
+      <tr><td>Budget Total (R$)</td><td>❌</td><td>Numérico</td><td>Valor positivo com até 2 casas decimais. Aceita vírgula como separador decimal.</td></tr>
+      <tr><td>Custo Estimado (R$)</td><td>❌</td><td>Numérico</td><td>Valor positivo. Sistema alerta se for maior que o budget.</td></tr>
+      <tr><td>Progresso (%)</td><td>—</td><td>Inteiro</td><td>0 a 100. Derivado automaticamente do status; editável manualmente.</td></tr>
+      <tr><td>R$ Orçado (atividade)</td><td>❌</td><td>Numérico</td><td>Valor positivo; aceita zero; nulo = sem orçamento definido</td></tr>
+      <tr><td>R$ Gasto Real (atividade)</td><td>❌</td><td>Numérico</td><td>Valor positivo; sistema exibe em vermelho quando supera R$ Orçado</td></tr>
+      <tr><td>Decisão Go/No-Go</td><td>✅</td><td>Seleção</td><td>GO, NO-GO ou STAND-BY. Obrigatório para registrar a reunião.</td></tr>
+      <tr><td>Evidências (upload)</td><td>❌</td><td>Arquivo</td><td>Formatos: PDF, DOCX, XLSX, XLS, JPG, PNG, ZIP, RAR. Máx: 50MB/arquivo.</td></tr>
+    </tbody>
+  </table>
+
+  <hr class="sec-divider">
+
+  <div class="section-header">
+    <div class="section-num">Seção 09</div>
+    <div class="section-title">Relatórios, Dashboards e KPIs</div>
+    <div class="section-title-bar"></div>
+  </div>
+
+  <h3>9.1 Dashboard Executivo</h3>
+  <table>
+    <thead><tr><th>Indicador</th><th>Cálculo</th><th>Visualização</th></tr></thead>
+    <tbody>
+      <tr><td>Total de Projetos Ativos</td><td>Count(status IN [IN_PROGRESS, PILOT, RAMP_UP, GO_LIVE, POST_GOLIVE])</td><td>Card numérico</td></tr>
+      <tr><td>Projetos Concluídos</td><td>Count(status = COMPLETED)</td><td>Card numérico</td></tr>
+      <tr><td>Projetos por Portfólio</td><td>Count agrupado por projectArea</td><td>Gráfico de barras</td></tr>
+      <tr><td>Progresso Médio do Portfólio</td><td>Média do progresso de todos os projetos ativos</td><td>Barra de progresso + %</td></tr>
+      <tr><td>Projetos em Risco (Vermelho)</td><td>Count(reportStatusOverall = RED)</td><td>Card com destaque vermelho</td></tr>
+      <tr><td>IDC Médio do Portfólio</td><td>Média dos IDCs dos projetos ativos com dados financeiros</td><td>Indicador colorido</td></tr>
+    </tbody>
+  </table>
+
+  <h3>9.2 Status Report por Projeto</h3>
+  <table>
+    <thead><tr><th>Indicador</th><th>Algoritmo</th><th>Cores</th></tr></thead>
+    <tbody>
+      <tr><td><strong>CUSTOS</strong></td><td>IDC = VE/CR. Fallback: estimatedCosts/budget</td><td>≥1.0=Verde | 0.85–1.0=Amarelo | &lt;0.85=Vermelho</td></tr>
+      <tr><td><strong>CRONOGRAMA</strong></td><td>Delta = Progresso Real − Progresso Esperado (timeline)</td><td>≥-10%=Verde | -10% a -25%=Amarelo | &lt;-25% ou prazo vencido=Vermelho</td></tr>
+      <tr><td><strong>RECURSOS</strong></td><td>Taxa entrega = tarefas concluídas no prazo / total com prazo vencido</td><td>≥80%=Verde | 60–80%=Amarelo | &lt;60%=Vermelho</td></tr>
+      <tr><td><strong>GERAL</strong></td><td>Pior status entre Custos, Cronograma e Recursos</td><td>Conforme pior resultado</td></tr>
+    </tbody>
+  </table>
+
+  <h3>9.3 Relatório de Consulta de Projetos</h3>
+  <ul>
+    <li><strong>Exportação de Cronograma:</strong> botão "Excel" exporta o cronograma completo em .xlsx com todas as colunas</li>
+    <li><strong>Exportação de ATA:</strong> botão "Baixar PDF" gera PDF A4 profissional de qualquer ATA</li>
+    <li><strong>Status Report Visual:</strong> tela dedicada de Status Report com slides por projeto para apresentações</li>
+  </ul>
+
+  <hr class="sec-divider">
+
+  <div class="section-header">
+    <div class="section-num">Seção 10</div>
+    <div class="section-title">Notificações e Alertas</div>
+    <div class="section-title-bar"></div>
+  </div>
+
+  <table>
+    <thead><tr><th>Evento</th><th>Canal</th><th>Destinatário</th><th>Mensagem</th></tr></thead>
+    <tbody>
+      <tr><td>Projeto criado</td><td>Sistema (notificação in-app)</td><td>Sponsor e PM</td><td>"Novo projeto [Nome] aguardando Go/No-Go"</td></tr>
+      <tr><td>Go/No-Go aprovado</td><td>Sistema</td><td>Membros do projeto</td><td>"Projeto [Nome] aprovado — em Planejamento"</td></tr>
+      <tr><td>Kick-Off registrado</td><td>Sistema</td><td>Todos os membros</td><td>"Projeto [Nome] iniciado com Kick-Off em [data]"</td></tr>
+      <tr><td>Tarefa atrasada</td><td>Sistema (badge visual)</td><td>PM e responsável</td><td>Ícone ⚠️ na linha da tarefa; cor vermelha na data</td></tr>
+      <tr><td>Budget em risco (IDC &lt; 0.85)</td><td>Semáforo automático</td><td>PM e Director</td><td>Card CUSTOS → Vermelho no Status Report</td></tr>
+      <tr><td>Prazo final vencido</td><td>Semáforo + visual</td><td>PM e Sponsor</td><td>Card CRONOGRAMA → Vermelho; dias negativos na página do projeto</td></tr>
+    </tbody>
+  </table>
+
+  <hr class="sec-divider">
+
+  <div class="section-header">
+    <div class="section-num">Seção 11</div>
+    <div class="section-title">Critérios de Aceite</div>
+    <div class="section-title-bar"></div>
+  </div>
+
+  <table>
+    <thead><tr><th>Funcionalidade</th><th>Critério de Aceite</th></tr></thead>
+    <tbody>
+      <tr><td>Criação de Projeto</td><td>Projeto criado com status correto; membros vinculados; riscos salvos; arquivos disponíveis para download</td></tr>
+      <tr><td>Kick-Off</td><td>EAP importada para o Cronograma; reunião salva; ATA gerada e disponível; status → IN_PROGRESS</td></tr>
+      <tr><td>Propagação de Datas</td><td>Editar data de uma tarefa filha atualiza imediatamente as datas da atividade pai na mesma linha</td></tr>
+      <tr><td>Propagação de Progresso</td><td>Alterar progresso de uma tarefa filha atualiza progresso e status da atividade pai</td></tr>
+      <tr><td>EVM (IDC/IDP)</td><td>Inserir orçado e custo real em qualquer atividade reflete imediatamente no card de Controle Orçamentário</td></tr>
+      <tr><td>Status Report</td><td>Ao acessar a página do projeto, os semáforos já refletem o estado atual calculado automaticamente</td></tr>
+      <tr><td>ATA</td><td>ATA gerada imediatamente após registrar a reunião; disponível para download na tela de Consulta</td></tr>
+      <tr><td>PDF da ATA</td><td>PDF gerado com logo, header escuro, conteúdo em A4 e footer com nome do sistema e data</td></tr>
+      <tr><td>Evidências</td><td>Arquivo anexado a uma atividade aparece na seção "Anexos do Projeto" da Consulta com identificação da tarefa de origem</td></tr>
+      <tr><td>Filtros da Consulta</td><td>Selecionar um filtro reduz a lista de projetos; contador "X de Y" atualiza em tempo real</td></tr>
+    </tbody>
+  </table>
+
+  <hr class="sec-divider">
+
+  <div class="section-header">
+    <div class="section-num">Seção 12</div>
+    <div class="section-title">Requisitos Não Funcionais</div>
+    <div class="section-title-bar"></div>
+  </div>
+
+  <table>
+    <thead><tr><th>Categoria</th><th>Requisito</th><th>Especificação</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Performance</strong></td><td>Tempo de resposta das páginas</td><td>&lt; 2s para 95% das requisições em condições normais de uso</td></tr>
+      <tr><td><strong>Performance</strong></td><td>Atualização de campos inline</td><td>&lt; 500ms do blur até confirmação visual de salvo</td></tr>
+      <tr><td><strong>Disponibilidade</strong></td><td>Uptime do sistema</td><td>99,5% de disponibilidade mensal (SLA Vercel + Turso)</td></tr>
+      <tr><td><strong>Segurança</strong></td><td>Autenticação</td><td>Sessões gerenciadas por NextAuth com JWT. Senhas hasheadas com bcrypt (salt rounds ≥ 10)</td></tr>
+      <tr><td><strong>Segurança</strong></td><td>Autorização</td><td>Toda Server Action valida a sessão antes de qualquer operação. RBAC implementado no servidor.</td></tr>
+      <tr><td><strong>Segurança</strong></td><td>Uploads de arquivo</td><td>Validação de tipo MIME e extensão no servidor; limite de 50MB; armazenamento em Vercel Blob</td></tr>
+      <tr><td><strong>Usabilidade</strong></td><td>Responsividade</td><td>Interface responsiva para desktop (≥ 1280px). Telas otimizadas para uso em notebook/desktop corporativo.</td></tr>
+      <tr><td><strong>Usabilidade</strong></td><td>Feedback visual</td><td>Toda ação de salvamento exibe indicador visual (spinner, badge "Salvo", cor de confirmação)</td></tr>
+      <tr><td><strong>Escalabilidade</strong></td><td>Volume de projetos</td><td>Suporta até 1.000 projetos simultâneos sem degradação de performance nas telas de listagem</td></tr>
+      <tr><td><strong>Escalabilidade</strong></td><td>Volume de atividades</td><td>Cronograma suporta até 500 atividades/tarefas por projeto com renderização virtual</td></tr>
+      <tr><td><strong>Manutenibilidade</strong></td><td>Stack tecnológica</td><td>Next.js 16 (App Router + Server Components), Prisma 7 (ORM), Turso (libSQL/SQLite), TypeScript estrito, Tailwind CSS</td></tr>
+      <tr><td><strong>Banco de Dados</strong></td><td>Persistência</td><td>Turso (SQLite distribuído via libSQL). Schema versionado com Prisma Migrations. Backup automático pela plataforma.</td></tr>
+      <tr><td><strong>Armazenamento</strong></td><td>Arquivos</td><td>Vercel Blob para produção. Filesystem local para desenvolvimento. URLs públicas com acesso autenticado.</td></tr>
+      <tr><td><strong>Internacionalização</strong></td><td>Idioma</td><td>Interface 100% em Português Brasileiro (pt-BR). Formatação de datas e moedas no padrão brasileiro.</td></tr>
+    </tbody>
+  </table>
+
+  <!-- RODAPÉ FINAL -->
+  <div style="margin-top:40pt; padding-top:16pt; border-top:2pt solid #E2E8F0; display:flex; align-items:center; justify-content:space-between;">
+    <div>
+      <img src="/logo_v4.png" alt="Planner" style="height:22px; opacity:0.5;" onerror="this.style.display='none'">
+    </div>
+    <div style="text-align:center;">
+      <p style="font-size:8pt; color:#94A3B8; margin:0;">Especificação Funcional — Planner v1.0.0</p>
+      <p style="font-size:7.5pt; color:#CBD5E1; margin:2pt 0 0;">Documento gerado em Maio/2026 &nbsp;|&nbsp; Documento Confidencial</p>
+    </div>
+    <div style="text-align:right;">
+      <p style="font-size:8pt; color:#94A3B8; margin:0;">Página final</p>
+      <p style="font-size:7.5pt; color:#CBD5E1; margin:2pt 0 0;">Planner — Sistema de Gestão de Projetos</p>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
