@@ -366,7 +366,7 @@ td { padding:4.5pt 7pt; border-bottom:.5pt solid #E2E8F0; } tr:nth-child(even) t
   <div class="hdr-r"><p class="hdr-t">${title}</p><p class="hdr-m">Documento oficial &nbsp;|&nbsp; ${now}</p></div>
 </div>
 ${parts.join("\n")}
-<div class="ftr"><span>Kronex — Sistema de Gestão de Projetos</span><span>${now}</span></div>
+<div class="ftr"><span>Planner — Sistema de Gestão de Projetos</span><span>${now}</span></div>
 </body></html>`)
   win.document.close()
   win.focus()

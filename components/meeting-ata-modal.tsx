@@ -301,7 +301,7 @@ export function MeetingAtaModal({ content, title = "ATA de Reunião", onClose }:
   ${htmlContent}
 
   <div class="doc-footer">
-    <span>Kronex — Sistema de Gestão de Projetos</span>
+    <span>Planner — Sistema de Gestão de Projetos</span>
     <span>Gerado em ${now}</span>
   </div>
 </body>
