@@ -27,6 +27,7 @@ export default async function StatusReportPage() {
           title: true, status: true, progress: true,
           startDate: true, endDate: true,
           budgetedCost: true, actualCost: true,
+          completedAt: true,
           responsible: { select: { name: true } },
         },
         orderBy: { order: "asc" },
@@ -143,6 +144,13 @@ export default async function StatusReportPage() {
     const daysLeft = pEnd ? differenceInDays(pEnd, today) : null
     // Último checkpoint = primeira reunião do tipo CHECKPOINT (já ordenado por date desc)
     const lastMtg  = p.meetings.find((m) => m.type === "CHECKPOINT") ?? null
+
+    // Delta de progresso: tarefas concluídas DESDE o último checkpoint
+    const lastCpDate = lastMtg?.date ?? null
+    const completedSinceCheckpoint = lastCpDate
+      ? tasks.filter((t) => t.completedAt && new Date(t.completedAt) > new Date(lastCpDate)).length
+      : 0
+    const progressDelta = total > 0 ? Math.round((completedSinceCheckpoint / total) * 100) : null
     const rawSteps = lastMtg?.nextActions || lastMtg?.decisions || null
     const nextSteps = rawSteps
       ?.split("\n").map((l) => l.replace(/^[-•*\d.]\s*/, "").trim()).filter(Boolean).slice(0, 5) ?? []
@@ -160,7 +168,7 @@ export default async function StatusReportPage() {
       id: p.id, title: p.title, status: p.status,
       sponsor:  p.sponsor?.name ?? null,
       progress: avgProgress,
-      idc, idp, timelineProgress,
+      idc, idp, timelineProgress, progressDelta,
       meetingsCount:  p._count.meetings,
       meetingsByType,
       team:    p.members.length,

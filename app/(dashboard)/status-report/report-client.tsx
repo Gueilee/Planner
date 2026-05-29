@@ -52,6 +52,7 @@ export type ProjectSlideData = {
     notes: string | null
   }
   idc: number | null; idp: number | null; timelineProgress: number | null
+  progressDelta: number | null
   meetingsCount: number; meetingsByType: Record<string, number>
 }
 
@@ -509,6 +510,11 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
               {data.sponsor&&<span style={{fontSize:9,color:"rgba(180,210,255,0.50)"}}>👤 Sponsor: <strong style={{color:"rgba(220,235,255,0.75)"}}>{data.sponsor}</strong></span>}
               {data.dates.start&&<span style={{fontSize:9,color:"rgba(180,210,255,0.40)"}}>📅 Início: {fmt(data.dates.start)}</span>}
               {daysStr&&<span style={{fontSize:8.5,fontWeight:700,padding:"1px 8px",borderRadius:20,background:data.daysLeft!==null&&data.daysLeft<0?"rgba(239,68,68,0.14)":"rgba(59,130,246,0.11)",border:`1px solid ${data.daysLeft!==null&&data.daysLeft<0?"rgba(239,68,68,0.28)":"rgba(96,165,250,0.22)"}`,color:data.daysLeft!==null&&data.daysLeft<0?"#FCA5A5":"#93C5FD"}}>{daysStr}</span>}
+              {data.progressDelta!==null&&data.progressDelta>0&&(
+                <span style={{fontSize:8.5,fontWeight:800,padding:"1px 8px",borderRadius:20,background:"rgba(16,185,129,0.12)",border:"1px solid rgba(16,185,129,0.25)",color:"#10B981"}}>
+                  ▲ +{data.progressDelta}% desde último checkpoint
+                </span>
+              )}
             </div>
           </div>
           {/* Progress ring */}
