@@ -5,7 +5,8 @@ import {
   Save, Loader2, Check, AlertCircle, Camera,
   Building2, Globe, Tag, Layers, Info,
 } from "lucide-react"
-import { saveOrgConfig, DEFAULT_AREA_CONFIGS, type OrgConfigData, type AreaConfigs } from "@/lib/actions/org-config"
+import { saveOrgConfig } from "@/lib/actions/org-config"
+import { DEFAULT_AREA_CONFIGS, type OrgConfigData, type AreaConfigs } from "@/lib/types/org-config"
 
 // ─── Logo upload ──────────────────────────────────────────────────────────────
 

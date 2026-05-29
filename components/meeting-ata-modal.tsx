@@ -180,10 +180,12 @@ export function MeetingAtaModal({ content, title = "ATA de Reunião", onClose }:
     let orgLogoUrl = window.location.origin + "/logo_v4.png"
     let orgName    = "Planner"
     try {
-      const { getOrgConfig } = await import("@/lib/actions/org-config")
-      const cfg = await getOrgConfig()
-      if (cfg.logoUrl) orgLogoUrl = cfg.logoUrl
-      if (cfg.name)    orgName    = cfg.name
+      const res = await fetch("/api/org-config")
+      if (res.ok) {
+        const cfg = await res.json() as { name?: string; logoUrl?: string | null }
+        if (cfg.logoUrl) orgLogoUrl = cfg.logoUrl
+        if (cfg.name)    orgName    = cfg.name
+      }
     } catch { /* use defaults */ }
 
     const logoUrl = orgLogoUrl

@@ -7,7 +7,7 @@ import { NotificationsTab } from "./notifications-tab"
 import { OrganizationTab } from "./organization-tab"
 import { UsersTab } from "./users-tab"
 import type { NotificationPreferenceData } from "@/lib/actions/notification-preferences"
-import type { OrgConfigData } from "@/lib/actions/org-config"
+import type { OrgConfigData } from "@/lib/types/org-config"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

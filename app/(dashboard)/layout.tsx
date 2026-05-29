@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import { Sidebar } from "@/components/layout/sidebar"
-import { getOrgConfig } from "@/lib/actions/org-config"
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [collapsed,   setCollapsed]   = useState(false)
@@ -15,10 +14,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [])
 
   useEffect(() => {
-    getOrgConfig().then((cfg) => {
-      setOrgLogoUrl(cfg.logoUrl)
-      setOrgName(cfg.name)
-    }).catch(() => {})
+    fetch("/api/org-config")
+      .then((r) => r.json() as Promise<{ name?: string; logoUrl?: string | null }>)
+      .then((cfg) => {
+        if (cfg.logoUrl) setOrgLogoUrl(cfg.logoUrl)
+        if (cfg.name)    setOrgName(cfg.name)
+      })
+      .catch(() => {})
   }, [])
 
   const handleToggle = () => {
