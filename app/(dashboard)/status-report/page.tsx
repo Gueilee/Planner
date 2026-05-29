@@ -20,7 +20,7 @@ export default async function StatusReportPage() {
   if (!session?.user) redirect("/login")
 
   const projects = await db.project.findMany({
-    where: { status: { in: ACTIVE_STATUSES } },
+    where:   { status: { in: ACTIVE_STATUSES } },
     orderBy: { createdAt: "asc" },
     include: {
       sponsor: { select: { name: true } },
@@ -29,6 +29,7 @@ export default async function StatusReportPage() {
         select: {
           title: true, status: true, progress: true,
           startDate: true, endDate: true,
+          budgetedCost: true, actualCost: true,
           responsible: { select: { name: true } },
         },
         orderBy: { order: "asc" },
@@ -36,150 +37,133 @@ export default async function StatusReportPage() {
       risks: {
         select: { status: true, description: true, mitigation: true, owner: true },
         orderBy: { status: "asc" },
-        take: 6,
+        take: 8,
       },
       wbsAreas: {
         orderBy: { order: "asc" },
-        include: {
-          tasks: { select: { status: true, title: true } },
-        },
+        include: { tasks: { select: { status: true, title: true } } },
       },
       meetings: {
-        where: { type: "CHECKPOINT" },
+        where:   { type: "CHECKPOINT" },
         orderBy: { date: "desc" },
         take: 1,
-        select: {
-          date:        true,
-          title:       true,
-          location:    true,
-          content:     true,
-          decisions:   true,
-          nextActions: true,
-        },
+        select: { date: true, title: true, location: true, content: true, decisions: true, nextActions: true },
+      },
+      _count: {
+        select: { meetings: true },
       },
     },
   })
 
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
   const slides: ProjectSlideData[] = projects.map((p) => {
-    const tasks       = p.tasks
-    const total       = tasks.length
-    const completed   = tasks.filter((t) => t.status === "COMPLETED")
-    const inProgress  = tasks.filter((t) => t.status === "IN_PROGRESS")
-    const delayed     = tasks.filter((t) => t.status === "DELAYED")
-    const planning    = tasks.filter((t) => t.status === "PLANNING")
+    const tasks      = p.tasks
+    const total      = tasks.length
+    const completed  = tasks.filter((t) => t.status === "COMPLETED")
+    const inProgress = tasks.filter((t) => t.status === "IN_PROGRESS")
+    const delayed    = tasks.filter((t) => t.status === "DELAYED")
+    const planning   = tasks.filter((t) => t.status === "PLANNING")
     const avgProgress = total > 0
       ? Math.round(tasks.reduce((s, t) => s + t.progress, 0) / total)
       : (p.status === "COMPLETED" ? 100 : 0)
 
-    const critRisks = p.risks.filter((r) => r.status === "CRITICAL").length
-    const highRisks = p.risks.filter((r) => r.status === "HIGH").length
+    // ── IDC (Índice de Desempenho de Custo) ──────────────────────────────
+    const earnedValue  = tasks.reduce((s, t) => s + (t.budgetedCost ?? 0) * (t.progress / 100), 0)
+    const actualCostSum = tasks.reduce((s, t) => s + (t.actualCost ?? 0), 0)
+    const idc = actualCostSum > 0 ? Math.round((earnedValue / actualCostSum) * 100) / 100 : null
 
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    // ── IDP (Índice de Desempenho de Prazo) ──────────────────────────────
+    let idp: number | null = null
+    let timelineProgress: number | null = null
+    if (p.expectedStart && p.expectedEnd) {
+      const totalDays   = differenceInDays(p.expectedEnd, p.expectedStart)
+      const elapsedDays = differenceInDays(today, p.expectedStart)
+      if (totalDays > 0) {
+        const plannedPct = Math.min(100, Math.max(0, (elapsedDays / totalDays) * 100))
+        timelineProgress = Math.round(plannedPct)
+        if (plannedPct > 5) idp = Math.round((avgProgress / plannedPct) * 100) / 100
+      }
+    }
 
-    // Tarefas em risco: não iniciadas com data passada, atrasadas, ou em andamento com prazo vencido
-    const atRiskTasks: {
-      title: string
-      type: "NOT_STARTED" | "OVERDUE" | "LATE_RUNNING"
-      date: string
-      daysLate: number
-      responsible: string | null
-      startDate: string | null
-      endDate: string | null
-    }[] = []
+    // ── At-risk tasks ────────────────────────────────────────────────────
+    const atRiskTasks: ProjectSlideData["atRiskTasks"] = []
     for (const t of tasks) {
       const responsible = t.responsible?.name ?? null
       const startDate   = t.startDate?.toISOString() ?? null
       const endDate     = t.endDate?.toISOString()   ?? null
       if (t.status === "PLANNING" && t.startDate) {
-        const start = new Date(t.startDate); start.setHours(0,0,0,0)
-        if (start < today) {
+        const start = new Date(t.startDate); start.setHours(0, 0, 0, 0)
+        if (start < today)
           atRiskTasks.push({ title: t.title, type: "NOT_STARTED", date: t.startDate.toISOString(), daysLate: differenceInDays(today, start), responsible, startDate, endDate })
-        }
       } else if (t.status === "DELAYED") {
         const ref = t.endDate ?? t.startDate
         const daysLate = ref ? Math.max(0, differenceInDays(today, new Date(ref))) : 0
         atRiskTasks.push({ title: t.title, type: "OVERDUE", date: (ref ?? new Date()).toISOString(), daysLate, responsible, startDate, endDate })
       } else if (t.status === "IN_PROGRESS" && t.endDate) {
-        const end = new Date(t.endDate); end.setHours(0,0,0,0)
-        if (end < today) {
+        const end = new Date(t.endDate); end.setHours(0, 0, 0, 0)
+        if (end < today)
           atRiskTasks.push({ title: t.title, type: "LATE_RUNNING", date: t.endDate.toISOString(), daysLate: differenceInDays(today, end), responsible, startDate, endDate })
-        }
       }
     }
     atRiskTasks.sort((a, b) => b.daysLate - a.daysLate)
 
-    const daysLeft = p.expectedEnd
-      ? differenceInDays(p.expectedEnd, new Date())
-      : null
+    const daysLeft = p.expectedEnd ? differenceInDays(p.expectedEnd, today) : null
 
-    const lastMtg = p.meetings[0] ?? null
-
-    // Build next-steps from checkpoint decisions/nextActions
-    const nextStepsRaw = lastMtg?.nextActions || lastMtg?.decisions || null
-    const nextSteps = nextStepsRaw
+    const lastMtg   = p.meetings[0] ?? null
+    const rawSteps  = lastMtg?.nextActions || lastMtg?.decisions || null
+    const nextSteps = rawSteps
       ?.split("\n")
       .map((l) => l.replace(/^[-•*\d.]\s*/, "").trim())
       .filter(Boolean)
-      .slice(0, 4) ?? []
+      .slice(0, 5) ?? []
 
-    // WBS summary
     const wbsSummary = p.wbsAreas
       .filter((a) => a.tasks.length > 0)
       .map((a) => ({
-        name:  a.name,
-        color: a.color,
+        name: a.name, color: a.color,
         total: a.tasks.length,
         done:  a.tasks.filter((t) => t.status === "COMPLETED").length,
         pct:   Math.round((a.tasks.filter((t) => t.status === "COMPLETED").length / a.tasks.length) * 100),
       }))
 
     return {
-      id:       p.id,
-      title:    p.title,
-      status:   p.status,
+      id: p.id, title: p.title, status: p.status,
       sponsor:  p.sponsor?.name ?? null,
       progress: avgProgress,
+      idc, idp, timelineProgress,
+      meetingsCount: p._count.meetings,
       tasks: {
-        total:      total,
-        completed:  completed.length,
-        inProgress: inProgress.length,
-        delayed:    delayed.length,
-        planning:   planning.length,
+        total, completed: completed.length, inProgress: inProgress.length,
+        delayed: delayed.length, planning: planning.length,
         completedTitles:  completed.slice(-5).map((t) => t.title),
         inProgressTitles: inProgress.slice(0, 5).map((t) => t.title),
         plannedTitles:    planning.slice(0, 4).map((t) => t.title),
       },
       risks: {
-        critical: critRisks,
-        high:     highRisks,
-        items: p.risks.map((r) => ({
-          level:       r.status,
-          description: r.description,
-          mitigation:  r.mitigation ?? null,
-          owner:       r.owner ?? null,
-        })),
+        critical: p.risks.filter((r) => r.status === "CRITICAL").length,
+        high:     p.risks.filter((r) => r.status === "HIGH").length,
+        items:    p.risks.map((r) => ({ level: r.status, description: r.description, mitigation: r.mitigation ?? null, owner: r.owner ?? null })),
       },
-      team:    p.members.length,
+      team: p.members.length,
       daysLeft,
       economy: p.economy,
       budget:  p.budget,
-      lastCheckpoint: lastMtg
-        ? {
-            date:       lastMtg.date.toISOString(),
-            title:      lastMtg.title,
-            location:   lastMtg.location ?? null,
-            highlights: lastMtg.content ?? null,
-            decisions:  lastMtg.decisions ?? null,
-            nextSteps,
-          }
-        : null,
+      lastCheckpoint: lastMtg ? {
+        date:       lastMtg.date.toISOString(),
+        title:      lastMtg.title,
+        location:   lastMtg.location ?? null,
+        highlights: lastMtg.content  ?? null,
+        decisions:  lastMtg.decisions ?? null,
+        nextSteps,
+      } : null,
       atRiskTasks: atRiskTasks.slice(0, 6),
       wbsAreas: wbsSummary,
       dates: {
-        start:  p.actualStart?.toISOString() ?? p.expectedStart?.toISOString() ?? null,
-        end:    p.actualEnd?.toISOString()   ?? p.expectedEnd?.toISOString()   ?? null,
-        goLive: p.goLiveDate?.toISOString() ?? null,
+        start:  p.actualStart?.toISOString()    ?? p.expectedStart?.toISOString() ?? null,
+        end:    p.expectedEnd?.toISOString()    ?? null,
+        goLive: p.goLiveDate?.toISOString()     ?? null,
       },
       reportStatus: {
         cost:      p.reportStatusCost      as "GREEN" | "YELLOW" | "RED",
@@ -191,5 +175,6 @@ export default async function StatusReportPage() {
     }
   })
 
-  return <ReportClient slides={slides} />
+  const totalMeetings = slides.reduce((s, p) => s + p.meetingsCount, 0)
+  return <ReportClient slides={slides} totalMeetings={totalMeetings} />
 }

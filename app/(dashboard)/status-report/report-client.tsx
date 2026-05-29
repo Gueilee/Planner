@@ -66,6 +66,10 @@ export type ProjectSlideData = {
     overall:   "GREEN" | "YELLOW" | "RED"
     notes:     string | null
   }
+  idc: number | null
+  idp: number | null
+  timelineProgress: number | null
+  meetingsCount: number
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────
@@ -380,28 +384,119 @@ function SlideBackground({ accent = "#2463FF" }: { accent?: string }) {
 
 // ─── Logo ────────────────────────────────────────────────────────────────────
 
-function VendemmiaLogo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
-  const h = size === "lg" ? 34 : size === "sm" ? 20 : 26
-  const w = size === "lg" ? 160 : size === "sm" ? 100 : 130
+function VendemmiaLogo({ size = "md" }: { size?: "sm" | "md" | "lg" | "xl" }) {
+  const h = size === "xl" ? 56 : size === "lg" ? 34 : size === "sm" ? 20 : 26
+  const w = size === "xl" ? 260 : size === "lg" ? 160 : size === "sm" ? 100 : 130
+  const pad = size === "xl" ? "12px 32px" : size === "sm" ? "5px 12px" : "7px 18px"
+  const radius = size === "xl" ? "20px" : "14px"
 
   return (
     <div style={{
       position: "relative",
-      background: "rgba(255,255,255,0.92)",
+      background: "rgba(255,255,255,0.93)",
       backdropFilter: "blur(24px)",
-      borderRadius: "14px",
-      padding: size === "sm" ? "5px 12px" : "7px 18px",
-      boxShadow: "0 0 0 1px rgba(96,165,250,0.40), 0 0 28px rgba(36,99,255,0.22), 0 0 70px rgba(139,47,255,0.14), 0 6px 24px rgba(0,0,0,0.55)",
+      borderRadius: radius,
+      padding: pad,
+      boxShadow: size === "xl"
+        ? "0 0 0 1px rgba(96,165,250,0.45), 0 0 50px rgba(36,99,255,0.30), 0 0 100px rgba(139,47,255,0.18), 0 8px 40px rgba(0,0,0,0.60)"
+        : "0 0 0 1px rgba(96,165,250,0.40), 0 0 28px rgba(36,99,255,0.22), 0 0 70px rgba(139,47,255,0.14), 0 6px 24px rgba(0,0,0,0.55)",
       animation: "glowPulse 4s ease-in-out infinite",
       display: "inline-flex",
       alignItems: "center",
     }}>
       <div style={{
-        position: "absolute", inset: 0, borderRadius: "14px", pointerEvents: "none",
-        background: "linear-gradient(135deg, rgba(96,165,250,0.10) 0%, rgba(192,132,252,0.08) 100%)",
+        position: "absolute", inset: 0, borderRadius: radius, pointerEvents: "none",
+        background: "linear-gradient(135deg, rgba(96,165,250,0.12) 0%, rgba(192,132,252,0.09) 100%)",
       }} />
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/vendemmia.png" alt="Vendemmia" style={{ height: h, width: w, objectFit: "contain", position: "relative" }} />
+    </div>
+  )
+}
+
+// ─── Performance Gauge (IDC / IDP) ───────────────────────────────────────────
+
+function PerfGaugeMini({ value, label, size = 90 }: { value: number | null; label: string; size?: number }) {
+  const [anim, setAnim] = useState(0)
+  useEffect(() => {
+    const t = setTimeout(() => setAnim(value ?? 0), 200)
+    return () => clearTimeout(t)
+  }, [value])
+
+  const MAX = 2.0
+  const clamped = Math.min(MAX, Math.max(0, anim))
+  const pct = clamped / MAX
+
+  const color = value === null ? "#475569"
+    : value >= 1.0  ? "#10B981"
+    : value >= 0.85 ? "#F59E0B"
+    : "#EF4444"
+  const glow = value === null ? "rgba(71,85,105,0.3)"
+    : value >= 1.0  ? "rgba(16,185,129,0.65)"
+    : value >= 0.85 ? "rgba(245,158,11,0.65)"
+    : "rgba(239,68,68,0.65)"
+  const statusLabel = value === null ? "N/A"
+    : value >= 1.0  ? "Em Linha"
+    : value >= 0.85 ? "Atenção"
+    : "Risco"
+
+  const cx = size / 2
+  const cy = size * 0.64
+  const r  = size * 0.37
+  const sw = Math.max(4, size * 0.07)
+  const halfCirc = Math.PI * r
+  const dashFill = pct * halfCirc
+
+  const needleAngleRad = (180 + pct * 180) * Math.PI / 180
+  const needleLen = r * 0.80
+  const ntx = cx + needleLen * Math.cos(needleAngleRad)
+  const nty = cy + needleLen * Math.sin(needleAngleRad)
+
+  const svgH = cy + sw / 2 + 5
+
+  return (
+    <div className="flex flex-col items-center">
+      <svg width={size} height={svgH} viewBox={`0 0 ${size} ${svgH}`}>
+        {/* Track */}
+        <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 0 ${cx + r} ${cy}`}
+          fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={sw} />
+        {/* Zone ticks at 0.85 and 1.0 */}
+        {[0.85, 1.0].map((thr, i) => {
+          const tp = thr / MAX
+          const ta = (180 + tp * 180) * Math.PI / 180
+          return (
+            <circle key={i} cx={cx + r * Math.cos(ta)} cy={cy + r * Math.sin(ta)} r={2.5}
+              fill={thr === 0.85 ? "rgba(245,158,11,0.85)" : "rgba(16,185,129,0.85)"}
+              style={{ filter: "drop-shadow(0 0 2px rgba(255,255,255,0.50))" }} />
+          )
+        })}
+        {/* Active arc */}
+        {value !== null && (
+          <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 0 ${cx + r} ${cy}`}
+            fill="none" stroke={color} strokeWidth={sw + 2} strokeLinecap="round"
+            strokeDasharray={`${dashFill} ${halfCirc}`}
+            style={{ filter: `drop-shadow(0 0 6px ${color}BB)`, transition: "stroke-dasharray 1.4s cubic-bezier(0.22,1,0.36,1)" }} />
+        )}
+        {/* Needle */}
+        <line x1={cx} y1={cy} x2={ntx} y2={nty}
+          stroke="rgba(255,255,255,0.88)" strokeWidth={2} strokeLinecap="round"
+          style={{ transition: "all 1.4s cubic-bezier(0.22,1,0.36,1)", filter: `drop-shadow(0 0 3px ${color})` }} />
+        {/* Pivot */}
+        <circle cx={cx} cy={cy} r={4} fill={color}
+          style={{ filter: `drop-shadow(0 0 8px ${glow})` }} />
+        {/* Value text */}
+        <text x={cx} y={cy - size * 0.07} textAnchor="middle"
+          fill="white" fontSize={size * 0.21} fontWeight="900"
+          style={{ fontFamily: "inherit", filter: `drop-shadow(0 0 10px ${glow})` }}>
+          {value !== null ? value.toFixed(2) : "N/A"}
+        </text>
+      </svg>
+      <p className="text-[9px] font-black uppercase tracking-wider leading-none mt-0.5" style={{ color }}>
+        {statusLabel}
+      </p>
+      <p className="text-[8px] font-semibold tracking-[0.12em] mt-0.5" style={{ color: "rgba(180,210,255,0.40)" }}>
+        {label}
+      </p>
     </div>
   )
 }
@@ -507,13 +602,13 @@ function GlassPanel({
   return (
     <div className={className} style={{
       background: accent
-        ? `linear-gradient(135deg, ${accent}09 0%, ${accent}04 100%)`
-        : "rgba(255,255,255,0.045)",
-      border: `1px solid ${accent ? accent + "28" : "rgba(255,255,255,0.09)"}`,
+        ? `linear-gradient(135deg, ${accent}16 0%, ${accent}09 100%)`
+        : "rgba(6,14,40,0.78)",
+      border: `1px solid ${accent ? accent + "35" : "rgba(96,165,250,0.13)"}`,
       boxShadow: accent
-        ? `0 0 30px ${accent}10, inset 0 1px 0 rgba(255,255,255,0.06)`
-        : "inset 0 1px 0 rgba(255,255,255,0.05)",
-      backdropFilter: "blur(20px)",
+        ? `0 0 30px ${accent}15, 0 2px 16px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)`
+        : "0 2px 20px rgba(0,0,0,0.50), inset 0 1px 0 rgba(255,255,255,0.07)",
+      backdropFilter: "blur(24px)",
       borderRadius: "20px",
       ...style,
     }}>
@@ -524,20 +619,40 @@ function GlassPanel({
 
 // ─── Cover Slide ─────────────────────────────────────────────────────────────
 
-function CoverSlide({ count, date }: { count: number; date: string }) {
+function CoverSlide({ slides, date, totalMeetings }: { slides: ProjectSlideData[]; date: string; totalMeetings: number }) {
+  const count        = slides.length
+  const totalTasks   = slides.reduce((s, p) => s + p.tasks.total, 0)
+  const doneTasks    = slides.reduce((s, p) => s + p.tasks.completed, 0)
+  const critRisks    = slides.reduce((s, p) => s + p.risks.critical, 0)
+  const highRisks    = slides.reduce((s, p) => s + p.risks.high, 0)
+  const avgProgress  = count > 0 ? Math.round(slides.reduce((s, p) => s + p.progress, 0) / count) : 0
+
+  const stats: { icon: React.ElementType; value: string | number; label: string; color: string; glow: string }[] = [
+    { icon: Zap,           value: count,          label: count === 1 ? "Projeto Ativo" : "Projetos Ativos",  color: "#60A5FA", glow: "rgba(96,165,250,0.45)"  },
+    { icon: Calendar,      value: totalMeetings,  label: "Reuniões Realizadas",                               color: "#C084FC", glow: "rgba(192,132,252,0.45)" },
+    { icon: TrendingUp,    value: `${avgProgress}%`, label: "Conclusão Média",                               color: "#34D399", glow: "rgba(52,211,153,0.45)"  },
+    {
+      icon: AlertTriangle,
+      value: critRisks > 0 ? critRisks : highRisks > 0 ? highRisks : "✓",
+      label: critRisks > 0 ? "Riscos Críticos" : highRisks > 0 ? "Riscos Altos" : "Sem Riscos Críticos",
+      color: critRisks > 0 ? "#FCA5A5" : highRisks > 0 ? "#FCD34D" : "#34D399",
+      glow:  critRisks > 0 ? "rgba(239,68,68,0.45)" : highRisks > 0 ? "rgba(245,158,11,0.45)" : "rgba(52,211,153,0.40)",
+    },
+  ]
+
   return (
     <div className="relative flex flex-col items-center justify-center h-full select-none overflow-hidden">
       <SlideBackground />
-      <FloatingParticles count={16} />
+      <FloatingParticles count={18} />
 
       {/* Expanding rings */}
       {[0, 1, 2, 3].map((i) => (
         <div key={i} className="absolute pointer-events-none" style={{
           top: "50%", left: "50%",
-          width: 280 + i * 220, height: 280 + i * 220,
+          width: 260 + i * 210, height: 260 + i * 210,
           borderRadius: "50%",
           border: `1px solid rgba(36,99,255,${0.14 - i * 0.025})`,
-          boxShadow: `0 0 18px rgba(36,99,255,${0.08 - i * 0.015}), inset 0 0 18px rgba(36,99,255,${0.04})`,
+          boxShadow: `0 0 18px rgba(36,99,255,${0.08 - i * 0.015}), inset 0 0 18px rgba(36,99,255,0.04)`,
           animation: `ringExpand ${4.5 + i * 1.2}s cubic-bezier(0.4,0,0.6,1) ${i * 1.1}s infinite`,
         }} />
       ))}
@@ -545,95 +660,92 @@ function CoverSlide({ count, date }: { count: number; date: string }) {
       {/* Central core glow */}
       <div className="absolute pointer-events-none" style={{
         top: "50%", left: "50%",
-        width: 750, height: 750,
+        width: 800, height: 800,
         borderRadius: "50%",
         background: "radial-gradient(circle, rgba(36,99,255,0.22) 0%, rgba(139,47,255,0.16) 28%, rgba(245,48,102,0.08) 55%, transparent 72%)",
-        filter: "blur(40px)",
+        filter: "blur(44px)",
         animation: "coreGlow 5s ease-in-out infinite",
       }} />
 
-      {/* Orbiting orbs — cover specific, larger radius */}
-      <div className="absolute pointer-events-none" style={{
-        top: "50%", left: "50%",
-        width: 220, height: 220, borderRadius: "50%",
-        background: "radial-gradient(circle, rgba(245,48,102,0.85) 0%, transparent 70%)",
-        filter: "blur(18px)",
-        animation: "orbitA1 9s linear infinite",
-      }} />
-      <div className="absolute pointer-events-none" style={{
-        top: "50%", left: "50%",
-        width: 175, height: 175, borderRadius: "50%",
-        background: "radial-gradient(circle, rgba(36,99,255,0.82) 0%, transparent 70%)",
-        filter: "blur(16px)",
-        animation: "orbitA2 14s linear infinite reverse",
-        animationDelay: "-5s",
-      }} />
-      <div className="absolute pointer-events-none" style={{
-        top: "50%", left: "50%",
-        width: 135, height: 135, borderRadius: "50%",
-        background: "radial-gradient(circle, rgba(16,185,129,0.78) 0%, transparent 70%)",
-        filter: "blur(13px)",
-        animation: "orbitB1 8s linear infinite",
-        animationDelay: "-2s",
-      }} />
-      <div className="absolute pointer-events-none" style={{
-        top: "50%", left: "50%",
-        width: 95, height: 95, borderRadius: "50%",
-        background: "radial-gradient(circle, rgba(248,244,255,0.70) 0%, transparent 70%)",
-        filter: "blur(10px)",
-        animation: "orbitB2 11s linear infinite reverse",
-        animationDelay: "-7s",
-      }} />
+      {/* Orbiting orbs */}
+      {[
+        { w: 220, c: "rgba(245,48,102,0.82)", b: 18, a: "orbitA1 9s linear infinite", d: "" },
+        { w: 175, c: "rgba(36,99,255,0.80)",  b: 16, a: "orbitA2 14s linear infinite reverse", d: "-5s" },
+        { w: 135, c: "rgba(16,185,129,0.75)", b: 13, a: "orbitB1 8s linear infinite", d: "-2s" },
+        { w: 95,  c: "rgba(248,244,255,0.68)", b: 10, a: "orbitB2 11s linear infinite reverse", d: "-7s" },
+      ].map((o, i) => (
+        <div key={i} className="absolute pointer-events-none" style={{
+          top: "50%", left: "50%",
+          width: o.w, height: o.w, borderRadius: "50%",
+          background: `radial-gradient(circle, ${o.c} 0%, transparent 70%)`,
+          filter: `blur(${o.b}px)`,
+          animation: o.a,
+          animationDelay: o.d,
+        }} />
+      ))}
 
-      <div className="relative z-10 flex flex-col items-center gap-7 text-center px-12">
-        {/* Logo */}
-        <motion.div initial={{ opacity: 0, y: -30, scale: 0.90 }} animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ delay: 0.10, duration: 0.70, ease: "easeOut" }}>
-          <VendemmiaLogo size="lg" />
+      <div className="relative z-10 flex flex-col items-center gap-5 text-center w-full max-w-4xl px-8">
+        {/* LOGO — large, centered */}
+        <motion.div initial={{ opacity: 0, y: -30, scale: 0.88 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ delay: 0.10, duration: 0.72, ease: "easeOut" }}>
+          <VendemmiaLogo size="xl" />
         </motion.div>
 
-        {/* Label + Title */}
+        {/* Badge chip + Title */}
         <motion.div initial={{ opacity: 0, y: 25 }} animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.28, duration: 0.65 }} className="space-y-4">
+          transition={{ delay: 0.28, duration: 0.65 }} className="space-y-3">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full"
+            style={{ background: "rgba(36,99,255,0.12)", border: "1px solid rgba(96,165,250,0.22)" }}>
+            <BarChart3 className="w-3 h-3" style={{ color: "rgba(150,185,255,0.60)" }} />
+            <span className="text-[11px] font-bold tracking-[0.18em] uppercase" style={{ color: "rgba(150,185,255,0.60)" }}>
+              Gestão de Projetos · Portfólio
+            </span>
+          </div>
           <h1 className="font-black tracking-tight leading-none" style={{
-            fontSize: "clamp(3.2rem, 6vw, 5rem)",
-            background: "linear-gradient(135deg, #ffffff 0%, #E0EAFF 40%, rgba(255,255,255,0.65) 100%)",
+            fontSize: "clamp(3.2rem, 5.5vw, 5.2rem)",
+            background: "linear-gradient(135deg, #ffffff 0%, #D8E8FF 40%, rgba(255,255,255,0.60) 100%)",
             WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-            textShadow: "none",
-            filter: "drop-shadow(0 0 40px rgba(36,99,255,0.35))",
+            filter: "drop-shadow(0 0 45px rgba(36,99,255,0.45))",
           }}>
             Status Report
           </h1>
-          <p className="text-xl font-semibold tracking-wide" style={{ color: "rgba(150,185,255,0.50)" }}>
-            Gestão de Projetos&nbsp;·&nbsp;Portfólio
-          </p>
         </motion.div>
 
-        {/* Counter card */}
-        <motion.div initial={{ opacity: 0, scale: 0.88, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ delay: 0.48, duration: 0.60, ease: "easeOut" }}>
-          <GlassPanel style={{
-            padding: "28px 52px",
-            textAlign: "center",
-            boxShadow: "0 0 0 1px rgba(96,165,250,0.18), 0 0 50px rgba(36,99,255,0.18), 0 0 120px rgba(139,47,255,0.10), inset 0 1px 0 rgba(255,255,255,0.08)",
-          }}>
-            <p className="font-black leading-none" style={{
-              fontSize: "4.5rem",
-              background: "linear-gradient(135deg, #00C4E0 0%, #2463FF 50%, #8B2FFF 100%)",
-              WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-              filter: "drop-shadow(0 0 30px rgba(36,99,255,0.50))",
+        {/* Stats row — 4 cards */}
+        <motion.div initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ delay: 0.45, duration: 0.65, ease: "easeOut" }}
+          className="w-full grid grid-cols-4 gap-4">
+          {stats.map(({ icon: Icon, value, label, color, glow }) => (
+            <GlassPanel key={label} style={{
+              padding: "22px 12px",
+              textAlign: "center",
+              boxShadow: `0 0 0 1px ${color}25, 0 0 40px ${glow}25, 0 4px 24px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.09)`,
             }}>
-              {count}
-            </p>
-            <p className="text-sm font-semibold mt-2.5 tracking-wide" style={{ color: "rgba(150,185,255,0.55)" }}>
-              {count === 1 ? "projeto em andamento" : "projetos em andamento"}
-            </p>
-          </GlassPanel>
+              <div className="flex items-center justify-center mb-2.5">
+                <Icon style={{ width: 18, height: 18, color }} />
+              </div>
+              <p className="font-black leading-none" style={{
+                fontSize: "2.6rem", color,
+                filter: `drop-shadow(0 0 14px ${glow})`,
+              }}>
+                {value}
+              </p>
+              <p className="text-[10px] font-bold mt-2 tracking-wide uppercase" style={{ color: "rgba(180,210,255,0.50)" }}>
+                {label}
+              </p>
+            </GlassPanel>
+          ))}
         </motion.div>
+
+        {/* Tasks sub-info */}
+        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.60, duration: 0.50 }}
+          className="text-xs font-semibold" style={{ color: "rgba(150,185,255,0.30)" }}>
+          {doneTasks} de {totalTasks} tarefas concluídas no portfólio
+        </motion.p>
 
         {/* Date */}
-        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.65, duration: 0.50 }}
-          className="text-sm font-medium tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.25)", letterSpacing: "0.18em" }}>
+        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.68, duration: 0.50 }}
+          className="text-sm font-semibold tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.22)", letterSpacing: "0.18em" }}>
           {date}
         </motion.p>
 
@@ -994,6 +1106,39 @@ function ProjectSlide({ data, index, total }: { data: ProjectSlideData; index: n
               </div>
             </GlassPanel>
 
+            {/* IDC / IDP — Índices de Desempenho */}
+            {(data.idc !== null || data.idp !== null) && (
+              <GlassPanel accent="#2463FF" style={{ padding: "10px 14px", flexShrink: 0 }}>
+                <RSH
+                  label="Índices de Desempenho"
+                  right={
+                    <span className="text-[9px] font-semibold" style={{ color: "rgba(150,185,255,0.40)" }}>
+                      {`<0.85 Risco · 0.85–1.0 Atenção · ≥1.0 Em Linha`}
+                    </span>
+                  }
+                />
+                <div className="flex items-center justify-around pt-1 pb-0.5">
+                  <div className="flex flex-col items-center gap-0.5">
+                    <PerfGaugeMini value={data.idc} label="IDC · Custo" size={88} />
+                    {data.idc !== null && data.budget !== null && (
+                      <span className="text-[8px]" style={{ color: "rgba(150,185,255,0.30)" }}>
+                        EV/AC
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ width: 1, height: 72, background: "rgba(255,255,255,0.07)" }} />
+                  <div className="flex flex-col items-center gap-0.5">
+                    <PerfGaugeMini value={data.idp} label="IDP · Prazo" size={88} />
+                    {data.idp !== null && data.timelineProgress !== null && (
+                      <span className="text-[8px]" style={{ color: "rgba(150,185,255,0.30)" }}>
+                        {data.timelineProgress}% do prazo decorrido
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </GlassPanel>
+            )}
+
             {/* Último Checkpoint */}
             {data.lastCheckpoint && (
               <GlassPanel accent="#2563EB" style={{ padding: "10px 12px", flexShrink: 0 }}>
@@ -1119,17 +1264,23 @@ function ProjectSlide({ data, index, total }: { data: ProjectSlideData; index: n
 
 // ─── Summary Slide ────────────────────────────────────────────────────────────
 
-function SummarySlide({ projects }: { projects: ProjectSlideData[] }) {
+function SummarySlide({ projects, totalMeetings }: { projects: ProjectSlideData[]; totalMeetings: number }) {
   const avgProgress = Math.round(projects.reduce((s, p) => s + p.progress, 0) / projects.length)
   const totalTasks  = projects.reduce((s, p) => s + p.tasks.total, 0)
   const doneTasks   = projects.reduce((s, p) => s + p.tasks.completed, 0)
   const critCount   = projects.reduce((s, p) => s + p.risks.critical, 0)
   const highCount   = projects.reduce((s, p) => s + p.risks.high, 0)
 
+  // IDC/IDP portfolio averages (only projects with data)
+  const idcList = projects.map((p) => p.idc).filter((v): v is number => v !== null)
+  const idpList = projects.map((p) => p.idp).filter((v): v is number => v !== null)
+  const avgIdc  = idcList.length > 0 ? Math.round((idcList.reduce((s, v) => s + v, 0) / idcList.length) * 100) / 100 : null
+  const avgIdp  = idpList.length > 0 ? Math.round((idpList.reduce((s, v) => s + v, 0) / idpList.length) * 100) / 100 : null
+
   const kpis = [
-    { label: "Progresso Médio",     value: `${avgProgress}%`, color: "#60A5FA",  glow: "rgba(96,165,250,0.35)",  sub: "do portfólio" },
-    { label: "Tarefas Concluídas",  value: `${doneTasks}/${totalTasks}`, color: "#34D399", glow: "rgba(52,211,153,0.35)", sub: "atividades" },
-    { label: "Projetos Ativos",     value: String(projects.length), color: "#C084FC", glow: "rgba(192,132,252,0.35)", sub: "em andamento" },
+    { label: "Progresso Médio",    value: `${avgProgress}%`,             color: "#60A5FA",  glow: "rgba(96,165,250,0.35)",  sub: "do portfólio" },
+    { label: "Tarefas Concluídas", value: `${doneTasks}/${totalTasks}`,  color: "#34D399",  glow: "rgba(52,211,153,0.35)",  sub: "atividades"   },
+    { label: "Reuniões Realizadas",value: String(totalMeetings),          color: "#C084FC",  glow: "rgba(192,132,252,0.35)", sub: `${projects.length} projeto${projects.length !== 1 ? "s" : ""}` },
     {
       label: critCount > 0 ? "Riscos Críticos" : highCount > 0 ? "Riscos Altos" : "Riscos",
       value: critCount > 0 ? String(critCount) : highCount > 0 ? String(highCount) : "0",
@@ -1241,30 +1392,61 @@ function SummarySlide({ projects }: { projects: ProjectSlideData[] }) {
           })}
         </div>
 
-        {/* Portfolio progress */}
+        {/* Portfolio bottom bar: progress + IDC/IDP */}
         <GlassPanel style={{
-          padding: "14px 24px", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "14px 24px", flexShrink: 0,
           boxShadow: "0 0 0 1px rgba(36,99,255,0.18), 0 0 40px rgba(36,99,255,0.12), inset 0 1px 0 rgba(255,255,255,0.06)",
         }}>
-          <span className="text-sm font-semibold tracking-wide" style={{ color: "rgba(150,185,255,0.45)" }}>
-            Progresso Médio do Portfólio
-          </span>
-          <div className="flex items-center gap-5">
-            <div className="w-56 h-2.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.07)" }}>
-              <div className="h-full rounded-full" style={{
-                width: `${avgProgress}%`,
-                background: "linear-gradient(90deg, #00C4E0, #2463FF, #8B2FFF)",
-                boxShadow: "0 0 16px rgba(36,99,255,0.70), 0 0 30px rgba(139,47,255,0.40)",
-                transition: "width 1.4s cubic-bezier(0.22,1,0.36,1)",
-              }} />
+          <div className="flex items-center justify-between gap-6">
+            <div className="flex items-center gap-4 flex-1">
+              <span className="text-sm font-semibold tracking-wide shrink-0" style={{ color: "rgba(150,185,255,0.45)" }}>
+                Progresso Médio
+              </span>
+              <div className="flex-1 h-2.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.07)" }}>
+                <div className="h-full rounded-full" style={{
+                  width: `${avgProgress}%`,
+                  background: "linear-gradient(90deg, #00C4E0, #2463FF, #8B2FFF)",
+                  boxShadow: "0 0 16px rgba(36,99,255,0.70), 0 0 30px rgba(139,47,255,0.40)",
+                  transition: "width 1.4s cubic-bezier(0.22,1,0.36,1)",
+                }} />
+              </div>
+              <span className="text-2xl font-black shrink-0" style={{
+                background: "linear-gradient(135deg, #00C4E0, #2463FF, #8B2FFF)",
+                WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+                filter: "drop-shadow(0 0 20px rgba(36,99,255,0.50))",
+              }}>
+                {avgProgress}%
+              </span>
             </div>
-            <span className="text-2xl font-black" style={{
-              background: "linear-gradient(135deg, #00C4E0, #2463FF, #8B2FFF)",
-              WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-              filter: "drop-shadow(0 0 20px rgba(36,99,255,0.50))",
-            }}>
-              {avgProgress}%
-            </span>
+
+            {/* IDC / IDP portfolio averages */}
+            {(avgIdc !== null || avgIdp !== null) && (
+              <div className="flex items-center gap-5 shrink-0 pl-6"
+                style={{ borderLeft: "1px solid rgba(255,255,255,0.07)" }}>
+                {avgIdc !== null && (
+                  <div className="text-center">
+                    <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: "rgba(180,210,255,0.40)" }}>IDC médio</p>
+                    <p className="font-black text-lg leading-tight" style={{
+                      color: avgIdc >= 1 ? "#10B981" : avgIdc >= 0.85 ? "#F59E0B" : "#EF4444",
+                      filter: `drop-shadow(0 0 10px ${avgIdc >= 1 ? "rgba(16,185,129,0.55)" : avgIdc >= 0.85 ? "rgba(245,158,11,0.55)" : "rgba(239,68,68,0.55)"})`,
+                    }}>
+                      {avgIdc.toFixed(2)}
+                    </p>
+                  </div>
+                )}
+                {avgIdp !== null && (
+                  <div className="text-center">
+                    <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: "rgba(180,210,255,0.40)" }}>IDP médio</p>
+                    <p className="font-black text-lg leading-tight" style={{
+                      color: avgIdp >= 1 ? "#10B981" : avgIdp >= 0.85 ? "#F59E0B" : "#EF4444",
+                      filter: `drop-shadow(0 0 10px ${avgIdp >= 1 ? "rgba(16,185,129,0.55)" : avgIdp >= 0.85 ? "rgba(245,158,11,0.55)" : "rgba(239,68,68,0.55)"})`,
+                    }}>
+                      {avgIdp.toFixed(2)}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </GlassPanel>
       </div>
@@ -1588,7 +1770,7 @@ function ProjectSelector({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function ReportClient({ slides: allSlides }: { slides: ProjectSlideData[] }) {
+export function ReportClient({ slides: allSlides, totalMeetings }: { slides: ProjectSlideData[]; totalMeetings: number }) {
   // ── All hooks unconditionally first ──────────────────────────────────────────
   const [started,      setStarted]      = useState(false)
   const [activeSlides, setActiveSlides] = useState<ProjectSlideData[]>(allSlides)
@@ -1700,13 +1882,13 @@ export function ReportClient({ slides: allSlides }: { slides: ProjectSlideData[]
           style={{ paddingBottom: 68 }}
         >
           {slideType === "cover" && (
-            <CoverSlide count={activeSlides.length} date={date} />
+            <CoverSlide slides={activeSlides} date={date} totalMeetings={totalMeetings} />
           )}
           {slideType === "project" && projectIdx >= 0 && projectIdx < activeSlides.length && (
             <ProjectSlide data={activeSlides[projectIdx]} index={projectIdx + 1} total={activeSlides.length} />
           )}
           {slideType === "summary" && (
-            <SummarySlide projects={activeSlides} />
+            <SummarySlide projects={activeSlides} totalMeetings={totalMeetings} />
           )}
         </motion.div>
       </AnimatePresence>
