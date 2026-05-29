@@ -172,11 +172,21 @@ export function MeetingAtaModal({ content, title = "ATA de Reunião", onClose }:
     setTimeout(() => setCopied(false), 2000)
   }, [content])
 
-  const handlePrint = useCallback(() => {
+  const handlePrint = useCallback(async () => {
     const win = window.open("", "_blank")
     if (!win) return
 
-    const logoUrl = window.location.origin + "/logo_v4.png"
+    // Try to load org config for custom logo/name
+    let orgLogoUrl = window.location.origin + "/logo_v4.png"
+    let orgName    = "Planner"
+    try {
+      const { getOrgConfig } = await import("@/lib/actions/org-config")
+      const cfg = await getOrgConfig()
+      if (cfg.logoUrl) orgLogoUrl = cfg.logoUrl
+      if (cfg.name)    orgName    = cfg.name
+    } catch { /* use defaults */ }
+
+    const logoUrl = orgLogoUrl
     const now     = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })
 
     // Markdown → HTML conversion (improved)
@@ -291,7 +301,7 @@ export function MeetingAtaModal({ content, title = "ATA de Reunião", onClose }:
 </head>
 <body>
   <div class="doc-header">
-    <img src="${logoUrl}" alt="Kronex" onerror="this.style.display='none'" />
+    <img src="${logoUrl}" alt="${orgName}" onerror="this.style.display='none'" />
     <div class="doc-header-text">
       <p class="doc-title">${title}</p>
       <p class="doc-meta">Documento oficial gerado automaticamente &nbsp;|&nbsp; ${now}</p>

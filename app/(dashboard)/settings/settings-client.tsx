@@ -4,7 +4,9 @@ import { useState } from "react"
 import { User, Bell, Building2, Users, ChevronRight, Lock } from "lucide-react"
 import { ProfileTab } from "./profile-tab"
 import { NotificationsTab } from "./notifications-tab"
+import { OrganizationTab } from "./organization-tab"
 import type { NotificationPreferenceData } from "@/lib/actions/notification-preferences"
+import type { OrgConfigData } from "@/lib/actions/org-config"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -28,6 +30,7 @@ type Props = {
   isAdmin:       boolean
   preferences:   NotificationPreferenceData
   notifications: NotifItem[]
+  orgConfig:     OrgConfigData
 }
 
 // ─── Tab config ───────────────────────────────────────────────────────────────
@@ -45,13 +48,13 @@ type Tab = {
 const TABS: Tab[] = [
   { id: "profile",       label: "Meu Perfil",    icon: User,      ready: true  },
   { id: "notifications", label: "Notificações",  icon: Bell,      ready: true  },
-  { id: "organization",  label: "Organização",   icon: Building2, ready: false, adminOnly: true },
+  { id: "organization",  label: "Organização",   icon: Building2, ready: true,  adminOnly: true },
   { id: "users",         label: "Usuários",      icon: Users,     ready: false, adminOnly: true },
 ]
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function SettingsClient({ profile, allUsers, isAdmin, preferences, notifications }: Props) {
+export function SettingsClient({ profile, allUsers, isAdmin, preferences, notifications, orgConfig }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>("profile")
 
   const visibleTabs = TABS.filter((t) => !t.adminOnly || isAdmin)
@@ -119,6 +122,9 @@ export function SettingsClient({ profile, allUsers, isAdmin, preferences, notifi
             )}
             {activeTab === "notifications" && (
               <NotificationsTab preferences={preferences} notifications={notifications} />
+            )}
+            {activeTab === "organization" && isAdmin && (
+              <OrganizationTab initial={orgConfig} />
             )}
 
             {/* Placeholder for future tabs */}

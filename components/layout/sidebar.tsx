@@ -34,11 +34,13 @@ const ADMIN_ITEMS = [
 ]
 
 interface SidebarProps {
-  collapsed: boolean
-  onToggle: () => void
+  collapsed:   boolean
+  onToggle:    () => void
+  orgLogoUrl?: string | null
+  orgName?:    string
 }
 
-export function Sidebar({ collapsed, onToggle }: SidebarProps) {
+export function Sidebar({ collapsed, onToggle, orgLogoUrl, orgName = "PLANNER" }: SidebarProps) {
   const pathname      = usePathname()
   const { data: session } = useSession()
 
@@ -117,20 +119,17 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       >
         {collapsed ? (
           <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm"
-            style={{ background: "linear-gradient(135deg, #7B2FBE, #9333EA)" }}
+            className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm overflow-hidden"
+            style={{ background: orgLogoUrl ? "transparent" : "linear-gradient(135deg, #7B2FBE, #9333EA)" }}
           >
-            <span className="text-white font-black text-sm tracking-tight">P</span>
+            {orgLogoUrl
+              ? <img src={orgLogoUrl} alt={orgName} className="w-full h-full object-contain p-1" />
+              : <span className="text-white font-black text-sm tracking-tight">{orgName.charAt(0).toUpperCase()}</span>}
           </div>
         ) : (
-          <Image
-            src="/logo_v4.png"
-            alt="PLANNER"
-            width={120}
-            height={36}
-            className="object-contain"
-            priority
-          />
+          orgLogoUrl
+            ? <img src={orgLogoUrl} alt={orgName} className="h-9 w-auto max-w-[140px] object-contain" />
+            : <Image src="/logo_v4.png" alt="PLANNER" width={120} height={36} className="object-contain" priority />
         )}
       </Link>
 

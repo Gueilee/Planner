@@ -4,6 +4,7 @@ import { Header } from "@/components/layout/header"
 import { getMyProfile, getAllUsers } from "@/lib/actions/profile"
 import { getNotificationPreferences } from "@/lib/actions/notification-preferences"
 import { getMyNotifications } from "@/lib/actions/notifications"
+import { getOrgConfig } from "@/lib/actions/org-config"
 import { SettingsClient } from "./settings-client"
 
 export const metadata = { title: "Configurações — Planner" }
@@ -12,11 +13,12 @@ export default async function SettingsPage() {
   const session = await auth()
   if (!session?.user) redirect("/login")
 
-  const [profile, allUsers, preferences, notifications] = await Promise.all([
+  const [profile, allUsers, preferences, notifications, orgConfig] = await Promise.all([
     getMyProfile(),
     session.user.role === "ADMIN" ? getAllUsers() : Promise.resolve([]),
     getNotificationPreferences(),
     getMyNotifications(50),
+    getOrgConfig(),
   ])
 
   if (!profile) redirect("/login")
@@ -39,6 +41,7 @@ export default async function SettingsPage() {
           criticalRisk:     preferences.criticalRisk,
         }}
         notifications={notifications}
+        orgConfig={orgConfig}
       />
     </div>
   )
