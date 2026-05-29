@@ -631,6 +631,55 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
         {/* ── RIGHT: Task lists ── */}
         <div className="flex flex-col gap-2 min-h-0 overflow-hidden">
 
+          {/* Fallback quando projeto não tem nenhum dado de atividades ainda */}
+          {td.recentlyCompleted.length===0 && td.inProgress.length===0 && td.delayed.length===0 && td.upcoming.length===0 && data.wbsAreas.length===0 && data.risks.items.length===0 && (
+            <GCard style={{padding:"18px 16px",flex:1,display:"flex",flexDirection:"column",justifyContent:"center",alignItems:"center",gap:14,textAlign:"center"}}>
+              <div style={{
+                width:52,height:52,borderRadius:16,
+                background:"linear-gradient(135deg,rgba(59,130,246,0.15),rgba(139,92,246,0.10))",
+                border:"1px solid rgba(96,165,250,0.22)",
+                display:"flex",alignItems:"center",justifyContent:"center",
+              }}>
+                <Activity style={{width:22,height:22,color:"rgba(148,185,255,0.55)"}}/>
+              </div>
+              <div>
+                <p style={{fontSize:13,fontWeight:800,color:"rgba(220,235,255,0.70)",marginBottom:6}}>
+                  Projeto em Configuração
+                </p>
+                <p style={{fontSize:10.5,color:"rgba(148,185,255,0.42)",lineHeight:1.55,maxWidth:220}}>
+                  Adicione tarefas ao cronograma para acompanhar atividades, responsáveis e prazos aqui.
+                </p>
+              </div>
+              {data.lastCheckpoint?.nextSteps && data.lastCheckpoint.nextSteps.length>0 && (
+                <div style={{width:"100%",padding:"10px 12px",background:"rgba(255,255,255,0.04)",borderRadius:10,border:"1px solid rgba(255,255,255,0.08)"}}>
+                  <p style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.14em",color:"rgba(148,185,255,0.45)",marginBottom:8}}>Próximos Passos (último checkpoint)</p>
+                  <div className="flex flex-col gap-1.5">
+                    {data.lastCheckpoint.nextSteps.slice(0,4).map((s,i)=>(
+                      <div key={i} className="flex items-start gap-2">
+                        <ArrowRight style={{width:9,height:9,color:"#60A5FA",flexShrink:0,marginTop:2}}/>
+                        <span style={{fontSize:9.5,color:"rgba(200,220,255,0.70)",lineHeight:1.4}}>{s}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div style={{display:"flex",gap:12,flexWrap:"wrap",justifyContent:"center"}}>
+                {data.meetingsCount>0&&<div style={{padding:"5px 12px",borderRadius:20,background:"rgba(192,132,252,0.12)",border:"1px solid rgba(192,132,252,0.22)",fontSize:10,color:"#C084FC",fontWeight:700}}>
+                  📅 {data.meetingsCount} reunião{data.meetingsCount!==1?"ões":" realizada"}
+                </div>}
+                {data.team>0&&<div style={{padding:"5px 12px",borderRadius:20,background:"rgba(251,146,60,0.12)",border:"1px solid rgba(251,146,60,0.22)",fontSize:10,color:"#FB923C",fontWeight:700}}>
+                  👥 {data.team} participante{data.team!==1?"s":""}
+                </div>}
+                {daysStr&&<div style={{padding:"5px 12px",borderRadius:20,
+                  background:data.daysLeft!==null&&data.daysLeft<0?"rgba(239,68,68,0.12)":"rgba(59,130,246,0.11)",
+                  border:`1px solid ${data.daysLeft!==null&&data.daysLeft<0?"rgba(239,68,68,0.24)":"rgba(96,165,250,0.20)"}`,
+                  fontSize:10,color:data.daysLeft!==null&&data.daysLeft<0?"#FCA5A5":"#93C5FD",fontWeight:700}}>
+                  ⏱ {daysStr}
+                </div>}
+              </div>
+            </GCard>
+          )}
+
           {/* Atividades concluídas */}
           {td.recentlyCompleted.length>0 && (
             <GCard style={{padding:"10px 12px",flexShrink:0}}>
