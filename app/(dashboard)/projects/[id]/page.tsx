@@ -234,20 +234,15 @@ export default async function ProjectDetailPage({
             />
 
             <div className="p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3 mb-3">
-                    <StatusBadge status={project.status} size="md" />
-                    {project.status === "COMPLETED" && ["ADMIN", "PROJECT_MANAGER"].includes(userRole) && (
-                      <ReopenProjectButton projectId={id} />
-                    )}
-                  </div>
-                  <h1 className="text-2xl font-black text-[#0F172A] leading-tight tracking-tight">{project.title}</h1>
-                  {project.description && (
-                    <p className="text-sm text-slate-400 mt-2 max-w-2xl leading-relaxed">{project.description}</p>
+              {/* ── Row 1: status badge (esquerda) + botões de ação (direita) ── */}
+              <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+                <div className="flex items-center gap-3">
+                  <StatusBadge status={project.status} size="md" />
+                  {project.status === "COMPLETED" && ["ADMIN", "PROJECT_MANAGER"].includes(userRole) && (
+                    <ReopenProjectButton projectId={id} />
                   )}
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 flex-wrap justify-end">
                   {/* Edit button — always visible */}
                   <ProjectEditModal
                     project={{
@@ -472,6 +467,12 @@ export default async function ProjectDetailPage({
                   )}
                 </div>
               </div>
+
+              {/* ── Row 2: título e descrição em largura total ── */}
+              <h1 className="text-2xl font-black text-[#0F172A] leading-tight tracking-tight mb-2">{project.title}</h1>
+              {project.description && (
+                <p className="text-sm text-slate-400 leading-relaxed">{project.description}</p>
+              )}
 
               {/* Status flow */}
               {!["CANCELLED", "ON_HOLD", "FUTURE_ANALYSIS"].includes(project.status) && (
