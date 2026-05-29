@@ -11,7 +11,7 @@ import {
   Play, RefreshCw, Flag, Loader2, ChevronRight, ExternalLink,
   ThumbsUp, ThumbsDown, BarChart3, Layers, Info, ArrowUpRight,
   CircleDot, GitBranch, CheckCircle2, Paperclip, Download,
-  FileImage, FileArchive, File, DollarSign,
+  FileImage, FileArchive, File,
 } from "lucide-react"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -759,9 +759,9 @@ function ProjectHistoryView({ data }: { data: NonNullable<FullHistory> }) {
         {/* 6. Controle Orçamentário */}
         {(() => {
           const budget       = p.budget ?? 0
-          const totalOrc     = p.tasks.reduce((s, t) => s + ((t as any).budgetedCost ?? 0), 0)
-          const totalReal    = p.tasks.reduce((s, t) => s + ((t as any).actualCost   ?? 0), 0)
-          const ve           = p.tasks.reduce((s, t) => s + (((t as any).budgetedCost ?? 0) * (t.progress / 100)), 0)
+          const totalOrc     = p.tasks.reduce((s, t) => s + (t.budgetedCost ?? 0), 0)
+          const totalReal    = p.tasks.reduce((s, t) => s + (t.actualCost   ?? 0), 0)
+          const ve           = p.tasks.reduce((s, t) => s + ((t.budgetedCost ?? 0) * (t.progress / 100)), 0)
           const idc          = totalReal > 0 ? ve / totalReal : null
           const hasData      = budget > 0 || totalOrc > 0 || totalReal > 0
           if (!hasData) return null

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback } from "react"
-import { X, Printer, Copy, Check, Loader2, FileText } from "lucide-react"
+import { X, Printer, Copy, Check, Loader2 } from "lucide-react"
 
 // ─── Simple Markdown → JSX renderer ──────────────────────────────────────────
 

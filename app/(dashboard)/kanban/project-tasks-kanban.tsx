@@ -700,6 +700,7 @@ function TaskDetailPanel({
                     className="flex-1 text-sm font-bold text-emerald-700 bg-transparent outline-none"
                     onBlur={(e) => {
                       const v = e.target.value === "" ? null : Number(e.target.value)
+                      setDetail(prev => prev ? { ...prev, budgetedCost: v } : prev)
                       start(async () => { await updateTaskKanban(initTask.id, projectId, { budgetedCost: v }) })
                     }}
                   />
@@ -715,6 +716,7 @@ function TaskDetailPanel({
                     className="flex-1 text-sm font-bold text-amber-700 bg-transparent outline-none"
                     onBlur={(e) => {
                       const v = e.target.value === "" ? null : Number(e.target.value)
+                      setDetail(prev => prev ? { ...prev, actualCost: v } : prev)
                       start(async () => { await updateTaskKanban(initTask.id, projectId, { actualCost: v }) })
                     }}
                   />
