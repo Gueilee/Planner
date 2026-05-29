@@ -197,7 +197,7 @@ export async function addTaskAttachmentKanban(
   if (!session?.user) throw new Error("Não autorizado")
 
   const att = await db.attachment.create({
-    data: { taskId, fileName: attachment.fileName, fileUrl: attachment.fileUrl, fileType: attachment.fileType, fileSize: attachment.fileSize },
+    data: { taskId, projectId, fileName: attachment.fileName, fileUrl: attachment.fileUrl, fileType: attachment.fileType, fileSize: attachment.fileSize },
     select: { id: true, fileName: true, fileUrl: true, fileType: true, fileSize: true },
   })
 
