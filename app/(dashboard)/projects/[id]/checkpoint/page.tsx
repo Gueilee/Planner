@@ -55,8 +55,10 @@ export default async function CheckpointPage({ params }: { params: Promise<{ id:
         wbsAreaId:   t.wbsAreaId,
         wbsArea:     t.wbsArea,
         responsible: t.responsible,
-        parentId:    t.parentId ?? null,
-        parentTitle: t.parentId ? (taskTitleMap.get(t.parentId) ?? null) : null,
+        parentId:     t.parentId ?? null,
+        parentTitle:  t.parentId ? (taskTitleMap.get(t.parentId) ?? null) : null,
+        budgetedCost: t.budgetedCost ?? null,
+        actualCost:   t.actualCost   ?? null,
       }))}
       members={memberships.map((m) => ({
         id:         m.user.id,

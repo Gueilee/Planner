@@ -36,8 +36,8 @@ const HDR_H   = 64
 const LEFT_W  = 600
 // List view: fixed column widths so header and rows always share the same total width
 const COL_NAME  = 280
-// 24+72+84+280+130+160+88+88+88+88+64+64+68+68+100
-const LIST_MIN_W = 1466
+// 24+72+84+280+130+160+88+88+88+88+64+64+68+68+100+84+84
+const LIST_MIN_W = 1634
 const BAR_H   = 24
 const BAR_PAD = 8
 
@@ -72,6 +72,7 @@ type Task = {
   startDate: string | null; endDate: string | null
   actualStart: string | null; actualEnd: string | null
   estimatedEffort: number | null; actualEffort: number | null
+  budgetedCost: number | null; actualCost: number | null
   status: string; progress: number; order: number; dependencies: string[]
   _count: { comments: number; attachments: number }
 }
@@ -1028,7 +1029,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [editTitle, setEditTitle] = useState<{ id: string; val: string } | null>(null)
-  const [editNum,   setEditNum]   = useState<{ id: string; field: "estimatedEffort" | "actualEffort" | "progress"; val: string } | null>(null)
+  const [editNum,   setEditNum]   = useState<{ id: string; field: "estimatedEffort" | "actualEffort" | "progress" | "budgetedCost" | "actualCost"; val: string } | null>(null)
   const [sortBy,    setSortBy]    = useState<"startDate" | "endDate" | null>(null)
   const [editPred,  setEditPred]  = useState<{ id: string; val: string } | null>(null)
   const [inlineAdd, setInlineAdd] = useState<{ taskId: string; val: string } | null>(null)
@@ -1502,6 +1503,8 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
               <div style={{ width: 68, flexShrink: 0 }} className="text-[10px] font-black text-amber-400/70 uppercase tracking-widest text-center">% Est.</div>
               <div style={{ width: 68, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">% Real</div>
               <div style={{ width: 100, flexShrink: 0 }} className="text-[10px] font-black text-indigo-400/70 uppercase tracking-widest text-center">Predecessoras</div>
+              <div style={{ width: 84, flexShrink: 0 }} className="text-[10px] font-black text-emerald-400/80 uppercase tracking-widest text-center">R$ Orç.</div>
+              <div style={{ width: 84, flexShrink: 0 }} className="text-[10px] font-black text-orange-400/80 uppercase tracking-widest text-center">R$ Real</div>
             </div>
           </div>
 
@@ -1605,6 +1608,27 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                         )}
                       </div>
                       <div style={{ width: 100, flexShrink: 0 }} />
+                      {/* Cost totals for the area */}
+                      {(() => {
+                        const areaTasks = tasks.filter(t => t.wbsAreaId === row.id)
+                        const totalOrc  = areaTasks.reduce((s, t) => s + (t.budgetedCost ?? 0), 0)
+                        const totalReal = areaTasks.reduce((s, t) => s + (t.actualCost   ?? 0), 0)
+                        const fmtK = (v: number) => v === 0 ? "—" : v >= 1000 ? `${(v/1000).toFixed(0)}k` : v.toFixed(0)
+                        return (
+                          <>
+                            <div style={{ width: 84, flexShrink: 0 }} className="text-center px-1">
+                              {totalOrc > 0 && <span className="text-[9px] font-bold text-emerald-600">R$ {fmtK(totalOrc)}</span>}
+                            </div>
+                            <div style={{ width: 84, flexShrink: 0 }} className="text-center px-1">
+                              {totalReal > 0 && (
+                                <span className="text-[9px] font-bold" style={{ color: totalReal > totalOrc && totalOrc > 0 ? "#EF4444" : "#F59E0B" }}>
+                                  R$ {fmtK(totalReal)}
+                                </span>
+                              )}
+                            </div>
+                          </>
+                        )
+                      })()}
                     </div>
                   )
                 }
@@ -2087,6 +2111,64 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                           {t.dependencies.length > 0
                             ? t.dependencies.map(d => eapById.get(d) ?? "?").join(", ")
                             : "—"}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* R$ Orçado */}
+                    <div style={{ width: 84, flexShrink: 0 }} className="text-center px-1">
+                      {editNum?.id === t.id && editNum.field === "budgetedCost" ? (
+                        <input
+                          autoFocus
+                          type="number" min={0} step={100}
+                          value={editNum.val}
+                          onChange={(e) => setEditNum({ id: t.id, field: "budgetedCost", val: e.target.value })}
+                          onBlur={() => {
+                            const v = editNum.val === "" ? null : Number(editNum.val)
+                            setEditNum(null)
+                            saveTaskField(t.id, { budgetedCost: v })
+                          }}
+                          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") setEditNum(null) }}
+                          className="w-full text-[9px] text-center px-1 py-0.5 rounded-lg outline-none font-mono"
+                          style={{ border: "1.5px solid #10B981", background: "#ECFDF5" }}
+                        />
+                      ) : (
+                        <span
+                          className="text-[9px] font-bold cursor-text"
+                          style={{ color: t.budgetedCost ? "#059669" : "#CBD5E1" }}
+                          onClick={() => setEditNum({ id: t.id, field: "budgetedCost", val: t.budgetedCost?.toString() ?? "" })}
+                          title="Clique para editar valor orçado"
+                        >
+                          {t.budgetedCost != null ? `R$${t.budgetedCost >= 1000 ? `${(t.budgetedCost/1000).toFixed(0)}k` : t.budgetedCost.toFixed(0)}` : "—"}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* R$ Real */}
+                    <div style={{ width: 84, flexShrink: 0 }} className="text-center px-1">
+                      {editNum?.id === t.id && editNum.field === "actualCost" ? (
+                        <input
+                          autoFocus
+                          type="number" min={0} step={100}
+                          value={editNum.val}
+                          onChange={(e) => setEditNum({ id: t.id, field: "actualCost", val: e.target.value })}
+                          onBlur={() => {
+                            const v = editNum.val === "" ? null : Number(editNum.val)
+                            setEditNum(null)
+                            saveTaskField(t.id, { actualCost: v })
+                          }}
+                          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") setEditNum(null) }}
+                          className="w-full text-[9px] text-center px-1 py-0.5 rounded-lg outline-none font-mono"
+                          style={{ border: "1.5px solid #F59E0B", background: "#FFFBEB" }}
+                        />
+                      ) : (
+                        <span
+                          className="text-[9px] font-bold cursor-text"
+                          style={{ color: t.actualCost == null ? "#CBD5E1" : t.actualCost > (t.budgetedCost ?? Infinity) ? "#EF4444" : "#D97706" }}
+                          onClick={() => setEditNum({ id: t.id, field: "actualCost", val: t.actualCost?.toString() ?? "" })}
+                          title="Clique para editar custo real"
+                        >
+                          {t.actualCost != null ? `R$${t.actualCost >= 1000 ? `${(t.actualCost/1000).toFixed(0)}k` : t.actualCost.toFixed(0)}` : "—"}
                         </span>
                       )}
                     </div>

@@ -19,6 +19,8 @@ export type TaskInput = {
   actualEnd?: string | null
   estimatedEffort?: number | null
   actualEffort?: number | null
+  budgetedCost?: number | null
+  actualCost?: number | null
   status?: string
   progress?: number
   dependencies?: string[]
@@ -37,6 +39,7 @@ function serialize(t: {
   startDate: Date | null; endDate: Date | null; actualStart: Date | null; actualEnd: Date | null
   completedAt: Date | null; estimatedEffort: number | null; actualEffort: number | null
   status: string; riskStatus: string; progress: number; order: number
+  budgetedCost: number | null; actualCost: number | null
   dependencies: string | null; createdAt: Date; updatedAt: Date
   responsible: { id: string; name: string } | null
   wbsArea: { id: string; name: string; color: string | null } | null
@@ -78,6 +81,8 @@ export async function createTask(data: TaskInput) {
       actualEnd: data.actualEnd ? new Date(data.actualEnd) : null,
       estimatedEffort: data.estimatedEffort ?? null,
       actualEffort: data.actualEffort ?? null,
+      budgetedCost: data.budgetedCost ?? null,
+      actualCost:   data.actualCost   ?? null,
       status: (data.status ?? "PLANNING") as never,
       progress: data.progress ?? 0,
       dependencies: data.dependencies?.length ? JSON.stringify(data.dependencies) : null,
@@ -176,7 +181,9 @@ export async function updateTask(id: string, projectId: string, data: Partial<Ta
       ...(data.actualStart !== undefined && { actualStart: data.actualStart ? new Date(data.actualStart) : null }),
       ...(data.actualEnd !== undefined && { actualEnd: data.actualEnd ? new Date(data.actualEnd) : null }),
       ...(data.estimatedEffort !== undefined && { estimatedEffort: data.estimatedEffort }),
-      ...(data.actualEffort !== undefined && { actualEffort: data.actualEffort }),
+      ...(data.actualEffort    !== undefined && { actualEffort:    data.actualEffort }),
+      ...(data.budgetedCost    !== undefined && { budgetedCost:    data.budgetedCost }),
+      ...(data.actualCost      !== undefined && { actualCost:      data.actualCost }),
       status: finalStatus as never,
       progress: finalProgress,
       ...(data.dependencies !== undefined && {

@@ -121,6 +121,8 @@ export async function getTaskDetail(taskId: string) {
         orderBy: { uploadedAt: "desc" },
         select: { id: true, fileName: true, fileUrl: true, fileType: true, fileSize: true },
       },
+      budgetedCost: true,
+      actualCost:   true,
     },
   })
   if (!task) return null
@@ -137,10 +139,12 @@ export async function updateTaskKanban(
   taskId:    string,
   projectId: string,
   data: {
-    progress?:    number
-    actualStart?: string | null
-    actualEnd?:   string | null
-    status?:      string
+    progress?:     number
+    actualStart?:  string | null
+    actualEnd?:    string | null
+    status?:       string
+    budgetedCost?: number | null
+    actualCost?:   number | null
   },
 ) {
   const session = await auth()
@@ -149,9 +153,11 @@ export async function updateTaskKanban(
   await db.scheduleTask.update({
     where: { id: taskId },
     data: {
-      ...(data.progress    !== undefined && { progress:    data.progress }),
-      ...(data.actualStart !== undefined && { actualStart: data.actualStart ? new Date(data.actualStart) : null }),
-      ...(data.actualEnd   !== undefined && { actualEnd:   data.actualEnd   ? new Date(data.actualEnd)   : null }),
+      ...(data.progress     !== undefined && { progress:     data.progress }),
+      ...(data.actualStart  !== undefined && { actualStart:  data.actualStart  ? new Date(data.actualStart)  : null }),
+      ...(data.actualEnd    !== undefined && { actualEnd:    data.actualEnd    ? new Date(data.actualEnd)    : null }),
+      ...(data.budgetedCost !== undefined && { budgetedCost: data.budgetedCost }),
+      ...(data.actualCost   !== undefined && { actualCost:   data.actualCost }),
       ...(data.status !== undefined && {
         status: data.status as never,
         ...(data.status === "COMPLETED" && { completedAt: new Date(), progress: 100 }),

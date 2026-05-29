@@ -11,9 +11,11 @@ type ProjectSnapshot = {
   expectedStart:  Date | null
   expectedEnd:    Date | null
   tasks: {
-    status:   string
-    progress: number
-    endDate:  Date | null
+    status:       string
+    progress:     number
+    endDate:      Date | null
+    budgetedCost: number | null
+    actualCost:   number | null
   }[]
   risks: { status: string }[]
 }
@@ -23,15 +25,27 @@ export function computeReportStatus(p: ProjectSnapshot): AutoReportStatus {
   today.setHours(0, 0, 0, 0)
   const isFinished = ["COMPLETED", "CANCELLED"].includes(p.status)
 
-  // ── CUSTOS ─────────────────────────────────────────────────────────────────
-  // Compare estimatedCosts vs budget. If no financial data → GREEN (no basis for concern).
-  // Riscos críticos/altos adicionam pressão de custo mesmo sem dados financeiros.
+  // ── CUSTOS — IDC (Índice de Desempenho de Custo) ───────────────────────────
+  // IDC = Valor Agregado / Custo Real  (Earned Value / Actual Cost)
+  // IDC >= 1.0: dentro do orçamento → GREEN
+  // IDC >= 0.85: atenção            → YELLOW
+  // IDC <  0.85: risco orçamentário → RED
+  // Fallback: estimatedCosts vs budget quando não há dados por tarefa.
   let cost: TL = "GREEN"
-  if (p.budget && p.estimatedCosts) {
+
+  const ve = p.tasks.reduce((s, t) => s + ((t.budgetedCost ?? 0) * (t.progress / 100)), 0)
+  const cr = p.tasks.reduce((s, t) => s + (t.actualCost ?? 0), 0)
+
+  if (cr > 0 && ve >= 0) {
+    const idc = ve / cr
+    if      (idc < 0.85) cost = "RED"
+    else if (idc < 1.00) cost = "YELLOW"
+  } else if (p.budget && p.estimatedCosts) {
     const ratio = p.estimatedCosts / p.budget
     if      (ratio > 1.15) cost = "RED"
     else if (ratio > 1.00) cost = "YELLOW"
   }
+
   const critHighRisks = p.risks.filter(r => ["HIGH", "CRITICAL"].includes(r.status)).length
   if (critHighRisks >= 3 && cost === "GREEN")  cost = "YELLOW"
   if (critHighRisks >= 5 && cost === "YELLOW") cost = "RED"

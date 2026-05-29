@@ -48,7 +48,7 @@ export async function getProjectFullHistory(projectId: string) {
       },
       tasks: {
         orderBy: { order: "asc" },
-        select: { id: true, status: true, progress: true },
+        select: { id: true, status: true, progress: true, budgetedCost: true, actualCost: true },
       },
       risks: { orderBy: { createdAt: "asc" } },
       meetings: {

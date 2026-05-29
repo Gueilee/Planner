@@ -11,7 +11,7 @@ import {
   Play, RefreshCw, Flag, Loader2, ChevronRight, ExternalLink,
   ThumbsUp, ThumbsDown, BarChart3, Layers, Info, ArrowUpRight,
   CircleDot, GitBranch, CheckCircle2, Paperclip, Download,
-  FileImage, FileArchive, File,
+  FileImage, FileArchive, File, DollarSign,
 } from "lucide-react"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -666,7 +666,88 @@ function ProjectHistoryView({ data }: { data: NonNullable<FullHistory> }) {
           </section>
         )}
 
-        {/* 6. Documentos */}
+        {/* 6. Controle Orçamentário */}
+        {(() => {
+          const budget       = p.budget ?? 0
+          const totalOrc     = p.tasks.reduce((s, t) => s + ((t as any).budgetedCost ?? 0), 0)
+          const totalReal    = p.tasks.reduce((s, t) => s + ((t as any).actualCost   ?? 0), 0)
+          const ve           = p.tasks.reduce((s, t) => s + (((t as any).budgetedCost ?? 0) * (t.progress / 100)), 0)
+          const idc          = totalReal > 0 ? ve / totalReal : null
+          const hasData      = budget > 0 || totalOrc > 0 || totalReal > 0
+          if (!hasData) return null
+
+          function fmtBRL(v: number) {
+            return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })
+          }
+          const idcColor = idc === null ? "#94A3B8" : idc >= 1.0 ? "#059669" : idc >= 0.85 ? "#D97706" : "#DC2626"
+          const idcBg    = idc === null ? "#F8FAFC" : idc >= 1.0 ? "#ECFDF5" : idc >= 0.85 ? "#FFFBEB" : "#FEF2F2"
+
+          return (
+            <section>
+              <SectionTitle icon={BarChart3} title="Controle Orçamentário" />
+              <div className="mt-4 rounded-2xl overflow-hidden bg-white border border-gray-100 shadow-sm">
+                {/* header */}
+                <div className="px-5 py-4 flex items-center justify-between"
+                  style={{ background: "linear-gradient(135deg, #0F172A 0%, #1E1B4B 100%)" }}>
+                  <div>
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-white/40 mb-0.5">IDC — Índice de Desempenho de Custo</p>
+                    {budget > 0 && <p className="text-sm font-black text-white">Budget: {fmtBRL(budget)}</p>}
+                  </div>
+                  {idc !== null ? (
+                    <div className="flex flex-col items-center px-4 py-2 rounded-xl" style={{ background: idcBg }}>
+                      <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: idcColor }}>IDC</span>
+                      <span className="text-2xl font-black" style={{ color: idcColor }}>{idc.toFixed(2)}</span>
+                      <span className="text-[9px] font-semibold mt-0.5" style={{ color: idcColor }}>
+                        {idc >= 1.0 ? "✓ Dentro do orçamento" : idc >= 0.85 ? "⚠ Atenção" : "✕ Em risco"}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="px-4 py-2 rounded-xl bg-white/10">
+                      <span className="text-xs font-semibold text-white/40">Sem dados de custo</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* metrics */}
+                <div className="grid grid-cols-3 divide-x divide-gray-100">
+                  {[
+                    { label: "Orçado (atividades)", value: totalOrc > 0 ? fmtBRL(totalOrc) : "—", sub: budget > 0 && totalOrc > 0 ? `${Math.round((totalOrc/budget)*100)}% do budget` : "—", color: "#059669", bg: "#F0FDF4" },
+                    { label: "Valor Agregado (VE)", value: ve > 0 ? fmtBRL(ve) : "—", sub: totalOrc > 0 && ve > 0 ? `${Math.round((ve/totalOrc)*100)}% do orçado` : "—", color: "#2463FF", bg: "#EFF6FF" },
+                    { label: "Gasto Real (CR)", value: totalReal > 0 ? fmtBRL(totalReal) : "—", sub: totalOrc > 0 && totalReal > 0 ? `${Math.round((totalReal/totalOrc)*100)}% do orçado` : "—", color: totalReal > totalOrc && totalOrc > 0 ? "#DC2626" : "#D97706", bg: totalReal > totalOrc && totalOrc > 0 ? "#FEF2F2" : "#FFFBEB" },
+                  ].map(({ label, value, sub, color, bg }) => (
+                    <div key={label} className="px-4 py-4 text-center" style={{ background: bg }}>
+                      <p className="text-[9px] font-bold uppercase tracking-widest mb-1.5" style={{ color }}>{label}</p>
+                      <p className="text-lg font-black" style={{ color }}>{value}</p>
+                      <p className="text-[10px] mt-0.5" style={{ color: color + "90" }}>{sub}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* consumption bar */}
+                {budget > 0 && totalReal > 0 && (
+                  <div className="px-5 py-3 bg-gray-50" style={{ borderTop: "1px solid #F1F5F9" }}>
+                    <div className="flex justify-between text-[9px] font-semibold mb-1.5 text-gray-400">
+                      <span>Consumo do Budget</span>
+                      <span style={{ color: totalReal > budget ? "#DC2626" : "#64748B" }}>
+                        {Math.round((totalReal / budget) * 100)}% utilizado
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full bg-gray-200 overflow-hidden">
+                      <div className="h-full rounded-full transition-all duration-700" style={{
+                        width: `${Math.min(100, Math.round((totalReal / budget) * 100))}%`,
+                        background: totalReal > budget ? "linear-gradient(90deg,#EF4444,#DC2626)"
+                          : totalReal > budget * 0.85 ? "linear-gradient(90deg,#D97706,#F59E0B)"
+                          : "linear-gradient(90deg,#059669,#10B981)",
+                      }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+          )
+        })()}
+
+        {/* 7. Documentos */}
         <section>
           <SectionTitle icon={FileText} title="Documentos e Relatórios" />
           <div className="mt-4 flex flex-wrap gap-3">

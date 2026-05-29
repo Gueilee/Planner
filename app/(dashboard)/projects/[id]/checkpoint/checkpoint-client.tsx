@@ -20,17 +20,19 @@ import { MeetingAtaModal } from "@/components/meeting-ata-modal"
 type Area   = { id: string; name: string; color: string | null }
 type Member = { id: string; name: string; department: string | null }
 type Task   = {
-  id:          string
-  title:       string
-  status:      string
-  progress:    number
-  startDate:   string | null
-  endDate:     string | null
-  wbsAreaId:   string | null
-  wbsArea:     { id: string; name: string; color: string | null } | null
-  responsible: { id: string; name: string } | null
-  parentId:    string | null
-  parentTitle: string | null
+  id:           string
+  title:        string
+  status:       string
+  progress:     number
+  startDate:    string | null
+  endDate:      string | null
+  wbsAreaId:    string | null
+  wbsArea:      { id: string; name: string; color: string | null } | null
+  responsible:  { id: string; name: string } | null
+  parentId:     string | null
+  parentTitle:  string | null
+  budgetedCost: number | null
+  actualCost:   number | null
 }
 type HistoryItem = {
   id:       string
@@ -57,6 +59,8 @@ type TaskState = {
   uploading:    boolean
   startDate:    string
   endDate:      string
+  budgetedCost: number | null
+  actualCost:   number | null
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -368,14 +372,16 @@ function TaskDetailPanel({
   onClose:   () => void
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [saving,         setSaving]        = useState(false)
-  const [localStatus,    setLocalStatus]   = useState(state.status)
-  const [localProgress,  setLocalProgress] = useState(state.progress)
-  const [localComment,   setLocalComment]  = useState(state.comment)
-  const [localAtts,      setLocalAtts]     = useState<TaskAttachmentInput[]>(state.attachments)
-  const [uploading,      setUploading]     = useState(false)
-  const [localStartDate, setLocalStartDate]= useState(task.startDate ?? "")
-  const [localEndDate,   setLocalEndDate]  = useState(task.endDate   ?? "")
+  const [saving,           setSaving]          = useState(false)
+  const [localStatus,      setLocalStatus]     = useState(state.status)
+  const [localProgress,    setLocalProgress]   = useState(state.progress)
+  const [localComment,     setLocalComment]    = useState(state.comment)
+  const [localAtts,        setLocalAtts]       = useState<TaskAttachmentInput[]>(state.attachments)
+  const [uploading,        setUploading]       = useState(false)
+  const [localStartDate,   setLocalStartDate]  = useState(task.startDate ?? "")
+  const [localEndDate,     setLocalEndDate]    = useState(task.endDate   ?? "")
+  const [localBudgetedCost,setLocalBudgetedCost] = useState<string>(state.budgetedCost?.toString() ?? "")
+  const [localActualCost,  setLocalActualCost]   = useState<string>(state.actualCost?.toString() ?? "")
 
   const cfg = STATUS_CFG.find((s) => s.value === localStatus)
 
@@ -413,13 +419,17 @@ function TaskDetailPanel({
   async function handleSave() {
     setSaving(true)
     try {
-      if (localStartDate !== (task.startDate ?? "") || localEndDate !== (task.endDate ?? "")) {
+      const bc = localBudgetedCost === "" ? null : Number(localBudgetedCost)
+      const ac = localActualCost   === "" ? null : Number(localActualCost)
+      const dateChanged = localStartDate !== (task.startDate ?? "") || localEndDate !== (task.endDate ?? "")
+      const costChanged = bc !== (task.budgetedCost ?? null) || ac !== (task.actualCost ?? null)
+      if (dateChanged || costChanged) {
         await updateScheduleTask(task.id, projectId, {
-          startDate: localStartDate || null,
-          endDate:   localEndDate   || null,
+          ...(dateChanged && { startDate: localStartDate || null, endDate: localEndDate || null }),
+          ...(costChanged && { budgetedCost: bc, actualCost: ac }),
         })
       }
-      onSave({ status: localStatus, progress: localProgress, comment: localComment, attachments: localAtts })
+      onSave({ status: localStatus, progress: localProgress, comment: localComment, attachments: localAtts, budgetedCost: bc, actualCost: ac })
       onClose()
     } catch { /* ignore */ }
     setSaving(false)
@@ -529,6 +539,35 @@ function TaskDetailPanel({
             </div>
           </div>
 
+          {/* Financeiro */}
+          <div>
+            <label className={lbl}>Financeiro</label>
+            <div className="rounded-xl overflow-hidden" style={{ border: "1px solid #E2E8F0" }}>
+              <div className="flex items-center gap-3 px-4 py-2.5" style={{ background: "#F0FDF4", borderBottom: "1px solid #E2E8F0" }}>
+                <span className="text-[10px] font-bold text-emerald-700 w-28 shrink-0">R$ Orçado</span>
+                <input
+                  type="number" min={0} step={100}
+                  value={localBudgetedCost}
+                  onChange={(e) => setLocalBudgetedCost(e.target.value)}
+                  placeholder="0,00"
+                  className="flex-1 text-sm font-bold text-emerald-700 bg-transparent outline-none"
+                />
+                <span className="text-[10px] text-emerald-400 font-semibold">BRL</span>
+              </div>
+              <div className="flex items-center gap-3 px-4 py-2.5" style={{ background: "#FFFBEB" }}>
+                <span className="text-[10px] font-bold text-amber-700 w-28 shrink-0">R$ Gasto Real</span>
+                <input
+                  type="number" min={0} step={100}
+                  value={localActualCost}
+                  onChange={(e) => setLocalActualCost(e.target.value)}
+                  placeholder="0,00"
+                  className="flex-1 text-sm font-bold text-amber-700 bg-transparent outline-none"
+                />
+                <span className="text-[10px] text-amber-400 font-semibold">BRL</span>
+              </div>
+            </div>
+          </div>
+
           {/* Comment */}
           <div>
             <label className={lbl}>Observação desta Reunião</label>
@@ -616,6 +655,7 @@ export function CheckpointClient({ project, areas, tasks, members, history }: Ch
         status: t.status, progress: t.progress,
         comment: "", commentOpen: false, attachments: [], uploading: false,
         startDate: t.startDate ?? "", endDate: t.endDate ?? "",
+        budgetedCost: t.budgetedCost ?? null, actualCost: t.actualCost ?? null,
       }
     }
     return init

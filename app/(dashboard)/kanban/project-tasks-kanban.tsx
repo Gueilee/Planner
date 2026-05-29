@@ -683,6 +683,65 @@ function TaskDetailPanel({
             </div>
           </div>
 
+          {/* Financeiro */}
+          <div>
+            <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-2">Financeiro</p>
+            {loadingDetail ? (
+              <div className="h-8 flex items-center justify-center"><Loader2 className="w-4 h-4 animate-spin text-slate-300" /></div>
+            ) : (
+              <div className="rounded-xl overflow-hidden" style={{ border: "1px solid rgba(15,23,42,0.07)" }}>
+                {/* R$ Orçado */}
+                <div className="flex items-center px-4 py-2.5" style={{ borderBottom: "1px solid rgba(15,23,42,0.05)", background: "#F0FDF4" }}>
+                  <span className="text-[10px] font-bold text-emerald-700 w-28 shrink-0">R$ Orçado</span>
+                  <input
+                    type="number" min={0} step={100}
+                    defaultValue={detail?.budgetedCost ?? ""}
+                    placeholder="0,00"
+                    className="flex-1 text-sm font-bold text-emerald-700 bg-transparent outline-none"
+                    onBlur={(e) => {
+                      const v = e.target.value === "" ? null : Number(e.target.value)
+                      start(async () => { await updateTaskKanban(initTask.id, projectId, { budgetedCost: v }) })
+                    }}
+                  />
+                  <span className="text-[10px] text-emerald-400 font-semibold shrink-0">BRL</span>
+                </div>
+                {/* R$ Gasto Real */}
+                <div className="flex items-center px-4 py-2.5" style={{ background: "#FFFBEB" }}>
+                  <span className="text-[10px] font-bold text-amber-700 w-28 shrink-0">R$ Gasto Real</span>
+                  <input
+                    type="number" min={0} step={100}
+                    defaultValue={detail?.actualCost ?? ""}
+                    placeholder="0,00"
+                    className="flex-1 text-sm font-bold text-amber-700 bg-transparent outline-none"
+                    onBlur={(e) => {
+                      const v = e.target.value === "" ? null : Number(e.target.value)
+                      start(async () => { await updateTaskKanban(initTask.id, projectId, { actualCost: v }) })
+                    }}
+                  />
+                  <span className="text-[10px] text-amber-400 font-semibold shrink-0">BRL</span>
+                </div>
+                {/* IDC mini */}
+                {(() => {
+                  const orc  = detail?.budgetedCost ?? 0
+                  const real = detail?.actualCost   ?? 0
+                  const prog = detail?.progress     ?? 0
+                  if (orc <= 0 || real <= 0) return null
+                  const ve  = orc * (prog / 100)
+                  const idc = ve / real
+                  const idcColor = idc >= 1.0 ? "#059669" : idc >= 0.85 ? "#D97706" : "#DC2626"
+                  const idcLabel = idc >= 1.0 ? "Dentro do orçamento" : idc >= 0.85 ? "Atenção ao orçamento" : "Orçamento em risco"
+                  return (
+                    <div className="flex items-center justify-between px-4 py-2" style={{ borderTop: "1px solid rgba(15,23,42,0.05)", background: "#F8FAFC" }}>
+                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">IDC</span>
+                      <span className="text-sm font-black" style={{ color: idcColor }}>{idc.toFixed(2)}</span>
+                      <span className="text-[9px] font-semibold" style={{ color: idcColor }}>{idcLabel}</span>
+                    </div>
+                  )
+                })()}
+              </div>
+            )}
+          </div>
+
           {/* Attachments */}
           <div>
             <div className="flex items-center justify-between mb-2">

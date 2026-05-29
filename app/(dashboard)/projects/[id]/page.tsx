@@ -100,9 +100,11 @@ export default async function ProjectDetailPage({
     expectedStart:  project.expectedStart,
     expectedEnd:    project.expectedEnd,
     tasks:          project.tasks.map(t => ({
-      status:   t.status,
-      progress: t.progress,
-      endDate:  t.endDate,
+      status:       t.status,
+      progress:     t.progress,
+      endDate:      t.endDate,
+      budgetedCost: t.budgetedCost,
+      actualCost:   t.actualCost,
     })),
     risks: project.risks.map(r => ({ status: r.status })),
   })
@@ -133,6 +135,17 @@ export default async function ProjectDetailPage({
   const daysLeft   = project.expectedEnd
     ? differenceInDays(project.expectedEnd, new Date())
     : null
+
+  // Financial aggregates
+  const totalBudgetedCost = project.tasks.reduce((s, t) => s + (t.budgetedCost ?? 0), 0)
+  const totalActualCost   = project.tasks.reduce((s, t) => s + (t.actualCost   ?? 0), 0)
+  const earnedValue       = project.tasks.reduce((s, t) => s + ((t.budgetedCost ?? 0) * (t.progress / 100)), 0)
+  const idc               = totalActualCost > 0 ? earnedValue / totalActualCost : null
+  const budgetUsedPct     = project.budget && project.budget > 0 ? Math.round((totalActualCost / project.budget) * 100) : null
+
+  function fmtBRL(v: number) {
+    return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })
+  }
 
   const STATUS_FLOW = [
     { key: "PENDING_GO_NO_GO", label: "Go/No-Go"    },
@@ -715,6 +728,91 @@ export default async function ProjectDetailPage({
                       )
                     })}
                   </div>
+                </div>
+              )}
+
+              {/* ── Controle Orçamentário ── */}
+              {(project.budget || totalBudgetedCost > 0 || totalActualCost > 0) && (
+                <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid #E2E8F0", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+                  {/* Header gradient */}
+                  <div className="px-5 py-4 flex items-center justify-between"
+                    style={{ background: "linear-gradient(135deg, #0F172A 0%, #1E1B4B 100%)" }}>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Controle Orçamentário</p>
+                      <p className="text-sm font-black text-white mt-0.5">
+                        {project.budget ? `Budget: ${fmtBRL(project.budget)}` : "Orçamento por atividades"}
+                      </p>
+                    </div>
+                    {idc !== null && (
+                      <div className="flex flex-col items-center">
+                        <span className="text-[9px] font-black uppercase tracking-widest mb-0.5" style={{ color: idc >= 1.0 ? "#34D399" : idc >= 0.85 ? "#FCD34D" : "#FCA5A5" }}>IDC</span>
+                        <span className="text-2xl font-black" style={{ color: idc >= 1.0 ? "#34D399" : idc >= 0.85 ? "#FCD34D" : "#FCA5A5" }}>
+                          {idc.toFixed(2)}
+                        </span>
+                        <span className="text-[9px] font-semibold mt-0.5" style={{ color: idc >= 1.0 ? "#34D399" : idc >= 0.85 ? "#FCD34D" : "#FCA5A5" }}>
+                          {idc >= 1.0 ? "✓ No orçamento" : idc >= 0.85 ? "⚠ Atenção" : "✕ Risco"}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Metrics grid */}
+                  <div className="grid grid-cols-3 divide-x divide-slate-100">
+                    {[
+                      {
+                        label: "Orçado (Atividades)",
+                        value: totalBudgetedCost > 0 ? fmtBRL(totalBudgetedCost) : "—",
+                        sub: project.budget && totalBudgetedCost > 0
+                          ? `${Math.round((totalBudgetedCost / project.budget) * 100)}% do budget`
+                          : "Sem dados",
+                        color: "#059669", bg: "#F0FDF4",
+                      },
+                      {
+                        label: "Valor Agregado (VE)",
+                        value: earnedValue > 0 ? fmtBRL(earnedValue) : "—",
+                        sub: totalBudgetedCost > 0 ? `${Math.round((earnedValue / totalBudgetedCost) * 100)}% do orçado` : "—",
+                        color: "#2463FF", bg: "#EFF6FF",
+                      },
+                      {
+                        label: "Gasto Real (CR)",
+                        value: totalActualCost > 0 ? fmtBRL(totalActualCost) : "—",
+                        sub: totalBudgetedCost > 0 && totalActualCost > 0
+                          ? `${Math.round((totalActualCost / totalBudgetedCost) * 100)}% do orçado`
+                          : "Sem dados",
+                        color: totalActualCost > totalBudgetedCost && totalBudgetedCost > 0 ? "#DC2626" : "#D97706",
+                        bg: totalActualCost > totalBudgetedCost && totalBudgetedCost > 0 ? "#FEF2F2" : "#FFFBEB",
+                      },
+                    ].map(({ label, value, sub, color, bg }) => (
+                      <div key={label} className="px-4 py-3 text-center" style={{ background: bg }}>
+                        <p className="text-[9px] font-bold uppercase tracking-widest mb-1" style={{ color }}>{label}</p>
+                        <p className="text-base font-black" style={{ color }}>{value}</p>
+                        <p className="text-[10px] mt-0.5" style={{ color: color + "99" }}>{sub}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Budget consumption bar */}
+                  {project.budget && project.budget > 0 && totalActualCost > 0 && (
+                    <div className="px-5 py-3 bg-slate-50" style={{ borderTop: "1px solid #F1F5F9" }}>
+                      <div className="flex justify-between text-[9px] font-semibold mb-1.5">
+                        <span className="text-slate-400">Consumo do Budget</span>
+                        <span style={{ color: (budgetUsedPct ?? 0) > 100 ? "#DC2626" : "#64748B" }}>
+                          {budgetUsedPct}% utilizado
+                        </span>
+                      </div>
+                      <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-700"
+                          style={{
+                            width: `${Math.min(100, budgetUsedPct ?? 0)}%`,
+                            background: (budgetUsedPct ?? 0) > 100 ? "linear-gradient(90deg,#EF4444,#DC2626)"
+                              : (budgetUsedPct ?? 0) > 85 ? "linear-gradient(90deg,#D97706,#F59E0B)"
+                              : "linear-gradient(90deg,#059669,#10B981)",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

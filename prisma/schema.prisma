@@ -270,6 +270,8 @@ model ScheduleTask {
 
   estimatedEffort Float?   // horas estimadas pelo analista
   actualEffort    Float?   // horas realizadas pelo responsável
+  budgetedCost    Float?   // R$ orçado para esta atividade
+  actualCost      Float?   // R$ real gasto nesta atividade
 
   status     TaskStatus @default(PLANNING)
   riskStatus RiskLevel  @default(LOW)
