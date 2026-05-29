@@ -24,7 +24,12 @@ export default async function StatusReportPage() {
     orderBy: { createdAt: "asc" },
     include: {
       sponsor: { select: { name: true } },
-      members: { select: { id: true } },
+      members: {
+        select: {
+          role: true,
+          user: { select: { name: true } },
+        },
+      },
       tasks: {
         select: {
           title: true, status: true, progress: true,
@@ -69,12 +74,11 @@ export default async function StatusReportPage() {
       ? Math.round(tasks.reduce((s, t) => s + t.progress, 0) / total)
       : (p.status === "COMPLETED" ? 100 : 0)
 
-    // ── IDC (Índice de Desempenho de Custo) ──────────────────────────────
-    const earnedValue  = tasks.reduce((s, t) => s + (t.budgetedCost ?? 0) * (t.progress / 100), 0)
+    // EVM
+    const earnedValue   = tasks.reduce((s, t) => s + (t.budgetedCost ?? 0) * (t.progress / 100), 0)
     const actualCostSum = tasks.reduce((s, t) => s + (t.actualCost ?? 0), 0)
     const idc = actualCostSum > 0 ? Math.round((earnedValue / actualCostSum) * 100) / 100 : null
 
-    // ── IDP (Índice de Desempenho de Prazo) ──────────────────────────────
     let idp: number | null = null
     let timelineProgress: number | null = null
     if (p.expectedStart && p.expectedEnd) {
@@ -87,7 +91,7 @@ export default async function StatusReportPage() {
       }
     }
 
-    // ── At-risk tasks ────────────────────────────────────────────────────
+    // At-risk tasks
     const atRiskTasks: ProjectSlideData["atRiskTasks"] = []
     for (const t of tasks) {
       const responsible = t.responsible?.name ?? null
@@ -109,15 +113,11 @@ export default async function StatusReportPage() {
     }
     atRiskTasks.sort((a, b) => b.daysLate - a.daysLate)
 
-    const daysLeft = p.expectedEnd ? differenceInDays(p.expectedEnd, today) : null
-
-    const lastMtg   = p.meetings[0] ?? null
-    const rawSteps  = lastMtg?.nextActions || lastMtg?.decisions || null
-    const nextSteps = rawSteps
-      ?.split("\n")
-      .map((l) => l.replace(/^[-•*\d.]\s*/, "").trim())
-      .filter(Boolean)
-      .slice(0, 5) ?? []
+    const daysLeft   = p.expectedEnd ? differenceInDays(p.expectedEnd, today) : null
+    const lastMtg    = p.meetings[0] ?? null
+    const rawSteps   = lastMtg?.nextActions || lastMtg?.decisions || null
+    const nextSteps  = rawSteps
+      ?.split("\n").map((l) => l.replace(/^[-•*\d.]\s*/, "").trim()).filter(Boolean).slice(0, 5) ?? []
 
     const wbsSummary = p.wbsAreas
       .filter((a) => a.tasks.length > 0)
@@ -134,6 +134,8 @@ export default async function StatusReportPage() {
       progress: avgProgress,
       idc, idp, timelineProgress,
       meetingsCount: p._count.meetings,
+      team: p.members.length,
+      members: p.members.map((m) => ({ name: m.user.name, role: m.role })),
       tasks: {
         total, completed: completed.length, inProgress: inProgress.length,
         delayed: delayed.length, planning: planning.length,
@@ -146,7 +148,6 @@ export default async function StatusReportPage() {
         high:     p.risks.filter((r) => r.status === "HIGH").length,
         items:    p.risks.map((r) => ({ level: r.status, description: r.description, mitigation: r.mitigation ?? null, owner: r.owner ?? null })),
       },
-      team: p.members.length,
       daysLeft,
       economy: p.economy,
       budget:  p.budget,
@@ -161,9 +162,9 @@ export default async function StatusReportPage() {
       atRiskTasks: atRiskTasks.slice(0, 6),
       wbsAreas: wbsSummary,
       dates: {
-        start:  p.actualStart?.toISOString()    ?? p.expectedStart?.toISOString() ?? null,
-        end:    p.expectedEnd?.toISOString()    ?? null,
-        goLive: p.goLiveDate?.toISOString()     ?? null,
+        start:  p.actualStart?.toISOString()  ?? p.expectedStart?.toISOString() ?? null,
+        end:    p.expectedEnd?.toISOString()   ?? null,
+        goLive: p.goLiveDate?.toISOString()    ?? null,
       },
       reportStatus: {
         cost:      p.reportStatusCost      as "GREEN" | "YELLOW" | "RED",
