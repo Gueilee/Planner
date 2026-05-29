@@ -43,12 +43,27 @@ function initials(name: string) {
   return name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()
 }
 
-async function uploadAvatar(file: File): Promise<string> {
-  const fd = new FormData()
-  fd.append("files", file)
-  const res = await fetch("/api/upload", { method: "POST", body: fd })
-  const data = await res.json() as { files: { url: string }[] }
-  return data.files[0].url
+// Converte avatar via canvas (80×80 JPEG) para caber no JWT sem estourar o cookie
+function avatarToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      const MAX = 80
+      const ratio = Math.min(MAX / img.width, MAX / img.height, 1)
+      const w = Math.max(1, Math.round(img.width  * ratio))
+      const h = Math.max(1, Math.round(img.height * ratio))
+      const canvas = document.createElement("canvas")
+      canvas.width = w; canvas.height = h
+      const ctx = canvas.getContext("2d")
+      if (!ctx) { reject(new Error("Canvas não suportado")); return }
+      ctx.drawImage(img, 0, 0, w, h)
+      URL.revokeObjectURL(url)
+      resolve(canvas.toDataURL("image/jpeg", 0.78))
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Falha ao ler imagem")) }
+    img.src = url
+  })
 }
 
 // ─── Avatar component ─────────────────────────────────────────────────────────
@@ -66,7 +81,7 @@ function UserAvatar({
   async function handleFile(f: File) {
     if (!f.type.startsWith("image/") || !onUpload) return
     setUploading(true)
-    try { onUpload(await uploadAvatar(f)) } finally { setUploading(false) }
+    try { onUpload(await avatarToBase64(f)) } finally { setUploading(false) }
   }
 
   const s = size + "px"

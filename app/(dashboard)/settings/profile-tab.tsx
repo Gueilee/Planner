@@ -18,10 +18,11 @@ function imageToBase64(file: File): Promise<string> {
     const img = new Image()
     const objectUrl = URL.createObjectURL(file)
     img.onload = () => {
-      const MAX = 300
+      // Máx 80×80 px para o base64 caber no JWT sem estourar o cookie de sessão
+      const MAX = 80
       const ratio = Math.min(MAX / img.width, MAX / img.height, 1)
-      const w = Math.round(img.width  * ratio)
-      const h = Math.round(img.height * ratio)
+      const w = Math.max(1, Math.round(img.width  * ratio))
+      const h = Math.max(1, Math.round(img.height * ratio))
       const canvas = document.createElement("canvas")
       canvas.width  = w
       canvas.height = h
@@ -29,7 +30,7 @@ function imageToBase64(file: File): Promise<string> {
       if (!ctx) { reject(new Error("Canvas não suportado")); return }
       ctx.drawImage(img, 0, 0, w, h)
       URL.revokeObjectURL(objectUrl)
-      resolve(canvas.toDataURL("image/jpeg", 0.82))
+      resolve(canvas.toDataURL("image/jpeg", 0.78))
     }
     img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error("Falha ao ler imagem")) }
     img.src = objectUrl

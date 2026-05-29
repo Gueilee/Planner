@@ -795,8 +795,8 @@ function TaskDetailPanel({
                   <a
                     key={a.id}
                     href={a.fileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    download={a.fileName}
+                    {...(!a.fileUrl.startsWith("data:") ? { target: "_blank", rel: "noopener noreferrer" } : {})}
                     className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors"
                     style={{ border: "1px solid rgba(15,23,42,0.07)" }}
                   >

@@ -511,8 +511,8 @@ function TaskForm({ mode, initial, areas, members, allTasks, onSave, onDelete, o
                 <a
                   key={att.id}
                   href={att.fileUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  download={att.fileName}
+                  {...(!att.fileUrl.startsWith("data:") ? { target: "_blank", rel: "noopener noreferrer" } : {})}
                   className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:border-[#7B2FBE] hover:bg-violet-50 transition-all group"
                 >
                   <Paperclip className="w-3.5 h-3.5 text-slate-400 group-hover:text-[#7B2FBE] shrink-0 transition-colors" />
