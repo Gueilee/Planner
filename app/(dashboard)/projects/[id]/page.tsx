@@ -18,6 +18,7 @@ import { ReopenProjectButton } from "./reopen-project-button"
 import Link from "next/link"
 import { format, differenceInDays } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { computeReportStatus } from "@/lib/utils/report-status"
 
 const RISK_COLORS: Record<string, string> = {
   LOW:      "text-green-600 bg-green-50 border-green-200",
@@ -90,6 +91,39 @@ export default async function ProjectDetailPage({
   ])
 
   if (!project) notFound()
+
+  // Auto-compute report status from project data and persist to DB
+  const autoStatus = computeReportStatus({
+    budget:         project.budget,
+    estimatedCosts: project.estimatedCosts,
+    status:         project.status,
+    expectedStart:  project.expectedStart,
+    expectedEnd:    project.expectedEnd,
+    tasks:          project.tasks.map(t => ({
+      status:   t.status,
+      progress: t.progress,
+      endDate:  t.endDate,
+    })),
+    risks: project.risks.map(r => ({ status: r.status })),
+  })
+
+  const statusChanged =
+    autoStatus.cost      !== project.reportStatusCost      ||
+    autoStatus.schedule  !== project.reportStatusSchedule  ||
+    autoStatus.resources !== project.reportStatusResources ||
+    autoStatus.overall   !== project.reportStatusOverall
+
+  if (statusChanged) {
+    await db.project.update({
+      where: { id },
+      data: {
+        reportStatusCost:      autoStatus.cost,
+        reportStatusSchedule:  autoStatus.schedule,
+        reportStatusResources: autoStatus.resources,
+        reportStatusOverall:   autoStatus.overall,
+      },
+    })
+  }
 
   const userRole   = session?.user?.role ?? ""
   const tasksDone  = project.tasks.filter((t) => t.status === "COMPLETED").length
@@ -688,10 +722,10 @@ export default async function ProjectDetailPage({
               <ReportStatusWidget
                 projectId={id}
                 initial={{
-                  cost:      (project.reportStatusCost      ?? "GREEN") as "GREEN" | "YELLOW" | "RED",
-                  schedule:  (project.reportStatusSchedule  ?? "GREEN") as "GREEN" | "YELLOW" | "RED",
-                  resources: (project.reportStatusResources ?? "GREEN") as "GREEN" | "YELLOW" | "RED",
-                  overall:   (project.reportStatusOverall   ?? "GREEN") as "GREEN" | "YELLOW" | "RED",
+                  cost:      autoStatus.cost,
+                  schedule:  autoStatus.schedule,
+                  resources: autoStatus.resources,
+                  overall:   autoStatus.overall,
                   notes:     project.reportStatusNotes ?? null,
                 }}
               />

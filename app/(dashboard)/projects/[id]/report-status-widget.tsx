@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { updateReportStatus } from "@/lib/actions/report-status"
+import { Zap } from "lucide-react"
 
 type TrafficLight = "GREEN" | "YELLOW" | "RED"
 
@@ -12,6 +13,13 @@ const LIGHT_CFG: Record<TrafficLight, { label: string; color: string; bg: string
 }
 
 const ORDER: TrafficLight[] = ["GREEN", "YELLOW", "RED"]
+
+const INDICATOR_HINTS: Record<string, string> = {
+  cost:      "Budget vs custo estimado + risco de custos",
+  schedule:  "Progresso real vs progresso esperado pela timeline + tarefas vencidas",
+  resources: "Taxa de entrega das tarefas dentro do prazo previsto",
+  overall:   "Pior status entre Custos, Cronograma e Recursos",
+}
 
 interface Props {
   projectId: string
@@ -57,8 +65,14 @@ export function ReportStatusWidget({ projectId, initial }: Props) {
     <div className="bg-white rounded-2xl p-5 space-y-4" style={{ border: "1px solid #E2E8F0", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Status para o Report</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">Clique nos indicadores para alternar o semáforo</p>
+          <div className="flex items-center gap-2">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Status para o Report</p>
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold"
+              style={{ background: "rgba(123,47,190,0.08)", color: "#7B2FBE" }}>
+              <Zap className="w-2.5 h-2.5" /> Auto
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-400 mt-0.5">Calculado automaticamente — clique para ajustar manualmente</p>
         </div>
         <button
           onClick={save}
@@ -77,6 +91,7 @@ export function ReportStatusWidget({ projectId, initial }: Props) {
             <button
               key={key}
               onClick={() => cycle(val, set)}
+              title={INDICATOR_HINTS[key]}
               className="flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all hover:scale-[1.03] active:scale-[0.98] cursor-pointer"
               style={{
                 background: cfg.bg,
