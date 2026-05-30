@@ -46,5 +46,5 @@ export default async function HistoryPage() {
     }
   })
 
-  return <HistoryClient projects={projects} />
+  return <HistoryClient projects={projects} userRole={session.user.role} />
 }

@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
+import { revalidatePath } from "next/cache"
 
 export async function getAllProjectsSummary() {
   const session = await auth()
@@ -70,4 +71,38 @@ export async function getProjectFullHistory(projectId: string) {
       },
     },
   })
+}
+
+// ─── Exclusão de Reunião ──────────────────────────────────────────────────────
+
+export async function deleteMeeting(meetingId: string) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+
+  await db.meeting.delete({ where: { id: meetingId } })
+  revalidatePath("/history")
+  return { success: true }
+}
+
+// ─── Exclusão de Anexo ────────────────────────────────────────────────────────
+
+export async function deleteAttachment(attachmentId: string) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+
+  const att = await db.attachment.findUnique({ where: { id: attachmentId }, select: { fileUrl: true } })
+  if (!att) throw new Error("Anexo não encontrado")
+
+  await db.attachment.delete({ where: { id: attachmentId } })
+
+  // Remove do Vercel Blob se disponível
+  if (att.fileUrl.startsWith("https://") && process.env.BLOB_READ_WRITE_TOKEN) {
+    try {
+      const { del } = await import("@vercel/blob")
+      await del(att.fileUrl)
+    } catch { /* silently ignore blob deletion errors */ }
+  }
+
+  revalidatePath("/history")
+  return { success: true }
 }

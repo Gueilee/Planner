@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition, useCallback } from "react"
-import { getProjectFullHistory } from "@/lib/actions/history"
+import { getProjectFullHistory, deleteMeeting, deleteAttachment } from "@/lib/actions/history"
 import { format, differenceInDays, formatDistanceToNow } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import Link from "next/link"
@@ -11,7 +11,7 @@ import {
   Play, RefreshCw, Flag, Loader2, ChevronRight, ExternalLink,
   ThumbsUp, ThumbsDown, BarChart3, Layers, Info, ArrowUpRight,
   CircleDot, GitBranch, CheckCircle2, Paperclip, Download,
-  FileImage, FileArchive, File,
+  FileImage, FileArchive, File, Trash2,
 } from "lucide-react"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -373,7 +373,26 @@ ${parts.join("\n")}
   setTimeout(() => { win.print() }, 400)
 }
 
-function ProjectHistoryView({ data }: { data: NonNullable<FullHistory> }) {
+type DeleteProps = {
+  canDelete: boolean
+  deletingId: string | null
+  confirmingMtg: string | null
+  confirmingAtt: string | null
+  deletedMtgIds: Set<string>
+  deletedAttIds: Set<string>
+  setConfirmingMtg: (id: string | null) => void
+  setConfirmingAtt: (id: string | null) => void
+  handleDeleteMeeting: (id: string) => Promise<void>
+  handleDeleteAttachment: (id: string) => Promise<void>
+}
+
+function ProjectHistoryView({ data, del }: { data: NonNullable<FullHistory>; del: DeleteProps }) {
+  const {
+    canDelete, deletingId, confirmingMtg, confirmingAtt,
+    deletedMtgIds, deletedAttIds,
+    setConfirmingMtg, setConfirmingAtt,
+    handleDeleteMeeting, handleDeleteAttachment,
+  } = del
   const p   = data
   const cfg = STATUS_CFG[p.status] ?? STATUS_CFG.PLANNING
 
@@ -554,6 +573,7 @@ function ProjectHistoryView({ data }: { data: NonNullable<FullHistory> }) {
             {meetings.map((mtg, idx) => {
               const mcfg  = MEETING_CFG[mtg.type] ?? MEETING_CFG.OTHER
               const isLast = idx === meetings.length - 1 && p.lessonsLearned.length === 0 && p.documents.length === 0
+              if (deletedMtgIds.has(mtg.id)) return null
               return (
                 <TimelineEvent key={mtg.id} date={mtg.date}
                   title={mtg.title}
@@ -568,6 +588,33 @@ function ProjectHistoryView({ data }: { data: NonNullable<FullHistory> }) {
                         {mtg.nextActions && <p><span className="font-bold text-gray-700">Próximas ações:</span> {mtg.nextActions}</p>}
                       </div>
                     </TCard>
+                  )}
+                  {/* Botão de excluir reunião */}
+                  {canDelete && (
+                    <div className="mt-2">
+                      {confirmingMtg === mtg.id ? (
+                        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-50 border border-red-100 w-fit">
+                          <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                          <span className="text-[11px] text-red-600 font-semibold">Excluir esta reunião permanentemente?</span>
+                          <button onClick={() => setConfirmingMtg(null)}
+                            className="text-[11px] text-slate-500 hover:text-slate-700 font-medium px-2 py-0.5 rounded-lg hover:bg-slate-100 transition-colors">
+                            Cancelar
+                          </button>
+                          <button onClick={() => handleDeleteMeeting(mtg.id)}
+                            disabled={deletingId === mtg.id}
+                            className="flex items-center gap-1 text-[11px] text-white font-bold px-2.5 py-1 rounded-lg bg-red-500 hover:bg-red-600 disabled:opacity-60 transition-colors">
+                            {deletingId === mtg.id ? <Loader2 className="w-3 h-3 animate-spin"/> : <Trash2 className="w-3 h-3"/>}
+                            {deletingId === mtg.id ? "Excluindo…" : "Excluir"}
+                          </button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setConfirmingMtg(mtg.id)}
+                          className="flex items-center gap-1.5 text-[11px] text-slate-400 hover:text-red-500 px-2.5 py-1 rounded-lg hover:bg-red-50 transition-all border border-transparent hover:border-red-100">
+                          <Trash2 className="w-3 h-3"/>
+                          Excluir reunião
+                        </button>
+                      )}
+                    </div>
                   )}
                 </TimelineEvent>
               )
@@ -896,7 +943,7 @@ function ProjectHistoryView({ data }: { data: NonNullable<FullHistory> }) {
           <section>
             <SectionTitle icon={Paperclip} title={`Anexos do Projeto (${p.attachments.length})`} />
             <div className="mt-4 grid grid-cols-1 gap-2">
-              {p.attachments.map((att) => {
+              {p.attachments.filter((att) => !deletedAttIds.has(att.id)).map((att) => {
                 const ext  = att.fileName.split(".").pop()?.toLowerCase() ?? ""
                 const isImg = ["jpg","jpeg","png","gif","webp","svg"].includes(ext)
                 const isZip = ["zip","rar","7z","tar"].includes(ext)
@@ -907,35 +954,73 @@ function ProjectHistoryView({ data }: { data: NonNullable<FullHistory> }) {
                     : `${(att.fileSize / (1024 * 1024)).toFixed(1)} MB`
                   : ""
                 const taskTitle = "task" in att && att.task ? (att.task as { title: string }).title : null
+                const isConfirming = confirmingAtt === att.id
                 return (
-                  <a
-                    key={att.id}
-                    href={att.fileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    download={att.fileName}
-                    className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white border border-gray-100 shadow-sm hover:border-violet-200 hover:shadow-md transition-all group"
-                  >
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                      style={{ background: "linear-gradient(135deg, rgba(123,47,190,0.08), rgba(147,51,234,0.12))" }}>
-                      <Icon className="w-4 h-4 text-violet-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-800 truncate group-hover:text-violet-700 transition-colors">
-                        {att.fileName}
-                      </p>
-                      <p className="text-[10px] text-gray-400 mt-0.5">
-                        {taskTitle && (
-                          <span className="inline-flex items-center gap-0.5 mr-1.5 px-1.5 py-0.5 rounded-md font-bold text-violet-500 bg-violet-50">
-                            Evidência · {taskTitle}
-                          </span>
+                  <div key={att.id} className="group rounded-xl border bg-white shadow-sm transition-all hover:shadow-md"
+                    style={{ borderColor: isConfirming ? "#FECACA" : "#F3F4F6" }}>
+                    <div className="flex items-center gap-3 px-4 py-3">
+                      <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                        style={{ background: "linear-gradient(135deg, rgba(123,47,190,0.08), rgba(147,51,234,0.12))" }}>
+                        <Icon className="w-4 h-4 text-violet-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-800 truncate">
+                          {att.fileName}
+                        </p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">
+                          {taskTitle && (
+                            <span className="inline-flex items-center gap-0.5 mr-1.5 px-1.5 py-0.5 rounded-md font-bold text-violet-500 bg-violet-50">
+                              Evidência · {taskTitle}
+                            </span>
+                          )}
+                          {att.fileType.toUpperCase()}{sizeFmt ? ` · ${sizeFmt}` : ""}
+                          {" · "}{new Date(att.uploadedAt).toLocaleDateString("pt-BR")}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {/* Download */}
+                        <a href={att.fileUrl} download={att.fileName}
+                          {...(!att.fileUrl.startsWith("data:") ? { target:"_blank", rel:"noopener noreferrer" } : {})}
+                          className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-violet-500 hover:bg-violet-50 transition-all"
+                          onClick={(e) => e.stopPropagation()}>
+                          <Download className="w-4 h-4"/>
+                        </a>
+                        {/* Delete */}
+                        {canDelete && (
+                          <button
+                            onClick={() => setConfirmingAtt(isConfirming ? null : att.id)}
+                            className="w-8 h-8 flex items-center justify-center rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                            style={{ color: isConfirming ? "#EF4444" : "#CBD5E1" }}
+                            onMouseEnter={(e)=>(e.currentTarget as HTMLElement).style.color="#EF4444"}
+                            onMouseLeave={(e)=>(e.currentTarget as HTMLElement).style.color=isConfirming?"#EF4444":"#CBD5E1"}
+                          >
+                            <Trash2 className="w-4 h-4"/>
+                          </button>
                         )}
-                        {att.fileType.toUpperCase()}{sizeFmt ? ` · ${sizeFmt}` : ""}
-                        {" · "}{new Date(att.uploadedAt).toLocaleDateString("pt-BR")}
-                      </p>
+                      </div>
                     </div>
-                    <Download className="w-4 h-4 text-gray-300 group-hover:text-violet-500 transition-colors shrink-0" />
-                  </a>
+
+                    {/* Confirmação inline de exclusão */}
+                    {isConfirming && (
+                      <div className="px-4 pb-3 flex items-center gap-3 border-t border-red-50">
+                        <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                        <span className="text-[11px] text-red-500 font-semibold flex-1">
+                          Excluir &quot;{att.fileName}&quot; permanentemente?
+                        </span>
+                        <button onClick={() => setConfirmingAtt(null)}
+                          className="text-[11px] text-slate-500 hover:text-slate-700 px-2.5 py-1 rounded-lg hover:bg-slate-100 font-medium transition-colors">
+                          Cancelar
+                        </button>
+                        <button onClick={() => handleDeleteAttachment(att.id)}
+                          disabled={deletingId === att.id}
+                          className="flex items-center gap-1.5 text-[11px] text-white font-bold px-3 py-1 rounded-lg bg-red-500 hover:bg-red-600 disabled:opacity-60 transition-colors">
+                          {deletingId === att.id
+                            ? <><Loader2 className="w-3 h-3 animate-spin"/> Excluindo…</>
+                            : <><Trash2 className="w-3 h-3"/> Excluir definitivamente</>}
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 )
               })}
             </div>
@@ -962,7 +1047,7 @@ const ORIGIN_CFG: Record<string, { label: string; icon: string; color: string }>
   CLIENT:   { label: "Cliente",   icon: "🌐", color: "#2563EB" },
 }
 
-export function HistoryClient({ projects }: { projects: ProjectSummary[] }) {
+export function HistoryClient({ projects, userRole }: { projects: ProjectSummary[]; userRole: string }) {
   const [search,        setSearch]        = useState("")
   const [filter,        setFilter]        = useState("ALL")
   const [filterArea,    setFilterArea]    = useState("ALL")
@@ -973,6 +1058,39 @@ export function HistoryClient({ projects }: { projects: ProjectSummary[] }) {
   const [history,  setHistory]  = useState<NonNullable<FullHistory> | null>(null)
   const [loading,  setLoading]  = useState(false)
   const [, startTransition] = useTransition()
+
+  // ── Exclusão ──────────────────────────────────────────────────────────────
+  const [confirmingMtg, setConfirmingMtg] = useState<string | null>(null)
+  const [confirmingAtt, setConfirmingAtt] = useState<string | null>(null)
+  const [deletingId,    setDeletingId]    = useState<string | null>(null)
+  const [deletedMtgIds, setDeletedMtgIds] = useState<Set<string>>(new Set())
+  const [deletedAttIds, setDeletedAttIds] = useState<Set<string>>(new Set())
+
+  const canDelete = ["ADMIN", "DIRECTOR", "PROJECT_MANAGER"].includes(userRole)
+
+  async function handleDeleteMeeting(id: string) {
+    setDeletingId(id)
+    try {
+      await deleteMeeting(id)
+      setDeletedMtgIds((prev) => new Set([...prev, id]))
+      setHistory((prev) => prev
+        ? { ...prev, meetings: prev.meetings.filter((m) => m.id !== id) }
+        : prev)
+    } catch { /* ignore */ }
+    finally { setDeletingId(null); setConfirmingMtg(null) }
+  }
+
+  async function handleDeleteAttachment(id: string) {
+    setDeletingId(id)
+    try {
+      await deleteAttachment(id)
+      setDeletedAttIds((prev) => new Set([...prev, id]))
+      setHistory((prev) => prev
+        ? { ...prev, attachments: prev.attachments.filter((a) => a.id !== id) }
+        : prev)
+    } catch { /* ignore */ }
+    finally { setDeletingId(null); setConfirmingAtt(null) }
+  }
 
   const STATUS_FILTERS = [
     { value: "ALL",       label: "Todos" },
@@ -1180,7 +1298,12 @@ export function HistoryClient({ projects }: { projects: ProjectSummary[] }) {
               <p className="text-sm font-semibold text-gray-400">Carregando histórico…</p>
             </div>
           ) : history ? (
-            <ProjectHistoryView data={history} />
+            <ProjectHistoryView data={history} del={{
+              canDelete, deletingId, confirmingMtg, confirmingAtt,
+              deletedMtgIds, deletedAttIds,
+              setConfirmingMtg, setConfirmingAtt,
+              handleDeleteMeeting, handleDeleteAttachment,
+            }} />
           ) : (
             <EmptyState />
           )}
