@@ -109,7 +109,7 @@ const KF = `
 
 // ─── Background ───────────────────────────────────────────────────────────────
 
-function SlideBackground({ accent = "#2463FF" }: { accent?: string }) {
+function SlideBackground({ accent = "#2463FF", orbs = false }: { accent?: string; orbs?: boolean }) {
   return (
     <div className="absolute inset-0 overflow-hidden" style={{ zIndex: 0 }}>
       <style>{KF}</style>
@@ -118,8 +118,9 @@ function SlideBackground({ accent = "#2463FF" }: { accent?: string }) {
       <div className="absolute inset-0" style={{ background:"radial-gradient(ellipse 85% 50% at -8% 8%,rgba(20,70,210,0.28) 0%,transparent 65%)", animation:"aurora1 11s ease-in-out infinite alternate", transformOrigin:"18% 8%" }} />
       <div className="absolute inset-0" style={{ background:`radial-gradient(ellipse 70% 50% at 106% 95%,${accent}2A 0%,transparent 62%)`, animation:"aurora2 15s ease-in-out infinite alternate", transformOrigin:"90% 88%" }} />
       <div className="absolute pointer-events-none" style={{ top:"50%",left:"50%",width:750,height:680,borderRadius:"50%", background:`radial-gradient(circle,rgba(36,99,255,0.18) 0%,rgba(139,47,255,0.12) 30%,${accent}0A 55%,transparent 72%)`, filter:"blur(42px)",animation:"coreGlow 6s ease-in-out infinite" }} />
-      {/* Orbiting orbs */}
-      {[
+
+      {/* Orbiting orbs — apenas na capa e no encerramento */}
+      {orbs && [
         { w:185, c:"rgba(239,68,68,0.88)",  b:18, a:"orbitA1 9s linear infinite",         d:"" },
         { w:150, c:`${accent}CC`,            b:15, a:"orbitA2 14s linear infinite reverse", d:"-5s" },
         { w:110, c:"rgba(16,185,129,0.80)",  b:12, a:"orbitB1 8s linear infinite",         d:"-2s" },
@@ -127,6 +128,7 @@ function SlideBackground({ accent = "#2463FF" }: { accent?: string }) {
       ].map((o,i)=>(
         <div key={i} className="absolute pointer-events-none" style={{ top:"50%",left:"50%",width:o.w,height:o.w,borderRadius:"50%", background:`radial-gradient(circle,${o.c} 0%,transparent 70%)`, filter:`blur(${o.b}px)`, animation:o.a, animationDelay:o.d }} />
       ))}
+
       <div className="absolute pointer-events-none" style={{ top:0,width:165,height:"100%", background:"linear-gradient(to right,transparent,rgba(36,99,255,0.16),rgba(139,47,255,0.11),transparent)", filter:"blur(28px)",animation:"beamSweep 9s ease-in-out infinite" }} />
       <div className="absolute pointer-events-none" style={{ top:0,width:105,height:"100%", background:`linear-gradient(to right,transparent,${accent}1E,transparent)`, filter:"blur(22px)",animation:"beamSweep 13s ease-in-out 4.5s infinite" }} />
       <div className="absolute pointer-events-none" style={{ top:-130,left:-130,width:480,height:480,borderRadius:"50%", background:"radial-gradient(circle,rgba(36,99,255,0.32) 0%,transparent 68%)", filter:"blur(58px)",animation:"orbPulse 7s ease-in-out infinite" }} />
@@ -381,7 +383,7 @@ function CoverSlide({slides,date,totalMeetings}:{slides:ProjectSlideData[];date:
 
   return (
     <div className="relative flex flex-col items-center justify-center h-full select-none overflow-hidden">
-      <SlideBackground/>
+      <SlideBackground orbs/>
       <Particles n={18}/>
       {[0,1,2].map((i)=>(
         <div key={i} className="absolute pointer-events-none" style={{top:"50%",left:"50%",width:300+i*220,height:300+i*220,borderRadius:"50%",border:`1px solid rgba(36,99,255,${0.12-i*0.03})`,animation:`ringGrow ${5+i*1.3}s cubic-bezier(0.4,0,0.6,1) ${i*1.2}s infinite`}}/>
@@ -921,7 +923,7 @@ function ClosingSlide({ slides, date }: { slides: ProjectSlideData[]; date: stri
 
   return (
     <div className="relative flex flex-col items-center justify-center h-full select-none overflow-hidden">
-      <SlideBackground/>
+      <SlideBackground orbs/>
       <Particles n={16}/>
       {[0,1].map((i)=>(
         <div key={i} className="absolute pointer-events-none" style={{top:"50%",left:"50%",width:280+i*200,height:280+i*200,borderRadius:"50%",border:`1px solid rgba(36,99,255,${0.12-i*0.04})`,animation:`ringGrow ${5+i*1.5}s cubic-bezier(0.4,0,0.6,1) ${i*1.3}s infinite`}}/>
