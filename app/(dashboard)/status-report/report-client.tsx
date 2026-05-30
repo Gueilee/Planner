@@ -173,21 +173,21 @@ function EVMGauge({ value, label }: { value: number|null; label: string }) {
     :value>=1?{color:"#10B981",glow:"rgba(16,185,129,0.6)",badge:"Em linha"}
     :value>=0.85?{color:"#F59E0B",glow:"rgba(245,158,11,0.6)",badge:"Atenção"}
     :{color:"#EF4444",glow:"rgba(239,68,68,0.6)",badge:"Em risco"}
-  const S=90;const cx=S/2;const cy=S*0.65;const r=S*0.38;const sw=7
+  const S=110;const cx=S/2;const cy=S*0.65;const r=S*0.38;const sw=9
   const half=Math.PI*r;const fill=pct*half
   return (
-    <div className="flex flex-col items-center" style={{gap:3}}>
+    <div className="flex flex-col items-center" style={{gap:4}}>
       <svg width={S} height={cy+sw/2+4} viewBox={`0 0 ${S} ${cy+sw/2+4}`}>
         <path d={`M ${cx-r} ${cy} A ${r} ${r} 0 0 0 ${cx+r} ${cy}`} fill="none" stroke="rgba(255,255,255,0.09)" strokeWidth={sw}/>
-        {[0.85,1.0].map((thr)=>{const a=(180+(thr/MAX)*180)*Math.PI/180;return <circle key={thr} cx={cx+r*Math.cos(a)} cy={cy+r*Math.sin(a)} r={2.5} fill={thr===1?"#10B981":"#F59E0B"} opacity={0.8}/>})}
+        {[0.85,1.0].map((thr)=>{const a=(180+(thr/MAX)*180)*Math.PI/180;return <circle key={thr} cx={cx+r*Math.cos(a)} cy={cy+r*Math.sin(a)} r={3.5} fill={thr===1?"#10B981":"#F59E0B"} opacity={0.9}/>})}
         <path d={`M ${cx-r} ${cy} A ${r} ${r} 0 0 0 ${cx+r} ${cy}`} fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round"
-          strokeDasharray={`${fill} ${half}`} style={{filter:`drop-shadow(0 0 5px ${glow})`,transition:"stroke-dasharray 1.2s cubic-bezier(0.22,1,0.36,1)"}}/>
-        <text x={cx} y={cy-3} textAnchor="middle" fill={color} style={{fontSize:14,fontWeight:800,fontFamily:"Inter,sans-serif",filter:`drop-shadow(0 0 6px ${glow})`}}>
+          strokeDasharray={`${fill} ${half}`} style={{filter:`drop-shadow(0 0 6px ${glow})`,transition:"stroke-dasharray 1.2s cubic-bezier(0.22,1,0.36,1)"}}/>
+        <text x={cx} y={cy-3} textAnchor="middle" fill={color} style={{fontSize:20,fontWeight:900,fontFamily:"Inter,sans-serif",filter:`drop-shadow(0 0 8px ${glow})`}}>
           {value!==null?value.toFixed(2):"N/A"}
         </text>
       </svg>
-      <p style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.14em",color:"rgba(200,220,255,0.55)"}}>{label}</p>
-      <span style={{fontSize:7.5,fontWeight:700,padding:"2px 6px",borderRadius:20,background:`${color}22`,color,border:`1px solid ${color}44`}}>{badge}</span>
+      <p style={{fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.12em",color:"rgba(200,220,255,0.60)"}}>{label}</p>
+      <span style={{fontSize:9.5,fontWeight:700,padding:"3px 9px",borderRadius:20,background:`${color}22`,color,border:`1px solid ${color}44`}}>{badge}</span>
     </div>
   )
 }
@@ -218,7 +218,7 @@ function GCard({children,style,className}:{children:React.ReactNode;style?:React
 }
 
 function SL({children,right}:{children:React.ReactNode;right?:React.ReactNode}) {
-  return <div className="flex items-center justify-between" style={{marginBottom:6}}><p style={{fontSize:8,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.16em",color:"rgba(148,185,255,0.45)"}}>{children}</p>{right}</div>
+  return <div className="flex items-center justify-between" style={{marginBottom:7}}><p style={{fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.14em",color:"rgba(148,185,255,0.55)"}}>{children}</p>{right}</div>
 }
 
 // ─── Traffic Light ────────────────────────────────────────────────────────────
@@ -229,45 +229,59 @@ function toTL(v:string|null|undefined):TL{return (v&&v in LIGHT)?v as TL:"GREEN"
 function TDot({light,label}:{light:TL;label:string}) {
   const c=LIGHT[light]
   return (
-    <div className="flex flex-col items-center gap-1">
-      <div style={{width:30,height:30,borderRadius:8,background:`linear-gradient(135deg,${c.color}EE,${c.color}99)`,boxShadow:`0 0 14px ${c.glow},0 0 28px ${c.glow}55,inset 0 1px 0 rgba(255,255,255,0.32)`,border:`1.5px solid ${c.color}70`}}/>
-      <span style={{fontSize:7.5,fontWeight:700,color:"rgba(200,220,255,0.50)",textTransform:"uppercase",letterSpacing:"0.08em"}}>{label}</span>
+    <div className="flex flex-col items-center gap-1.5">
+      <div style={{width:40,height:40,borderRadius:10,background:`linear-gradient(135deg,${c.color}EE,${c.color}99)`,boxShadow:`0 0 18px ${c.glow},0 0 36px ${c.glow}55,inset 0 1.5px 0 rgba(255,255,255,0.35)`,border:`2px solid ${c.color}80`}}/>
+      <span style={{fontSize:10,fontWeight:700,color:"rgba(200,220,255,0.60)",textTransform:"uppercase",letterSpacing:"0.08em"}}>{label}</span>
+      <span style={{fontSize:9,fontWeight:600,color:c.color}}>{c.label}</span>
     </div>
   )
 }
 
 // ─── Phase Bar ────────────────────────────────────────────────────────────────
 
-function PhaseBar({ status }: { status: string }) {
+function PhaseBar({ status, color = "#C084FC" }: { status: string; color?: string }) {
   const idx = PHASES.findIndex((p) => p.key === status)
   return (
-    <div className="flex items-center gap-0" style={{ overflow: "hidden" }}>
+    <div style={{
+      display: "flex", alignItems: "center",
+      background: "rgba(255,255,255,0.04)",
+      border: "1px solid rgba(255,255,255,0.09)",
+      borderRadius: 12, padding: "10px 16px", gap: 0,
+    }}>
       {PHASES.map((phase, i) => {
         const done    = i < idx
         const current = i === idx
-        const future  = i > idx
         return (
-          <div key={phase.key} className="flex items-center" style={{ minWidth: 0, flex: 1 }}>
-            <div className="flex flex-col items-center" style={{ minWidth: 0, flex: 1 }}>
+          <div key={phase.key} style={{ display:"flex", alignItems:"center", flex:1 }}>
+            {/* Node + label */}
+            <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:5, flexShrink:0 }}>
+              {/* Dot */}
               <div style={{
-                width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
-                background: current ? "#C084FC" : done ? "rgba(16,185,129,0.70)" : "rgba(255,255,255,0.15)",
-                boxShadow: current ? "0 0 8px rgba(192,132,252,0.80)" : done ? "0 0 5px rgba(16,185,129,0.50)" : "none",
-                border: current ? "1.5px solid #C084FC" : "none",
+                width: current ? 16 : 10, height: current ? 16 : 10, borderRadius: "50%", flexShrink: 0,
+                background: current ? color : done ? "#10B981" : "rgba(255,255,255,0.18)",
+                boxShadow: current ? `0 0 14px ${color}CC, 0 0 28px ${color}66` : done ? "0 0 8px rgba(16,185,129,0.65)" : "none",
+                border: current ? `2.5px solid rgba(255,255,255,0.50)` : "none",
+                transition: "all 0.4s ease",
               }} />
+              {/* Label */}
               <span style={{
-                fontSize: 6.5, marginTop: 3, textAlign: "center", lineHeight: 1.2,
-                color: current ? "#C084FC" : done ? "rgba(16,185,129,0.70)" : "rgba(255,255,255,0.20)",
-                fontWeight: current ? 800 : 500,
-                whiteSpace: "nowrap", overflow: "hidden", maxWidth: "100%",
+                fontSize: current ? 11 : 9.5,
+                fontWeight: current ? 900 : 500,
+                color: current ? color : done ? "rgba(16,185,129,0.80)" : "rgba(255,255,255,0.25)",
+                whiteSpace: "nowrap",
+                letterSpacing: current ? "0.02em" : "0",
+                textShadow: current ? `0 0 12px ${color}80` : "none",
               }}>
-                {phase.label}
+                {current ? `● ${phase.label}` : phase.label}
               </span>
             </div>
+            {/* Connector line */}
             {i < PHASES.length - 1 && (
-              <div style={{ height: 1, width: "100%", flexShrink: 1,
-                background: i < idx ? "rgba(16,185,129,0.50)" : "rgba(255,255,255,0.12)",
-                marginBottom: 10,
+              <div style={{
+                flex: 1, height: current || done ? 2.5 : 1.5,
+                background: done ? "linear-gradient(90deg,#10B981,rgba(16,185,129,0.50))" : current ? `linear-gradient(90deg,${color}80,rgba(255,255,255,0.10))` : "rgba(255,255,255,0.10)",
+                boxShadow: done ? "0 0 4px rgba(16,185,129,0.40)" : "none",
+                marginBottom: 18, flexShrink: 1, minWidth: 8,
               }} />
             )}
           </div>
@@ -290,8 +304,8 @@ function TimelineThermometer({ timelineProgress, progress }: { timelineProgress:
   if (timelineProgress === null) {
     return (
       <div style={{ padding: "8px 0" }}>
-        <p style={{ fontSize: 8.5, color: "rgba(148,185,255,0.40)", textAlign: "center" }}>
-          Sem datas de cronograma cadastradas
+        <p style={{ fontSize: 11, color: "rgba(148,185,255,0.40)", textAlign: "center" }}>
+          Sem datas de cronograma
         </p>
       </div>
     )
@@ -301,31 +315,31 @@ function TimelineThermometer({ timelineProgress, progress }: { timelineProgress:
   const delta = Math.abs(progress - timelineProgress)
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
       {/* Prazo decorrido */}
       <div>
-        <div className="flex justify-between" style={{ marginBottom: 3 }}>
-          <span style={{ fontSize: 8, color: "rgba(148,185,255,0.50)", fontWeight: 600 }}>Prazo decorrido</span>
-          <span style={{ fontSize: 8.5, color: "#60A5FA", fontWeight: 800 }}>{animT}%</span>
+        <div className="flex justify-between" style={{ marginBottom: 4 }}>
+          <span style={{ fontSize: 10.5, color: "rgba(148,185,255,0.55)", fontWeight: 600 }}>Prazo decorrido</span>
+          <span style={{ fontSize: 12, color: "#60A5FA", fontWeight: 800 }}>{animT}%</span>
         </div>
-        <div style={{ height: 5, background: "rgba(255,255,255,0.08)", borderRadius: 3, overflow: "hidden" }}>
-          <div style={{ height: "100%", borderRadius: 3, width: `${animT}%`, background: "#3B82F6", transition: "width 1.2s ease" }} />
+        <div style={{ height: 7, background: "rgba(255,255,255,0.08)", borderRadius: 4, overflow: "hidden" }}>
+          <div style={{ height: "100%", borderRadius: 4, width: `${animT}%`, background: "#3B82F6", transition: "width 1.2s ease" }} />
         </div>
       </div>
       {/* Progresso real */}
       <div>
-        <div className="flex justify-between" style={{ marginBottom: 3 }}>
-          <span style={{ fontSize: 8, color: "rgba(148,185,255,0.50)", fontWeight: 600 }}>Progresso real</span>
-          <span style={{ fontSize: 8.5, color: ahead ? "#10B981" : "#EF4444", fontWeight: 800 }}>{animP}%</span>
+        <div className="flex justify-between" style={{ marginBottom: 4 }}>
+          <span style={{ fontSize: 10.5, color: "rgba(148,185,255,0.55)", fontWeight: 600 }}>Progresso real</span>
+          <span style={{ fontSize: 12, color: ahead ? "#10B981" : "#EF4444", fontWeight: 800 }}>{animP}%</span>
         </div>
-        <div style={{ height: 5, background: "rgba(255,255,255,0.08)", borderRadius: 3, overflow: "hidden" }}>
-          <div style={{ height: "100%", borderRadius: 3, width: `${animP}%`, background: ahead ? "#10B981" : "#EF4444", boxShadow: `0 0 6px ${ahead ? "rgba(16,185,129,0.60)" : "rgba(239,68,68,0.60)"}`, transition: "width 1.2s ease" }} />
+        <div style={{ height: 7, background: "rgba(255,255,255,0.08)", borderRadius: 4, overflow: "hidden" }}>
+          <div style={{ height: "100%", borderRadius: 4, width: `${animP}%`, background: ahead ? "#10B981" : "#EF4444", boxShadow: `0 0 8px ${ahead ? "rgba(16,185,129,0.60)" : "rgba(239,68,68,0.60)"}`, transition: "width 1.2s ease" }} />
         </div>
       </div>
       {/* Status label */}
-      <div style={{ textAlign: "center", marginTop: 2 }}>
-        <span style={{ fontSize: 8, fontWeight: 800, padding: "2px 8px", borderRadius: 20, background: ahead ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.12)", color: ahead ? "#10B981" : "#EF4444", border: `1px solid ${ahead ? "rgba(16,185,129,0.25)" : "rgba(239,68,68,0.25)"}` }}>
-          {ahead ? `▲ ${delta}% à frente do prazo` : `▼ ${delta}% atrás do prazo`}
+      <div style={{ textAlign: "center" }}>
+        <span style={{ fontSize: 10.5, fontWeight: 800, padding: "4px 12px", borderRadius: 20, background: ahead ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.12)", color: ahead ? "#10B981" : "#EF4444", border: `1px solid ${ahead ? "rgba(16,185,129,0.25)" : "rgba(239,68,68,0.25)"}` }}>
+          {ahead ? `▲ ${delta}% à frente` : `▼ ${delta}% atrás do prazo`}
         </span>
       </div>
     </div>
@@ -493,25 +507,25 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
 
       {/* ── HEADER ── */}
       <div className="relative z-10 shrink-0 px-6 pt-4 pb-2">
-        {/* Phase bar */}
-        <div style={{marginBottom:6}}><PhaseBar status={data.status}/></div>
+        {/* Phase bar — full width, always labeled */}
+        <div style={{marginBottom:8}}><PhaseBar status={data.status} color={status.color}/></div>
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <span style={{fontSize:8.5,fontWeight:800,padding:"2px 9px",borderRadius:20,background:status.bg,color:status.color,border:`1px solid ${status.color}40`,textTransform:"uppercase",letterSpacing:"0.10em"}}>
+            <div className="flex items-center gap-2 mb-1.5">
+              <span style={{fontSize:11,fontWeight:800,padding:"3px 12px",borderRadius:20,background:status.bg,color:status.color,border:`1px solid ${status.color}40`,textTransform:"uppercase",letterSpacing:"0.08em"}}>
                 {status.icon} {status.label}
               </span>
-              <span style={{fontSize:8.5,color:"rgba(180,210,255,0.35)",fontWeight:600}}>{index} de {total}</span>
+              <span style={{fontSize:11,color:"rgba(180,210,255,0.40)",fontWeight:600}}>{index} de {total}</span>
             </div>
-            <h2 style={{fontSize:"clamp(1.1rem,2vw,1.7rem)",fontWeight:900,color:"#fff",lineHeight:1.15,letterSpacing:"-0.01em",textShadow:"0 2px 20px rgba(0,0,0,0.50)"}}>
+            <h2 style={{fontSize:"clamp(1.4rem,2.5vw,2.2rem)",fontWeight:900,color:"#fff",lineHeight:1.1,letterSpacing:"-0.02em",textShadow:"0 2px 20px rgba(0,0,0,0.50)"}}>
               {data.title}
             </h2>
-            <div className="flex items-center gap-3 mt-1 flex-wrap">
-              {data.sponsor&&<span style={{fontSize:9,color:"rgba(180,210,255,0.50)"}}>👤 Sponsor: <strong style={{color:"rgba(220,235,255,0.75)"}}>{data.sponsor}</strong></span>}
-              {data.dates.start&&<span style={{fontSize:9,color:"rgba(180,210,255,0.40)"}}>📅 Início: {fmt(data.dates.start)}</span>}
-              {daysStr&&<span style={{fontSize:8.5,fontWeight:700,padding:"1px 8px",borderRadius:20,background:data.daysLeft!==null&&data.daysLeft<0?"rgba(239,68,68,0.14)":"rgba(59,130,246,0.11)",border:`1px solid ${data.daysLeft!==null&&data.daysLeft<0?"rgba(239,68,68,0.28)":"rgba(96,165,250,0.22)"}`,color:data.daysLeft!==null&&data.daysLeft<0?"#FCA5A5":"#93C5FD"}}>{daysStr}</span>}
+            <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+              {data.sponsor&&<span style={{fontSize:11,color:"rgba(180,210,255,0.55)"}}>👤 Sponsor: <strong style={{color:"rgba(220,235,255,0.80)"}}>{data.sponsor}</strong></span>}
+              {data.dates.start&&<span style={{fontSize:11,color:"rgba(180,210,255,0.45)"}}>📅 Início: {fmt(data.dates.start)}</span>}
+              {daysStr&&<span style={{fontSize:10.5,fontWeight:700,padding:"2px 10px",borderRadius:20,background:data.daysLeft!==null&&data.daysLeft<0?"rgba(239,68,68,0.14)":"rgba(59,130,246,0.11)",border:`1px solid ${data.daysLeft!==null&&data.daysLeft<0?"rgba(239,68,68,0.28)":"rgba(96,165,250,0.22)"}`,color:data.daysLeft!==null&&data.daysLeft<0?"#FCA5A5":"#93C5FD"}}>{daysStr}</span>}
               {data.progressDelta!==null&&data.progressDelta>0&&(
-                <span style={{fontSize:8.5,fontWeight:800,padding:"1px 8px",borderRadius:20,background:"rgba(16,185,129,0.12)",border:"1px solid rgba(16,185,129,0.25)",color:"#10B981"}}>
+                <span style={{fontSize:10.5,fontWeight:800,padding:"2px 10px",borderRadius:20,background:"rgba(16,185,129,0.12)",border:"1px solid rgba(16,185,129,0.25)",color:"#10B981"}}>
                   ▲ +{data.progressDelta}% desde último checkpoint
                 </span>
               )}
@@ -561,23 +575,23 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
           {/* Budget */}
           <GCard style={{padding:"9px 10px",flexShrink:0}}>
             <SL>💰 Financeiro</SL>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {[{label:"Orçamento",val:currency(data.budget),color:"#60A5FA"},{label:"Economia",val:currency(data.economy),color:"#34D399"}].map(({label,val,color})=>(
                 <div key={label} className="flex justify-between items-center">
-                  <span style={{fontSize:9,color:"rgba(200,220,255,0.50)"}}>{label}</span>
-                  <span style={{fontSize:10,fontWeight:800,color}}>{val}</span>
+                  <span style={{fontSize:11,color:"rgba(200,220,255,0.55)"}}>{label}</span>
+                  <span style={{fontSize:12.5,fontWeight:800,color}}>{val}</span>
                 </div>
               ))}
               {data.dates.end&&(
                 <div className="flex justify-between items-center">
-                  <span style={{fontSize:9,color:"rgba(200,220,255,0.50)"}}>Término</span>
-                  <span style={{fontSize:9.5,fontWeight:700,color:"rgba(220,235,255,0.70)"}}>{fmt(data.dates.end)}</span>
+                  <span style={{fontSize:11,color:"rgba(200,220,255,0.55)"}}>Término</span>
+                  <span style={{fontSize:12,fontWeight:700,color:"rgba(220,235,255,0.75)"}}>{fmt(data.dates.end)}</span>
                 </div>
               )}
               {data.dates.goLive&&(
                 <div className="flex justify-between items-center">
-                  <span style={{fontSize:9,color:"rgba(200,220,255,0.50)"}}>Go Live</span>
-                  <span style={{fontSize:9.5,fontWeight:700,color:"#34D399"}}>{fmt(data.dates.goLive)}</span>
+                  <span style={{fontSize:11,color:"rgba(200,220,255,0.55)"}}>Go Live</span>
+                  <span style={{fontSize:12,fontWeight:700,color:"#34D399"}}>{fmt(data.dates.goLive)}</span>
                 </div>
               )}
             </div>
@@ -591,87 +605,87 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
         <div className="flex flex-col gap-2 min-h-0 overflow-hidden">
 
           {/* Atividades concluídas */}
-          <GCard style={{padding:"9px 11px",flexShrink:0}}>
-            <SL right={<span style={{fontSize:9,color:"#10B981",fontWeight:800,background:"rgba(16,185,129,0.12)",padding:"1px 7px",borderRadius:20,border:"1px solid rgba(16,185,129,0.25)"}}>{data.tasks.completed}</span>}>✅ Concluídas</SL>
+          <GCard style={{padding:"11px 13px",flexShrink:0}}>
+            <SL right={<span style={{fontSize:11,color:"#10B981",fontWeight:800,background:"rgba(16,185,129,0.12)",padding:"2px 9px",borderRadius:20,border:"1px solid rgba(16,185,129,0.25)"}}>{data.tasks.completed}</span>}>✅ Concluídas</SL>
             {td.recentlyCompleted.length>0?(
-              <div className="flex flex-col gap-1">
-                {td.recentlyCompleted.slice(0,4).map((t,i)=>(
-                  <div key={i} className="flex items-center gap-1.5">
-                    <CheckCircle2 style={{width:9,height:9,color:"#10B981",flexShrink:0}}/>
-                    <span style={{fontSize:9,color:"rgba(200,220,255,0.65)",overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const,lineHeight:1.3}}>{t.title}</span>
+              <div className="flex flex-col gap-1.5">
+                {td.recentlyCompleted.slice(0,3).map((t,i)=>(
+                  <div key={i} className="flex items-center gap-2">
+                    <CheckCircle2 style={{width:11,height:11,color:"#10B981",flexShrink:0}}/>
+                    <span style={{fontSize:12,color:"rgba(200,220,255,0.75)",overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const,lineHeight:1.35}}>{t.title}</span>
                   </div>
                 ))}
               </div>
             ):(
-              <p style={{fontSize:8.5,color:"rgba(148,185,255,0.30)",fontStyle:"italic"}}>Nenhuma atividade concluída ainda</p>
+              <p style={{fontSize:11,color:"rgba(148,185,255,0.35)",fontStyle:"italic"}}>Nenhuma atividade concluída ainda</p>
             )}
           </GCard>
 
           {/* Em andamento */}
-          <GCard style={{padding:"9px 11px",flexShrink:0}}>
-            <SL right={<span style={{fontSize:9,color:"#60A5FA",fontWeight:800,background:"rgba(96,165,250,0.12)",padding:"1px 7px",borderRadius:20,border:"1px solid rgba(96,165,250,0.25)"}}>{data.tasks.inProgress}</span>}>🔵 Em Andamento</SL>
+          <GCard style={{padding:"11px 13px",flexShrink:0}}>
+            <SL right={<span style={{fontSize:11,color:"#60A5FA",fontWeight:800,background:"rgba(96,165,250,0.12)",padding:"2px 9px",borderRadius:20,border:"1px solid rgba(96,165,250,0.25)"}}>{data.tasks.inProgress}</span>}>🔵 Em Andamento</SL>
             {td.inProgress.length>0?(
-              <div className="flex flex-col gap-2">
-                {td.inProgress.slice(0,4).map((t,i)=>(
-                  <div key={i} style={{paddingBottom:i<Math.min(td.inProgress.length,4)-1?6:0,borderBottom:i<Math.min(td.inProgress.length,4)-1?"1px solid rgba(255,255,255,0.05)":"none"}}>
-                    <p style={{fontSize:9.5,color:"rgba(200,220,255,0.80)",fontWeight:500,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const,marginBottom:2}}>{t.title}</p>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {t.responsible&&<span style={{fontSize:8,color:"rgba(148,185,255,0.55)"}}>👤 {t.responsible}</span>}
-                      {(t.startDate||t.endDate)&&<span style={{fontSize:8,color:"rgba(148,185,255,0.40)"}}>📅 {fmt(t.startDate)} → {fmt(t.endDate)}</span>}
+              <div className="flex flex-col gap-2.5">
+                {td.inProgress.slice(0,3).map((t,i)=>(
+                  <div key={i} style={{paddingBottom:i<Math.min(td.inProgress.length,3)-1?8:0,borderBottom:i<Math.min(td.inProgress.length,3)-1?"1px solid rgba(255,255,255,0.06)":"none"}}>
+                    <p style={{fontSize:13,color:"rgba(200,220,255,0.88)",fontWeight:600,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const,marginBottom:3}}>{t.title}</p>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      {t.responsible&&<span style={{fontSize:10.5,color:"rgba(148,185,255,0.65)"}}>👤 {t.responsible}</span>}
+                      {(t.startDate||t.endDate)&&<span style={{fontSize:10.5,color:"rgba(148,185,255,0.50)"}}>📅 {fmt(t.startDate)} → {fmt(t.endDate)}</span>}
                     </div>
                   </div>
                 ))}
               </div>
             ):(
-              <p style={{fontSize:8.5,color:"rgba(148,185,255,0.30)",fontStyle:"italic"}}>Nenhuma atividade em andamento</p>
+              <p style={{fontSize:11,color:"rgba(148,185,255,0.35)",fontStyle:"italic"}}>Nenhuma atividade em andamento</p>
             )}
           </GCard>
 
           {/* Em atraso */}
-          <GCard style={{padding:"9px 11px",flexShrink:0}}>
-            <SL right={<span style={{fontSize:9,color:"#EF4444",fontWeight:800,background:"rgba(239,68,68,0.12)",padding:"1px 7px",borderRadius:20,border:"1px solid rgba(239,68,68,0.25)"}}>{data.tasks.delayed}</span>}>🔴 Em Atraso</SL>
+          <GCard style={{padding:"11px 13px",flexShrink:0}}>
+            <SL right={<span style={{fontSize:11,color:"#EF4444",fontWeight:800,background:"rgba(239,68,68,0.12)",padding:"2px 9px",borderRadius:20,border:"1px solid rgba(239,68,68,0.25)"}}>{data.tasks.delayed}</span>}>🔴 Em Atraso</SL>
             {td.delayed.length>0?(
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2.5">
                 {td.delayed.slice(0,3).map((t,i)=>(
-                  <div key={i} style={{paddingBottom:i<Math.min(td.delayed.length,3)-1?6:0,borderBottom:i<Math.min(td.delayed.length,3)-1?"1px solid rgba(255,255,255,0.05)":"none"}}>
+                  <div key={i} style={{paddingBottom:i<Math.min(td.delayed.length,3)-1?8:0,borderBottom:i<Math.min(td.delayed.length,3)-1?"1px solid rgba(255,255,255,0.06)":"none"}}>
                     <div className="flex items-start justify-between gap-2">
-                      <p style={{fontSize:9.5,color:"rgba(252,165,165,0.85)",fontWeight:500,flex:1,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const,marginBottom:2}}>{t.title}</p>
-                      <span style={{fontSize:8.5,fontWeight:800,color:"#FCA5A5",flexShrink:0,background:"rgba(239,68,68,0.15)",padding:"1px 5px",borderRadius:6}}>{t.daysLate}d</span>
+                      <p style={{fontSize:13,color:"rgba(252,165,165,0.90)",fontWeight:600,flex:1,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const,marginBottom:3}}>{t.title}</p>
+                      <span style={{fontSize:11,fontWeight:800,color:"#FCA5A5",flexShrink:0,background:"rgba(239,68,68,0.15)",padding:"2px 7px",borderRadius:8}}>{t.daysLate}d</span>
                     </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {t.responsible&&<span style={{fontSize:8,color:"rgba(252,165,165,0.50)"}}>👤 {t.responsible}</span>}
-                      {(t.startDate||t.endDate)&&<span style={{fontSize:8,color:"rgba(252,165,165,0.40)"}}>📅 {fmt(t.startDate)} → {fmt(t.endDate)}</span>}
+                    <div className="flex items-center gap-3 flex-wrap">
+                      {t.responsible&&<span style={{fontSize:10.5,color:"rgba(252,165,165,0.60)"}}>👤 {t.responsible}</span>}
+                      {(t.startDate||t.endDate)&&<span style={{fontSize:10.5,color:"rgba(252,165,165,0.50)"}}>📅 {fmt(t.startDate)} → {fmt(t.endDate)}</span>}
                     </div>
                   </div>
                 ))}
               </div>
             ):(
-              <p style={{fontSize:8.5,color:"rgba(148,185,255,0.30)",fontStyle:"italic"}}>✅ Nenhuma atividade em atraso</p>
+              <p style={{fontSize:11,color:"rgba(148,185,255,0.35)",fontStyle:"italic"}}>✅ Nenhuma atividade em atraso</p>
             )}
           </GCard>
 
           {/* Próximas a vencer */}
-          <GCard style={{padding:"9px 11px",flex:1,minHeight:0,overflow:"hidden"}}>
-            <SL right={<span style={{fontSize:9,color:"#FCD34D",fontWeight:800}}>{td.upcoming.length}</span>}>📅 Próximas Atividades</SL>
+          <GCard style={{padding:"11px 13px",flex:1,minHeight:0,overflow:"hidden"}}>
+            <SL right={<span style={{fontSize:11,color:"#FCD34D",fontWeight:800}}>{td.upcoming.length}</span>}>📅 Próximas Atividades</SL>
             {td.upcoming.length>0?(
-              <div className="flex flex-col gap-2">
-                {td.upcoming.slice(0,4).map((t,i)=>(
-                  <div key={i} style={{paddingBottom:i<Math.min(td.upcoming.length,4)-1?6:0,borderBottom:i<Math.min(td.upcoming.length,4)-1?"1px solid rgba(255,255,255,0.05)":"none"}}>
+              <div className="flex flex-col gap-2.5">
+                {td.upcoming.slice(0,3).map((t,i)=>(
+                  <div key={i} style={{paddingBottom:i<Math.min(td.upcoming.length,3)-1?8:0,borderBottom:i<Math.min(td.upcoming.length,3)-1?"1px solid rgba(255,255,255,0.06)":"none"}}>
                     <div className="flex items-start justify-between gap-2">
-                      <p style={{fontSize:9.5,color:"rgba(200,220,255,0.78)",fontWeight:500,flex:1,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const,marginBottom:2}}>{t.title}</p>
-                      <span style={{fontSize:8,fontWeight:800,flexShrink:0,color:t.daysUntil===0?"#FCA5A5":t.daysUntil<=3?"#FCD34D":"#86EFAC",background:t.daysUntil===0?"rgba(239,68,68,0.12)":t.daysUntil<=3?"rgba(245,158,11,0.12)":"rgba(16,185,129,0.10)",padding:"1px 5px",borderRadius:6}}>
+                      <p style={{fontSize:13,color:"rgba(200,220,255,0.85)",fontWeight:600,flex:1,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const,marginBottom:3}}>{t.title}</p>
+                      <span style={{fontSize:11,fontWeight:800,flexShrink:0,color:t.daysUntil===0?"#FCA5A5":t.daysUntil<=3?"#FCD34D":"#86EFAC",background:t.daysUntil===0?"rgba(239,68,68,0.12)":t.daysUntil<=3?"rgba(245,158,11,0.12)":"rgba(16,185,129,0.10)",padding:"2px 7px",borderRadius:8}}>
                         {t.daysUntil===0?"Hoje":`${t.daysUntil}d`}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {t.responsible&&<span style={{fontSize:8,color:"rgba(148,185,255,0.50)"}}>👤 {t.responsible}</span>}
-                      {(t.startDate||t.endDate)&&<span style={{fontSize:8,color:"rgba(148,185,255,0.40)"}}>📅 {fmt(t.startDate)} → {fmt(t.endDate)}</span>}
+                    <div className="flex items-center gap-3 flex-wrap">
+                      {t.responsible&&<span style={{fontSize:10.5,color:"rgba(148,185,255,0.60)"}}>👤 {t.responsible}</span>}
+                      {(t.startDate||t.endDate)&&<span style={{fontSize:10.5,color:"rgba(148,185,255,0.50)"}}>📅 {fmt(t.startDate)} → {fmt(t.endDate)}</span>}
                     </div>
                   </div>
                 ))}
               </div>
             ):(
-              <p style={{fontSize:8.5,color:"rgba(148,185,255,0.30)",fontStyle:"italic"}}>Sem atividades previstas próximas</p>
+              <p style={{fontSize:11,color:"rgba(148,185,255,0.35)",fontStyle:"italic"}}>Sem atividades previstas próximas</p>
             )}
           </GCard>
         </div>
@@ -680,78 +694,78 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
         <div className="flex flex-col gap-2 min-h-0 overflow-hidden">
 
           {/* Equipe */}
-          <GCard style={{padding:"9px 11px",flexShrink:0}}>
-            <SL right={<span style={{fontSize:9,color:"#FB923C",fontWeight:800}}>{data.team} pessoas</span>}>👥 Equipe</SL>
-            <div className="flex flex-col gap-1.5">
-              {data.members.slice(0,6).map((m,i)=>(
-                <div key={i} className="flex items-center gap-2">
-                  <UserAvatar name={m.name} image={m.image} size={18}/>
-                  <span style={{fontSize:9.5,color:"rgba(220,235,255,0.80)",fontWeight:500,flex:1,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{m.name}</span>
-                  {m.role&&<span style={{fontSize:7.5,color:"rgba(148,185,255,0.40)",flexShrink:0,overflow:"hidden",whiteSpace:"nowrap",maxWidth:70,textOverflow:"ellipsis"}}>{m.role}</span>}
+          <GCard style={{padding:"11px 13px",flexShrink:0}}>
+            <SL right={<span style={{fontSize:11,color:"#FB923C",fontWeight:800}}>{data.team} pessoas</span>}>👥 Equipe</SL>
+            <div className="flex flex-col gap-2">
+              {data.members.slice(0,5).map((m,i)=>(
+                <div key={i} className="flex items-center gap-2.5">
+                  <UserAvatar name={m.name} image={m.image} size={24}/>
+                  <span style={{fontSize:12,color:"rgba(220,235,255,0.85)",fontWeight:600,flex:1,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{m.name}</span>
+                  {m.role&&<span style={{fontSize:10,color:"rgba(148,185,255,0.50)",flexShrink:0,overflow:"hidden",whiteSpace:"nowrap",maxWidth:80,textOverflow:"ellipsis"}}>{m.role}</span>}
                 </div>
               ))}
-              {data.members.length>6&&<p style={{fontSize:8,color:"rgba(148,185,255,0.35)",fontStyle:"italic"}}>+{data.members.length-6} participantes</p>}
+              {data.members.length>5&&<p style={{fontSize:10.5,color:"rgba(148,185,255,0.40)",fontStyle:"italic"}}>+{data.members.length-5} participantes</p>}
             </div>
           </GCard>
 
           {/* Reuniões por tipo */}
-          <GCard style={{padding:"9px 11px",flexShrink:0}}>
-            <SL right={<span style={{fontSize:9,color:"#C084FC",fontWeight:800}}>{data.meetingsCount} total</span>}>📋 Reuniões</SL>
-            <div className="flex flex-wrap gap-1.5">
+          <GCard style={{padding:"11px 13px",flexShrink:0}}>
+            <SL right={<span style={{fontSize:11,color:"#C084FC",fontWeight:800}}>{data.meetingsCount} total</span>}>📋 Reuniões</SL>
+            <div className="flex flex-wrap gap-2">
               {Object.entries(data.meetingsByType).filter(([,v])=>v>0).map(([type,count])=>(
-                <span key={type} style={{fontSize:8,fontWeight:700,padding:"2px 8px",borderRadius:20,background:"rgba(192,132,252,0.10)",border:"1px solid rgba(192,132,252,0.20)",color:"#C084FC"}}>
+                <span key={type} style={{fontSize:10.5,fontWeight:700,padding:"3px 10px",borderRadius:20,background:"rgba(192,132,252,0.10)",border:"1px solid rgba(192,132,252,0.22)",color:"#C084FC"}}>
                   {MTG_LABELS[type]??type}: {count}
                 </span>
               ))}
               {Object.keys(data.meetingsByType).length===0&&(
-                <p style={{fontSize:8.5,color:"rgba(148,185,255,0.30)",fontStyle:"italic"}}>Nenhuma reunião registrada</p>
+                <p style={{fontSize:11,color:"rgba(148,185,255,0.35)",fontStyle:"italic"}}>Nenhuma reunião registrada</p>
               )}
             </div>
           </GCard>
 
           {/* Riscos com mitigação */}
-          <GCard style={{padding:"9px 11px",flex:1,minHeight:0,overflow:"hidden"}}>
+          <GCard style={{padding:"11px 13px",flex:1,minHeight:0,overflow:"hidden"}}>
             <SL right={
               <div className="flex gap-1.5">
-                {data.risks.critical>0&&<span style={{fontSize:7.5,fontWeight:800,padding:"1px 6px",borderRadius:10,background:"rgba(239,68,68,0.15)",color:"#FCA5A5"}}>⚠ {data.risks.critical} crít.</span>}
-                {data.risks.high>0&&<span style={{fontSize:7.5,fontWeight:800,padding:"1px 6px",borderRadius:10,background:"rgba(245,158,11,0.12)",color:"#FCD34D"}}>{data.risks.high} alto{data.risks.high>1?"s":""}</span>}
+                {data.risks.critical>0&&<span style={{fontSize:10,fontWeight:800,padding:"2px 8px",borderRadius:10,background:"rgba(239,68,68,0.15)",color:"#FCA5A5"}}>⚠ {data.risks.critical} crít.</span>}
+                {data.risks.high>0&&<span style={{fontSize:10,fontWeight:800,padding:"2px 8px",borderRadius:10,background:"rgba(245,158,11,0.12)",color:"#FCD34D"}}>{data.risks.high} alto{data.risks.high>1?"s":""}</span>}
               </div>
             }>🛡️ Riscos & Issues</SL>
             {data.risks.items.length>0?(
-              <div className="flex flex-col gap-2 overflow-hidden">
-                {data.risks.items.slice(0,4).map((r,i)=>{
+              <div className="flex flex-col gap-2.5 overflow-hidden">
+                {data.risks.items.slice(0,3).map((r,i)=>{
                   const rc:{[k:string]:{color:string;label:string}}={CRITICAL:{color:"#FCA5A5",label:"Crítico"},HIGH:{color:"#FCD34D",label:"Alto"},MEDIUM:{color:"#86EFAC",label:"Médio"},LOW:{color:"#94A3B8",label:"Baixo"}}
                   const {color,label}=rc[r.level]??{color:"#94A3B8",label:r.level}
                   return (
-                    <div key={i} style={{borderLeft:`2px solid ${color}`,paddingLeft:7,paddingBottom:i<Math.min(data.risks.items.length,4)-1?6:0,borderBottom:i<Math.min(data.risks.items.length,4)-1?"1px solid rgba(255,255,255,0.05)":"none"}}>
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <span style={{fontSize:7.5,fontWeight:800,color,textTransform:"uppercase"}}>{label}</span>
-                        {r.owner&&<span style={{fontSize:7.5,color:"rgba(180,210,255,0.35)"}}>· {r.owner}</span>}
+                    <div key={i} style={{borderLeft:`3px solid ${color}`,paddingLeft:9,paddingBottom:i<Math.min(data.risks.items.length,3)-1?8:0,borderBottom:i<Math.min(data.risks.items.length,3)-1?"1px solid rgba(255,255,255,0.06)":"none"}}>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span style={{fontSize:10,fontWeight:800,color,textTransform:"uppercase"}}>{label}</span>
+                        {r.owner&&<span style={{fontSize:10,color:"rgba(180,210,255,0.45)"}}>· {r.owner}</span>}
                       </div>
-                      <p style={{fontSize:8.5,color:"rgba(200,220,255,0.68)",lineHeight:1.35,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const}}>{r.description}</p>
-                      {r.mitigation&&<p style={{fontSize:8,color:"rgba(148,185,255,0.42)",lineHeight:1.3,marginTop:1,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const}}>↳ {r.mitigation}</p>}
+                      <p style={{fontSize:11,color:"rgba(200,220,255,0.75)",lineHeight:1.4,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const}}>{r.description}</p>
+                      {r.mitigation&&<p style={{fontSize:10,color:"rgba(148,185,255,0.52)",lineHeight:1.35,marginTop:2,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const}}>↳ {r.mitigation}</p>}
                     </div>
                   )
                 })}
               </div>
             ):(
-              <p style={{fontSize:8.5,color:"rgba(148,185,255,0.30)",fontStyle:"italic"}}>✅ Sem riscos registrados</p>
+              <p style={{fontSize:11,color:"rgba(148,185,255,0.35)",fontStyle:"italic"}}>✅ Sem riscos registrados</p>
             )}
           </GCard>
 
           {/* WBS áreas */}
           {data.wbsAreas.length>0&&(
-            <GCard style={{padding:"9px 11px",flexShrink:0}}>
+            <GCard style={{padding:"11px 13px",flexShrink:0}}>
               <SL>📁 Áreas do Projeto</SL>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 {data.wbsAreas.slice(0,4).map((a)=>(
                   <div key={a.name}>
-                    <div className="flex justify-between mb-0.5">
-                      <span style={{fontSize:8.5,color:"rgba(200,220,255,0.65)",fontWeight:500,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis",maxWidth:"75%"}}>{a.name}</span>
-                      <span style={{fontSize:8.5,fontWeight:800,color:a.color??"#60A5FA"}}>{a.pct}%</span>
+                    <div className="flex justify-between mb-1">
+                      <span style={{fontSize:11,color:"rgba(200,220,255,0.70)",fontWeight:500,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis",maxWidth:"75%"}}>{a.name}</span>
+                      <span style={{fontSize:11,fontWeight:800,color:a.color??"#60A5FA"}}>{a.pct}%</span>
                     </div>
-                    <div style={{height:3.5,background:"rgba(255,255,255,0.08)",borderRadius:2,overflow:"hidden"}}>
-                      <div style={{height:"100%",borderRadius:2,width:`${a.pct}%`,background:a.color??"#60A5FA",boxShadow:`0 0 5px ${a.color??"#60A5FA"}80`,transition:"width 1.2s ease"}}/>
+                    <div style={{height:5,background:"rgba(255,255,255,0.08)",borderRadius:3,overflow:"hidden"}}>
+                      <div style={{height:"100%",borderRadius:3,width:`${a.pct}%`,background:a.color??"#60A5FA",boxShadow:`0 0 6px ${a.color??"#60A5FA"}80`,transition:"width 1.2s ease"}}/>
                     </div>
                   </div>
                 ))}
@@ -769,30 +783,30 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
         const decisions  = cleanHtml(cp.decisions)?.replace(/^[-•*\d.]\s*/gm,"").trim().slice(0,220)??null
         return (
           <div className="relative z-10 shrink-0 px-6 pb-2.5 pt-1.5">
-            <div style={{ background:"rgba(255,255,255,0.055)",border:"1px solid rgba(255,255,255,0.12)",borderLeft:"3px solid rgba(192,132,252,0.70)",borderRadius:10,padding:"8px 14px" }}>
-              <div className="flex items-center gap-3 mb-1.5">
-                <Calendar style={{width:10,height:10,color:"#C084FC",flexShrink:0}}/>
-                <span style={{fontSize:7.5,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.16em",color:"#C084FC"}}>Último Checkpoint</span>
-                <span style={{fontSize:8.5,color:"rgba(200,220,255,0.60)",fontWeight:600}}>
+            <div style={{ background:"rgba(255,255,255,0.055)",border:"1px solid rgba(255,255,255,0.12)",borderLeft:"4px solid rgba(192,132,252,0.70)",borderRadius:12,padding:"10px 16px" }}>
+              <div className="flex items-center gap-3 mb-2">
+                <Calendar style={{width:13,height:13,color:"#C084FC",flexShrink:0}}/>
+                <span style={{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.16em",color:"#C084FC"}}>Último Checkpoint</span>
+                <span style={{fontSize:11,color:"rgba(200,220,255,0.65)",fontWeight:600}}>
                   {fmtLong(cp.date)}{cp.title?` · ${cp.title}`:""}{cp.location?` · 📍${cp.location}`:""}
                 </span>
               </div>
               <div className="flex gap-4">
                 {highlights&&(
                   <div style={{flex:1,minWidth:0}}>
-                    <p style={{fontSize:7.5,fontWeight:700,color:"rgba(148,185,255,0.42)",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:2}}>Destaques</p>
-                    <p style={{fontSize:8.5,color:"rgba(200,220,255,0.68)",lineHeight:1.4,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as const}}>{highlights}{(highlights?.length??0)>=220?"…":""}</p>
+                    <p style={{fontSize:9.5,fontWeight:700,color:"rgba(148,185,255,0.50)",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:3}}>Destaques</p>
+                    <p style={{fontSize:11,color:"rgba(200,220,255,0.75)",lineHeight:1.45,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as const}}>{highlights}{(highlights?.length??0)>=220?"…":""}</p>
                   </div>
                 )}
                 {decisions&&decisions!==highlights&&(
                   <div style={{flex:1,minWidth:0}}>
-                    <p style={{fontSize:7.5,fontWeight:700,color:"rgba(148,185,255,0.42)",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:2}}>Decisões</p>
-                    <p style={{fontSize:8.5,color:"rgba(200,220,255,0.68)",lineHeight:1.4,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as const}}>{decisions}{(decisions?.length??0)>=220?"…":""}</p>
+                    <p style={{fontSize:9.5,fontWeight:700,color:"rgba(148,185,255,0.50)",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:3}}>Decisões</p>
+                    <p style={{fontSize:11,color:"rgba(200,220,255,0.75)",lineHeight:1.45,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as const}}>{decisions}{(decisions?.length??0)>=220?"…":""}</p>
                   </div>
                 )}
                 {cp.nextSteps.length>0&&(
                   <div style={{flex:1,minWidth:0}}>
-                    <p style={{fontSize:7.5,fontWeight:700,color:"rgba(148,185,255,0.42)",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:2}}>Próximos Passos</p>
+                    <p style={{fontSize:9.5,fontWeight:700,color:"rgba(148,185,255,0.50)",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:3}}>Próximos Passos</p>
                     <div className="flex flex-col gap-0.5">
                       {cp.nextSteps.slice(0,3).map((s,i)=>(
                         <div key={i} className="flex items-start gap-1.5">
