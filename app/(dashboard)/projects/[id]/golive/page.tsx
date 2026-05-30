@@ -1,6 +1,7 @@
 import { auth } from "@/auth"
 import { db } from "@/lib/db"
 import { notFound, redirect } from "next/navigation"
+import { getProjectParticipants, getAllActiveUsers } from "@/lib/actions/meeting-participants"
 import { GoLiveClient } from "./golive-client"
 
 export const metadata = { title: "GO LIVE" }
@@ -10,21 +11,13 @@ export default async function GoLivePage({ params }: { params: Promise<{ id: str
   const session = await auth()
   if (!session?.user) redirect("/login")
 
-  const [project, memberships] = await Promise.all([
+  const [project, projectParticipants, allUsers] = await Promise.all([
     db.project.findUnique({
       where: { id },
-      select: {
-        id: true,
-        title: true,
-        status: true,
-        goLiveDate: true,
-        postGoLiveEndDate: true,
-      },
+      select: { id: true, title: true, status: true, goLiveDate: true, postGoLiveEndDate: true },
     }),
-    db.projectMember.findMany({
-      where: { projectId: id },
-      include: { user: { select: { id: true, name: true, department: true } } },
-    }),
+    getProjectParticipants(id),
+    getAllActiveUsers(),
   ])
 
   if (!project) notFound()
@@ -38,11 +31,8 @@ export default async function GoLivePage({ params }: { params: Promise<{ id: str
         goLiveDate: project.goLiveDate?.toISOString() ?? null,
         postGoLiveEndDate: project.postGoLiveEndDate?.toISOString() ?? null,
       }}
-      members={memberships.map((m) => ({
-        id: m.user.id,
-        name: m.user.name,
-        department: m.user.department,
-      }))}
+      projectParticipants={projectParticipants}
+      allUsers={allUsers}
     />
   )
 }

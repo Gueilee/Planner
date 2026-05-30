@@ -2,6 +2,7 @@ import { auth } from "@/auth"
 import { db } from "@/lib/db"
 import { notFound, redirect } from "next/navigation"
 import { getCheckpointHistory } from "@/lib/actions/checkpoint"
+import { getProjectParticipants, getAllActiveUsers } from "@/lib/actions/meeting-participants"
 import { CheckpointClient } from "./checkpoint-client"
 
 export const metadata = { title: "Checkpoint" }
@@ -11,7 +12,7 @@ export default async function CheckpointPage({ params }: { params: Promise<{ id:
   const session = await auth()
   if (!session?.user) redirect("/login")
 
-  const [project, areas, tasks, memberships, history] = await Promise.all([
+  const [project, areas, tasks, projectParticipants, allUsers, history] = await Promise.all([
     db.project.findUnique({
       where: { id },
       select: { id: true, title: true, status: true },
@@ -29,16 +30,13 @@ export default async function CheckpointPage({ params }: { params: Promise<{ id:
       },
       orderBy: { order: "asc" },
     }),
-    db.projectMember.findMany({
-      where: { projectId: id },
-      include: { user: { select: { id: true, name: true, department: true } } },
-    }),
+    getProjectParticipants(id),
+    getAllActiveUsers(),
     getCheckpointHistory(id),
   ])
 
   if (!project) notFound()
 
-  // Build parent title map for hierarchy display
   const taskTitleMap = new Map(tasks.map((t) => [t.id, t.title]))
 
   return (
@@ -60,11 +58,8 @@ export default async function CheckpointPage({ params }: { params: Promise<{ id:
         budgetedCost: t.budgetedCost ?? null,
         actualCost:   t.actualCost   ?? null,
       }))}
-      members={memberships.map((m) => ({
-        id:         m.user.id,
-        name:       m.user.name,
-        department: m.user.department,
-      }))}
+      projectParticipants={projectParticipants}
+      allUsers={allUsers}
       history={history}
     />
   )

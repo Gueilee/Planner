@@ -46,12 +46,18 @@ type HistoryItem = {
   _count:   { participants: number }
 }
 
+import type { PickerUser } from "@/components/meeting-participant-picker"
+import { MeetingParticipantPicker } from "@/components/meeting-participant-picker"
+
 interface CheckpointClientProps {
-  project:  { id: string; title: string }
-  areas:    Area[]
-  tasks:    Task[]
-  members:  Member[]
-  history:  HistoryItem[]
+  project:             { id: string; title: string }
+  areas:               Area[]
+  tasks:               Task[]
+  /** @deprecated use projectParticipants */
+  members?:            Member[]
+  projectParticipants: PickerUser[]
+  allUsers:            PickerUser[]
+  history:             HistoryItem[]
 }
 
 type TaskState = {
@@ -627,7 +633,7 @@ function TaskDetailPanel({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function CheckpointClient({ project, areas, tasks, members, history }: CheckpointClientProps) {
+export function CheckpointClient({ project, areas, tasks, projectParticipants, allUsers, history }: CheckpointClientProps) {
   const today = new Date().toISOString().split("T")[0]
 
   const [frequency,        setFrequency]        = useState<CheckpointFrequency>("WEEKLY")
@@ -637,9 +643,9 @@ export function CheckpointClient({ project, areas, tasks, members, history }: Ch
   const [blockers,         setBlockers]         = useState("")
   const [nextSteps,        setNextSteps]        = useState("")
   const [observations,     setObservations]     = useState("")
-  const [attendeeIds,      setAttendeeIds]       = useState<string[]>([])
+  // Pré-seleciona automaticamente todos os participantes do projeto
+  const [attendeeIds,      setAttendeeIds]       = useState<string[]>(() => projectParticipants.map((p) => p.id))
   const [externalAttendees,setExternalAttendees] = useState<NewParticipant[]>([])
-  const [addingExternal,   setAddingExternal]   = useState(false)
   const [expandedAreas,    setExpandedAreas]    = useState<Set<string>>(new Set(areas.map((a) => a.id)))
   const [saving,           setSaving]           = useState(false)
   const [saved,            setSaved]            = useState(false)
@@ -973,51 +979,16 @@ export function CheckpointClient({ project, areas, tasks, members, history }: Ch
                 className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-50 placeholder:text-slate-300" />
             </div>
 
-            {/* Attendees */}
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-1.5">
-                <Users className="w-3 h-3" />
-                Participantes ({attendeeIds.length + externalAttendees.length}{members.length > 0 ? `/${members.length}` : ""})
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {members.map((m) => {
-                  const selected = attendeeIds.includes(m.id)
-                  return (
-                    <button key={m.id} onClick={() => toggleAttendee(m.id)}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all border"
-                      style={selected
-                        ? { background: "linear-gradient(135deg, #2463FF, #8B2FFF)", color: "#fff", borderColor: "transparent", boxShadow: "0 2px 8px rgba(36,99,255,0.25)" }
-                        : { background: "#fff", borderColor: "#E2E8F0", color: "#475569" }
-                      }>
-                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-black shrink-0 ${selected ? "bg-white/20 text-white" : "bg-slate-100 text-[#0F172A]"}`}>
-                        {initials(m.name)}
-                      </span>
-                      {m.name.split(" ")[0]}
-                    </button>
-                  )
-                })}
-
-                {externalAttendees.map((ext) => (
-                  <ParticipantCard
-                    key={ext.id}
-                    participant={ext}
-                    onRemove={() => setExternalAttendees((p) => p.filter((e) => e.id !== ext.id))}
-                  />
-                ))}
-
-                {addingExternal ? (
-                  <NewParticipantForm
-                    onAdd={(p) => {
-                      setExternalAttendees((prev) => [...prev, { ...p, id: Math.random().toString(36).slice(2) }])
-                      setAddingExternal(false)
-                    }}
-                    onCancel={() => setAddingExternal(false)}
-                  />
-                ) : (
-                  <NewParticipantTrigger onClick={() => setAddingExternal(true)} />
-                )}
-              </div>
-            </div>
+            {/* Attendees — novo picker com fotos e pré-seleção */}
+            <MeetingParticipantPicker
+              projectParticipants={projectParticipants}
+              allUsers={allUsers}
+              selectedIds={attendeeIds}
+              onChange={setAttendeeIds}
+              externalAttendees={externalAttendees}
+              onAddExternal={(p) => setExternalAttendees((prev) => [...prev, p])}
+              onRemoveExternal={(id) => setExternalAttendees((p) => p.filter((e) => e.id !== id))}
+            />
 
             {/* Stats */}
             <div className="pt-3 border-t border-slate-100">
