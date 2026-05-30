@@ -5,6 +5,9 @@ import { differenceInDays } from "date-fns"
 import { ProjectStatus } from "@/lib/generated/prisma/enums"
 import { ReportClient, type ProjectSlideData } from "./report-client"
 
+// Garante que a página sempre busca dados frescos do banco (sem cache estático)
+export const dynamic = "force-dynamic"
+
 export const metadata = { title: "Status Report" }
 
 const ACTIVE_STATUSES: ProjectStatus[] = [

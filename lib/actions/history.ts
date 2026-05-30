@@ -79,8 +79,23 @@ export async function deleteMeeting(meetingId: string) {
   const session = await auth()
   if (!session?.user) throw new Error("Não autorizado")
 
+  // Busca o projectId antes de deletar para revalidar as rotas certas
+  const meeting = await db.meeting.findUnique({
+    where:  { id: meetingId },
+    select: { projectId: true },
+  })
+
   await db.meeting.delete({ where: { id: meetingId } })
+
+  // Revalida todas as rotas que exibem dados de reuniões/checkpoints
   revalidatePath("/history")
+  revalidatePath("/status-report")
+  if (meeting?.projectId) {
+    revalidatePath(`/projects/${meeting.projectId}`)
+    revalidatePath(`/projects/${meeting.projectId}/checkpoint`)
+    revalidatePath(`/projects/${meeting.projectId}/meetings`)
+  }
+
   return { success: true }
 }
 
@@ -90,7 +105,10 @@ export async function deleteAttachment(attachmentId: string) {
   const session = await auth()
   if (!session?.user) throw new Error("Não autorizado")
 
-  const att = await db.attachment.findUnique({ where: { id: attachmentId }, select: { fileUrl: true } })
+  const att = await db.attachment.findUnique({
+    where:  { id: attachmentId },
+    select: { fileUrl: true, projectId: true, taskId: true },
+  })
   if (!att) throw new Error("Anexo não encontrado")
 
   await db.attachment.delete({ where: { id: attachmentId } })
@@ -104,5 +122,10 @@ export async function deleteAttachment(attachmentId: string) {
   }
 
   revalidatePath("/history")
+  if (att.projectId) {
+    revalidatePath(`/projects/${att.projectId}`)
+    revalidatePath(`/projects/${att.projectId}/schedule`)
+  }
+
   return { success: true }
 }
