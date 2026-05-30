@@ -12,9 +12,9 @@ import { format, differenceInDays } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import Link from "next/link"
 import { saveGoNoGoDecision } from "@/lib/actions/go-no-go"
-import {
-  NewParticipantForm, type NewParticipant,
-} from "@/components/meeting-new-participant"
+import type { NewParticipant } from "@/components/meeting-new-participant"
+import type { PickerUser } from "@/components/meeting-participant-picker"
+import { MeetingParticipantPicker } from "@/components/meeting-participant-picker"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -679,57 +679,28 @@ function SlideRisks({ risks }: { risks: RiskItem[] }) {
   )
 }
 
-// ── Dark-themed "Novo" trigger for Go-No-Go ───────────────────────────────────
-function GngNewParticipant({ onAdd }: { onAdd: (p: Omit<NewParticipant, "id">) => void }) {
-  const [open, setOpen] = useState(false)
-  if (open) {
-    return (
-      <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.12)", padding: "12px" }}>
-        <NewParticipantForm
-          onAdd={(p) => { onAdd(p); setOpen(false) }}
-          onCancel={() => setOpen(false)}
-        />
-      </div>
-    )
-  }
-  return (
-    <button
-      type="button"
-      onClick={() => setOpen(true)}
-      style={{
-        display: "flex", alignItems: "center", gap: "6px",
-        padding: "7px 14px", borderRadius: "8px",
-        background: "rgba(255,255,255,0.05)", border: "1px dashed rgba(255,255,255,0.20)",
-        fontSize: "11px", fontWeight: 700, color: "rgba(248,250,252,0.50)",
-        cursor: "pointer", transition: "all 0.15s",
-      }}
-      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#7B2FBE"; e.currentTarget.style.color = "#A78BFA"; e.currentTarget.style.background = "rgba(123,47,190,0.10)" }}
-      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.20)"; e.currentTarget.style.color = "rgba(248,250,252,0.50)"; e.currentTarget.style.background = "rgba(255,255,255,0.05)" }}
-    >
-      + Novo Participante
-    </button>
-  )
-}
 
 function SlideDecision({
-  decision, onDecision, attendees, onToggleAttendee,
-  extraAttendees, onExtraAttendees,
+  decision, onDecision, attendees, onChangeAttendees,
+  extraAttendees, onAddExtra, onRemoveExtra,
   notes, onNotes, observations, onObservations, meetingDate, onMeetingDate,
-  users, onSubmit, isPending, submitted,
+  projectParticipants, allUsers, onSubmit, isPending, submitted,
 }: {
   decision: Decision | null
   onDecision: (d: Decision) => void
   attendees: string[]
-  onToggleAttendee: (id: string) => void
+  onChangeAttendees: (ids: string[]) => void
   extraAttendees: NewParticipant[]
-  onExtraAttendees: (list: NewParticipant[]) => void
+  onAddExtra: (p: NewParticipant) => void
+  onRemoveExtra: (id: string) => void
   notes: string
   onNotes: (v: string) => void
   observations: string
   onObservations: (v: string) => void
   meetingDate: string
   onMeetingDate: (v: string) => void
-  users: AttendeeUser[]
+  projectParticipants: PickerUser[]
+  allUsers: PickerUser[]
   onSubmit: () => void
   isPending: boolean
   submitted: boolean
@@ -761,93 +732,16 @@ function SlideDecision({
             />
           </div>
 
-          {/* Attendees */}
+          {/* Participantes — picker moderno */}
           <div style={{ marginBottom: "1.5rem" }}>
-            <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: "rgba(248,250,252,0.45)", textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: "8px" }}>
-              Participantes ({attendees.length + extraAttendees.length} selecionado{(attendees.length + extraAttendees.length) !== 1 ? "s" : ""})
-            </label>
-
-            {/* System users list */}
-            <div style={{
-              maxHeight: "160px", overflowY: "auto",
-              background: "rgba(255,255,255,0.03)", borderRadius: "10px",
-              border: "1px solid rgba(255,255,255,0.08)",
-              display: "flex", flexDirection: "column",
-              marginBottom: "8px",
-            }}>
-              {users.map((u) => {
-                const checked = attendees.includes(u.id)
-                return (
-                  <button
-                    key={u.id}
-                    type="button"
-                    onClick={() => onToggleAttendee(u.id)}
-                    style={{
-                      display: "flex", alignItems: "center", gap: "10px",
-                      padding: "10px 14px", textAlign: "left",
-                      background: checked ? "rgba(123,47,190,0.12)" : "transparent",
-                      border: "none", borderBottom: "1px solid rgba(255,255,255,0.05)",
-                      cursor: "pointer", transition: "background 0.15s",
-                    }}
-                  >
-                    <div style={{
-                      width: "18px", height: "18px", borderRadius: "5px", flexShrink: 0,
-                      background: checked ? "#7B2FBE" : "rgba(255,255,255,0.08)",
-                      border: `1px solid ${checked ? "#7B2FBE" : "rgba(255,255,255,0.15)"}`,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      transition: "all 0.15s",
-                    }}>
-                      {checked && <CheckCircle2 size={11} style={{ color: "white" }} />}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: "13px", fontWeight: 600, color: "rgba(248,250,252,0.85)", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {u.name}
-                      </p>
-                      {u.department && (
-                        <p style={{ fontSize: "11px", color: "rgba(248,250,252,0.35)", margin: 0 }}>{u.department}</p>
-                      )}
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-
-            {/* Extra participants added via "Novo" */}
-            {extraAttendees.length > 0 && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "8px" }}>
-                {extraAttendees.map((p) => (
-                  <div key={p.id} style={{
-                    display: "flex", alignItems: "center", gap: "6px",
-                    padding: "5px 10px", borderRadius: "20px",
-                    background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)",
-                  }}>
-                    <div style={{
-                      width: "20px", height: "20px", borderRadius: "50%", flexShrink: 0,
-                      background: p.kind === "INTERNO" ? "#4338CA" : p.kind === "FORNECEDOR" ? "#D97706" : "#059669",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: "8px", fontWeight: 900, color: "white",
-                    }}>
-                      {p.name.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase()}
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <p style={{ fontSize: "11px", fontWeight: 600, color: "rgba(248,250,252,0.85)", margin: 0 }}>{p.name.split(" ")[0]}</p>
-                      {p.area && <p style={{ fontSize: "9px", color: "rgba(248,250,252,0.35)", margin: 0 }}>{p.area}</p>}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => onExtraAttendees(extraAttendees.filter((x) => x.id !== p.id))}
-                      style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: "rgba(248,250,252,0.35)", lineHeight: 1 }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* "Novo" button or form */}
-            <GngNewParticipant
-              onAdd={(p) => onExtraAttendees([...extraAttendees, { ...p, id: Math.random().toString(36).slice(2) }])}
+            <MeetingParticipantPicker
+              projectParticipants={projectParticipants}
+              allUsers={allUsers}
+              selectedIds={attendees}
+              onChange={onChangeAttendees}
+              externalAttendees={extraAttendees}
+              onAddExternal={onAddExtra}
+              onRemoveExternal={onRemoveExtra}
             />
           </div>
 
@@ -1070,11 +964,13 @@ function SuccessScreen({ decision, projectId }: { decision: Decision; projectId:
 
 export function GoNoGoClient({
   project,
-  users,
+  projectParticipants,
+  allUsers,
   currentUserId,
 }: {
   project: ProjectData
-  users: AttendeeUser[]
+  projectParticipants: PickerUser[]
+  allUsers: PickerUser[]
   currentUserId: string
 }) {
   const router = useRouter()
@@ -1087,7 +983,11 @@ export function GoNoGoClient({
   const [submitted, setSubmitted] = useState(false)
 
   const [decision, setDecision] = useState<Decision | null>(null)
-  const [attendees, setAttendees] = useState<string[]>([currentUserId])
+  // Pré-seleciona todos os participantes do projeto
+  const [attendees, setAttendees] = useState<string[]>(() => {
+    const ids = projectParticipants.map((p) => p.id)
+    return ids.includes(currentUserId) ? ids : [currentUserId, ...ids]
+  })
   const [extraAttendees, setExtraAttendees] = useState<NewParticipant[]>([])
   const [notes, setNotes] = useState("")
   const [observations, setObservations] = useState("")
@@ -1189,13 +1089,15 @@ export function GoNoGoClient({
       case "decision":    return (
         <SlideDecision
           decision={decision} onDecision={setDecision}
-          attendees={attendees} onToggleAttendee={toggleAttendee}
-          extraAttendees={extraAttendees} onExtraAttendees={setExtraAttendees}
+          attendees={attendees} onChangeAttendees={setAttendees}
+          extraAttendees={extraAttendees}
+          onAddExtra={(p) => setExtraAttendees((prev) => [...prev, p])}
+          onRemoveExtra={(id) => setExtraAttendees((prev) => prev.filter((e) => e.id !== id))}
           notes={notes} onNotes={setNotes}
           observations={observations} onObservations={setObservations}
           meetingDate={meetingDate} onMeetingDate={setMeetingDate}
-          users={users} onSubmit={handleSubmit}
-          isPending={isPending} submitted={submitted}
+          projectParticipants={projectParticipants} allUsers={allUsers}
+          onSubmit={handleSubmit} isPending={isPending} submitted={submitted}
         />
       )
       default: return null

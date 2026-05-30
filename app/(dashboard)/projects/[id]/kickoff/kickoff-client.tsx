@@ -13,9 +13,8 @@ import {
 } from "lucide-react"
 import { saveKickOff, registerKickOff } from "@/lib/actions/kickoff"
 import type { KickOffData, EAPArea, EAPTask, Milestone, KickOffAttachment, ExternalAttendee } from "@/lib/types/kickoff"
-import {
-  ParticipantCard, NewParticipantForm, NewParticipantTrigger,
-} from "@/components/meeting-new-participant"
+import type { PickerUser } from "@/components/meeting-participant-picker"
+import { MeetingParticipantPicker } from "@/components/meeting-participant-picker"
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -518,12 +517,13 @@ function FileIcon({ type }: { type: string }) {
 // ── Main Client ───────────────────────────────────────────────────────────────
 
 interface KickOffClientProps {
-  project: ProjectData
-  existing: (KickOffData & { id: string }) | null
-  allUsers: UserInfo[]
+  project:             ProjectData
+  existing:            (KickOffData & { id: string }) | null
+  projectParticipants: PickerUser[]
+  allUsers:            PickerUser[]
 }
 
-export function KickOffClient({ project, existing, allUsers }: KickOffClientProps) {
+export function KickOffClient({ project, existing, projectParticipants, allUsers }: KickOffClientProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -539,12 +539,11 @@ export function KickOffClient({ project, existing, allUsers }: KickOffClientProp
   const [milestones, setMilestones] = useState<Milestone[]>(() => existing?.milestones ?? generateMilestones(project))
   const [attachments, setAttachments] = useState<KickOffAttachment[]>(existing?.attachments ?? [])
   const [attendeeIds, setAttendeeIds] = useState<string[]>(
-    existing?.attendeeIds ?? project.members.map((m) => m.user.id)
+    existing?.attendeeIds ?? projectParticipants.map((p) => p.id)
   )
   const [externalAttendees, setExternalAttendees] = useState<ExternalAttendee[]>(
     existing?.externalAttendees ?? []
   )
-  const [addingExternal, setAddingExternal] = useState(false)
   const [notes, setNotes] = useState(existing?.notes ?? "")
   const [observations, setObservations] = useState(existing?.observations ?? "")
   const [uploading, setUploading] = useState(false)
@@ -569,12 +568,6 @@ export function KickOffClient({ project, existing, allUsers }: KickOffClientProp
       notes,
       observations,
     }
-  }
-
-  function confirmExternal(name: string, area: string, kind: "INTERNO" | "EXTERNO" | "FORNECEDOR") {
-    const type: ExternalAttendee["type"] = kind === "INTERNO" ? "INTERNAL" : "EXTERNAL"
-    setExternalAttendees((prev) => [...prev, { id: uid(), name, role: area, type }])
-    setAddingExternal(false)
   }
 
   function removeExternal(id: string) {
@@ -879,61 +872,17 @@ export function KickOffClient({ project, existing, allUsers }: KickOffClientProp
             <section id="section-participantes">
               <SectionHeader number={5} title="Participantes & Notas" icon={Users} description="Selecione quem participará do Kick-Off." />
               <div className="mt-4 space-y-4">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {/* Internal users */}
-                  {allUsers.map((user) => {
-                    const selected = attendeeIds.includes(user.id)
-                    const initials = user.name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()
-                    return (
-                      <button
-                        key={user.id}
-                        onClick={() => toggleAttendee(user.id)}
-                        className={`flex items-center gap-2.5 p-3 rounded-xl text-left transition-all ${
-                          selected
-                            ? "bg-violet-50 border-2 border-[#7B2FBE]/30"
-                            : "bg-white border border-slate-200 hover:border-slate-300"
-                        }`}
-                      >
-                        <div
-                          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black text-white shrink-0"
-                          style={{ background: selected ? "linear-gradient(135deg, #7B2FBE, #2463FF)" : "#94A3B8" }}
-                        >
-                          {initials}
-                        </div>
-                        <div className="min-w-0">
-                          <p className={`text-xs font-semibold truncate ${selected ? "text-[#7B2FBE]" : "text-[#0F172A]"}`}>{user.name}</p>
-                          <p className="text-[10px] text-slate-400 truncate">{user.department ?? user.role}</p>
-                        </div>
-                        {selected && <Check className="w-3.5 h-3.5 text-[#7B2FBE] shrink-0 ml-auto" />}
-                      </button>
-                    )
-                  })}
-
-                  {/* Additional participants */}
-                  {externalAttendees.map((ext) => (
-                    <ParticipantCard
-                      key={ext.id}
-                      participant={{
-                        id:   ext.id,
-                        name: ext.name,
-                        area: ext.role ?? "",
-                        kind: ext.type === "INTERNAL" ? "INTERNO" : "EXTERNO",
-                      }}
-                      onRemove={() => removeExternal(ext.id)}
-                    />
-                  ))}
-
-                  {addingExternal ? (
-                    <div className="col-span-2 sm:col-span-3">
-                      <NewParticipantForm
-                        onAdd={(p) => confirmExternal(p.name, p.area, p.kind)}
-                        onCancel={() => setAddingExternal(false)}
-                      />
-                    </div>
-                  ) : (
-                    <NewParticipantTrigger onClick={() => setAddingExternal(true)} />
-                  )}
-                </div>
+                <MeetingParticipantPicker
+                  projectParticipants={projectParticipants}
+                  allUsers={allUsers}
+                  selectedIds={attendeeIds}
+                  onChange={setAttendeeIds}
+                  externalAttendees={externalAttendees.map((e) => ({
+                    id: e.id, name: e.name, area: e.role ?? "", kind: "EXTERNO" as const,
+                  }))}
+                  onAddExternal={(p) => setExternalAttendees((prev) => [...prev, { id: p.id, name: p.name, role: p.area, type: "EXTERNAL" }])}
+                  onRemoveExternal={(id) => setExternalAttendees((prev) => prev.filter((e) => e.id !== id))}
+                />
 
                 <div>
                   <label className="block text-xs font-700 uppercase tracking-widest text-slate-400 mb-1.5">Notas & Decisões da Reunião</label>

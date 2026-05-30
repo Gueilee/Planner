@@ -14,10 +14,9 @@ import {
 } from "lucide-react"
 import { registerClosureMeeting } from "@/lib/actions/encerramento"
 import { createLesson } from "@/lib/actions/lessons"
-import {
-  ParticipantCard, NewParticipantForm, NewParticipantTrigger,
-  type NewParticipant,
-} from "@/components/meeting-new-participant"
+import type { NewParticipant } from "@/components/meeting-new-participant"
+import type { PickerUser } from "@/components/meeting-participant-picker"
+import { MeetingParticipantPicker } from "@/components/meeting-participant-picker"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -49,12 +48,14 @@ type MeetingRef = { id: string; type: string; title: string; date: string; parti
 type LessonRef  = { id: string; phase: string; area: string; occurrence: string; influence: string; impact: string; lesson: string; identifiedAt: string; createdBy: string }
 
 type Props = {
-  project:  ProjectInfo
-  members:  Member[]
-  wbsAreas: WbsArea[]
-  risks:    Risk[]
-  meetings: MeetingRef[]
-  lessons:  LessonRef[]
+  project:             ProjectInfo
+  members:             Member[]
+  projectParticipants: PickerUser[]
+  allUsers:            PickerUser[]
+  wbsAreas:            WbsArea[]
+  risks:               Risk[]
+  meetings:            MeetingRef[]
+  lessons:             LessonRef[]
 }
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -127,7 +128,7 @@ function Section({ title, icon: Icon, children, defaultOpen = true }: {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function EncerramentoMeetingClient({ project, members, wbsAreas, risks, meetings, lessons: initialLessons }: Props) {
+export function EncerramentoMeetingClient({ project, members, projectParticipants, allUsers, wbsAreas, risks, meetings, lessons: initialLessons }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -139,9 +140,8 @@ export function EncerramentoMeetingClient({ project, members, wbsAreas, risks, m
   const [nextActions, setNextActions] = useState("")
   const [closingNotes, setClosingNotes] = useState("")
   const [observations, setObservations] = useState("")
-  const [attendeeIds, setAttendeeIds] = useState<string[]>([])
+  const [attendeeIds, setAttendeeIds] = useState<string[]>(() => projectParticipants.map((p) => p.id))
   const [externalAttendees, setExternalAttendees] = useState<NewParticipant[]>([])
-  const [addingExternal, setAddingExternal] = useState(false)
 
   // lessons
   const [lessons,      setLessons]      = useState<LessonRef[]>(initialLessons)
@@ -383,49 +383,16 @@ export function EncerramentoMeetingClient({ project, members, wbsAreas, risks, m
 
         {/* ── Attendees ── */}
         <Section title="Participantes da Reunião" icon={Users} defaultOpen={true}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
-            {members.map((m) => {
-              const checked = attendeeIds.includes(m.id)
-              return (
-                <button
-                  key={m.id}
-                  onClick={() => toggleAttendee(m.id)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all ${checked ? "border-violet-300 bg-violet-50" : "border-black/[0.07] bg-[#F7F6F2] hover:bg-white"}`}
-                >
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0" style={{ background: checked ? "linear-gradient(135deg, #7B2FBE, #9333EA)" : "#c4c1d4" }}>
-                    {m.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className={`text-sm font-medium truncate ${checked ? "text-violet-700" : "text-[#1a1625]"}`}>{m.name}</p>
-                    {m.department && <p className="text-[11px] text-[#9c99b0] truncate">{m.department}</p>}
-                  </div>
-                  {checked && <CheckCircle2 className="w-4 h-4 text-violet-600 shrink-0" />}
-                </button>
-              )
-            })}
-
-            {/* Additional participants */}
-            {externalAttendees.map((ext) => (
-              <ParticipantCard
-                key={ext.id}
-                participant={ext}
-                onRemove={() => setExternalAttendees((p) => p.filter((e) => e.id !== ext.id))}
-              />
-            ))}
-
-            {addingExternal ? (
-              <div className="col-span-full sm:col-span-2">
-                <NewParticipantForm
-                  onAdd={(p) => {
-                    setExternalAttendees((prev) => [...prev, { ...p, id: Math.random().toString(36).slice(2) }])
-                    setAddingExternal(false)
-                  }}
-                  onCancel={() => setAddingExternal(false)}
-                />
-              </div>
-            ) : (
-              <NewParticipantTrigger onClick={() => setAddingExternal(true)} />
-            )}
+          <div className="mt-1">
+            <MeetingParticipantPicker
+              projectParticipants={projectParticipants}
+              allUsers={allUsers}
+              selectedIds={attendeeIds}
+              onChange={setAttendeeIds}
+              externalAttendees={externalAttendees}
+              onAddExternal={(p) => setExternalAttendees((prev) => [...prev, p])}
+              onRemoveExternal={(id) => setExternalAttendees((prev) => prev.filter((e) => e.id !== id))}
+            />
           </div>
         </Section>
 

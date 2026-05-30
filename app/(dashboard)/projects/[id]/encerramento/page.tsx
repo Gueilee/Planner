@@ -1,6 +1,7 @@
 import { auth } from "@/auth"
 import { notFound, redirect } from "next/navigation"
 import { getProjectClosureData } from "@/lib/actions/encerramento"
+import { getProjectParticipants, getAllActiveUsers } from "@/lib/actions/meeting-participants"
 import { EncerramentoMeetingClient } from "./encerramento-client"
 
 export const metadata = { title: "Reunião de Encerramento" }
@@ -10,7 +11,11 @@ export default async function EncerramentoMeetingPage({ params }: { params: Prom
   const session = await auth()
   if (!session?.user) redirect("/login")
 
-  const project = await getProjectClosureData(id)
+  const [project, projectParticipants, allUsers] = await Promise.all([
+    getProjectClosureData(id),
+    getProjectParticipants(id),
+    getAllActiveUsers(),
+  ])
   if (!project) notFound()
 
   const members = project.members.map((m) => ({
@@ -92,6 +97,8 @@ export default async function EncerramentoMeetingPage({ params }: { params: Prom
         tasksTotal,
       }}
       members={members}
+      projectParticipants={projectParticipants}
+      allUsers={allUsers}
       wbsAreas={wbsAreas}
       risks={risks}
       meetings={meetings}
