@@ -17,6 +17,7 @@ import {
   List, BarChart2, Search, FolderOpen, Paperclip,
   Link2, Lock, ArrowRight, GripVertical, FileSpreadsheet, ArrowUpDown,
   Upload, Download, FileText, FileImage, FileArchive, Users,
+  LayoutTemplate, Milestone, Zap, Award, Star, Globe2,
 } from "lucide-react"
 import {
   createTask, updateTask, deleteTask, createArea,
@@ -25,6 +26,7 @@ import {
   addExternalMember,
   type AttachmentUpload,
 } from "@/lib/actions/schedule"
+import { getTemplates, applyTemplate, type Template } from "@/lib/actions/templates"
 import { deriveStatus, deriveProgress, type AncestorUpdate } from "@/lib/utils/task-progress"
 import { isHoliday, isWeekend as isWknd, getHolidayName, nextWorkingDay } from "@/lib/working-days"
 import { WorkingDayPicker } from "@/components/working-day-picker"
@@ -1048,6 +1050,43 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
   const [editPred,  setEditPred]  = useState<{ id: string; val: string } | null>(null)
   const [inlineAdd, setInlineAdd] = useState<{ taskId: string; val: string } | null>(null)
 
+  // ── Template modal state ─────────────────────────────────────────────────
+  const [tplModalOpen,    setTplModalOpen]    = useState(false)
+  const [tplLoading,      setTplLoading]      = useState(false)
+  const [tplList,         setTplList]         = useState<Template[]>([])
+  const [tplSelected,     setTplSelected]     = useState<Template | null>(null)
+  const [tplStartDate,    setTplStartDate]    = useState<string>("")
+  const [tplApplying,     setTplApplying]     = useState(false)
+
+  async function openTemplateModal() {
+    setTplModalOpen(true)
+    setTplSelected(null)
+    setTplStartDate(new Date().toISOString().slice(0, 10))
+    setTplLoading(true)
+    try {
+      const list = await getTemplates()
+      setTplList(list)
+    } finally {
+      setTplLoading(false)
+    }
+  }
+
+  async function handleApplyTemplate() {
+    if (!tplSelected || tplApplying) return
+    setTplApplying(true)
+    try {
+      const start = tplStartDate ? new Date(tplStartDate) : new Date()
+      const result = await applyTemplate(project.id, tplSelected.id, start)
+      // Reload page to show new tasks
+      window.location.reload()
+    } catch (e) {
+      alert("Erro ao aplicar modelo: " + (e instanceof Error ? e.message : String(e)))
+    } finally {
+      setTplApplying(false)
+      setTplModalOpen(false)
+    }
+  }
+
   // Always-current ref — safe to read inside async callbacks
   const tasksRef = useRef(tasks)
   useLayoutEffect(() => { tasksRef.current = tasks })
@@ -1544,6 +1583,23 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
           }
           {exporting ? "Exportando…" : "Excel"}
         </button>
+
+        {/* Use template */}
+        {tasks.length === 0 && (
+          <button onClick={openTemplateModal}
+            className="inline-flex items-center gap-2 px-4 h-8 text-xs font-bold rounded-xl border transition-all hover:opacity-90"
+            style={{ borderColor: "#7B2FBE", color: "#7B2FBE", background: "rgba(123,47,190,0.06)" }}
+            title="Iniciar cronograma a partir de um modelo">
+            <LayoutTemplate className="w-3.5 h-3.5" /> Usar Modelo
+          </button>
+        )}
+        {tasks.length > 0 && (
+          <button onClick={openTemplateModal}
+            className="inline-flex items-center gap-2 px-3 h-8 text-xs font-semibold rounded-xl border border-slate-200 text-slate-500 hover:border-[#7B2FBE] hover:text-[#7B2FBE] transition-all bg-white"
+            title="Adicionar atividades de um modelo ao cronograma">
+            <LayoutTemplate className="w-3.5 h-3.5" /> Usar Modelo
+          </button>
+        )}
 
         {/* Add task */}
         <button onClick={() => openAdd()}
@@ -2707,6 +2763,132 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
       <style jsx global>{`
         [style*="scrollbar-width: none"]::-webkit-scrollbar { display: none; }
       `}</style>
+
+      {/* ── Template modal ───────────────────────────────────────────────── */}
+      {tplModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(15,23,42,0.7)", backdropFilter: "blur(6px)" }}>
+          <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-[90vh]">
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100"
+              style={{ background: "linear-gradient(135deg, #0F172A, #1E1B4B)" }}>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center"
+                  style={{ background: "linear-gradient(135deg, #7B2FBE, #9333EA)" }}>
+                  <LayoutTemplate className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-black text-white text-sm">Usar Modelo de Cronograma</h3>
+                  <p className="text-[11px] text-white/50">Selecione um modelo e defina a data de início</p>
+                </div>
+              </div>
+              <button onClick={() => setTplModalOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="flex flex-1 min-h-0 overflow-hidden">
+              {/* Template list */}
+              <div className="w-56 flex-shrink-0 border-r border-slate-100 overflow-y-auto p-3 space-y-2 bg-slate-50">
+                {tplLoading ? (
+                  <div className="flex justify-center pt-8"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
+                ) : tplList.map((t) => {
+                  const TYPE_ICON: Record<string, React.ElementType> = { AUTOMACAO: Zap, QUALIDADE: Award, CERTIFICACAO: Star, EXTERNO: Globe2, CUSTOM: Layers }
+                  const TYPE_COLOR: Record<string, string> = { AUTOMACAO: "#7B2FBE", QUALIDADE: "#10B981", CERTIFICACAO: "#F59E0B", EXTERNO: "#2463FF", CUSTOM: "#64748B" }
+                  const Icon = TYPE_ICON[t.projectType] ?? Layers
+                  const color = TYPE_COLOR[t.projectType] ?? "#64748B"
+                  const active = tplSelected?.id === t.id
+                  return (
+                    <button key={t.id} onClick={() => setTplSelected(t)}
+                      className="w-full text-left rounded-xl p-3 border transition-all"
+                      style={{
+                        borderColor: active ? color : "#E2E8F0",
+                        background: active ? `${color}12` : "white",
+                        boxShadow: active ? `0 0 0 2px ${color}30` : "none",
+                      }}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <Icon className="w-3 h-3 shrink-0" style={{ color }} />
+                        <span className="text-xs font-bold text-slate-700 truncate">{t.name}</span>
+                      </div>
+                      <span className="text-[10px] text-slate-400">{t.tasks.length} atividades</span>
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* Preview + settings */}
+              <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+                {!tplSelected ? (
+                  <div className="flex flex-col items-center justify-center h-full text-center p-8">
+                    <LayoutTemplate className="w-10 h-10 text-slate-200 mb-3" />
+                    <p className="text-sm text-slate-400 font-medium">Selecione um modelo à esquerda</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Start date */}
+                    <div className="px-5 py-3 border-b border-slate-100 bg-white flex items-center gap-4">
+                      <label className="text-xs font-bold text-slate-600 shrink-0">Data de início:</label>
+                      <input type="date" value={tplStartDate}
+                        onChange={(e) => setTplStartDate(e.target.value)}
+                        className="flex-1 px-3 py-1.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#7B2FBE]/30" />
+                      <span className="text-[11px] text-slate-400 shrink-0">
+                        As datas serão calculadas automaticamente pela regra FS
+                      </span>
+                    </div>
+
+                    {/* Task preview */}
+                    <div className="flex-1 overflow-y-auto p-4">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Atividades do modelo</p>
+                      <div className="space-y-0.5">
+                        {tplSelected.tasks.map((t) => {
+                          const depth = (t.wbsCode.match(/\./g) ?? []).length
+                          const isParent = tplSelected.tasks.some((x) => x.parentCode === t.wbsCode)
+                          return (
+                            <div key={t.id} className="flex items-center gap-2 py-1 rounded px-2 hover:bg-slate-50"
+                              style={{ paddingLeft: 8 + depth * 16 }}>
+                              <span className="w-2 h-2 rounded-full shrink-0"
+                                style={{ background: t.isMilestone ? "#F59E0B" : isParent ? "#7B2FBE" : "#CBD5E1" }} />
+                              <span className="text-[11px] font-mono text-slate-400 shrink-0 w-10">{t.wbsCode}</span>
+                              <span className={`text-xs truncate ${isParent ? "font-semibold text-slate-700" : "text-slate-600"}`}>{t.title}</span>
+                              {t.isMilestone && <Milestone className="w-2.5 h-2.5 text-amber-500 shrink-0" />}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-white">
+              <p className="text-xs text-slate-400">
+                {tplSelected
+                  ? `${tplSelected.tasks.length} atividades serão adicionadas ao cronograma`
+                  : "Selecione um modelo para continuar"}
+              </p>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setTplModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+                  Cancelar
+                </button>
+                <button onClick={handleApplyTemplate}
+                  disabled={!tplSelected || tplApplying}
+                  className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-bold text-white disabled:opacity-50 transition-all hover:opacity-90 active:scale-[0.97]"
+                  style={{ background: "linear-gradient(135deg, #7B2FBE, #2463FF)", boxShadow: "0 4px 12px rgba(123,47,190,0.3)" }}>
+                  {tplApplying
+                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Aplicando…</>
+                    : <><Check className="w-4 h-4" /> Aplicar Modelo</>}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

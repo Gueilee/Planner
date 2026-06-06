@@ -144,6 +144,7 @@ model User {
   notifications           Notification[]
   notificationPreference  NotificationPreference?
   lessonsLearned          LessonLearned[]
+  scheduleTemplates       ScheduleTemplate[]
 }
 
 // ─────────────────────────────────────────────
@@ -530,6 +531,42 @@ model NotificationPreference {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// SCHEDULE TEMPLATES — Modelos de Cronograma
+// ─────────────────────────────────────────────
+
+model ScheduleTemplate {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  projectType String  // "AUTOMACAO" | "QUALIDADE" | "CERTIFICACAO" | "EXTERNO" | "CUSTOM"
+  color       String?
+  isBuiltIn   Boolean @default(false)
+
+  tasks       ScheduleTemplateTask[]
+
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ScheduleTemplateTask {
+  id               String  @id @default(cuid())
+  templateId       String
+  wbsCode          String  // "1", "1.1", "1.1.1"
+  parentCode       String? // wbsCode do pai (null = raiz)
+  title            String
+  estimatedEffort  Float?
+  isMilestone      Boolean @default(false)
+  predecessorCodes String? // JSON: ["1.1","2.3"]
+  durationDays     Int     @default(1)
+  order            Int     @default(0)
+
+  template ScheduleTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
 }
 
 // ─────────────────────────────────────────────
