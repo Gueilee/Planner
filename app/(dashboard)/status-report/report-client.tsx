@@ -221,7 +221,7 @@ function GCard({children,style,className}:{children:React.ReactNode;style?:React
 }
 
 function SL({children,right}:{children:React.ReactNode;right?:React.ReactNode}) {
-  return <div className="flex items-center justify-between" style={{marginBottom:7}}><p style={{fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.14em",color:"rgba(148,185,255,0.55)"}}>{children}</p>{right}</div>
+  return <div className="flex items-center justify-between" style={{marginBottom:9}}><p style={{fontSize:13,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.12em",color:"rgba(170,205,255,0.75)"}}>{children}</p>{right}</div>
 }
 
 // ─── Traffic Light ────────────────────────────────────────────────────────────
@@ -318,30 +318,30 @@ function TimelineThermometer({ timelineProgress, progress }: { timelineProgress:
   const delta = Math.abs(progress - timelineProgress)
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {/* Prazo decorrido */}
       <div>
-        <div className="flex justify-between" style={{ marginBottom: 4 }}>
-          <span style={{ fontSize: 10.5, color: "rgba(148,185,255,0.55)", fontWeight: 600 }}>Prazo decorrido</span>
-          <span style={{ fontSize: 12, color: "#60A5FA", fontWeight: 800 }}>{animT}%</span>
+        <div className="flex justify-between" style={{ marginBottom: 5 }}>
+          <span style={{ fontSize: 12.5, color: "rgba(165,200,255,0.72)", fontWeight: 600 }}>Prazo decorrido</span>
+          <span style={{ fontSize: 14, color: "#60A5FA", fontWeight: 800 }}>{animT}%</span>
         </div>
-        <div style={{ height: 7, background: "rgba(255,255,255,0.08)", borderRadius: 4, overflow: "hidden" }}>
-          <div style={{ height: "100%", borderRadius: 4, width: `${animT}%`, background: "#3B82F6", transition: "width 1.2s ease" }} />
+        <div style={{ height: 9, background: "rgba(255,255,255,0.08)", borderRadius: 5, overflow: "hidden" }}>
+          <div style={{ height: "100%", borderRadius: 5, width: `${animT}%`, background: "#3B82F6", transition: "width 1.2s ease" }} />
         </div>
       </div>
       {/* Progresso real */}
       <div>
-        <div className="flex justify-between" style={{ marginBottom: 4 }}>
-          <span style={{ fontSize: 10.5, color: "rgba(148,185,255,0.55)", fontWeight: 600 }}>Progresso real</span>
-          <span style={{ fontSize: 12, color: ahead ? "#10B981" : "#EF4444", fontWeight: 800 }}>{animP}%</span>
+        <div className="flex justify-between" style={{ marginBottom: 5 }}>
+          <span style={{ fontSize: 12.5, color: "rgba(165,200,255,0.72)", fontWeight: 600 }}>Progresso real</span>
+          <span style={{ fontSize: 14, color: ahead ? "#10B981" : "#EF4444", fontWeight: 800 }}>{animP}%</span>
         </div>
-        <div style={{ height: 7, background: "rgba(255,255,255,0.08)", borderRadius: 4, overflow: "hidden" }}>
-          <div style={{ height: "100%", borderRadius: 4, width: `${animP}%`, background: ahead ? "#10B981" : "#EF4444", boxShadow: `0 0 8px ${ahead ? "rgba(16,185,129,0.60)" : "rgba(239,68,68,0.60)"}`, transition: "width 1.2s ease" }} />
+        <div style={{ height: 9, background: "rgba(255,255,255,0.08)", borderRadius: 5, overflow: "hidden" }}>
+          <div style={{ height: "100%", borderRadius: 5, width: `${animP}%`, background: ahead ? "#10B981" : "#EF4444", boxShadow: `0 0 8px ${ahead ? "rgba(16,185,129,0.60)" : "rgba(239,68,68,0.60)"}`, transition: "width 1.2s ease" }} />
         </div>
       </div>
       {/* Status label */}
       <div style={{ textAlign: "center" }}>
-        <span style={{ fontSize: 10.5, fontWeight: 800, padding: "4px 12px", borderRadius: 20, background: ahead ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.12)", color: ahead ? "#10B981" : "#EF4444", border: `1px solid ${ahead ? "rgba(16,185,129,0.25)" : "rgba(239,68,68,0.25)"}` }}>
+        <span style={{ fontSize: 13, fontWeight: 800, padding: "5px 14px", borderRadius: 20, background: ahead ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.12)", color: ahead ? "#10B981" : "#EF4444", border: `1px solid ${ahead ? "rgba(16,185,129,0.25)" : "rgba(239,68,68,0.25)"}` }}>
           {ahead ? `▲ ${delta}% à frente` : `▼ ${delta}% atrás do prazo`}
         </span>
       </div>
@@ -608,87 +608,87 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
         <div className="flex flex-col gap-2 min-h-0 overflow-hidden">
 
           {/* Atividades concluídas */}
-          <GCard style={{padding:"11px 13px",flexShrink:0}}>
-            <SL right={<span style={{fontSize:11,color:"#10B981",fontWeight:800,background:"rgba(16,185,129,0.12)",padding:"2px 9px",borderRadius:20,border:"1px solid rgba(16,185,129,0.25)"}}>{data.tasks.completed}</span>}>✅ Concluídas</SL>
+          <GCard style={{padding:"13px 15px",flexShrink:0}}>
+            <SL right={<span style={{fontSize:13,color:"#10B981",fontWeight:800,background:"rgba(16,185,129,0.12)",padding:"3px 10px",borderRadius:20,border:"1px solid rgba(16,185,129,0.25)"}}>{data.tasks.completed}</span>}>✅ Concluídas</SL>
             {td.recentlyCompleted.length>0?(
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-2">
                 {td.recentlyCompleted.slice(0,3).map((t,i)=>(
-                  <div key={i} className="flex items-center gap-2">
-                    <CheckCircle2 style={{width:11,height:11,color:"#10B981",flexShrink:0}}/>
-                    <span style={{fontSize:12,color:"rgba(200,220,255,0.75)",overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const,lineHeight:1.35}}>{t.title}</span>
+                  <div key={i} className="flex items-center gap-2.5">
+                    <CheckCircle2 style={{width:13,height:13,color:"#10B981",flexShrink:0}}/>
+                    <span style={{fontSize:14,color:"rgba(220,238,255,0.90)",overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const,lineHeight:1.35,fontWeight:500}}>{t.title}</span>
                   </div>
                 ))}
               </div>
             ):(
-              <p style={{fontSize:11,color:"rgba(148,185,255,0.35)",fontStyle:"italic"}}>Nenhuma atividade concluída ainda</p>
+              <p style={{fontSize:13,color:"rgba(148,185,255,0.50)",fontStyle:"italic"}}>Nenhuma atividade concluída ainda</p>
             )}
           </GCard>
 
           {/* Em andamento */}
-          <GCard style={{padding:"11px 13px",flexShrink:0}}>
-            <SL right={<span style={{fontSize:11,color:"#60A5FA",fontWeight:800,background:"rgba(96,165,250,0.12)",padding:"2px 9px",borderRadius:20,border:"1px solid rgba(96,165,250,0.25)"}}>{data.tasks.inProgress}</span>}>🔵 Em Andamento</SL>
+          <GCard style={{padding:"13px 15px",flexShrink:0}}>
+            <SL right={<span style={{fontSize:13,color:"#60A5FA",fontWeight:800,background:"rgba(96,165,250,0.12)",padding:"3px 10px",borderRadius:20,border:"1px solid rgba(96,165,250,0.25)"}}>{data.tasks.inProgress}</span>}>🔵 Em Andamento</SL>
             {td.inProgress.length>0?(
-              <div className="flex flex-col gap-2.5">
+              <div className="flex flex-col gap-3">
                 {td.inProgress.slice(0,3).map((t,i)=>(
-                  <div key={i} style={{paddingBottom:i<Math.min(td.inProgress.length,3)-1?8:0,borderBottom:i<Math.min(td.inProgress.length,3)-1?"1px solid rgba(255,255,255,0.06)":"none"}}>
-                    <p style={{fontSize:13,color:"rgba(200,220,255,0.88)",fontWeight:600,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const,marginBottom:3}}>{t.title}</p>
+                  <div key={i} style={{paddingBottom:i<Math.min(td.inProgress.length,3)-1?10:0,borderBottom:i<Math.min(td.inProgress.length,3)-1?"1px solid rgba(255,255,255,0.07)":"none"}}>
+                    <p style={{fontSize:15,color:"rgba(220,238,255,0.95)",fontWeight:600,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const,marginBottom:4}}>{t.title}</p>
                     <div className="flex items-center gap-3 flex-wrap">
-                      {t.responsible&&<span style={{fontSize:10.5,color:"rgba(148,185,255,0.65)"}}>👤 {t.responsible}</span>}
-                      {(t.startDate||t.endDate)&&<span style={{fontSize:10.5,color:"rgba(148,185,255,0.50)"}}>📅 {fmt(t.startDate)} → {fmt(t.endDate)}</span>}
+                      {t.responsible&&<span style={{fontSize:12.5,color:"rgba(165,200,255,0.78)"}}>👤 {t.responsible}</span>}
+                      {(t.startDate||t.endDate)&&<span style={{fontSize:12.5,color:"rgba(148,185,255,0.60)"}}>📅 {fmt(t.startDate)} → {fmt(t.endDate)}</span>}
                     </div>
                   </div>
                 ))}
               </div>
             ):(
-              <p style={{fontSize:11,color:"rgba(148,185,255,0.35)",fontStyle:"italic"}}>Nenhuma atividade em andamento</p>
+              <p style={{fontSize:13,color:"rgba(148,185,255,0.50)",fontStyle:"italic"}}>Nenhuma atividade em andamento</p>
             )}
           </GCard>
 
           {/* Em atraso */}
-          <GCard style={{padding:"11px 13px",flexShrink:0}}>
-            <SL right={<span style={{fontSize:11,color:"#EF4444",fontWeight:800,background:"rgba(239,68,68,0.12)",padding:"2px 9px",borderRadius:20,border:"1px solid rgba(239,68,68,0.25)"}}>{data.tasks.delayed}</span>}>🔴 Em Atraso</SL>
+          <GCard style={{padding:"13px 15px",flexShrink:0}}>
+            <SL right={<span style={{fontSize:13,color:"#EF4444",fontWeight:800,background:"rgba(239,68,68,0.12)",padding:"3px 10px",borderRadius:20,border:"1px solid rgba(239,68,68,0.25)"}}>{data.tasks.delayed}</span>}>🔴 Em Atraso</SL>
             {td.delayed.length>0?(
-              <div className="flex flex-col gap-2.5">
+              <div className="flex flex-col gap-3">
                 {td.delayed.slice(0,3).map((t,i)=>(
-                  <div key={i} style={{paddingBottom:i<Math.min(td.delayed.length,3)-1?8:0,borderBottom:i<Math.min(td.delayed.length,3)-1?"1px solid rgba(255,255,255,0.06)":"none"}}>
+                  <div key={i} style={{paddingBottom:i<Math.min(td.delayed.length,3)-1?10:0,borderBottom:i<Math.min(td.delayed.length,3)-1?"1px solid rgba(255,255,255,0.07)":"none"}}>
                     <div className="flex items-start justify-between gap-2">
-                      <p style={{fontSize:13,color:"rgba(252,165,165,0.90)",fontWeight:600,flex:1,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const,marginBottom:3}}>{t.title}</p>
-                      <span style={{fontSize:11,fontWeight:800,color:"#FCA5A5",flexShrink:0,background:"rgba(239,68,68,0.15)",padding:"2px 7px",borderRadius:8}}>{t.daysLate}d</span>
+                      <p style={{fontSize:15,color:"rgba(255,185,185,0.95)",fontWeight:700,flex:1,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const,marginBottom:4}}>{t.title}</p>
+                      <span style={{fontSize:13,fontWeight:800,color:"#FCA5A5",flexShrink:0,background:"rgba(239,68,68,0.18)",padding:"3px 9px",borderRadius:8}}>{t.daysLate}d</span>
                     </div>
                     <div className="flex items-center gap-3 flex-wrap">
-                      {t.responsible&&<span style={{fontSize:10.5,color:"rgba(252,165,165,0.60)"}}>👤 {t.responsible}</span>}
-                      {(t.startDate||t.endDate)&&<span style={{fontSize:10.5,color:"rgba(252,165,165,0.50)"}}>📅 {fmt(t.startDate)} → {fmt(t.endDate)}</span>}
+                      {t.responsible&&<span style={{fontSize:12.5,color:"rgba(255,165,165,0.72)"}}>👤 {t.responsible}</span>}
+                      {(t.startDate||t.endDate)&&<span style={{fontSize:12.5,color:"rgba(255,165,165,0.55)"}}>📅 {fmt(t.startDate)} → {fmt(t.endDate)}</span>}
                     </div>
                   </div>
                 ))}
               </div>
             ):(
-              <p style={{fontSize:11,color:"rgba(148,185,255,0.35)",fontStyle:"italic"}}>✅ Nenhuma atividade em atraso</p>
+              <p style={{fontSize:13,color:"rgba(148,185,255,0.50)",fontStyle:"italic"}}>✅ Nenhuma atividade em atraso</p>
             )}
           </GCard>
 
           {/* Próximas a vencer */}
-          <GCard style={{padding:"11px 13px",flex:1,minHeight:0,overflow:"hidden"}}>
-            <SL right={<span style={{fontSize:11,color:"#FCD34D",fontWeight:800}}>{td.upcoming.length}</span>}>📅 Próximas Atividades</SL>
+          <GCard style={{padding:"13px 15px",flex:1,minHeight:0,overflow:"hidden"}}>
+            <SL right={<span style={{fontSize:13,color:"#FCD34D",fontWeight:800}}>{td.upcoming.length}</span>}>📅 Próximas Atividades</SL>
             {td.upcoming.length>0?(
-              <div className="flex flex-col gap-2.5">
+              <div className="flex flex-col gap-3">
                 {td.upcoming.slice(0,3).map((t,i)=>(
-                  <div key={i} style={{paddingBottom:i<Math.min(td.upcoming.length,3)-1?8:0,borderBottom:i<Math.min(td.upcoming.length,3)-1?"1px solid rgba(255,255,255,0.06)":"none"}}>
+                  <div key={i} style={{paddingBottom:i<Math.min(td.upcoming.length,3)-1?10:0,borderBottom:i<Math.min(td.upcoming.length,3)-1?"1px solid rgba(255,255,255,0.07)":"none"}}>
                     <div className="flex items-start justify-between gap-2">
-                      <p style={{fontSize:13,color:"rgba(200,220,255,0.85)",fontWeight:600,flex:1,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const,marginBottom:3}}>{t.title}</p>
-                      <span style={{fontSize:11,fontWeight:800,flexShrink:0,color:t.daysUntil===0?"#FCA5A5":t.daysUntil<=3?"#FCD34D":"#86EFAC",background:t.daysUntil===0?"rgba(239,68,68,0.12)":t.daysUntil<=3?"rgba(245,158,11,0.12)":"rgba(16,185,129,0.10)",padding:"2px 7px",borderRadius:8}}>
+                      <p style={{fontSize:15,color:"rgba(220,235,255,0.92)",fontWeight:600,flex:1,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const,marginBottom:4}}>{t.title}</p>
+                      <span style={{fontSize:13,fontWeight:800,flexShrink:0,color:t.daysUntil===0?"#FCA5A5":t.daysUntil<=3?"#FCD34D":"#86EFAC",background:t.daysUntil===0?"rgba(239,68,68,0.12)":t.daysUntil<=3?"rgba(245,158,11,0.12)":"rgba(16,185,129,0.10)",padding:"3px 9px",borderRadius:8}}>
                         {t.daysUntil===0?"Hoje":`${t.daysUntil}d`}
                       </span>
                     </div>
                     <div className="flex items-center gap-3 flex-wrap">
-                      {t.responsible&&<span style={{fontSize:10.5,color:"rgba(148,185,255,0.60)"}}>👤 {t.responsible}</span>}
-                      {(t.startDate||t.endDate)&&<span style={{fontSize:10.5,color:"rgba(148,185,255,0.50)"}}>📅 {fmt(t.startDate)} → {fmt(t.endDate)}</span>}
+                      {t.responsible&&<span style={{fontSize:12.5,color:"rgba(165,200,255,0.72)"}}>👤 {t.responsible}</span>}
+                      {(t.startDate||t.endDate)&&<span style={{fontSize:12.5,color:"rgba(148,185,255,0.60)"}}>📅 {fmt(t.startDate)} → {fmt(t.endDate)}</span>}
                     </div>
                   </div>
                 ))}
               </div>
             ):(
-              <p style={{fontSize:11,color:"rgba(148,185,255,0.35)",fontStyle:"italic"}}>Sem atividades previstas próximas</p>
+              <p style={{fontSize:13,color:"rgba(148,185,255,0.50)",fontStyle:"italic"}}>Sem atividades previstas próximas</p>
             )}
           </GCard>
         </div>
@@ -697,78 +697,78 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
         <div className="flex flex-col gap-2 min-h-0 overflow-hidden">
 
           {/* Equipe */}
-          <GCard style={{padding:"11px 13px",flexShrink:0}}>
-            <SL right={<span style={{fontSize:11,color:"#FB923C",fontWeight:800}}>{data.team} pessoas</span>}>👥 Equipe</SL>
-            <div className="flex flex-col gap-2">
+          <GCard style={{padding:"13px 15px",flexShrink:0}}>
+            <SL right={<span style={{fontSize:13,color:"#FB923C",fontWeight:800}}>{data.team} pessoas</span>}>👥 Equipe</SL>
+            <div className="flex flex-col gap-2.5">
               {data.members.slice(0,5).map((m,i)=>(
                 <div key={i} className="flex items-center gap-2.5">
-                  <UserAvatar name={m.name} image={m.image} size={24}/>
-                  <span style={{fontSize:12,color:"rgba(220,235,255,0.85)",fontWeight:600,flex:1,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{m.name}</span>
-                  {m.role&&<span style={{fontSize:10,color:"rgba(148,185,255,0.50)",flexShrink:0,overflow:"hidden",whiteSpace:"nowrap",maxWidth:80,textOverflow:"ellipsis"}}>{m.role}</span>}
+                  <UserAvatar name={m.name} image={m.image} size={26}/>
+                  <span style={{fontSize:14,color:"rgba(225,240,255,0.92)",fontWeight:600,flex:1,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{m.name}</span>
+                  {m.role&&<span style={{fontSize:11,color:"rgba(160,195,255,0.60)",flexShrink:0,overflow:"hidden",whiteSpace:"nowrap",maxWidth:90,textOverflow:"ellipsis"}}>{m.role}</span>}
                 </div>
               ))}
-              {data.members.length>5&&<p style={{fontSize:10.5,color:"rgba(148,185,255,0.40)",fontStyle:"italic"}}>+{data.members.length-5} participantes</p>}
+              {data.members.length>5&&<p style={{fontSize:12,color:"rgba(148,185,255,0.50)",fontStyle:"italic"}}>+{data.members.length-5} participantes</p>}
             </div>
           </GCard>
 
           {/* Reuniões por tipo */}
-          <GCard style={{padding:"11px 13px",flexShrink:0}}>
-            <SL right={<span style={{fontSize:11,color:"#C084FC",fontWeight:800}}>{data.meetingsCount} total</span>}>📋 Reuniões</SL>
+          <GCard style={{padding:"13px 15px",flexShrink:0}}>
+            <SL right={<span style={{fontSize:13,color:"#C084FC",fontWeight:800}}>{data.meetingsCount} total</span>}>📋 Reuniões</SL>
             <div className="flex flex-wrap gap-2">
               {Object.entries(data.meetingsByType).filter(([,v])=>v>0).map(([type,count])=>(
-                <span key={type} style={{fontSize:10.5,fontWeight:700,padding:"3px 10px",borderRadius:20,background:"rgba(192,132,252,0.10)",border:"1px solid rgba(192,132,252,0.22)",color:"#C084FC"}}>
+                <span key={type} style={{fontSize:12,fontWeight:700,padding:"4px 11px",borderRadius:20,background:"rgba(192,132,252,0.12)",border:"1px solid rgba(192,132,252,0.28)",color:"#C084FC"}}>
                   {MTG_LABELS[type]??type}: {count}
                 </span>
               ))}
               {Object.keys(data.meetingsByType).length===0&&(
-                <p style={{fontSize:11,color:"rgba(148,185,255,0.35)",fontStyle:"italic"}}>Nenhuma reunião registrada</p>
+                <p style={{fontSize:13,color:"rgba(148,185,255,0.50)",fontStyle:"italic"}}>Nenhuma reunião registrada</p>
               )}
             </div>
           </GCard>
 
           {/* Riscos com mitigação */}
-          <GCard style={{padding:"11px 13px",flex:1,minHeight:0,overflow:"hidden"}}>
+          <GCard style={{padding:"13px 15px",flex:1,minHeight:0,overflow:"hidden"}}>
             <SL right={
               <div className="flex gap-1.5">
-                {data.risks.critical>0&&<span style={{fontSize:10,fontWeight:800,padding:"2px 8px",borderRadius:10,background:"rgba(239,68,68,0.15)",color:"#FCA5A5"}}>⚠ {data.risks.critical} crít.</span>}
-                {data.risks.high>0&&<span style={{fontSize:10,fontWeight:800,padding:"2px 8px",borderRadius:10,background:"rgba(245,158,11,0.12)",color:"#FCD34D"}}>{data.risks.high} alto{data.risks.high>1?"s":""}</span>}
+                {data.risks.critical>0&&<span style={{fontSize:12,fontWeight:800,padding:"3px 9px",borderRadius:10,background:"rgba(239,68,68,0.15)",color:"#FCA5A5"}}>⚠ {data.risks.critical} crít.</span>}
+                {data.risks.high>0&&<span style={{fontSize:12,fontWeight:800,padding:"3px 9px",borderRadius:10,background:"rgba(245,158,11,0.12)",color:"#FCD34D"}}>{data.risks.high} alto{data.risks.high>1?"s":""}</span>}
               </div>
             }>🛡️ Riscos & Issues</SL>
             {data.risks.items.length>0?(
-              <div className="flex flex-col gap-2.5 overflow-hidden">
+              <div className="flex flex-col gap-3 overflow-hidden">
                 {data.risks.items.slice(0,3).map((r,i)=>{
                   const rc:{[k:string]:{color:string;label:string}}={CRITICAL:{color:"#FCA5A5",label:"Crítico"},HIGH:{color:"#FCD34D",label:"Alto"},MEDIUM:{color:"#86EFAC",label:"Médio"},LOW:{color:"#94A3B8",label:"Baixo"}}
                   const {color,label}=rc[r.level]??{color:"#94A3B8",label:r.level}
                   return (
-                    <div key={i} style={{borderLeft:`3px solid ${color}`,paddingLeft:9,paddingBottom:i<Math.min(data.risks.items.length,3)-1?8:0,borderBottom:i<Math.min(data.risks.items.length,3)-1?"1px solid rgba(255,255,255,0.06)":"none"}}>
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span style={{fontSize:10,fontWeight:800,color,textTransform:"uppercase"}}>{label}</span>
-                        {r.owner&&<span style={{fontSize:10,color:"rgba(180,210,255,0.45)"}}>· {r.owner}</span>}
+                    <div key={i} style={{borderLeft:`3px solid ${color}`,paddingLeft:10,paddingBottom:i<Math.min(data.risks.items.length,3)-1?10:0,borderBottom:i<Math.min(data.risks.items.length,3)-1?"1px solid rgba(255,255,255,0.07)":"none"}}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span style={{fontSize:12,fontWeight:800,color,textTransform:"uppercase"}}>{label}</span>
+                        {r.owner&&<span style={{fontSize:12,color:"rgba(180,210,255,0.55)"}}>· {r.owner}</span>}
                       </div>
-                      <p style={{fontSize:11,color:"rgba(200,220,255,0.75)",lineHeight:1.4,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const}}>{r.description}</p>
-                      {r.mitigation&&<p style={{fontSize:10,color:"rgba(148,185,255,0.52)",lineHeight:1.35,marginTop:2,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const}}>↳ {r.mitigation}</p>}
+                      <p style={{fontSize:13,color:"rgba(215,230,255,0.85)",lineHeight:1.4,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as const}}>{r.description}</p>
+                      {r.mitigation&&<p style={{fontSize:12,color:"rgba(160,195,255,0.62)",lineHeight:1.4,marginTop:3,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const}}>↳ {r.mitigation}</p>}
                     </div>
                   )
                 })}
               </div>
             ):(
-              <p style={{fontSize:11,color:"rgba(148,185,255,0.35)",fontStyle:"italic"}}>✅ Sem riscos registrados</p>
+              <p style={{fontSize:13,color:"rgba(148,185,255,0.50)",fontStyle:"italic"}}>✅ Sem riscos registrados</p>
             )}
           </GCard>
 
           {/* WBS áreas */}
           {data.wbsAreas.length>0&&(
-            <GCard style={{padding:"11px 13px",flexShrink:0}}>
+            <GCard style={{padding:"13px 15px",flexShrink:0}}>
               <SL>📁 Áreas do Projeto</SL>
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {data.wbsAreas.slice(0,4).map((a)=>(
                   <div key={a.name}>
-                    <div className="flex justify-between mb-1">
-                      <span style={{fontSize:11,color:"rgba(200,220,255,0.70)",fontWeight:500,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis",maxWidth:"75%"}}>{a.name}</span>
-                      <span style={{fontSize:11,fontWeight:800,color:a.color??"#60A5FA"}}>{a.pct}%</span>
+                    <div className="flex justify-between mb-1.5">
+                      <span style={{fontSize:13,color:"rgba(215,232,255,0.82)",fontWeight:600,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis",maxWidth:"75%"}}>{a.name}</span>
+                      <span style={{fontSize:13,fontWeight:800,color:a.color??"#60A5FA"}}>{a.pct}%</span>
                     </div>
-                    <div style={{height:5,background:"rgba(255,255,255,0.08)",borderRadius:3,overflow:"hidden"}}>
-                      <div style={{height:"100%",borderRadius:3,width:`${a.pct}%`,background:a.color??"#60A5FA",boxShadow:`0 0 6px ${a.color??"#60A5FA"}80`,transition:"width 1.2s ease"}}/>
+                    <div style={{height:7,background:"rgba(255,255,255,0.08)",borderRadius:4,overflow:"hidden"}}>
+                      <div style={{height:"100%",borderRadius:4,width:`${a.pct}%`,background:a.color??"#60A5FA",boxShadow:`0 0 6px ${a.color??"#60A5FA"}80`,transition:"width 1.2s ease"}}/>
                     </div>
                   </div>
                 ))}
@@ -787,41 +787,41 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
         return (
           <div className="relative z-10 shrink-0 px-6 pb-2.5 pt-1.5">
             <div style={{ background:"rgba(255,255,255,0.055)",border:"1px solid rgba(255,255,255,0.12)",borderLeft:"4px solid rgba(192,132,252,0.70)",borderRadius:12,padding:"10px 16px" }}>
-              <div className="flex items-center gap-3 mb-2">
-                <Calendar style={{width:13,height:13,color:"#C084FC",flexShrink:0}}/>
-                <span style={{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.16em",color:"#C084FC"}}>Último Checkpoint</span>
-                <span style={{fontSize:11,color:"rgba(200,220,255,0.65)",fontWeight:600}}>
+              <div className="flex items-center gap-3 mb-2.5">
+                <Calendar style={{width:14,height:14,color:"#C084FC",flexShrink:0}}/>
+                <span style={{fontSize:12,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.14em",color:"#C084FC"}}>Último Checkpoint</span>
+                <span style={{fontSize:13,color:"rgba(215,232,255,0.80)",fontWeight:600}}>
                   {fmtLong(cp.date)}{cp.title?` · ${cp.title}`:""}{cp.location?` · 📍${cp.location}`:""}
                 </span>
               </div>
-              <div className="flex gap-4">
+              <div className="flex gap-5">
                 {highlights&&(
                   <div style={{flex:1,minWidth:0}}>
-                    <p style={{fontSize:9.5,fontWeight:700,color:"rgba(148,185,255,0.50)",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:3}}>Destaques</p>
-                    <p style={{fontSize:11,color:"rgba(200,220,255,0.75)",lineHeight:1.45,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as const}}>{highlights}{(highlights?.length??0)>=220?"…":""}</p>
+                    <p style={{fontSize:11,fontWeight:700,color:"rgba(170,200,255,0.65)",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:4}}>Destaques</p>
+                    <p style={{fontSize:13,color:"rgba(215,232,255,0.85)",lineHeight:1.5,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as const}}>{highlights}{(highlights?.length??0)>=220?"…":""}</p>
                   </div>
                 )}
                 {decisions&&decisions!==highlights&&(
                   <div style={{flex:1,minWidth:0}}>
-                    <p style={{fontSize:9.5,fontWeight:700,color:"rgba(148,185,255,0.50)",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:3}}>Decisões</p>
-                    <p style={{fontSize:11,color:"rgba(200,220,255,0.75)",lineHeight:1.45,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as const}}>{decisions}{(decisions?.length??0)>=220?"…":""}</p>
+                    <p style={{fontSize:11,fontWeight:700,color:"rgba(170,200,255,0.65)",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:4}}>Decisões</p>
+                    <p style={{fontSize:13,color:"rgba(215,232,255,0.85)",lineHeight:1.5,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as const}}>{decisions}{(decisions?.length??0)>=220?"…":""}</p>
                   </div>
                 )}
                 {cp.nextSteps.length>0&&(
                   <div style={{flex:1,minWidth:0}}>
-                    <p style={{fontSize:9.5,fontWeight:700,color:"rgba(148,185,255,0.50)",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:3}}>Próximos Passos</p>
-                    <div className="flex flex-col gap-0.5">
+                    <p style={{fontSize:11,fontWeight:700,color:"rgba(170,200,255,0.65)",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:4}}>Próximos Passos</p>
+                    <div className="flex flex-col gap-1">
                       {cp.nextSteps.slice(0,3).map((s,i)=>(
-                        <div key={i} className="flex items-start gap-1.5">
-                          <ArrowRight style={{width:7,height:7,color:"#C084FC",flexShrink:0,marginTop:2}}/>
-                          <span style={{fontSize:8,color:"rgba(200,220,255,0.70)",lineHeight:1.35,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const}}>{s}</span>
+                        <div key={i} className="flex items-start gap-2">
+                          <ArrowRight style={{width:9,height:9,color:"#C084FC",flexShrink:0,marginTop:3}}/>
+                          <span style={{fontSize:12,color:"rgba(215,232,255,0.80)",lineHeight:1.4,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const}}>{s}</span>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
                 {!highlights&&!decisions&&cp.nextSteps.length===0&&(
-                  <p style={{fontSize:8.5,color:"rgba(200,220,255,0.40)"}}>Reunião registrada sem detalhamento de conteúdo.</p>
+                  <p style={{fontSize:12,color:"rgba(200,220,255,0.45)"}}>Reunião registrada sem detalhamento de conteúdo.</p>
                 )}
               </div>
             </div>

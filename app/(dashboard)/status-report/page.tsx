@@ -32,6 +32,7 @@ export default async function StatusReportPage() {
           budgetedCost: true, actualCost: true,
           completedAt: true,
           responsible: { select: { name: true } },
+          _count: { select: { subtasks: true } },
         },
         orderBy: { order: "asc" },
       },
@@ -56,14 +57,24 @@ export default async function StatusReportPage() {
   today.setHours(0, 0, 0, 0)
 
   const slides: ProjectSlideData[] = projects.map((p) => {
-    const tasks      = p.tasks
-    const total      = tasks.length
-    const completed  = tasks.filter((t) => t.status === "COMPLETED")
-    const inProgress = tasks.filter((t) => t.status === "IN_PROGRESS")
-    const delayed    = tasks.filter((t) => t.status === "DELAYED")
-    const planning   = tasks.filter((t) => t.status === "PLANNING")
+    const tasks     = p.tasks
+    // Apenas tarefas folha (sem filhos) para listas de atividades e progresso
+    const leafTasks = tasks.filter((t) => t._count.subtasks === 0)
+    const total     = leafTasks.length
+
+    const completed  = leafTasks.filter((t) => t.status === "COMPLETED")
+    // Em Andamento: exclui tarefas IN_PROGRESS cujo prazo já passou (essas vão para Em Atraso)
+    const inProgress = leafTasks.filter((t) =>
+      t.status === "IN_PROGRESS" && !(t.endDate && new Date(t.endDate) < today)
+    )
+    // Em Atraso: status DELAYED + IN_PROGRESS com endDate no passado
+    const delayed = leafTasks.filter((t) =>
+      t.status === "DELAYED" ||
+      (t.status === "IN_PROGRESS" && t.endDate && new Date(t.endDate) < today)
+    )
+    const planning   = leafTasks.filter((t) => t.status === "PLANNING")
     const avgProgress = total > 0
-      ? Math.round(tasks.reduce((s, t) => s + t.progress, 0) / total)
+      ? Math.round(leafTasks.reduce((s, t) => s + t.progress, 0) / total)
       : (p.status === "COMPLETED" ? 100 : 0)
 
     // IDC
@@ -87,9 +98,9 @@ export default async function StatusReportPage() {
       }
     }
 
-    // At-risk tasks
+    // At-risk tasks — usa apenas tarefas folha
     const atRiskTasks: ProjectSlideData["atRiskTasks"] = []
-    for (const t of tasks) {
+    for (const t of leafTasks) {
       const responsible = t.responsible?.name ?? null
       const startDate   = t.startDate?.toISOString() ?? null
       const endDate     = t.endDate?.toISOString()   ?? null
@@ -128,7 +139,7 @@ export default async function StatusReportPage() {
           daysLate:    ref ? Math.max(0, differenceInDays(today, new Date(ref))) : 0,
         }
       }),
-      upcoming: tasks
+      upcoming: leafTasks
         .filter((t) => (t.status === "PLANNING" || t.status === "IN_PROGRESS") && t.endDate && new Date(t.endDate) >= today)
         .sort((a, b) => (a.endDate?.getTime() ?? 0) - (b.endDate?.getTime() ?? 0))
         .slice(0, 5)
@@ -152,7 +163,7 @@ export default async function StatusReportPage() {
     // Delta de progresso: tarefas concluídas DESDE o último checkpoint
     const lastCpDate = lastMtg?.date ?? null
     const completedSinceCheckpoint = lastCpDate
-      ? tasks.filter((t) => t.completedAt && new Date(t.completedAt) > new Date(lastCpDate)).length
+      ? leafTasks.filter((t) => t.completedAt && new Date(t.completedAt) > new Date(lastCpDate)).length
       : 0
     const progressDelta = total > 0 ? Math.round((completedSinceCheckpoint / total) * 100) : null
     const rawSteps = lastMtg?.nextActions || lastMtg?.decisions || null
