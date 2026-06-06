@@ -16,7 +16,7 @@ import {
   Loader2, X, Check, CalendarDays, AlertTriangle, Layers,
   List, BarChart2, Search, FolderOpen, Paperclip,
   Link2, Lock, ArrowRight, GripVertical, FileSpreadsheet, ArrowUpDown,
-  Upload, Download, FileText, FileImage, FileArchive,
+  Upload, Download, FileText, FileImage, FileArchive, Users,
 } from "lucide-react"
 import {
   createTask, updateTask, deleteTask, createArea,
@@ -144,6 +144,8 @@ function buildListRows(
   expandedTasks: Set<string>,
   search: string,
   hideDone: boolean,
+  // null = sem filtro; Set de IDs = mostra apenas essas tarefas (+ ancestrais)
+  visibleIds: Set<string> | null = null,
 ): Row[] {
   const q = search.trim().toLowerCase()
   const result: Row[] = []
@@ -159,13 +161,16 @@ function buildListRows(
   function matches(t: Task) {
     if (hideDone && t.status === "COMPLETED") return false
     if (q && !t.title.toLowerCase().includes(q)) return false
+    if (visibleIds !== null && !visibleIds.has(t.id)) return false
     return true
   }
 
   function walkTask(t: Task, depth: number, eap: string, areaColor: string | null) {
     const kids = sortBy(childrenMap.get(t.id) ?? [])
     result.push({ kind: "task", task: t, eap, depth, hasChildren: kids.length > 0, areaColor })
-    if (kids.length > 0 && expandedTasks.has(t.id)) {
+    // Quando filtrando por pessoa: força expansão para mostrar descendentes
+    const shouldExpand = visibleIds !== null ? true : expandedTasks.has(t.id)
+    if (kids.length > 0 && shouldExpand) {
       kids.forEach((k, i) => {
         if (matches(k)) walkTask(k, depth + 1, `${eap}.${i + 1}`, areaColor)
       })
@@ -185,7 +190,11 @@ function buildListRows(
     const areaTasks = tasks.filter((t) => t.wbsAreaId === area.id)
     const doneCount = areaTasks.filter((t) => t.status === "COMPLETED").length
     result.push({ kind: "area", id: area.id, name: area.name, color: area.color, eap: eapArea, taskCount: areaTasks.length, doneCount })
-    if (!expandedAreas.has(area.id)) return
+    // Quando filtrando: auto-expande área que contenha tarefas visíveis
+    const isExpanded = visibleIds !== null
+      ? areaTasks.some((t) => visibleIds.has(t.id))
+      : expandedAreas.has(area.id)
+    if (!isExpanded) return
     sortBy(topByArea.get(area.id) ?? []).forEach((t, i) => {
       if (matches(t)) walkTask(t, 0, `${eapArea}.${i + 1}`, area.color)
     })
@@ -196,7 +205,10 @@ function buildListRows(
     const ugId = "__ungrouped__"
     const ugEap = `${areas.length + 1}`
     result.push({ kind: "area", id: ugId, name: "Sem Área", color: null, eap: ugEap, taskCount: ungrouped.length, doneCount: ungrouped.filter((t) => t.status === "COMPLETED").length })
-    if (expandedAreas.has(ugId)) {
+    const ugExpanded = visibleIds !== null
+      ? ungrouped.some((t) => visibleIds.has(t.id))
+      : expandedAreas.has(ugId)
+    if (ugExpanded) {
       ungrouped.forEach((t, i) => {
         if (matches(t)) walkTask(t, 0, `${ugEap}.${i + 1}`, null)
       })
@@ -1014,9 +1026,10 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
     const parentIds = new Set(initialTasks.filter((t) => t.parentId).map((t) => t.parentId!))
     return new Set(initialTasks.filter((t) => parentIds.has(t.id)).map((t) => t.id))
   })
-  const [search, setSearch]     = useState("")
-  const [hideDone, setHideDone] = useState(false)
-  const [addingArea, setAddingArea] = useState(false)
+  const [search, setSearch]                 = useState("")
+  const [hideDone, setHideDone]             = useState(false)
+  const [filterResponsible, setFilterResponsible] = useState("")
+  const [addingArea, setAddingArea]         = useState(false)
 
   // Gantt state
   const [expandedGantt, setExpandedGantt] = useState<Set<string>>(() =>
@@ -1178,10 +1191,29 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
     })
   }, [tasks, sortBy])
 
-  const listRows   = useMemo(() => buildListRows(areas, sortedForList, expandedAreas, expandedTasks, search, hideDone), [areas, sortedForList, expandedAreas, expandedTasks, search, hideDone])
+  // IDs visíveis quando filtrando por responsável: tarefa + todos os ancestrais
+  const filterVisibleIds = useMemo<Set<string> | null>(() => {
+    if (!filterResponsible) return null
+    const parentMap = new Map(tasks.map((t) => [t.id, t.parentId]))
+    const matching  = tasks.filter((t) => t.responsibleId === filterResponsible).map((t) => t.id)
+    const result    = new Set(matching)
+    for (const id of matching) {
+      let pid = parentMap.get(id)
+      while (pid) { result.add(pid); pid = parentMap.get(pid) }
+    }
+    return result
+  }, [tasks, filterResponsible])
+
+  const listRows   = useMemo(
+    () => buildListRows(areas, sortedForList, expandedAreas, expandedTasks, search, hideDone, filterVisibleIds),
+    [areas, sortedForList, expandedAreas, expandedTasks, search, hideDone, filterVisibleIds],
+  )
 
   // Gantt rows — area-grouped, uses its own expand sets
-  const ganttRows  = useMemo(() => buildListRows(areas, tasks, expandedGanttAreas, expandedGantt, "", false), [areas, tasks, expandedGanttAreas, expandedGantt])
+  const ganttRows  = useMemo(
+    () => buildListRows(areas, tasks, expandedGanttAreas, expandedGantt, "", false, filterVisibleIds),
+    [areas, tasks, expandedGanttAreas, expandedGantt, filterVisibleIds],
+  )
   const ganttRowIndexMap = useMemo(() => {
     const m = new Map<string, number>()
     ganttRows.forEach((row, i) => { if (row.kind === "task") m.set(row.task.id, i) })
@@ -1380,7 +1412,46 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
           <span>{tasks.length} atividades</span>
           <span className="text-slate-200">·</span>
           <span>{completedCount} concluídas</span>
+          {filterResponsible && filterVisibleIds !== null && (
+            <>
+              <span className="text-slate-200">·</span>
+              <span className="text-[#7B2FBE] font-semibold">
+                {[...filterVisibleIds].filter(id => tasks.find(t => t.id === id && t.responsibleId === filterResponsible)).length} da pessoa
+              </span>
+            </>
+          )}
         </div>
+
+        {/* Filtro por responsável — visível nos dois modos (lista e Gantt) */}
+        {members.length > 0 && (
+          <div className="flex items-center gap-1.5">
+            <Users className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <select
+              value={filterResponsible}
+              onChange={(e) => setFilterResponsible(e.target.value)}
+              className={`h-8 pl-2.5 pr-7 text-xs rounded-xl border outline-none cursor-pointer transition-all appearance-none ${
+                filterResponsible
+                  ? "border-[#7B2FBE] text-[#7B2FBE] bg-violet-50 font-semibold"
+                  : "border-slate-200 text-slate-500 bg-white hover:border-slate-300"
+              }`}
+              style={{ minWidth: 148 }}
+            >
+              <option value="">Todos</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+            {filterResponsible && (
+              <button
+                onClick={() => setFilterResponsible("")}
+                title="Limpar filtro"
+                className="p-1 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-400 transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        )}
 
         <div className="flex-1" />
 

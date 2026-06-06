@@ -360,13 +360,16 @@ export function AnalyticsClient({
   projects,
   users,
   userRole,
+  userArea,
 }: {
   projects: ProjectIndicator[]
   users: UserOption[]
   userRole: string
+  userArea: string | null
 }) {
   const [filter,      setFilter]      = useState<"ACTIVE" | "ALL">("ACTIVE")
-  const [areaFilter,  setAreaFilter]  = useState<string>("ALL")
+  // Diretores iniciam com o filtro da sua área; podem alterar manualmente
+  const [areaFilter,  setAreaFilter]  = useState<string>(userArea ?? "ALL")
   const [responsible, setResponsible] = useState<string>("ALL")
   const [search,      setSearch]      = useState("")
 
@@ -396,7 +399,7 @@ export function AnalyticsClient({
     setAllocResults(null)
   }
 
-  void userRole // disponível para futuras restrições por papel
+  void userRole
 
   // Responsáveis únicos de todas as tarefas
   const allResponsibles = useMemo(

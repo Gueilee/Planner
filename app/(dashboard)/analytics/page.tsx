@@ -38,6 +38,19 @@ export default async function AnalyticsPage() {
   const today = new Date()
   const userRole = (session.user.role ?? "PROJECT_MEMBER") as string
 
+  // Para diretores: auto-seleciona a área do projeto com base no departamento
+  let userArea: string | null = null
+  if (userRole === "DIRECTOR") {
+    const dbUser = await db.user.findUnique({
+      where:  { id: session.user.id ?? "" },
+      select: { department: true },
+    })
+    const dept = (dbUser?.department ?? "").toUpperCase().trim()
+    if (dept === "TECNOLOGIA")       userArea = "TECNOLOGIA"
+    else if (dept === "QUALIDADE")   userArea = "QUALIDADE"
+    else if (dept)                   userArea = "ESTRATEGICO"
+  }
+
   const [projectsRaw, users] = await Promise.all([
     db.project.findMany({
       where:   { status: { not: ProjectStatus.CANCELLED } },
@@ -158,5 +171,5 @@ export default async function AnalyticsPage() {
     }
   })
 
-  return <AnalyticsClient projects={data} users={users} userRole={userRole} />
+  return <AnalyticsClient projects={data} users={users} userRole={userRole} userArea={userArea} />
 }
