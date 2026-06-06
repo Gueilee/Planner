@@ -18,6 +18,7 @@ export type ProjectIndicator = {
   projectArea: string
   sponsor: string | null
   progress: number
+  plannedPct: number | null
   devio: number | null
   idp: number | null
   idc: number | null
@@ -31,6 +32,11 @@ export type ProjectIndicator = {
   taskResponsibles: string[]
 }
 
+// Nesses status o projeto ainda não iniciou ou está pausado — não calcular IDP/IDC
+const SKIP_KPI_STATUSES = new Set([
+  "PLANNING", "FUTURE_ANALYSIS", "ON_HOLD", "PAUSED", "PENDING_GO_NO_GO",
+])
+
 export default async function AnalyticsPage() {
   const session = await auth()
   if (!session?.user) redirect("/login")
@@ -38,7 +44,6 @@ export default async function AnalyticsPage() {
   const today = new Date()
   const userRole = (session.user.role ?? "PROJECT_MEMBER") as string
 
-  // Para diretores: auto-seleciona a área do projeto com base no departamento
   let userArea: string | null = null
   if (userRole === "DIRECTOR") {
     const dbUser = await db.user.findUnique({
@@ -61,6 +66,7 @@ export default async function AnalyticsPage() {
           select: {
             status: true, progress: true,
             startDate: true, endDate: true,
+            budgetedCost: true, actualCost: true,
             responsible: { select: { name: true } },
           },
         },
@@ -75,64 +81,85 @@ export default async function AnalyticsPage() {
   ])
 
   const data: ProjectIndicator[] = projectsRaw.map((p) => {
-    // ── Progress ──────────────────────────────────────────────────
-    const tasks = p.tasks
+    const tasks   = p.tasks
+    const skipKpi = SKIP_KPI_STATUSES.has(p.status)
+
+    // ── Progresso médio ───────────────────────────────────────────
     const progress =
       tasks.length > 0
         ? Math.round(tasks.reduce((s, t) => s + t.progress, 0) / tasks.length)
-        : p.status === "COMPLETED"
-        ? 100
-        : 0
+        : p.status === "COMPLETED" ? 100 : 0
 
-    // ── Desvio de Prazo
-    let devio: number | null = null
+    // ── Desvio / IDP / scheduleStatus ────────────────────────────
+    let devio:          number | null = null
+    let plannedPct:     number | null = null
+    let idp:            number | null = null
     let scheduleStatus: ProjectIndicator["scheduleStatus"] = "ND"
 
-    if (p.status === "COMPLETED" && !p.expectedStart && !p.expectedEnd) {
+    if (p.status === "COMPLETED") {
+      // Projeto concluído: sempre classificado como no prazo
       scheduleStatus = "ON_TIME"
-    } else if (p.expectedStart && p.expectedEnd) {
-      const totalDays = differenceInDays(p.expectedEnd, p.expectedStart)
-      if (totalDays > 0) {
-        const referenceDate = (p.status === "COMPLETED" && p.actualEnd) ? p.actualEnd : today
-        const elapsedDays   = differenceInDays(referenceDate, p.expectedStart)
-        const plannedPct    = Math.min(100, Math.max(0, (elapsedDays / totalDays) * 100))
-        devio = (progress - plannedPct) / 100
-        if (devio >= 0)         scheduleStatus = "ON_TIME"
-        else if (devio >= -0.2) scheduleStatus = "AT_RISK"
-        else                    scheduleStatus = "DELAYED"
+      idp = 1.0
+
+    } else if (!skipKpi) {
+      // Passo 1: % planejado no nível do projeto (linha de base = expectedStart)
+      if (p.expectedStart && p.expectedEnd) {
+        const totalDays   = differenceInDays(p.expectedEnd, p.expectedStart)
+        const elapsedDays = differenceInDays(today, p.expectedStart)
+        if (totalDays > 0 && elapsedDays > 0) {
+          const pct = Math.min(100, (elapsedDays / totalDays) * 100)
+          plannedPct = Math.round(pct)
+          devio      = (progress - pct) / 100
+        }
+      }
+
+      // Passo 2: IDP por tarefa individual (mais preciso)
+      const tasksWithDates = tasks.filter((t) => t.startDate && t.endDate)
+      if (tasksWithDates.length >= 2) {
+        let sumActual = 0, sumPlanned = 0, count = 0
+        for (const t of tasksWithDates) {
+          const totalD  = differenceInDays(t.endDate!, t.startDate!)
+          const elapsed = differenceInDays(today, t.startDate!)
+          let planned: number
+          if (elapsed <= 0)     planned = 0   // tarefa ainda não começou
+          else if (totalD <= 0) planned = 100 // duração zero
+          else                  planned = Math.min(100, (elapsed / totalD) * 100)
+          sumActual  += t.progress
+          sumPlanned += planned
+          count++
+        }
+        if (count > 0 && sumPlanned > 0) {
+          idp = Math.round((sumActual / sumPlanned) * 100) / 100
+        }
+      } else if (plannedPct !== null && plannedPct > 5) {
+        // Fallback: IDP no nível do projeto
+        idp = Math.round((progress / plannedPct) * 100) / 100
+      }
+
+      // Passo 3: classificação baseada no IDP
+      if (idp !== null) {
+        if (idp >= 0.95)      scheduleStatus = "ON_TIME"
+        else if (idp >= 0.80) scheduleStatus = "AT_RISK"
+        else                  scheduleStatus = "DELAYED"
+      } else if (devio !== null) {
+        if (devio >= 0)          scheduleStatus = "ON_TIME"
+        else if (devio >= -0.15) scheduleStatus = "AT_RISK"
+        else                     scheduleStatus = "DELAYED"
       }
     }
 
-    // ── IDP
-    let idp: number | null = null
-    const tasksWithDates = tasks.filter((t) => t.startDate && t.endDate)
-    if (tasksWithDates.length >= 3) {
-      let sumActual = 0, sumPlanned = 0
-      for (const t of tasksWithDates) {
-        const totalDays = differenceInDays(t.endDate!, t.startDate!)
-        if (totalDays <= 0) { sumActual += t.progress; sumPlanned += t.progress; continue }
-        const elapsed  = differenceInDays(today, t.startDate!)
-        const planned  = Math.max(0, Math.min(100, (elapsed / totalDays) * 100))
-        sumActual  += t.progress
-        sumPlanned += planned
-      }
-      if (sumPlanned > 0) idp = sumActual / sumPlanned
-    } else if (p.expectedStart && p.expectedEnd) {
-      const totalDays   = differenceInDays(p.expectedEnd, p.expectedStart)
-      const elapsedDays = differenceInDays(today, p.expectedStart)
-      if (totalDays > 0) {
-        const plannedPct = Math.min(Math.max((elapsedDays / totalDays) * 100, 0), 100)
-        if (plannedPct > 5) idp = progress / plannedPct
-      }
-    }
-
-    // ── IDC
+    // ── IDC — EVM: Valor Agregado / Custo Real ────────────────────
+    // IDC = EV / AC  onde EV = Σ(custo_orçado × % progresso) e AC = Σ(custo_real)
     let idc: number | null = null
-    if (p.budget != null && p.estimatedCosts != null && p.estimatedCosts > 0) {
-      idc = p.budget / p.estimatedCosts
+    if (!skipKpi) {
+      const earnedValue   = tasks.reduce((s, t) => s + (t.budgetedCost ?? 0) * (t.progress / 100), 0)
+      const actualCostSum = tasks.reduce((s, t) => s + (t.actualCost  ?? 0), 0)
+      if (actualCostSum > 0) {
+        idc = Math.round((earnedValue / actualCostSum) * 100) / 100
+      }
     }
 
-    // ── Risks
+    // ── Riscos ───────────────────────────────────────────────────
     const risks = {
       critical: p.risks.filter((r) => r.status === "CRITICAL").length,
       high:     p.risks.filter((r) => r.status === "HIGH").length,
@@ -140,7 +167,6 @@ export default async function AnalyticsPage() {
       low:      p.risks.filter((r) => r.status === "LOW").length,
     }
 
-    // ── Task responsibles
     const taskResponsibles = [
       ...new Set(tasks.map((t) => t.responsible?.name).filter((n): n is string => Boolean(n)))
     ]
@@ -153,6 +179,7 @@ export default async function AnalyticsPage() {
       sponsor:        p.sponsor?.name ?? null,
       taskResponsibles,
       progress,
+      plannedPct,
       devio,
       idp,
       idc,

@@ -71,16 +71,17 @@ export default async function StatusReportPage() {
     const actualCostSum = tasks.reduce((s, t) => s + (t.actualCost ?? 0), 0)
     const idc = actualCostSum > 0 ? Math.round((earnedValue / actualCostSum) * 100) / 100 : null
 
-    // IDP — cascata de datas
+    // IDP: usa expectedStart como linha de base (cronograma original, não data real de início)
+    // Isso garante que projetos que começaram atrasados não tenham IDP artificialmente inflado
     let idp: number | null = null
     let timelineProgress: number | null = null
-    const pStart = p.actualStart ?? p.suggestedStart ?? p.expectedStart
-    const pEnd   = p.expectedEnd  ?? p.suggestedEnd
-    if (pStart && pEnd) {
+    const pStart = p.expectedStart ?? p.suggestedStart
+    const pEnd   = p.expectedEnd   ?? p.suggestedEnd
+    if (pStart && pEnd && p.status !== "PAUSED") {
       const totalDays   = differenceInDays(pEnd, pStart)
       const elapsedDays = differenceInDays(today, pStart)
-      if (totalDays > 0) {
-        const plannedPct = Math.min(100, Math.max(0, (elapsedDays / totalDays) * 100))
+      if (totalDays > 0 && elapsedDays > 0) {
+        const plannedPct = Math.min(100, (elapsedDays / totalDays) * 100)
         timelineProgress = Math.round(plannedPct)
         if (plannedPct > 2) idp = Math.round((avgProgress / plannedPct) * 100) / 100
       }

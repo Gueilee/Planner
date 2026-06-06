@@ -4,6 +4,8 @@ import { getAllProjectsForKanban } from "@/lib/actions/kanban"
 import { KanbanClient } from "./kanban-client"
 import { differenceInDays } from "date-fns"
 
+export const dynamic = "force-dynamic"
+
 export const metadata = { title: "Kanban — Projetos" }
 
 const FULL_ACCESS_ROLES = new Set(["ADMIN", "DIRECTOR", "PROJECT_MANAGER"])
