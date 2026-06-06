@@ -31,7 +31,7 @@ export default async function StatusReportPage() {
           startDate: true, endDate: true,
           budgetedCost: true, actualCost: true,
           completedAt: true,
-          responsible: { select: { name: true } },
+          responsible: { select: { name: true, image: true } },
           _count: { select: { subtasks: true } },
         },
         orderBy: { order: "asc" },
@@ -186,8 +186,21 @@ export default async function StatusReportPage() {
       idc, idp, timelineProgress, progressDelta,
       meetingsCount:  p._count.meetings,
       meetingsByType,
-      team:    p.members.length,
-      members: p.members.map((m) => ({ name: m.user.name, role: m.role, image: m.user.image })),
+      // Squad completa: membros formais + responsáveis do cronograma não listados como membros
+      ...((): { team: number; members: { name: string; role: string | null; image: string | null }[] } => {
+        const formalMembers = p.members.map((m) => ({ name: m.user.name, role: m.role as string | null, image: m.user.image }))
+        const formalNames   = new Set(formalMembers.map((m) => m.name))
+        const scheduleExtra = [
+          ...new Map(
+            tasks
+              .map((t) => t.responsible)
+              .filter((r): r is { name: string; image: string | null } => Boolean(r) && !formalNames.has(r!.name))
+              .map((r) => [r.name, r] as const)
+          ).values(),
+        ].map((r) => ({ name: r.name, role: null as string | null, image: r.image }))
+        const fullTeam = [...formalMembers, ...scheduleExtra]
+        return { team: fullTeam.length, members: fullTeam }
+      })(),
       tasks: {
         total, completed: completed.length, inProgress: inProgress.length,
         delayed: delayed.length, planning: planning.length,

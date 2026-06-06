@@ -34,7 +34,7 @@ export type ProjectSlideData = {
     critical: number; high: number
     items: { level: string; description: string; mitigation: string | null; owner: string | null }[]
   }
-  team: number; members: { name: string; role: string; image: string | null }[]
+  team: number; members: { name: string; role: string | null; image: string | null }[]
   daysLeft: number | null; economy: number | null; budget: number | null
   lastCheckpoint: {
     date: string; title: string; location: string | null
