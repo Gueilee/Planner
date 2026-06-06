@@ -18,15 +18,16 @@ export default async function KanbanPage() {
   const raw = await getAllProjectsForKanban()
 
   const projects = raw.map((p) => {
-    const tasks    = p.tasks
-    const total    = tasks.length
-    const done     = tasks.filter((t) => t.status === "COMPLETED").length
-    const progress = total > 0
-      ? Math.round(tasks.reduce((s, t) => s + t.progress, 0) / total)
+    // Mesma lógica do project-tasks-kanban: apenas tarefas folha (sem filhos)
+    const leafTasks    = p.tasks.filter((t) => t._count.subtasks === 0)
+    const total        = leafTasks.length
+    const done         = leafTasks.filter((t) => t.status === "COMPLETED").length
+    const progress     = total > 0
+      ? Math.round(leafTasks.reduce((s, t) => s + t.progress, 0) / total)
       : 0
 
     const highRisks    = p.risks.filter((r) => r.status === "HIGH" || r.status === "CRITICAL").length
-    const delayedTasks = tasks.filter((t) => t.status === "DELAYED").length
+    const delayedTasks = leafTasks.filter((t) => t.status === "DELAYED").length
 
     const daysLeft = p.expectedEnd
       ? differenceInDays(p.expectedEnd, new Date())

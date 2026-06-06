@@ -93,7 +93,7 @@ export async function getAllProjectsForKanban() {
       sponsor:  { select: { name: true, department: true } },
       members:  { take: 5, include: { user: { select: { id: true, name: true, image: true } } } },
       _count:   { select: { members: true } },
-      tasks:    { where: { subtasks: { none: {} } }, select: { status: true, progress: true } },
+      tasks:    { select: { status: true, progress: true, _count: { select: { subtasks: true } } } },
       risks:    { select: { status: true } },
     },
   })
