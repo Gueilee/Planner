@@ -17,7 +17,7 @@ import {
   LayoutGrid, List, Search, X, Users, AlertTriangle,
   TrendingUp, Calendar, ExternalLink,
   ChevronRight, CheckCircle2, Loader2,
-  Clock, Layers, CircleCheck, ArrowRight, Zap, PauseCircle,
+  Clock, Layers, CircleCheck, ArrowRight, Zap, PauseCircle, UserRound,
 } from "lucide-react"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -408,14 +408,35 @@ function ProjectCard({
           </div>
 
           {/* Title */}
-          <p className="text-[13px] font-bold text-slate-800 leading-snug mb-1 line-clamp-2">
+          <p className="text-[13px] font-bold text-slate-800 leading-snug mb-2 line-clamp-2">
             {project.title}
           </p>
 
-          {/* Sponsor */}
-          <p className="text-[11px] mb-3.5 truncate text-slate-400 font-medium">
-            {project.sponsor}
-          </p>
+          {/* Solicitante */}
+          {project.sponsor && project.sponsor !== "—" && (
+            <div
+              className="flex items-center gap-1.5 mb-3 px-2 py-1 rounded-lg self-start w-fit max-w-full"
+              style={{
+                background: "rgba(123,47,190,0.07)",
+                border:     "1px solid rgba(123,47,190,0.16)",
+              }}
+            >
+              <div
+                className="w-4 h-4 rounded-full flex items-center justify-center shrink-0"
+                style={{ background: "rgba(123,47,190,0.15)" }}
+              >
+                <UserRound className="w-2.5 h-2.5" style={{ color: "#7B2FBE" }} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[7.5px] font-black uppercase tracking-widest leading-none mb-0.5" style={{ color: "#9333EA" }}>
+                  Solicitante
+                </p>
+                <p className="text-[10.5px] font-bold truncate leading-none" style={{ color: "#3B0764" }}>
+                  {project.sponsor}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Progress accent bar — thin, only when tasks exist */}
           {project.tasksTotal > 0 && (
@@ -761,6 +782,32 @@ function DetailDrawer({ project, onClose }: { project: KanbanProject; onClose: (
             ))}
           </div>
 
+          {/* Solicitante destaque */}
+          {project.sponsor && project.sponsor !== "—" && (
+            <div
+              className="flex items-center gap-3 px-4 py-3.5 rounded-2xl"
+              style={{
+                background: "rgba(123,47,190,0.06)",
+                border:     "1.5px solid rgba(123,47,190,0.18)",
+              }}
+            >
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: "rgba(123,47,190,0.14)" }}
+              >
+                <UserRound className="w-4.5 h-4.5" style={{ color: "#7B2FBE", width: 18, height: 18 }} />
+              </div>
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-widest mb-0.5" style={{ color: "#9333EA" }}>
+                  Solicitante do Projeto
+                </p>
+                <p className="text-sm font-bold" style={{ color: "#3B0764" }}>
+                  {project.sponsor}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Timeline */}
           <div
             className="rounded-2xl overflow-hidden"
@@ -769,14 +816,13 @@ function DetailDrawer({ project, onClose }: { project: KanbanProject; onClose: (
             {[
               { label: "Início Previsto",  value: fmt(project.expectedStart) },
               { label: "Término Previsto", value: fmt(project.expectedEnd) },
-              { label: "Sponsor",          value: project.sponsor },
             ].map(({ label, value }, i) => (
               <div
                 key={label}
                 className="flex items-center justify-between px-5 py-3.5"
                 style={{
                   background:   i % 2 === 0 ? "#F8FAFC" : "#ffffff",
-                  borderBottom: i < 2 ? "1px solid rgba(15,23,42,0.05)" : "none",
+                  borderBottom: i < 1 ? "1px solid rgba(15,23,42,0.05)" : "none",
                 }}
               >
                 <span className="text-xs font-semibold text-slate-400">{label}</span>
