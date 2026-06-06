@@ -33,6 +33,7 @@ enum ProjectStatus {
   CANCELLED
   ON_HOLD
   FUTURE_ANALYSIS
+  PAUSED
 }
 
 enum TaskStatus {

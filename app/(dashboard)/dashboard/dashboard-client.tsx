@@ -47,6 +47,7 @@ const STATUS_LABEL: Record<string, string> = {
   CANCELLED:   "Cancelado",
   ON_HOLD:     "Em Espera",
   FUTURE_ANALYSIS: "Análise Futura",
+  PAUSED:      "Pausado",
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -60,6 +61,7 @@ const STATUS_COLOR: Record<string, string> = {
   CANCELLED:   "#EF4444",
   ON_HOLD:     "#8B5CF6",
   FUTURE_ANALYSIS: "#9333EA",
+  PAUSED:      "#94A3B8",
 }
 
 // 6 pipeline stages. statusKeys = DB statuses that count towards each stage.
@@ -71,6 +73,7 @@ const PIPELINE = [
   { key: "GO_LIVE",     filterKey: "GO_LIVE",     statusKeys: ["GO_LIVE"],               label: "Go Live",       color: "#059669" },
   { key: "POST_GOLIVE", filterKey: "GO_LIVE",     statusKeys: ["POST_GOLIVE"],           label: "Pós Go Live",   color: "#0891B2" },
   { key: "COMPLETED",   filterKey: "COMPLETED",   statusKeys: ["COMPLETED"],             label: "Concluído",     color: "#64748B" },
+  { key: "PAUSED",      filterKey: "PAUSED",      statusKeys: ["PAUSED"],                label: "Pausado",       color: "#94A3B8" },
 ]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

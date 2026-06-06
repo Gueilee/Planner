@@ -18,6 +18,7 @@ const STATUS_CONFIG: Record<string, { label: string; dot: string; bg: string; te
   COMPLETED:         { label: "Concluído",      dot: "bg-green-500",   bg: "bg-green-100",   text: "text-green-700",   border: "border-green-300" },
   ON_HOLD:           { label: "Em Espera",       dot: "bg-orange-400",  bg: "bg-orange-50",   text: "text-orange-600",  border: "border-orange-200" },
   FUTURE_ANALYSIS:   { label: "Análise Futura", dot: "bg-violet-500",  bg: "bg-violet-50",   text: "text-violet-700",  border: "border-violet-200" },
+  PAUSED:            { label: "Pausado",        dot: "bg-slate-400",   bg: "bg-slate-100",   text: "text-slate-600",   border: "border-slate-300" },
 }
 
 interface StatusBadgeProps {

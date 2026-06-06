@@ -95,6 +95,7 @@ const STATUS_LABELS: Record<string, string> = {
   COMPLETED:       "Concluído",
   ON_HOLD:         "Em Espera",
   FUTURE_ANALYSIS: "Análise Futura",
+  PAUSED:          "Pausado",
 }
 
 const STATUS_BADGE_COLORS: Record<string, string> = {
@@ -107,6 +108,7 @@ const STATUS_BADGE_COLORS: Record<string, string> = {
   COMPLETED:       "bg-green-100 text-green-700",
   ON_HOLD:         "bg-orange-100 text-orange-700",
   FUTURE_ANALYSIS: "bg-gray-100 text-gray-600",
+  PAUSED:          "bg-slate-100 text-slate-600",
 }
 
 // ─── Section Header ───────────────────────────────────────────────────────────

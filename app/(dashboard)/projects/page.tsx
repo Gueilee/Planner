@@ -2,7 +2,7 @@ import { Suspense } from "react"
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
 import { Header } from "@/components/layout/header"
-import { FolderKanban, Layers, Clock, CheckCircle2, BarChart3 } from "lucide-react"
+import { FolderKanban, Layers, Clock, CheckCircle2, BarChart3, PauseCircle } from "lucide-react"
 import { ProjectsClient, type ProjectRow } from "./projects-client"
 
 const KPI_GRADIENTS = [
@@ -45,12 +45,14 @@ export default async function ProjectsPage() {
   const planning       = byStatus["PLANNING"] ?? 0
   const completed      = byStatus["COMPLETED"] ?? 0
   const futureAnalysis = byStatus["FUTURE_ANALYSIS"] ?? 0
+  const paused         = byStatus["PAUSED"] ?? 0
 
   const kpis = [
     { label: "Total Projetos",  value: total,          icon: FolderKanban },
     { label: "Planejamento",    value: planning,       icon: Layers },
     { label: "Em Execução",     value: active,         icon: Clock },
     { label: "Concluídos",      value: completed,      icon: CheckCircle2 },
+    { label: "Pausados",        value: paused,         icon: PauseCircle },
     { label: "Análise Futura",  value: futureAnalysis, icon: BarChart3 },
   ]
 

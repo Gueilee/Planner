@@ -55,6 +55,7 @@ const STATUS_CFG: Record<string, { label: string; color: string; bg: string; bor
   ON_HOLD:         { label: "Em Espera",      color: "#EA580C", bg: "#FFF7ED", border: "#FED7AA", pill: "bg-orange-50 text-orange-700 border-orange-200" },
   CANCELLED:       { label: "Cancelado",      color: "#DC2626", bg: "#FEF2F2", border: "#FECACA", pill: "bg-red-50 text-red-700 border-red-200" },
   FUTURE_ANALYSIS: { label: "Análise Futura", color: "#7C3AED", bg: "#F5F3FF", border: "#DDD6FE", pill: "bg-violet-50 text-violet-700 border-violet-200" },
+  PAUSED:          { label: "Pausado",        color: "#64748B", bg: "#F8FAFC", border: "#CBD5E1", pill: "bg-slate-100 text-slate-600 border-slate-300" },
 }
 
 const MEETING_CFG: Record<string, { label: string; color: string; icon: typeof Play; bg: string }> = {

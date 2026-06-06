@@ -2,7 +2,7 @@
 
 import { useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { Loader2, Play, CheckCircle2, FlaskConical, Rocket, TrendingUp, RotateCcw } from "lucide-react"
+import { Loader2, Play, CheckCircle2, FlaskConical, Rocket, TrendingUp, RotateCcw, PlayCircle } from "lucide-react"
 import { updateProjectStatus } from "@/lib/actions/projects"
 
 const TRANSITIONS: Record<string, { label: string; next: string; icon: typeof Play; color: string }> = {
@@ -14,6 +14,7 @@ const TRANSITIONS: Record<string, { label: string; next: string; icon: typeof Pl
   GO_LIVE:         { label: "Pós GO LIVE",           next: "POST_GOLIVE", icon: CheckCircle2, color: "from-teal-500 to-emerald-500" },
   POST_GOLIVE:     { label: "Encerrar Projeto",      next: "COMPLETED",   icon: CheckCircle2, color: "from-green-500 to-green-700" },
   FUTURE_ANALYSIS: { label: "Retomar para Análise",  next: "PLANNING",    icon: RotateCcw,    color: "from-violet-500 to-purple-600" },
+  PAUSED:          { label: "Retomar Projeto",       next: "IN_PROGRESS", icon: PlayCircle,   color: "from-slate-500 to-slate-600"   },
 }
 
 interface StatusActionsProps {

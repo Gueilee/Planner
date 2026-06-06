@@ -17,7 +17,7 @@ import {
   LayoutGrid, List, Search, X, Users, AlertTriangle,
   TrendingUp, Calendar, ExternalLink,
   ChevronRight, CheckCircle2, Loader2,
-  Clock, Layers, CircleCheck, ArrowRight, Zap,
+  Clock, Layers, CircleCheck, ArrowRight, Zap, PauseCircle,
 } from "lucide-react"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -124,6 +124,16 @@ const COLUMNS = [
     glow: "rgba(8,145,178,0.25)",
     icon: CircleCheck,
     gradient: "linear-gradient(135deg, #0891B2, #67E8F9)",
+  },
+  {
+    id: "PAUSED",
+    label: "Pausado",
+    dropStatus: "PAUSED",
+    displayStatuses: ["PAUSED"],
+    color: "#64748B",
+    glow: "rgba(100,116,139,0.25)",
+    icon: PauseCircle,
+    gradient: "linear-gradient(135deg, #64748B, #94A3B8)",
   },
 ] as const
 

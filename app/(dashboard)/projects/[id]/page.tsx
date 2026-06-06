@@ -498,7 +498,7 @@ export default async function ProjectDetailPage({
               )}
 
               {/* Status flow */}
-              {!["CANCELLED", "ON_HOLD", "FUTURE_ANALYSIS"].includes(project.status) && (
+              {!["CANCELLED", "ON_HOLD", "FUTURE_ANALYSIS", "PAUSED"].includes(project.status) && (
                 <div className="mt-6 flex items-center" style={{ gap: "0" }}>
                   {STATUS_FLOW.map((s, idx) => {
                     const done   = idx < flowIdx

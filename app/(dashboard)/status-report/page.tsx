@@ -12,7 +12,7 @@ export const metadata = { title: "Status Report" }
 
 const ACTIVE_STATUSES: ProjectStatus[] = [
   ProjectStatus.IN_PROGRESS, ProjectStatus.PILOT, ProjectStatus.RAMP_UP,
-  ProjectStatus.GO_LIVE, ProjectStatus.POST_GOLIVE,
+  ProjectStatus.GO_LIVE, ProjectStatus.POST_GOLIVE, ProjectStatus.PAUSED,
 ]
 
 export default async function StatusReportPage() {
