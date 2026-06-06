@@ -25,9 +25,8 @@ export default async function KanbanPage() {
       ? Math.round(tasks.reduce((s, t) => s + t.progress, 0) / total)
       : 0
 
-    const highRisks = p.risks.filter((r) =>
-      r.status === "HIGH" || r.status === "CRITICAL"
-    ).length
+    const highRisks    = p.risks.filter((r) => r.status === "HIGH" || r.status === "CRITICAL").length
+    const delayedTasks = tasks.filter((t) => t.status === "DELAYED").length
 
     const daysLeft = p.expectedEnd
       ? differenceInDays(p.expectedEnd, new Date())
@@ -48,6 +47,7 @@ export default async function KanbanPage() {
       members:       p.members.map((m) => ({ id: m.user.id, name: m.user.name })),
       riskCount:     p.risks.length,
       highRisks,
+      delayedTasks,
       economy:       p.economy,
       budget:        p.budget,
       expectedEnd:   p.expectedEnd?.toISOString() ?? null,

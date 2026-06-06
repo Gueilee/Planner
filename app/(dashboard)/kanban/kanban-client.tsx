@@ -37,6 +37,7 @@ export type KanbanProject = {
   members: { id: string; name: string }[]
   riskCount: number
   highRisks: number
+  delayedTasks: number
   economy: number | null
   budget: number | null
   expectedEnd: string | null
@@ -154,6 +155,60 @@ const PRIORITY_CFG: Record<string, { color: string; bg: string; label: string }>
   P4: { color: "#64748B", bg: "rgba(100,116,139,0.10)", label: "P4" },
 }
 
+// ─── Urgency ──────────────────────────────────────────────────────────────────
+
+type UrgencyLevel = "delayed" | "at_risk" | "on_time" | "none"
+
+const URGENCY_CFG: Record<UrgencyLevel, {
+  bg: string; leftBorder: string; sideColor: string
+  badge: { text: string; color: string; bg: string } | null
+}> = {
+  delayed: {
+    bg:          "#FEF2F2",
+    leftBorder:  "#EF4444",
+    sideColor:   "rgba(239,68,68,0.18)",
+    badge:       { text: "Atrasado",        color: "#DC2626", bg: "rgba(220,38,38,0.10)" },
+  },
+  at_risk: {
+    bg:          "#FFFBEB",
+    leftBorder:  "#F59E0B",
+    sideColor:   "rgba(245,158,11,0.18)",
+    badge:       { text: "Risco de Atraso", color: "#D97706", bg: "rgba(245,158,11,0.10)" },
+  },
+  on_time: {
+    bg:          "#F0FDF4",
+    leftBorder:  "#22C55E",
+    sideColor:   "rgba(34,197,94,0.18)",
+    badge:       { text: "No Prazo",        color: "#16A34A", bg: "rgba(22,163,74,0.10)" },
+  },
+  none: {
+    bg:         "#ffffff",
+    leftBorder: "transparent",
+    sideColor:  "rgba(15,23,42,0.07)",
+    badge:      null,
+  },
+}
+
+const NO_URGENCY_STATUSES = new Set(["COMPLETED", "PAUSED", "FUTURE_ANALYSIS"])
+
+function getUrgency(project: KanbanProject): { level: UrgencyLevel; daysLate: number } {
+  if (NO_URGENCY_STATUSES.has(project.status)) return { level: "none", daysLate: 0 }
+
+  const pastDue         = project.daysLeft !== null && project.daysLeft < 0
+  const hasDelayedTasks = project.delayedTasks > 0
+
+  if (pastDue || hasDelayedTasks) {
+    return { level: "delayed", daysLate: pastDue ? Math.abs(project.daysLeft!) : 0 }
+  }
+  if (project.daysLeft !== null && project.daysLeft <= 14) {
+    return { level: "at_risk", daysLate: 0 }
+  }
+  if (project.daysLeft !== null) {
+    return { level: "on_time", daysLate: 0 }
+  }
+  return { level: "none", daysLate: 0 }
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmt(d: string | null) {
@@ -240,8 +295,10 @@ function ProjectCard({
   onClick?: () => void
   isDragOverlay?: boolean
 }) {
-  const col  = COL_BY_STATUS[project.status] ?? COLUMNS[0]
-  const pCfg = project.priorityLabel ? PRIORITY_CFG[project.priorityLabel] : null
+  const col   = COL_BY_STATUS[project.status] ?? COLUMNS[0]
+  const pCfg  = project.priorityLabel ? PRIORITY_CFG[project.priorityLabel] : null
+  const urg   = getUrgency(project)
+  const ucfg  = URGENCY_CFG[urg.level]
 
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id:       project.id,
@@ -249,17 +306,7 @@ function ProjectCard({
     disabled: isDragOverlay,
   })
 
-  const isDelayed = project.daysLeft !== null && project.daysLeft < 0
-  const isUrgent  = !isDelayed && project.daysLeft !== null && project.daysLeft <= 14
-
-  const cardBg     = isDelayed ? "#fff8f8" : isUrgent ? "#fffcf0" : "#ffffff"
-  const cardBorder = isDragOverlay
-    ? `1px solid ${col.color}40`
-    : isDelayed
-      ? "1px solid rgba(239,68,68,0.22)"
-      : isUrgent
-        ? "1px solid rgba(245,158,11,0.22)"
-        : "1px solid rgba(15,23,42,0.07)"
+  const hasAccent = urg.level !== "none"
 
   return (
     <div
@@ -277,19 +324,28 @@ function ProjectCard({
     >
       <div
         className="group/card select-none rounded-2xl overflow-hidden"
-        style={{
-          background: cardBg,
-          border:     cardBorder,
-          boxShadow:  isDragOverlay
-            ? `0 24px 60px rgba(0,0,0,0.20), 0 0 0 2px ${col.color}35`
-            : "0 1px 3px rgba(15,23,42,0.05), 0 4px 12px rgba(15,23,42,0.04)",
-          transition: "transform 0.18s ease, box-shadow 0.18s ease",
+        style={isDragOverlay ? {
+          background:  "#ffffff",
+          border:      `1px solid ${col.color}40`,
+          boxShadow:   `0 24px 60px rgba(0,0,0,0.20), 0 0 0 2px ${col.color}35`,
+        } : {
+          background:       ucfg.bg,
+          borderStyle:      "solid",
+          borderTopWidth:   "1px",    borderTopColor:    hasAccent ? ucfg.sideColor : "rgba(15,23,42,0.07)",
+          borderRightWidth: "1px",    borderRightColor:  hasAccent ? ucfg.sideColor : "rgba(15,23,42,0.07)",
+          borderBottomWidth:"1px",    borderBottomColor: hasAccent ? ucfg.sideColor : "rgba(15,23,42,0.07)",
+          borderLeftWidth:  hasAccent ? "4px" : "1px",
+          borderLeftColor:  hasAccent ? ucfg.leftBorder : "rgba(15,23,42,0.07)",
+          boxShadow:        "0 1px 3px rgba(15,23,42,0.05), 0 4px 12px rgba(15,23,42,0.04)",
+          transition:       "transform 0.18s ease, box-shadow 0.18s ease",
         }}
         onMouseEnter={(e) => {
           if (!isDragOverlay) {
             const el = e.currentTarget as HTMLElement
             el.style.transform = "translateY(-2px)"
-            el.style.boxShadow = `0 8px 24px rgba(15,23,42,0.10), 0 2px 6px rgba(15,23,42,0.06), 0 0 0 1px ${col.color}20`
+            el.style.boxShadow = hasAccent
+              ? `0 8px 24px rgba(15,23,42,0.10), 0 2px 6px rgba(15,23,42,0.06), 0 0 0 1px ${ucfg.leftBorder}35`
+              : `0 8px 24px rgba(15,23,42,0.10), 0 2px 6px rgba(15,23,42,0.06), 0 0 0 1px ${col.color}20`
           }
         }}
         onMouseLeave={(e) => {
@@ -324,21 +380,29 @@ function ProjectCard({
                 {pCfg.label}
               </span>
             )}
-            {isDelayed && (
+            {urg.level === "delayed" && (
               <span
                 className="text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1"
-                style={{ background: "rgba(239,68,68,0.10)", color: "#DC2626" }}
+                style={{ background: ucfg.badge!.bg, color: ucfg.badge!.color }}
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block animate-pulse" />
-                {Math.abs(project.daysLeft!)}d atrasado
+                {urg.daysLate > 0 ? `${urg.daysLate}d atrasado` : "Tarefas atrasadas"}
               </span>
             )}
-            {isUrgent && (
+            {urg.level === "at_risk" && (
               <span
-                className="text-[9px] font-bold px-2 py-0.5 rounded-full"
-                style={{ background: "rgba(245,158,11,0.10)", color: "#D97706" }}
+                className="text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1"
+                style={{ background: ucfg.badge!.bg, color: ucfg.badge!.color }}
               >
                 ⚡ {project.daysLeft}d restantes
+              </span>
+            )}
+            {urg.level === "on_time" && (
+              <span
+                className="text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1"
+                style={{ background: ucfg.badge!.bg, color: ucfg.badge!.color }}
+              >
+                ✓ No prazo
               </span>
             )}
           </div>
@@ -411,7 +475,7 @@ function ProjectCard({
                 {project.expectedEnd && (
                   <span
                     className="text-[9px] font-semibold"
-                    style={{ color: isDelayed ? "#DC2626" : isUrgent ? "#D97706" : "#94A3B8" }}
+                    style={{ color: urg.level === "delayed" ? "#DC2626" : urg.level === "at_risk" ? "#D97706" : "#94A3B8" }}
                   >
                     {format(new Date(project.expectedEnd), "dd/MM", { locale: ptBR })}
                   </span>
@@ -539,8 +603,10 @@ function KanbanColumn({
 function DetailDrawer({ project, onClose }: { project: KanbanProject; onClose: () => void }) {
   const col       = COL_BY_STATUS[project.status] ?? COLUMNS[0]
   const pCfg      = project.priorityLabel ? PRIORITY_CFG[project.priorityLabel] : null
-  const isDelayed = project.daysLeft !== null && project.daysLeft < 0
-  const isUrgent  = !isDelayed && project.daysLeft !== null && project.daysLeft <= 14
+  const urg       = getUrgency(project)
+  const ucfg      = URGENCY_CFG[urg.level]
+  const isDelayed = urg.level === "delayed"
+  const isUrgent  = urg.level === "at_risk"
 
   return (
     <>
@@ -590,10 +656,15 @@ function DetailDrawer({ project, onClose }: { project: KanbanProject; onClose: (
                     {project.priorityLabel}
                   </span>
                 )}
-                {isDelayed && (
-                  <span className="text-[10px] font-bold px-2.5 py-1 rounded-full"
-                    style={{ background: "rgba(239,68,68,0.10)", color: "#DC2626" }}>
-                    {Math.abs(project.daysLeft!)}d atrasado
+                {urg.level !== "none" && ucfg.badge && (
+                  <span className="text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5"
+                    style={{ background: ucfg.badge.bg, color: ucfg.badge.color }}>
+                    {urg.level === "delayed" && <span className="w-2 h-2 rounded-full inline-block bg-red-500 animate-pulse" />}
+                    {urg.level === "delayed"
+                      ? urg.daysLate > 0 ? `${urg.daysLate}d atrasado` : "Tarefas atrasadas"
+                      : urg.level === "at_risk"
+                        ? `⚡ ${project.daysLeft}d restantes`
+                        : `✓ No prazo`}
                   </span>
                 )}
               </div>
@@ -804,8 +875,10 @@ function ListView({ projects, onRowClick }: { projects: KanbanProject[]; onRowCl
               style={{ border: "1px solid rgba(15,23,42,0.07)", boxShadow: "0 1px 4px rgba(15,23,42,0.05)" }}
             >
               {items.map((p, i) => {
-                const pCfg      = p.priorityLabel ? PRIORITY_CFG[p.priorityLabel] : null
-                const isDelayed = p.daysLeft !== null && p.daysLeft < 0
+                const pCfg = p.priorityLabel ? PRIORITY_CFG[p.priorityLabel] : null
+                const purg = getUrgency(p)
+                const pucfg = URGENCY_CFG[purg.level]
+                const isDelayed = purg.level === "delayed"
                 return (
                   <div
                     key={p.id}
@@ -815,7 +888,7 @@ function ListView({ projects, onRowClick }: { projects: KanbanProject[]; onRowCl
                   >
                     <div
                       className="w-1 h-10 rounded-full shrink-0"
-                      style={{ background: col.gradient }}
+                      style={{ background: purg.level !== "none" ? pucfg.leftBorder : col.gradient }}
                     />
                     <div className="w-8 shrink-0">
                       {pCfg && p.priorityLabel
@@ -861,7 +934,7 @@ function ListView({ projects, onRowClick }: { projects: KanbanProject[]; onRowCl
                     </div>
                     <div className="w-20 shrink-0 text-right hidden xl:block">
                       <span className="text-xs font-bold"
-                        style={{ color: isDelayed ? "#DC2626" : p.daysLeft !== null && p.daysLeft <= 14 ? "#D97706" : "#94A3B8" }}>
+                        style={{ color: purg.level === "delayed" ? "#DC2626" : purg.level === "at_risk" ? "#D97706" : "#94A3B8" }}>
                         {p.daysLeft === null ? "—" : isDelayed ? `-${Math.abs(p.daysLeft)}d` : `${p.daysLeft}d`}
                       </span>
                     </div>
@@ -1081,6 +1154,23 @@ export function KanbanClient({ projects: initial }: { projects: KanbanProject[] 
             ))}
           </div>
         </div>
+      </div>
+
+      {/* ── Urgency Legend ── */}
+      <div
+        className="flex items-center gap-5 px-6 py-1.5 shrink-0 bg-white"
+        style={{ borderBottom: "1px solid rgba(15,23,42,0.05)" }}
+      >
+        <span className="text-[9px] font-bold uppercase tracking-widest text-slate-300">Prazo</span>
+        {(["on_time", "at_risk", "delayed"] as UrgencyLevel[]).map((level) => {
+          const c = URGENCY_CFG[level]
+          return (
+            <div key={level} className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-[3px]" style={{ background: c.leftBorder }} />
+              <span className="text-[10px] font-semibold" style={{ color: c.badge!.color }}>{c.badge!.text}</span>
+            </div>
+          )
+        })}
       </div>
 
       {/* ── Board / List ── */}
