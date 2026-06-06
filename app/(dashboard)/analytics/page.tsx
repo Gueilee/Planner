@@ -5,7 +5,11 @@ import { differenceInDays } from "date-fns"
 import { ProjectStatus } from "@/lib/generated/prisma/enums"
 import { AnalyticsClient } from "./analytics-client"
 
+export const dynamic = "force-dynamic"
+
 export const metadata = { title: "Indicadores de Gestão" }
+
+export type UserOption = { id: string; name: string }
 
 export type ProjectIndicator = {
   id: string
@@ -24,7 +28,7 @@ export type ProjectIndicator = {
   risks: { critical: number; high: number; medium: number; low: number }
   expectedEnd: string | null
   reportStatus: { cost: string; schedule: string; resources: string; overall: string }
-  taskResponsibles: string[]   // nomes únicos dos responsáveis das tarefas
+  taskResponsibles: string[]
 }
 
 export default async function AnalyticsPage() {
@@ -32,24 +36,32 @@ export default async function AnalyticsPage() {
   if (!session?.user) redirect("/login")
 
   const today = new Date()
+  const userRole = (session.user.role ?? "PROJECT_MEMBER") as string
 
-  const projects = await db.project.findMany({
-    where: { status: { not: ProjectStatus.CANCELLED } },
-    orderBy: { createdAt: "asc" },
-    include: {
-      sponsor: { select: { name: true } },
-      tasks: {
-        select: {
-          status: true, progress: true,
-          startDate: true, endDate: true,
-          responsible: { select: { name: true } },
+  const [projectsRaw, users] = await Promise.all([
+    db.project.findMany({
+      where:   { status: { not: ProjectStatus.CANCELLED } },
+      orderBy: { createdAt: "asc" },
+      include: {
+        sponsor: { select: { name: true } },
+        tasks: {
+          select: {
+            status: true, progress: true,
+            startDate: true, endDate: true,
+            responsible: { select: { name: true } },
+          },
         },
+        risks: { select: { status: true } },
       },
-      risks: { select: { status: true } },
-    },
-  })
+    }),
+    db.user.findMany({
+      where:   { active: true },
+      select:  { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+  ])
 
-  const data: ProjectIndicator[] = projects.map((p) => {
+  const data: ProjectIndicator[] = projectsRaw.map((p) => {
     // ── Progress ──────────────────────────────────────────────────
     const tasks = p.tasks
     const progress =
@@ -59,10 +71,7 @@ export default async function AnalyticsPage() {
         ? 100
         : 0
 
-    // ── Desvio de Prazo: variação entre progresso real e progresso planejado
-    // devio > 0 → adiantado (fez mais do que o tempo sugeria)
-    // devio < 0 → atrasado  (fez menos do que deveria para esta data)
-    // devio = (progresso_real% − progresso_planejado%) / 100
+    // ── Desvio de Prazo
     let devio: number | null = null
     let scheduleStatus: ProjectIndicator["scheduleStatus"] = "ND"
 
@@ -71,39 +80,31 @@ export default async function AnalyticsPage() {
     } else if (p.expectedStart && p.expectedEnd) {
       const totalDays = differenceInDays(p.expectedEnd, p.expectedStart)
       if (totalDays > 0) {
-        // Para projetos concluídos usa actualEnd (se disponível) como referência
         const referenceDate = (p.status === "COMPLETED" && p.actualEnd) ? p.actualEnd : today
         const elapsedDays   = differenceInDays(referenceDate, p.expectedStart)
         const plannedPct    = Math.min(100, Math.max(0, (elapsedDays / totalDays) * 100))
-        devio = (progress - plannedPct) / 100   // -1 a +1
-        if (devio >= 0)       scheduleStatus = "ON_TIME"
+        devio = (progress - plannedPct) / 100
+        if (devio >= 0)         scheduleStatus = "ON_TIME"
         else if (devio >= -0.2) scheduleStatus = "AT_RISK"
         else                    scheduleStatus = "DELAYED"
       }
     }
 
-    // ── IDP — calculado por tarefa (mais preciso que usar só datas do projeto)
-    // Para cada tarefa com startDate e endDate, calcula o % planejado baseado
-    // no tempo decorrido (mesmo cálculo do calcEstimatedProgress do cronograma).
-    // IDP = Σ(progresso_real) / Σ(progresso_planejado)
+    // ── IDP
     let idp: number | null = null
     const tasksWithDates = tasks.filter((t) => t.startDate && t.endDate)
     if (tasksWithDates.length >= 3) {
-      let sumActual  = 0
-      let sumPlanned = 0
+      let sumActual = 0, sumPlanned = 0
       for (const t of tasksWithDates) {
-        const totalDays   = differenceInDays(t.endDate!, t.startDate!)
+        const totalDays = differenceInDays(t.endDate!, t.startDate!)
         if (totalDays <= 0) { sumActual += t.progress; sumPlanned += t.progress; continue }
-        const elapsed     = differenceInDays(today, t.startDate!)
-        const planned     = Math.max(0, Math.min(100, (elapsed / totalDays) * 100))
+        const elapsed  = differenceInDays(today, t.startDate!)
+        const planned  = Math.max(0, Math.min(100, (elapsed / totalDays) * 100))
         sumActual  += t.progress
         sumPlanned += planned
       }
-      if (sumPlanned > 0) {
-        idp = sumActual / sumPlanned
-      }
+      if (sumPlanned > 0) idp = sumActual / sumPlanned
     } else if (p.expectedStart && p.expectedEnd) {
-      // Fallback: usar datas do projeto quando há poucas tarefas com datas
       const totalDays   = differenceInDays(p.expectedEnd, p.expectedStart)
       const elapsedDays = differenceInDays(today, p.expectedStart)
       if (totalDays > 0) {
@@ -112,13 +113,13 @@ export default async function AnalyticsPage() {
       }
     }
 
-    // ── IDC ──────────────────────────────────────────────────────
+    // ── IDC
     let idc: number | null = null
     if (p.budget != null && p.estimatedCosts != null && p.estimatedCosts > 0) {
       idc = p.budget / p.estimatedCosts
     }
 
-    // ── Risks ─────────────────────────────────────────────────────
+    // ── Risks
     const risks = {
       critical: p.risks.filter((r) => r.status === "CRITICAL").length,
       high:     p.risks.filter((r) => r.status === "HIGH").length,
@@ -126,7 +127,7 @@ export default async function AnalyticsPage() {
       low:      p.risks.filter((r) => r.status === "LOW").length,
     }
 
-    // ── Task responsibles ─────────────────────────────────────────
+    // ── Task responsibles
     const taskResponsibles = [
       ...new Set(tasks.map((t) => t.responsible?.name).filter((n): n is string => Boolean(n)))
     ]
@@ -157,5 +158,5 @@ export default async function AnalyticsPage() {
     }
   })
 
-  return <AnalyticsClient projects={data} />
+  return <AnalyticsClient projects={data} users={users} userRole={userRole} />
 }

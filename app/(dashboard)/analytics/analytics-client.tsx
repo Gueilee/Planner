@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useTransition } from "react"
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   Cell, PieChart, Pie, ReferenceLine, Legend,
@@ -8,10 +8,14 @@ import {
 import type { TooltipContentProps } from "recharts"
 import {
   TrendingUp, Calendar, AlertTriangle, DollarSign, Activity,
-  Target, BarChart3, ChevronRight, Info, Search, X, Users,
+  Target, BarChart3, ChevronRight, Info, Search, X, Users, Loader2,
 } from "lucide-react"
+import { format } from "date-fns"
+import { ptBR } from "date-fns/locale"
 import { Header } from "@/components/layout/header"
-import type { ProjectIndicator } from "./page"
+import type { ProjectIndicator, UserOption } from "./page"
+import { getPersonAllocation } from "@/lib/actions/allocation"
+import type { AllocationResult } from "@/lib/actions/allocation"
 
 // ─── Colors ─────────────────────────────────────────────────────────────────
 const C = {
@@ -221,6 +225,129 @@ function BudgetTooltip({ active, payload }: TooltipContentProps): React.ReactEle
   )
 }
 
+// ─── Task Status ──────────────────────────────────────────────────────────────
+const TASK_STATUS_LABEL: Record<string, string> = {
+  PLANNING:    "Planejamento",
+  IN_PROGRESS: "Em Andamento",
+  COMPLETED:   "Concluída",
+  DELAYED:     "Atrasada",
+  ON_HOLD:     "Em Espera",
+  CANCELLED:   "Cancelada",
+}
+
+const TASK_STATUS_BADGE: Record<string, string> = {
+  PLANNING:    "bg-slate-100 text-slate-600",
+  IN_PROGRESS: "bg-blue-100 text-blue-700",
+  COMPLETED:   "bg-green-100 text-green-700",
+  DELAYED:     "bg-red-100 text-red-700",
+  ON_HOLD:     "bg-orange-100 text-orange-700",
+  CANCELLED:   "bg-gray-100 text-gray-400",
+}
+
+// ─── Allocation Results Component ────────────────────────────────────────────
+function AllocationResults({ results }: { results: AllocationResult }) {
+  const { tasks, userName } = results
+
+  if (tasks.length === 0) {
+    return (
+      <div className="py-8 flex flex-col items-center text-slate-400 gap-2">
+        <Search className="w-8 h-8 opacity-40" />
+        <span className="text-xs">Nenhuma atividade encontrada para <strong>{userName}</strong> no período selecionado</span>
+      </div>
+    )
+  }
+
+  // Agrupa por projeto
+  const byProject = tasks.reduce((acc, t) => {
+    if (!acc[t.projectId]) {
+      acc[t.projectId] = { title: t.projectTitle, area: t.projectArea, status: t.projectStatus, tasks: [] }
+    }
+    acc[t.projectId].tasks.push(t)
+    return acc
+  }, {} as Record<string, { title: string; area: string; status: string; tasks: typeof tasks }>)
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-slate-500">
+        <span className="font-bold text-slate-700">{tasks.length}</span>{" "}
+        atividade{tasks.length !== 1 ? "s" : ""} de{" "}
+        <span className="font-bold text-slate-700">{userName}</span>
+      </p>
+
+      {Object.values(byProject).map((proj) => (
+        <div key={proj.title} className="border border-slate-100 rounded-xl overflow-hidden">
+          {/* Cabeçalho do projeto */}
+          <div className="px-4 py-2 bg-slate-50 flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-bold text-slate-700">{proj.title}</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-500">
+              {AREA_CFG[proj.area]?.label ?? proj.area}
+            </span>
+            <span className={
+              "text-[10px] px-2 py-0.5 rounded-full " +
+              (STATUS_BADGE_COLORS[proj.status] ?? "bg-slate-100 text-slate-600")
+            }>
+              {STATUS_LABELS[proj.status] ?? proj.status}
+            </span>
+            <span className="ml-auto text-[10px] text-slate-400">
+              {proj.tasks.length} atividade{proj.tasks.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+
+          {/* Tabela de tarefas */}
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-slate-100 text-[10px] text-slate-400 font-semibold uppercase bg-white">
+                <th className="text-left px-4 py-2">Atividade</th>
+                <th className="text-center px-4 py-2">Status</th>
+                <th className="text-center px-4 py-2">Progresso</th>
+                <th className="text-center px-4 py-2">Início</th>
+                <th className="text-center px-4 py-2">Término</th>
+              </tr>
+            </thead>
+            <tbody>
+              {proj.tasks.map((t) => (
+                <tr key={t.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
+                  <td className="px-4 py-2.5 font-medium text-slate-700 max-w-[280px]">
+                    <span className="line-clamp-2">{t.title}</span>
+                  </td>
+                  <td className="px-4 py-2.5 text-center whitespace-nowrap">
+                    <span className={
+                      "inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold " +
+                      (TASK_STATUS_BADGE[t.status] ?? "bg-slate-100 text-slate-600")
+                    }>
+                      {TASK_STATUS_LABEL[t.status] ?? t.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 text-center">
+                    <div className="flex items-center gap-2 justify-center">
+                      <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${t.progress}%`,
+                            background: t.progress >= 80 ? C.green : t.progress >= 50 ? C.blue : C.amber,
+                          }}
+                        />
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-500 w-7 text-right">{t.progress}%</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-2.5 text-center text-slate-500 whitespace-nowrap">
+                    {t.startDate ? format(new Date(t.startDate), "dd/MM/yy", { locale: ptBR }) : "—"}
+                  </td>
+                  <td className="px-4 py-2.5 text-center text-slate-500 whitespace-nowrap">
+                    {t.endDate ? format(new Date(t.endDate), "dd/MM/yy", { locale: ptBR }) : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ─── Area Config ─────────────────────────────────────────────────────────────
 const AREA_CFG: Record<string, { label: string; color: string }> = {
   TECNOLOGIA:  { label: "Tecnologia",            color: "#0891B2" },
@@ -229,11 +356,47 @@ const AREA_CFG: Record<string, { label: string; color: string }> = {
 }
 
 // ─── Main Client Component ────────────────────────────────────────────────────
-export function AnalyticsClient({ projects }: { projects: ProjectIndicator[] }) {
+export function AnalyticsClient({
+  projects,
+  users,
+  userRole,
+}: {
+  projects: ProjectIndicator[]
+  users: UserOption[]
+  userRole: string
+}) {
   const [filter,      setFilter]      = useState<"ACTIVE" | "ALL">("ACTIVE")
   const [areaFilter,  setAreaFilter]  = useState<string>("ALL")
   const [responsible, setResponsible] = useState<string>("ALL")
   const [search,      setSearch]      = useState("")
+
+  // ── Alocação por Pessoa ────────────────────────────────────────
+  const [allocOpen,    setAllocOpen]    = useState(false)
+  const [selectedUser, setSelectedUser] = useState("")
+  const [allocStart,   setAllocStart]   = useState("")
+  const [allocEnd,     setAllocEnd]     = useState("")
+  const [allocResults, setAllocResults] = useState<AllocationResult | null>(null)
+  const [allocPending, startAlloc]      = useTransition()
+
+  function handleAllocSearch() {
+    if (!selectedUser) return
+    startAlloc(async () => {
+      const result = await getPersonAllocation(
+        selectedUser,
+        allocStart || null,
+        allocEnd   || null,
+      )
+      setAllocResults(result)
+    })
+  }
+
+  // Reseta resultados se trocar a pessoa ou o período
+  function onUserChange(uid: string) {
+    setSelectedUser(uid)
+    setAllocResults(null)
+  }
+
+  void userRole // disponível para futuras restrições por papel
 
   // Responsáveis únicos de todas as tarefas
   const allResponsibles = useMemo(
@@ -423,6 +586,103 @@ export function AnalyticsClient({ projects }: { projects: ProjectIndicator[] }) 
             <span className="ml-auto text-xs text-slate-400 font-medium">
               {filtered.length} projeto{filtered.length !== 1 ? "s" : ""}
             </span>
+          </div>
+
+          {/* ── Alocação por Pessoa ─────────────────────────────── */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            <button
+              onClick={() => setAllocOpen((v) => !v)}
+              className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-slate-50 transition-colors"
+            >
+              <div
+                className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+                style={{ background: "linear-gradient(135deg, #00C4E0, #2463FF, #8B2FFF)" }}
+              >
+                <Users className="w-3.5 h-3.5 text-white" />
+              </div>
+              <div>
+                <span className="text-sm font-black text-slate-800 uppercase tracking-wide">
+                  Alocação por Pessoa
+                </span>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Veja todas as atividades de uma pessoa em um período, independente do projeto
+                </p>
+              </div>
+              <ChevronRight
+                className={
+                  "w-4 h-4 text-slate-400 ml-auto shrink-0 transition-transform duration-200 " +
+                  (allocOpen ? "rotate-90" : "")
+                }
+              />
+            </button>
+
+            {allocOpen && (
+              <div className="border-t border-slate-100 px-4 pb-5 pt-4 space-y-4">
+                {/* Filtros */}
+                <div className="flex flex-wrap gap-3 items-end">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
+                      Pessoa
+                    </label>
+                    <select
+                      value={selectedUser}
+                      onChange={(e) => onUserChange(e.target.value)}
+                      className="h-8 pl-3 pr-7 text-xs rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-[#7B2FBE] text-slate-700 appearance-none cursor-pointer transition-colors"
+                      style={{ minWidth: 220 }}
+                    >
+                      <option value="">Selecione uma pessoa…</option>
+                      {users.map((u) => (
+                        <option key={u.id} value={u.id}>{u.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">De</label>
+                    <input
+                      type="date"
+                      value={allocStart}
+                      onChange={(e) => { setAllocStart(e.target.value); setAllocResults(null) }}
+                      className="h-8 px-3 text-xs rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-[#7B2FBE] transition-colors"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Até</label>
+                    <input
+                      type="date"
+                      value={allocEnd}
+                      onChange={(e) => { setAllocEnd(e.target.value); setAllocResults(null) }}
+                      className="h-8 px-3 text-xs rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-[#7B2FBE] transition-colors"
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleAllocSearch}
+                    disabled={!selectedUser || allocPending}
+                    className="h-8 px-4 rounded-xl text-xs font-bold text-white disabled:opacity-50 flex items-center gap-1.5 transition-all hover:opacity-90"
+                    style={{ background: "linear-gradient(135deg, #2463FF, #8B2FFF)" }}
+                  >
+                    {allocPending
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <Search className="w-3.5 h-3.5" />}
+                    Consultar
+                  </button>
+
+                  {allocResults && (
+                    <button
+                      onClick={() => { setAllocResults(null); setSelectedUser(""); setAllocStart(""); setAllocEnd("") }}
+                      className="h-8 px-3 rounded-xl text-xs font-semibold text-slate-500 hover:text-red-500 border border-slate-200 hover:border-red-200 flex items-center gap-1.5 transition-all"
+                    >
+                      <X className="w-3 h-3" /> Limpar
+                    </button>
+                  )}
+                </div>
+
+                {/* Resultados */}
+                {allocResults && <AllocationResults results={allocResults} />}
+              </div>
+            )}
           </div>
 
           {/* ── Summary Strip ───────────────────────────────────── */}

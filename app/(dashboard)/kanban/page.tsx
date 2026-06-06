@@ -6,9 +6,14 @@ import { differenceInDays } from "date-fns"
 
 export const metadata = { title: "Kanban — Projetos" }
 
+const FULL_ACCESS_ROLES = new Set(["ADMIN", "DIRECTOR", "PROJECT_MANAGER"])
+
 export default async function KanbanPage() {
   const session = await auth()
   if (!session?.user) redirect("/login")
+
+  const userId   = session.user.id   ?? ""
+  const userRole = (session.user.role ?? "PROJECT_MEMBER") as string
 
   const raw = await getAllProjectsForKanban()
 
@@ -52,5 +57,10 @@ export default async function KanbanPage() {
     }
   })
 
-  return <KanbanClient projects={projects} />
+  // Membros e sponsors veem apenas projetos em que participam
+  const visibleProjects = FULL_ACCESS_ROLES.has(userRole)
+    ? projects
+    : projects.filter((p) => p.members.some((m) => m.id === userId))
+
+  return <KanbanClient projects={visibleProjects} />
 }
