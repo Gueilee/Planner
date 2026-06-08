@@ -11,6 +11,7 @@ const KPI_GRADIENTS = [
   { gradient: "linear-gradient(135deg, #065F46, #10B981)", glow: "rgba(16,185,129,0.3)"  },
   { gradient: "linear-gradient(135deg, #064E3B, #059669)", glow: "rgba(5,150,105,0.3)"   },
   { gradient: "linear-gradient(135deg, #4C1D95, #7C3AED)", glow: "rgba(124,58,237,0.35)" },
+  { gradient: "linear-gradient(135deg, #92400E, #F59E0B)", glow: "rgba(245,158,11,0.3)"  },
 ]
 
 export default async function ProjectsPage() {
@@ -74,7 +75,7 @@ export default async function ProjectsPage() {
       <div className="flex-1 overflow-auto p-6 space-y-6">
 
         {/* KPIs */}
-        <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 xl:grid-cols-6 gap-4">
           {kpis.map(({ label, value, icon: Icon }, i) => {
             const { gradient, glow } = KPI_GRADIENTS[i]
             return (
