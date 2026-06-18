@@ -10,7 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
   ArrowLeft, Users, Calendar, AlertTriangle, CheckCircle2,
   Clock, BarChart3, Layers, TrendingUp, Play, Timer, CalendarDays, RefreshCw,
-  Rocket, FileDown, BookOpen, Shield, FileText,
+  Rocket, FileDown, BookOpen, Shield, FileText, Gem,
 } from "lucide-react"
 import { DeleteProjectButton } from "./delete-project-button"
 import { SuggestedDatesPanel } from "./suggested-dates-panel"
@@ -299,6 +299,17 @@ export default async function ProjectDetailPage({
                       mitigation:  r.mitigation,
                     }))}
                   />
+
+                  {/* Benefícios — sempre visível */}
+                  <Link
+                    href={`/projects/${id}/benefits`}
+                    className="inline-flex items-center gap-2 px-3 h-9 text-sm font-semibold rounded-xl border transition-all hover:opacity-90 active:scale-[0.98]"
+                    style={{ borderColor: "rgba(123,47,190,0.3)", color: "#7B2FBE", background: "rgba(123,47,190,0.06)" }}
+                    title="Benefícios e Valor Gerado"
+                  >
+                    <Gem className="w-3.5 h-3.5" />
+                    Benefícios
+                  </Link>
 
                   {/* PENDING GO/NO-GO — nova solicitação aguardando análise e reunião */}
                   {project.status === "PENDING_GO_NO_GO" && (

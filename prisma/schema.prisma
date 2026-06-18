@@ -115,6 +115,47 @@ enum ProjectArea {
   ESTRATEGICO
 }
 
+enum BenefitCategory {
+  FINANCIAL
+  OPERATIONAL
+  STRATEGIC
+}
+
+enum BenefitType {
+  // Financial
+  COST_REDUCTION
+  REVENUE_INCREASE
+  OPEX_REDUCTION
+  ANNUAL_SAVINGS
+  MONTHLY_SAVINGS
+  // Operational
+  HOURS_SAVED
+  PRODUCTIVITY_GAIN
+  PROCESS_AUTOMATION
+  REWORK_REDUCTION
+  TIME_REDUCTION
+  // Strategic
+  CUSTOMER_EXPERIENCE
+  RISK_REDUCTION
+  COMPLIANCE
+  QUALITY
+  GOVERNANCE
+  USER_SATISFACTION
+}
+
+enum BenefitFrequency {
+  ONCE
+  MONTHLY
+  ANNUAL
+}
+
+enum BenefitStatus {
+  PLANNED
+  IN_PROGRESS
+  REALIZED
+  NOT_REALIZED
+}
+
 // ─────────────────────────────────────────────
 // AUTH
 // ─────────────────────────────────────────────
@@ -145,6 +186,8 @@ model User {
   notificationPreference  NotificationPreference?
   lessonsLearned          LessonLearned[]
   scheduleTemplates       ScheduleTemplate[]
+  createdBenefits         ProjectBenefit[]
+  createdMeasurements     BenefitMeasurement[]
 }
 
 // ─────────────────────────────────────────────
@@ -192,6 +235,9 @@ model Project {
   goLiveActual      DateTime?
   postGoLiveEndDate DateTime?
 
+  // Benefits — investimento do projeto para cálculo de ROI
+  investment Float @default(0)
+
   // Priority
   priority          Int?
   priorityLabel     String?
@@ -215,6 +261,7 @@ model Project {
   postGoLiveItems PostGoLiveItem[]
   lessonsLearned LessonLearned[]
   attachments    Attachment[]
+  benefits       ProjectBenefit[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -480,11 +527,13 @@ model Attachment {
   commentId String?
   meetingId String?
   projectId String?
+  benefitId String?
 
-  task    ScheduleTask? @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  comment Comment?      @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  meeting Meeting?      @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  project Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task    ScheduleTask?   @relation(fields: [taskId],    references: [id], onDelete: Cascade)
+  comment Comment?        @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  meeting Meeting?        @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  project Project?        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  benefit ProjectBenefit? @relation(fields: [benefitId], references: [id], onDelete: Cascade)
 
   uploadedAt DateTime @default(now())
 }
@@ -567,6 +616,47 @@ model ScheduleTemplateTask {
   order            Int     @default(0)
 
   template ScheduleTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────────────────────────
+// BENEFITS — Benefícios e Valor Gerado
+// ─────────────────────────────────────────────
+
+model ProjectBenefit {
+  id              String           @id @default(cuid())
+  projectId       String
+  category        BenefitCategory
+  type            BenefitType
+  description     String
+  unit            String           @default("R$")
+  plannedValue    Float            @default(0)
+  realizedValue   Float            @default(0)
+  frequency       BenefitFrequency @default(ONCE)
+  baselineDate    DateTime?
+  realizationDate DateTime?
+  evidence        String?
+  status          BenefitStatus    @default(PLANNED)
+  createdById     String
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  project      Project              @relation(fields: [projectId],   references: [id], onDelete: Cascade)
+  createdBy    User                 @relation(fields: [createdById], references: [id])
+  measurements BenefitMeasurement[]
+  attachments  Attachment[]
+}
+
+model BenefitMeasurement {
+  id            String   @id @default(cuid())
+  benefitId     String
+  measuredAt    DateTime
+  measuredValue Float
+  notes         String?
+  createdById   String
+  createdAt     DateTime @default(now())
+
+  benefit   ProjectBenefit @relation(fields: [benefitId],   references: [id], onDelete: Cascade)
+  createdBy User           @relation(fields: [createdById], references: [id])
 }
 
 // ─────────────────────────────────────────────
