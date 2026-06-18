@@ -95,24 +95,25 @@ export async function getProjectBenefits(projectId: string): Promise<{
 
 // ── Portfolio dashboard data ───────────────────────────────────────────────────
 export async function getPortfolioBenefits(filters?: {
-  year?: number; area?: string; status?: string; category?: string; managerId?: string
+  years?: number[]; areas?: string[]; statuses?: string[]; categories?: string[]; managerIds?: string[]
 }): Promise<{
   summary: PortfolioSummary
   charts: PortfolioChartData
   projects: ProjectBenefitMetrics[]
 }> {
   const projectWhere: Record<string, unknown> = {}
-  if (filters?.area)      projectWhere.projectArea = filters.area
-  if (filters?.status)    projectWhere.status      = filters.status
-  if (filters?.managerId) {
-    projectWhere.members = { some: { userId: filters.managerId, role: "PROJECT_MANAGER" } }
+  if (filters?.areas?.length)    projectWhere.projectArea = { in: filters.areas }
+  if (filters?.statuses?.length) projectWhere.status      = { in: filters.statuses }
+  if (filters?.managerIds?.length) {
+    projectWhere.members = { some: { userId: { in: filters.managerIds } } }
   }
 
   const benefitWhere: Record<string, unknown> = {}
-  if (filters?.category) benefitWhere.category = filters.category
-  if (filters?.year)     benefitWhere.createdAt = {
-    gte: new Date(filters.year, 0, 1),
-    lt:  new Date(filters.year + 1, 0, 1),
+  if (filters?.categories?.length) benefitWhere.category = { in: filters.categories }
+  if (filters?.years?.length) {
+    benefitWhere.OR = filters.years.map((y) => ({
+      createdAt: { gte: new Date(y, 0, 1), lt: new Date(y + 1, 0, 1) },
+    }))
   }
 
   const rawProjects = await db.project.findMany({

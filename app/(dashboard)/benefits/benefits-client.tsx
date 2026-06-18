@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useTransition } from "react"
+import { useState, useCallback, useTransition, useRef, useEffect } from "react"
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area, Legend,
@@ -8,11 +8,105 @@ import {
 import Link from "next/link"
 import {
   TrendingUp, DollarSign, Clock, BarChart3, Award, Filter,
-  ChevronRight, Sparkles, Target, ArrowUpRight,
+  ChevronRight, Sparkles, Target, ArrowUpRight, ChevronDown, X, Loader2,
 } from "lucide-react"
 import { getPortfolioBenefits } from "@/lib/actions/benefits"
 import { impactColor, impactBg } from "@/lib/utils/benefits-calc"
 import type { PortfolioSummary, PortfolioChartData, ProjectBenefitMetrics } from "@/lib/types/benefits"
+
+// ── Multi-Select Dropdown ──────────────────────────────────────────────────────
+interface MultiSelectProps {
+  label: string
+  options: { value: string; label: string }[]
+  selected: string[]
+  onChange: (values: string[]) => void
+  placeholder?: string
+}
+
+function MultiSelect({ label, options, selected, onChange, placeholder = "Todos" }: MultiSelectProps) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [])
+
+  function toggle(value: string) {
+    onChange(selected.includes(value) ? selected.filter((v) => v !== value) : [...selected, value])
+  }
+
+  const displayLabel = selected.length === 0
+    ? placeholder
+    : selected.length === 1
+      ? options.find((o) => o.value === selected[0])?.label ?? selected[0]
+      : `${selected.length} selecionados`
+
+  const hasSelection = selected.length > 0
+
+  return (
+    <div ref={ref} className="relative flex flex-col gap-1">
+      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</span>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`flex items-center justify-between gap-2 h-8 px-3 rounded-lg text-sm border transition-all min-w-[140px] ${
+          hasSelection
+            ? "border-purple-300 bg-purple-50 text-purple-800 font-semibold"
+            : "border-slate-200 bg-white text-slate-600"
+        }`}
+      >
+        <span className="truncate">{displayLabel}</span>
+        <div className="flex items-center gap-1 shrink-0">
+          {hasSelection && (
+            <span
+              className="w-4 h-4 rounded-full bg-purple-600 text-white text-[9px] font-black flex items-center justify-center"
+              onClick={(e) => { e.stopPropagation(); onChange([]) }}
+            >
+              {selected.length}
+            </span>
+          )}
+          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
+        </div>
+      </button>
+
+      {open && (
+        <div
+          className="absolute top-full left-0 mt-1 z-50 min-w-[180px] rounded-xl shadow-xl overflow-hidden"
+          style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.08)" }}
+        >
+          {options.map((opt) => {
+            const checked = selected.includes(opt.value)
+            return (
+              <button
+                key={opt.value}
+                onClick={() => toggle(opt.value)}
+                className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left text-sm transition-colors hover:bg-purple-50 ${
+                  checked ? "bg-purple-50/60" : ""
+                }`}
+              >
+                <span
+                  className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border-2 transition-all ${
+                    checked ? "border-purple-600 bg-purple-600" : "border-slate-300"
+                  }`}
+                >
+                  {checked && (
+                    <svg viewBox="0 0 10 8" className="w-2.5 h-2.5 fill-white">
+                      <path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </span>
+                <span className={`font-medium ${checked ? "text-purple-800" : "text-slate-700"}`}>{opt.label}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function fmtBRL(v: number) {
   if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`
@@ -98,32 +192,55 @@ interface Props {
   userRole: string
 }
 
-export function BenefitsClient({ summary, charts, projects, users, userRole }: Props) {
-  const [filterArea,     setFilterArea]     = useState("")
-  const [filterStatus,   setFilterStatus]   = useState("")
-  const [filterCategory, setFilterCategory] = useState("")
-  const [filterManager,  setFilterManager]  = useState("")
-  const [filterYear,     setFilterYear]     = useState("")
-  const [sortBy,         setSortBy]         = useState<"value" | "roi" | "score">("value")
-  const [currentSummary,   setCurrentSummary]   = useState(summary)
-  const [currentCharts,    setCurrentCharts]    = useState(charts)
-  const [currentProjects,  setCurrentProjects]  = useState(projects)
-  const [isPending, startTransition] = useTransition()
+interface FilterState {
+  years:      string[]
+  areas:      string[]
+  statuses:   string[]
+  categories: string[]
+  managers:   string[]
+}
 
-  const applyFilters = useCallback(() => {
-    startTransition(async () => {
-      const data = await getPortfolioBenefits({
-        area:      filterArea     || undefined,
-        status:    filterStatus   || undefined,
-        category:  filterCategory || undefined,
-        managerId: filterManager  || undefined,
-        year:      filterYear     ? Number(filterYear) : undefined,
+const EMPTY_FILTERS: FilterState = { years: [], areas: [], statuses: [], categories: [], managers: [] }
+
+export function BenefitsClient({ summary, charts, projects, users, userRole }: Props) {
+  const [filters,   setFilters]   = useState<FilterState>(EMPTY_FILTERS)
+  const [sortBy,    setSortBy]    = useState<"value" | "roi" | "score">("value")
+  const [currentSummary,  setCurrentSummary]  = useState(summary)
+  const [currentCharts,   setCurrentCharts]   = useState(charts)
+  const [currentProjects, setCurrentProjects] = useState(projects)
+  const [isPending, startTransition] = useTransition()
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const runFilter = useCallback((f: FilterState) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      startTransition(async () => {
+        const data = await getPortfolioBenefits({
+          years:      f.years.map(Number).filter(Boolean),
+          areas:      f.areas,
+          statuses:   f.statuses,
+          categories: f.categories,
+          managerIds: f.managers,
+        })
+        setCurrentSummary(data.summary)
+        setCurrentCharts(data.charts)
+        setCurrentProjects(data.projects)
       })
-      setCurrentSummary(data.summary)
-      setCurrentCharts(data.charts)
-      setCurrentProjects(data.projects)
-    })
-  }, [filterArea, filterStatus, filterCategory, filterManager, filterYear])
+    }, 350)
+  }, [])
+
+  function setFilter<K extends keyof FilterState>(key: K, value: FilterState[K]) {
+    const next = { ...filters, [key]: value }
+    setFilters(next)
+    runFilter(next)
+  }
+
+  const hasAnyFilter = Object.values(filters).some((v) => v.length > 0)
+
+  function clearAll() {
+    setFilters(EMPTY_FILTERS)
+    runFilter(EMPTY_FILTERS)
+  }
 
   const sorted = [...currentProjects].sort((a, b) => {
     if (sortBy === "roi")   return (b.roi ?? -999) - (a.roi ?? -999)
@@ -177,53 +294,74 @@ export function BenefitsClient({ summary, charts, projects, users, userRole }: P
         className="rounded-2xl p-4"
         style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
       >
-        <div className="flex items-center gap-2 mb-3">
-          <Filter className="w-4 h-4 text-purple-600" />
-          <span className="text-sm font-semibold text-slate-700">Filtros</span>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-purple-600" />
+            <span className="text-sm font-semibold text-slate-700">Filtros</span>
+            {isPending && <Loader2 className="w-3.5 h-3.5 text-purple-500 animate-spin" />}
+          </div>
+          {hasAnyFilter && (
+            <button
+              onClick={clearAll}
+              className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-700 transition-colors font-medium"
+            >
+              <X className="w-3 h-3" />
+              Limpar filtros
+            </button>
+          )}
         </div>
         <div className="flex flex-wrap gap-3 items-end">
-          {[
-            { label: "Ano", value: filterYear, onChange: setFilterYear,
-              options: [["", "Todos os anos"], ...years.map((y) => [String(y), String(y)])] },
-            { label: "Área", value: filterArea, onChange: setFilterArea,
-              options: [["", "Todas as áreas"], ["TECNOLOGIA", "Tecnologia"], ["QUALIDADE", "Qualidade"], ["ESTRATEGICO", "Estratégico"]] },
-            { label: "Status do Projeto", value: filterStatus, onChange: setFilterStatus,
-              options: [["", "Todos"], ["PLANNING", "Planejamento"], ["IN_PROGRESS", "Em Andamento"], ["COMPLETED", "Concluído"]] },
-            { label: "Categoria", value: filterCategory, onChange: setFilterCategory,
-              options: [["", "Todas"], ["FINANCIAL", "Financeiro"], ["OPERATIONAL", "Operacional"], ["STRATEGIC", "Estratégico"]] },
-          ].map(({ label, value, onChange, options }) => (
-            <div key={label} className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</label>
-              <select
-                value={value as string}
-                onChange={(e) => (onChange as (v: string) => void)(e.target.value)}
-                className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-purple-300"
-              >
-                {(options as [string, string][]).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-              </select>
-            </div>
-          ))}
-
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Gestor</label>
-            <select
-              value={filterManager}
-              onChange={(e) => setFilterManager(e.target.value)}
-              className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-purple-300"
-            >
-              <option value="">Todos</option>
-              {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-            </select>
-          </div>
-
-          <button
-            onClick={applyFilters}
-            disabled={isPending}
-            className="px-4 py-1.5 rounded-lg text-sm font-semibold text-white transition-all"
-            style={{ background: "linear-gradient(135deg,#7B2FBE,#A855F7)" }}
-          >
-            {isPending ? "Carregando…" : "Aplicar"}
-          </button>
+          <MultiSelect
+            label="Ano"
+            selected={filters.years}
+            onChange={(v) => setFilter("years", v)}
+            options={years.map((y) => ({ value: String(y), label: String(y) }))}
+            placeholder="Todos os anos"
+          />
+          <MultiSelect
+            label="Área"
+            selected={filters.areas}
+            onChange={(v) => setFilter("areas", v)}
+            options={[
+              { value: "TECNOLOGIA", label: "Tecnologia" },
+              { value: "QUALIDADE", label: "Qualidade" },
+              { value: "ESTRATEGICO", label: "Estratégico" },
+              { value: "OPERACOES", label: "Operações" },
+              { value: "COMERCIAL", label: "Comercial" },
+              { value: "FINANCEIRO", label: "Financeiro" },
+            ]}
+            placeholder="Todas as áreas"
+          />
+          <MultiSelect
+            label="Status do Projeto"
+            selected={filters.statuses}
+            onChange={(v) => setFilter("statuses", v)}
+            options={[
+              { value: "PLANNING",    label: "Planejamento" },
+              { value: "IN_PROGRESS", label: "Em Andamento" },
+              { value: "COMPLETED",   label: "Concluído" },
+              { value: "ON_HOLD",     label: "Em Espera" },
+            ]}
+            placeholder="Todos"
+          />
+          <MultiSelect
+            label="Categoria"
+            selected={filters.categories}
+            onChange={(v) => setFilter("categories", v)}
+            options={[
+              { value: "FINANCIAL",   label: "Financeiro" },
+              { value: "OPERATIONAL", label: "Operacional" },
+              { value: "STRATEGIC",   label: "Estratégico" },
+            ]}
+            placeholder="Todas"
+          />
+          <MultiSelect
+            label="Gestor"
+            selected={filters.managers}
+            onChange={(v) => setFilter("managers", v)}
+            options={users.map((u) => ({ value: u.id, label: u.name }))}
+            placeholder="Todos"
+          />
         </div>
       </div>
 
