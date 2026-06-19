@@ -262,6 +262,7 @@ model Project {
   lessonsLearned LessonLearned[]
   attachments    Attachment[]
   benefits       ProjectBenefit[]
+  baselines      ProjectBaseline[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -657,6 +658,34 @@ model BenefitMeasurement {
 
   benefit   ProjectBenefit @relation(fields: [benefitId],   references: [id], onDelete: Cascade)
   createdBy User           @relation(fields: [createdById], references: [id])
+}
+
+// ─────────────────────────────────────────────
+// S-CURVE — Curva S / Baselines de Replanejamento
+// ─────────────────────────────────────────────
+
+model ProjectBaseline {
+  id          String   @id @default(cuid())
+  projectId   String
+  number      Int      // 0 = original, 1 = 1º replanejamento, etc.
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+
+  project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  snaps     BaselineSnap[]
+
+  @@unique([projectId, number])
+}
+
+model BaselineSnap {
+  id         String   @id @default(cuid())
+  baselineId String
+  taskId     String
+  taskTitle  String
+  plannedEnd DateTime
+
+  baseline ProjectBaseline @relation(fields: [baselineId], references: [id], onDelete: Cascade)
 }
 
 // ─────────────────────────────────────────────

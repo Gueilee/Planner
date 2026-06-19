@@ -21,6 +21,7 @@ import Link from "next/link"
 import { format, differenceInDays } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { computeReportStatus } from "@/lib/utils/report-status"
+import { SCurveTab } from "./s-curve/s-curve-tab"
 
 const RISK_COLORS: Record<string, string> = {
   LOW:      "text-green-600 bg-green-50 border-green-200",
@@ -669,6 +670,7 @@ export default async function ProjectDetailPage({
               {[
                 { value: "overview",  label: "Visão Geral" },
                 { value: "schedule",  label: `Cronograma (${tasksTotal})` },
+                { value: "s-curve",   label: "Curva S" },
                 { value: "risks",     label: `Riscos (${project.risks.length})` },
                 { value: "team",      label: `Equipe (${project.members.length})` },
                 { value: "lessons",   label: `Lições Aprendidas (${project.lessonsLearned.length})` },
@@ -1131,6 +1133,11 @@ export default async function ProjectDetailPage({
                   createdBy:    { id: l.createdBy.id, name: l.createdBy.name },
                 }))}
               />
+            </TabsContent>
+
+            {/* Curva S */}
+            <TabsContent value="s-curve" className="mt-4">
+              <SCurveTab projectId={id} />
             </TabsContent>
 
             {/* History */}
