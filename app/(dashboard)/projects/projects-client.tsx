@@ -184,17 +184,6 @@ export function ProjectsClient({ projects }: { projects: ProjectRow[] }) {
           </div>
         </div>
 
-        <Link
-          href="/projects/new"
-          className="inline-flex items-center gap-2 px-4 h-9 text-sm font-bold rounded-xl text-white hover:opacity-90 active:scale-[0.98] transition-all"
-          style={{
-            background: "linear-gradient(135deg, #7B2FBE, #9333EA, #A855F7)",
-            boxShadow: "0 4px 16px rgba(123,47,190,0.35)",
-          }}
-        >
-          <Plus className="w-4 h-4" />
-          Novo Projeto
-        </Link>
       </div>
 
       {/* Project list */}
