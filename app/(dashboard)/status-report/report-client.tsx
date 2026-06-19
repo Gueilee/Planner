@@ -746,6 +746,22 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
                 </div>
               </div>
             )}
+            {(data.dates.goLive||data.dates.end)&&(
+              <div style={{marginTop:8,paddingTop:7,borderTop:"1px solid rgba(255,255,255,0.07)"}}>
+                {data.dates.goLive&&(
+                  <div className="flex justify-between items-center" style={{marginBottom:data.dates.end?4:0}}>
+                    <span style={{fontSize:9.5,color:"rgba(165,200,255,0.50)",fontWeight:600}}>🚀 Go Live</span>
+                    <span style={{fontSize:11,fontWeight:800,color:"#34D399"}}>{fmt(data.dates.goLive)}</span>
+                  </div>
+                )}
+                {data.dates.end&&(
+                  <div className="flex justify-between items-center">
+                    <span style={{fontSize:9.5,color:"rgba(165,200,255,0.50)",fontWeight:600}}>🏁 Término</span>
+                    <span style={{fontSize:11,fontWeight:800,color:"rgba(200,220,255,0.70)"}}>{fmt(data.dates.end)}</span>
+                  </div>
+                )}
+              </div>
+            )}
           </GCard>
 
           {/* Riscos com mitigação */}
