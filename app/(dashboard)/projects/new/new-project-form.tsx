@@ -19,7 +19,6 @@ type BenefitItem = {
   category: "FINANCIAL" | "OPERATIONAL" | "STRATEGIC"
   type: string
   description: string
-  unit: string
   plannedValue: string
   frequency: "ONCE" | "MONTHLY" | "ANNUAL"
 }
@@ -45,44 +44,56 @@ const STEPS = [
 ]
 
 const BENEFIT_CATEGORIES = [
-  { value: "FINANCIAL",   label: "Financeiro",   color: "#059669", icon: "💰", desc: "Economia, receita e custos" },
-  { value: "OPERATIONAL", label: "Operacional",  color: "#2563EB", icon: "⚙️",  desc: "Produtividade e processos" },
-  { value: "STRATEGIC",   label: "Estratégico",  color: "#7B2FBE", icon: "🎯", desc: "Risco, qualidade e compliance" },
+  { value: "FINANCIAL",   label: "Financeiro",  color: "#059669", bg: "#ECFDF5", icon: "💰" },
+  { value: "OPERATIONAL", label: "Operacional", color: "#2563EB", bg: "#EFF6FF", icon: "⚙️"  },
+  { value: "STRATEGIC",   label: "Estratégico", color: "#7B2FBE", bg: "#F5F3FF", icon: "🎯" },
 ] as const
 
-const BENEFIT_TYPES: Record<string, { value: string; label: string }[]> = {
-  FINANCIAL: [
-    { value: "COST_REDUCTION",    label: "Redução de Custos" },
-    { value: "REVENUE_INCREASE",  label: "Aumento de Receita" },
-    { value: "OPEX_REDUCTION",    label: "Redução de OPEX" },
-    { value: "ANNUAL_SAVINGS",    label: "Economia Anual" },
-    { value: "MONTHLY_SAVINGS",   label: "Economia Mensal" },
-  ],
-  OPERATIONAL: [
-    { value: "HOURS_SAVED",         label: "Horas Economizadas" },
-    { value: "PRODUCTIVITY_GAIN",   label: "Ganho de Produtividade" },
-    { value: "PROCESS_AUTOMATION",  label: "Automação de Processo" },
-    { value: "REWORK_REDUCTION",    label: "Redução de Retrabalho" },
-    { value: "TIME_REDUCTION",      label: "Redução de Tempo" },
-  ],
-  STRATEGIC: [
-    { value: "CUSTOMER_EXPERIENCE", label: "Experiência do Cliente" },
-    { value: "RISK_REDUCTION",      label: "Redução de Risco" },
-    { value: "COMPLIANCE",          label: "Compliance" },
-    { value: "QUALITY",             label: "Qualidade" },
-    { value: "GOVERNANCE",          label: "Governança" },
-    { value: "USER_SATISFACTION",   label: "Satisfação do Usuário" },
-  ],
+// Each type defines its measurement context — drives value field rendering
+const BENEFIT_META: Record<string, {
+  label: string
+  unit: string
+  valueType: "currency" | "hours" | "percent" | "count" | "score"
+  valueLabel: string
+  valuePlaceholder: string
+  suffix: string
+  showFrequency: boolean
+}> = {
+  // ── Financeiro ────────────────────────────────────────────────────────
+  COST_REDUCTION:     { label: "Redução de Custos",       unit: "R$",        valueType: "currency", valueLabel: "Redução esperada",         valuePlaceholder: "0,00",  suffix: "R$",          showFrequency: true  },
+  REVENUE_INCREASE:   { label: "Aumento de Receita",      unit: "R$",        valueType: "currency", valueLabel: "Aumento esperado",          valuePlaceholder: "0,00",  suffix: "R$",          showFrequency: true  },
+  OPEX_REDUCTION:     { label: "Redução de OPEX",         unit: "R$",        valueType: "currency", valueLabel: "Redução de OPEX esperada",  valuePlaceholder: "0,00",  suffix: "R$",          showFrequency: true  },
+  ANNUAL_SAVINGS:     { label: "Economia Anual",          unit: "R$",        valueType: "currency", valueLabel: "Economia anual esperada",   valuePlaceholder: "0,00",  suffix: "R$/ano",      showFrequency: false },
+  MONTHLY_SAVINGS:    { label: "Economia Mensal",         unit: "R$",        valueType: "currency", valueLabel: "Economia mensal esperada",  valuePlaceholder: "0,00",  suffix: "R$/mês",      showFrequency: false },
+  // ── Operacional ───────────────────────────────────────────────────────
+  HOURS_SAVED:        { label: "Horas Economizadas",      unit: "horas",     valueType: "hours",    valueLabel: "Horas economizadas",        valuePlaceholder: "0",     suffix: "horas",       showFrequency: true  },
+  PRODUCTIVITY_GAIN:  { label: "Ganho de Produtividade",  unit: "%",         valueType: "percent",  valueLabel: "Ganho de produtividade",    valuePlaceholder: "0",     suffix: "%",           showFrequency: false },
+  PROCESS_AUTOMATION: { label: "Automação de Processo",   unit: "processos", valueType: "count",    valueLabel: "Processos automatizados",   valuePlaceholder: "0",     suffix: "processos",   showFrequency: false },
+  REWORK_REDUCTION:   { label: "Redução de Retrabalho",   unit: "%",         valueType: "percent",  valueLabel: "Redução de retrabalho",     valuePlaceholder: "0",     suffix: "%",           showFrequency: false },
+  TIME_REDUCTION:     { label: "Redução de Lead Time",    unit: "dias",      valueType: "count",    valueLabel: "Redução no lead time",      valuePlaceholder: "0",     suffix: "dias",        showFrequency: false },
+  // ── Estratégico ───────────────────────────────────────────────────────
+  CUSTOMER_EXPERIENCE:{ label: "Experiência do Cliente",  unit: "pontos",    valueType: "score",    valueLabel: "Melhoria no NPS / CSAT",    valuePlaceholder: "0",     suffix: "pontos",      showFrequency: false },
+  RISK_REDUCTION:     { label: "Redução de Risco",        unit: "%",         valueType: "percent",  valueLabel: "Redução de risco esperada", valuePlaceholder: "0",     suffix: "%",           showFrequency: false },
+  COMPLIANCE:         { label: "Compliance",              unit: "%",         valueType: "percent",  valueLabel: "Aderência ao compliance",   valuePlaceholder: "0",     suffix: "%",           showFrequency: false },
+  QUALITY:            { label: "Qualidade",               unit: "%",         valueType: "percent",  valueLabel: "Melhoria de qualidade",     valuePlaceholder: "0",     suffix: "%",           showFrequency: false },
+  GOVERNANCE:         { label: "Governança",              unit: "pontos",    valueType: "score",    valueLabel: "Maturidade de governança",  valuePlaceholder: "0",     suffix: "pontos",      showFrequency: false },
+  USER_SATISFACTION:  { label: "Satisfação do Usuário",   unit: "%",         valueType: "percent",  valueLabel: "Satisfação dos usuários",   valuePlaceholder: "0",     suffix: "%",           showFrequency: false },
+}
+
+const BENEFIT_TYPES_BY_CAT: Record<string, string[]> = {
+  FINANCIAL:   ["COST_REDUCTION", "REVENUE_INCREASE", "OPEX_REDUCTION", "ANNUAL_SAVINGS", "MONTHLY_SAVINGS"],
+  OPERATIONAL: ["HOURS_SAVED", "PRODUCTIVITY_GAIN", "PROCESS_AUTOMATION", "REWORK_REDUCTION", "TIME_REDUCTION"],
+  STRATEGIC:   ["CUSTOMER_EXPERIENCE", "RISK_REDUCTION", "COMPLIANCE", "QUALITY", "GOVERNANCE", "USER_SATISFACTION"],
 }
 
 const FREQUENCIES = [
-  { value: "MONTHLY", label: "Mensal",  desc: "Por mês" },
-  { value: "ANNUAL",  label: "Anual",   desc: "Por ano" },
-  { value: "ONCE",    label: "Único",   desc: "Pontual" },
+  { value: "MONTHLY", label: "Por mês" },
+  { value: "ANNUAL",  label: "Por ano" },
+  { value: "ONCE",    label: "Pontual" },
 ] as const
 
 const EMPTY_BENEFIT: BenefitItem = {
-  category: "FINANCIAL", type: "COST_REDUCTION", description: "", unit: "R$", plannedValue: "", frequency: "MONTHLY",
+  category: "FINANCIAL", type: "COST_REDUCTION", description: "", plannedValue: "", frequency: "MONTHLY",
 }
 
 const AREAS = ["Tecnologia", "Projetos", "Qualidade", "Operações", "Financeiro", "Comercial",
@@ -208,15 +219,22 @@ export function NewProjectForm({ users, currentUserId }: Props) {
         expectedEnd:    form.expectedEnd,
         risks:          form.risks.filter(r => r.description.trim()),
         benefits:       form.benefits
-          .filter(b => b.description.trim() && b.plannedValue)
-          .map(b => ({
-            category:     b.category,
-            type:         b.type,
-            description:  b.description,
-            unit:         b.unit || "R$",
-            plannedValue: parseBRL(b.plannedValue) ?? 0,
-            frequency:    b.frequency,
-          })),
+          .filter(b => b.description.trim())
+          .map(b => {
+            const meta = BENEFIT_META[b.type]
+            const raw  = b.plannedValue
+            const val  = meta?.valueType === "currency"
+              ? (parseBRL(raw) ?? 0)
+              : (parseFloat(raw) || 0)
+            return {
+              category:     b.category,
+              type:         b.type,
+              description:  b.description,
+              unit:         meta?.unit ?? "R$",
+              plannedValue: val,
+              frequency:    b.frequency,
+            }
+          }),
         files:          form.files,
       })
       router.push(`/projects/${id}`)
@@ -578,10 +596,8 @@ export function NewProjectForm({ users, currentUserId }: Props) {
               <>
                 <div className="flex items-center justify-between mb-1">
                   <div>
-                    <p className="text-sm font-semibold text-[#1a1625]">Benefícios Planejados</p>
-                    <p className="text-[11px] text-[#9c99b0]">
-                      Informe os retornos esperados com a execução deste projeto
-                    </p>
+                    <p className="text-sm font-semibold text-[#1a1625]">O que este projeto vai gerar?</p>
+                    <p className="text-[11px] text-[#9c99b0]">Adicione os ganhos e reduções esperados — cada tipo já define a unidade correta</p>
                   </div>
                   <button type="button"
                     onClick={() => set("benefits", [...form.benefits, { ...EMPTY_BENEFIT }])}
@@ -594,35 +610,41 @@ export function NewProjectForm({ users, currentUserId }: Props) {
                 {form.benefits.length === 0 && (
                   <div className="text-center py-12 text-[#9c99b0] text-sm border-2 border-dashed border-[rgba(0,0,0,0.08)] rounded-xl">
                     <Gem className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                    Nenhum benefício adicionado — clique em "Adicionar Benefício"
+                    <p className="font-medium">Nenhum benefício adicionado</p>
+                    <p className="text-[11px] mt-1">Exemplos: redução de R$ 50k/mês em custos, 200 horas/mês economizadas, 30% menos retrabalho</p>
                   </div>
                 )}
 
-                <div className="space-y-4">
+                <div className="space-y-5">
                   {form.benefits.map((ben, i) => {
-                    const cat = BENEFIT_CATEGORIES.find(c => c.value === ben.category)!
-                    const typeOptions = BENEFIT_TYPES[ben.category] ?? []
+                    const cat  = BENEFIT_CATEGORIES.find(c => c.value === ben.category)!
+                    const meta = BENEFIT_META[ben.type]
+                    const types = BENEFIT_TYPES_BY_CAT[ben.category] ?? []
+
+                    const updateBen = (patch: Partial<BenefitItem>) => {
+                      const bs = [...form.benefits]; bs[i] = { ...bs[i], ...patch }; set("benefits", bs)
+                    }
+
                     return (
-                      <div key={i} className="rounded-xl border border-[rgba(0,0,0,0.08)] overflow-hidden">
-                        {/* Card header */}
-                        <div className="flex items-center justify-between px-4 py-2.5 border-b border-[rgba(0,0,0,0.06)]"
-                          style={{ background: `${cat.color}0d` }}>
-                          <div className="flex items-center gap-2">
-                            <span className="text-base">{cat.icon}</span>
-                            <span className="text-xs font-bold" style={{ color: cat.color }}>
-                              Benefício {i + 1}
-                            </span>
+                      <div key={i} className="rounded-2xl border overflow-hidden" style={{ borderColor: `${cat.color}30` }}>
+
+                        {/* ── Header: categoria ─────────────────────────── */}
+                        <div className="flex items-center justify-between px-4 py-3"
+                          style={{ background: cat.bg, borderBottom: `1px solid ${cat.color}20` }}>
+                          <div className="flex items-center gap-3">
+                            <span className="text-lg">{cat.icon}</span>
+                            <div>
+                              <p className="text-xs font-black uppercase tracking-wider" style={{ color: cat.color }}>
+                                Benefício {i + 1}
+                              </p>
+                              <p className="text-[10px] text-[#9c99b0]">{cat.label}</p>
+                            </div>
                           </div>
-                          {/* Category selector */}
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1.5">
                             {BENEFIT_CATEGORIES.map(c => (
                               <button key={c.value} type="button"
-                                onClick={() => {
-                                  const bs = [...form.benefits]
-                                  bs[i] = { ...bs[i], category: c.value, type: BENEFIT_TYPES[c.value][0].value }
-                                  set("benefits", bs)
-                                }}
-                                className="px-2 py-0.5 rounded-md text-[10px] font-bold transition-all"
+                                onClick={() => updateBen({ category: c.value, type: BENEFIT_TYPES_BY_CAT[c.value][0], plannedValue: "" })}
+                                className="px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all"
                                 style={ben.category === c.value
                                   ? { background: c.color, color: "#fff" }
                                   : { background: "rgba(0,0,0,0.05)", color: "#9c99b0" }
@@ -632,82 +654,109 @@ export function NewProjectForm({ users, currentUserId }: Props) {
                             ))}
                             <button type="button"
                               onClick={() => set("benefits", form.benefits.filter((_, j) => j !== i))}
-                              className="p-1 ml-2 rounded-lg text-[#9c99b0] hover:text-red-500 hover:bg-red-50 transition-all">
+                              className="p-1.5 ml-1 rounded-lg text-[#9c99b0] hover:text-red-500 hover:bg-red-50 transition-all">
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         </div>
 
-                        {/* Card body */}
-                        <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {/* Tipo */}
-                          <div>
-                            <Label>Tipo de Benefício</Label>
-                            <select
-                              value={ben.type}
-                              onChange={e => {
-                                const bs = [...form.benefits]; bs[i] = { ...bs[i], type: e.target.value }; set("benefits", bs)
-                              }}
-                              className={inputCls}>
-                              {typeOptions.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                            </select>
-                          </div>
-
-                          {/* Frequência */}
-                          <div>
-                            <Label>Frequência</Label>
-                            <div className="flex gap-2 h-[46px] items-center">
-                              {FREQUENCIES.map(f => (
-                                <button key={f.value} type="button"
-                                  onClick={() => {
-                                    const bs = [...form.benefits]; bs[i] = { ...bs[i], frequency: f.value }; set("benefits", bs)
-                                  }}
-                                  className={cn(
-                                    "flex-1 h-[38px] rounded-xl text-xs font-bold border-2 transition-all",
-                                    ben.frequency === f.value
-                                      ? "border-[#7B2FBE] text-[#7B2FBE] bg-[rgba(123,47,190,0.07)]"
-                                      : "border-[rgba(0,0,0,0.09)] text-[#9c99b0] hover:border-[rgba(0,0,0,0.2)]"
-                                  )}>
-                                  {f.label}
+                        {/* ── Tipo: pill grid ───────────────────────────── */}
+                        <div className="px-4 pt-4 pb-3">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#4a4760] mb-2">
+                            Tipo de Benefício
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {types.map(t => {
+                              const tMeta = BENEFIT_META[t]
+                              const sel   = ben.type === t
+                              return (
+                                <button key={t} type="button"
+                                  onClick={() => updateBen({ type: t, plannedValue: "" })}
+                                  className="px-3 py-1.5 rounded-full text-[11px] font-semibold border-2 transition-all"
+                                  style={sel
+                                    ? { borderColor: cat.color, background: cat.color, color: "#fff" }
+                                    : { borderColor: "rgba(0,0,0,0.10)", background: "#fff", color: "#6b6880" }
+                                  }>
+                                  {tMeta?.label ?? t}
                                 </button>
-                              ))}
-                            </div>
+                              )
+                            })}
                           </div>
+                        </div>
+
+                        {/* ── Corpo: descrição + valor ──────────────────── */}
+                        <div className="px-4 pb-4 space-y-3">
 
                           {/* Descrição */}
-                          <div className="md:col-span-2">
-                            <Label required>Descrição</Label>
+                          <div>
+                            <Label required>Como isso acontecerá?</Label>
                             <textarea
-                              className={cn(textareaCls, "h-20 resize-none")} rows={2}
-                              placeholder="Descreva o benefício esperado..."
+                              className={cn(textareaCls, "h-[72px] resize-none")}
+                              placeholder={
+                                meta?.valueType === "currency"
+                                  ? "Ex: Eliminação de processo manual de conferência — 3 colaboradores × 4h/dia"
+                                  : meta?.valueType === "hours"
+                                  ? "Ex: Automação do relatório diário — elimina 8h/semana da equipe de operações"
+                                  : meta?.valueType === "percent"
+                                  ? "Ex: Implementação de checklist digital reduz falhas de processo"
+                                  : "Descreva como este benefício será gerado..."
+                              }
                               value={ben.description}
-                              onChange={e => {
-                                const bs = [...form.benefits]; bs[i] = { ...bs[i], description: e.target.value }; set("benefits", bs)
-                              }} />
+                              onChange={e => updateBen({ description: e.target.value })} />
                           </div>
 
-                          {/* Valor planejado */}
-                          <div>
-                            <Label required>Valor Planejado</Label>
-                            <input
-                              className={inputCls}
-                              placeholder="R$ 0,00"
-                              value={ben.plannedValue}
-                              onChange={e => {
-                                const bs = [...form.benefits]; bs[i] = { ...bs[i], plannedValue: fmt(e.target.value) }; set("benefits", bs)
-                              }} />
-                          </div>
+                          {/* Valor — contextual por tipo */}
+                          <div className="rounded-xl p-3 border" style={{ background: `${cat.color}05`, borderColor: `${cat.color}20` }}>
+                            <p className="text-[10px] font-bold uppercase tracking-[0.08em] mb-2" style={{ color: cat.color }}>
+                              {meta?.valueLabel ?? "Resultado Esperado"}
+                            </p>
 
-                          {/* Unidade */}
-                          <div>
-                            <Label>Unidade</Label>
-                            <input
-                              className={inputCls}
-                              placeholder="R$, horas, %, processos..."
-                              value={ben.unit}
-                              onChange={e => {
-                                const bs = [...form.benefits]; bs[i] = { ...bs[i], unit: e.target.value }; set("benefits", bs)
-                              }} />
+                            {meta?.valueType === "currency" ? (
+                              /* FINANCEIRO: R$ + frequência */
+                              <div className="flex gap-3 items-end">
+                                <div className="flex-1">
+                                  <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-[#059669]">R$</span>
+                                    <input type="text" className={cn(inputCls, "pl-9")}
+                                      placeholder="0,00"
+                                      value={ben.plannedValue}
+                                      onChange={e => {
+                                        const raw = e.target.value.replace(/\D/g, "")
+                                        updateBen({ plannedValue: raw ? fmt(raw) : "" })
+                                      }} />
+                                  </div>
+                                </div>
+                                {meta.showFrequency && (
+                                  <div className="flex gap-1.5 shrink-0">
+                                    {FREQUENCIES.map(f => (
+                                      <button key={f.value} type="button"
+                                        onClick={() => updateBen({ frequency: f.value })}
+                                        className="h-[46px] px-3 rounded-xl text-xs font-bold border-2 transition-all"
+                                        style={ben.frequency === f.value
+                                          ? { borderColor: cat.color, background: cat.color, color: "#fff" }
+                                          : { borderColor: "rgba(0,0,0,0.09)", background: "#fff", color: "#9c99b0" }
+                                        }>
+                                        {f.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              /* OPERACIONAL / ESTRATÉGICO: número + sufixo fixo */
+                              <div className="relative">
+                                <input type="number" min={0}
+                                  className={cn(inputCls, "pr-24")}
+                                  placeholder={meta?.valuePlaceholder ?? "0"}
+                                  value={ben.plannedValue}
+                                  onChange={e => updateBen({ plannedValue: e.target.value })} />
+                                <span
+                                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold px-2 py-0.5 rounded-md"
+                                  style={{ background: `${cat.color}15`, color: cat.color }}>
+                                  {meta?.suffix ?? ""}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
