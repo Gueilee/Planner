@@ -199,7 +199,7 @@ export function ProjectsClient({ projects }: { projects: ProjectRow[] }) {
       <div className="flex items-center gap-2">
         {/* Chips — scroll horizontally if needed */}
         <div
-          className="flex gap-1.5 flex-1 min-w-0 overflow-x-auto pb-0.5"
+          className="flex gap-1.5 overflow-x-auto pb-0.5"
           style={{ scrollbarWidth: "none" }}
         >
           {FILTERS.map((f) => {
