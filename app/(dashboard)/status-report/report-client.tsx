@@ -1018,7 +1018,7 @@ function ProjectSelector({slides,onStart}:{slides:ProjectSlideData[];onStart:(s:
         </div>
       </div>
       <div className="shrink-0 px-8 py-4 flex items-center justify-between" style={{background:"rgba(8,20,50,0.95)",borderTop:"1px solid rgba(255,255,255,0.07)"}}>
-        <Link href="/projects" className="flex items-center gap-1.5 text-xs font-semibold" style={{color:"rgba(148,185,255,0.35)",textDecoration:"none"}} onMouseEnter={(e)=>{(e.currentTarget as HTMLElement).style.color="rgba(148,185,255,0.70)"}} onMouseLeave={(e)=>{(e.currentTarget as HTMLElement).style.color="rgba(148,185,255,0.35)"}}>
+        <Link href="/projects" className="flex items-center gap-1.5 text-xs font-semibold" style={{color:"rgba(180,210,255,0.75)",textDecoration:"none",border:"1px solid rgba(148,185,255,0.22)",background:"rgba(148,185,255,0.08)",borderRadius:8,padding:"4px 10px",transition:"all 0.15s"}} onMouseEnter={(e)=>{const el=e.currentTarget as HTMLElement;el.style.color="rgba(220,235,255,1)";el.style.background="rgba(148,185,255,0.18)";el.style.borderColor="rgba(148,185,255,0.45)"}} onMouseLeave={(e)=>{const el=e.currentTarget as HTMLElement;el.style.color="rgba(180,210,255,0.75)";el.style.background="rgba(148,185,255,0.08)";el.style.borderColor="rgba(148,185,255,0.22)"}}>
           <ArrowLeft className="w-3.5 h-3.5"/> Projetos
         </Link>
         <span style={{fontSize:13,fontWeight:600,color:"rgba(148,185,255,0.42)"}}>{selected.size} de {slides.length} selecionado{selected.size!==1?"s":""}</span>
