@@ -210,7 +210,7 @@ export function DashboardClient({
             <p className="text-[#6b6880] text-sm mt-1">
               Portfólio com{" "}
               <span className="text-[#1a1625] font-semibold">{stats.totalProjects} projetos</span>
-              {" — "}{stats.inProgress} ativos, {stats.completed} concluídos
+              {" — "}{stats.inProgress} em execução, {stats.completed} concluídos
             </p>
           </div>
           <div className="hidden md:flex items-center gap-3 shrink-0">
@@ -235,9 +235,9 @@ export function DashboardClient({
           glow="#2563EB"
         />
         <KpiCard
-          label="Em Andamento"
+          label="Projetos Ativos"
           value={stats.inProgress}
-          sub="Fases ativas agora"
+          sub="Em execução no portfólio"
           icon={Activity}
           gradient="linear-gradient(135deg, #065F46 0%, #059669 55%, #10B981 100%)"
           glow="#10B981"
