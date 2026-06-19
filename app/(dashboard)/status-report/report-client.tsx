@@ -717,17 +717,17 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
         <div className="flex flex-col gap-2 min-h-0 overflow-hidden">
 
           {/* Progresso do projeto — card destaque */}
-          <GCard style={{padding:"16px 15px",flexShrink:0,border:`1.5px solid ${status.color}30`,boxShadow:`0 0 24px ${status.color}18`}}>
-            <p style={{fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.16em",color:"rgba(170,205,255,0.50)",marginBottom:6}}>Progresso do Projeto</p>
-            <div className="flex items-baseline gap-2" style={{marginBottom:10}}>
-              <span style={{fontSize:"2.6rem",fontWeight:900,lineHeight:1,color:status.color,filter:`drop-shadow(0 0 12px ${status.color}88)`}}>
+          <GCard style={{padding:"11px 13px",flexShrink:0,border:`1.5px solid ${status.color}30`,boxShadow:`0 0 24px ${status.color}18`}}>
+            <p style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.16em",color:"rgba(170,205,255,0.50)",marginBottom:4}}>Progresso do Projeto</p>
+            <div className="flex items-baseline gap-2" style={{marginBottom:7}}>
+              <span style={{fontSize:"2.2rem",fontWeight:900,lineHeight:1,color:status.color,filter:`drop-shadow(0 0 10px ${status.color}88)`}}>
                 {data.progress}%
               </span>
               {data.progressDelta!==null&&data.progressDelta!==0&&(
-                <span style={{fontSize:12,fontWeight:800,
+                <span style={{fontSize:11,fontWeight:800,
                   color:data.progressDelta>0?"#10B981":"#FCA5A5",
                   background:data.progressDelta>0?"rgba(16,185,129,0.12)":"rgba(239,68,68,0.10)",
-                  padding:"2px 8px",borderRadius:12,
+                  padding:"2px 7px",borderRadius:12,
                   border:`1px solid ${data.progressDelta>0?"rgba(16,185,129,0.25)":"rgba(239,68,68,0.22)"}`,
                 }}>
                   {data.progressDelta>0?`▲ +${data.progressDelta}%`:`▼ ${data.progressDelta}%`}
@@ -736,20 +736,20 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
             </div>
             <AnimProgressBar value={data.progress} color={status.color}/>
             {data.timelineProgress!==null&&(
-              <div style={{marginTop:8}}>
-                <div className="flex justify-between" style={{marginBottom:4}}>
-                  <span style={{fontSize:10,color:"rgba(165,200,255,0.50)",fontWeight:600}}>Prazo decorrido</span>
-                  <span style={{fontSize:10,fontWeight:800,color:"#60A5FA"}}>{data.timelineProgress}%</span>
+              <div style={{marginTop:6}}>
+                <div className="flex justify-between" style={{marginBottom:3}}>
+                  <span style={{fontSize:9.5,color:"rgba(165,200,255,0.50)",fontWeight:600}}>Prazo decorrido</span>
+                  <span style={{fontSize:9.5,fontWeight:800,color:"#60A5FA"}}>{data.timelineProgress}%</span>
                 </div>
-                <div style={{height:6,background:"rgba(255,255,255,0.07)",borderRadius:4,overflow:"hidden"}}>
+                <div style={{height:5,background:"rgba(255,255,255,0.07)",borderRadius:4,overflow:"hidden"}}>
                   <div style={{height:"100%",width:`${data.timelineProgress}%`,background:"#3B82F6",borderRadius:4,transition:"width 1.2s ease"}}/>
                 </div>
-                <div style={{marginTop:6,textAlign:"center"}}>
+                <div style={{marginTop:5,textAlign:"center"}}>
                   {(() => {
                     const ahead = data.progress >= data.timelineProgress
                     const delta = Math.abs(data.progress - data.timelineProgress)
                     return (
-                      <span style={{fontSize:10,fontWeight:800,padding:"2px 10px",borderRadius:12,
+                      <span style={{fontSize:9.5,fontWeight:800,padding:"2px 9px",borderRadius:12,
                         background:ahead?"rgba(16,185,129,0.10)":"rgba(239,68,68,0.10)",
                         color:ahead?"#10B981":"#FCA5A5",
                         border:`1px solid ${ahead?"rgba(16,185,129,0.22)":"rgba(239,68,68,0.20)"}`,
@@ -764,26 +764,26 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
           </GCard>
 
           {/* Riscos com mitigação */}
-          <GCard style={{padding:"13px 15px",flex:1,minHeight:0,overflow:"hidden"}}>
+          <GCard style={{padding:"10px 12px",flex:1,minHeight:0,overflow:"hidden",display:"flex",flexDirection:"column"}}>
             <SL right={
               <div className="flex gap-1.5">
-                {data.risks.critical>0&&<span style={{fontSize:12,fontWeight:800,padding:"3px 9px",borderRadius:10,background:"rgba(239,68,68,0.15)",color:"#FCA5A5"}}>⚠ {data.risks.critical} crít.</span>}
-                {data.risks.high>0&&<span style={{fontSize:12,fontWeight:800,padding:"3px 9px",borderRadius:10,background:"rgba(245,158,11,0.12)",color:"#FCD34D"}}>{data.risks.high} alto{data.risks.high>1?"s":""}</span>}
+                {data.risks.critical>0&&<span style={{fontSize:11,fontWeight:800,padding:"2px 7px",borderRadius:10,background:"rgba(239,68,68,0.15)",color:"#FCA5A5"}}>⚠ {data.risks.critical} crít.</span>}
+                {data.risks.high>0&&<span style={{fontSize:11,fontWeight:800,padding:"2px 7px",borderRadius:10,background:"rgba(245,158,11,0.12)",color:"#FCD34D"}}>{data.risks.high} alto{data.risks.high>1?"s":""}</span>}
               </div>
             }>🛡️ Riscos & Issues</SL>
             {data.risks.items.length>0?(
-              <div className="flex flex-col gap-3 overflow-hidden">
+              <div style={{display:"flex",flexDirection:"column",flex:1,minHeight:0,overflow:"hidden",gap:0}}>
                 {data.risks.items.slice(0,4).map((r,i)=>{
                   const rc:{[k:string]:{color:string;label:string}}={CRITICAL:{color:"#FCA5A5",label:"Crítico"},HIGH:{color:"#FCD34D",label:"Alto"},MEDIUM:{color:"#86EFAC",label:"Médio"},LOW:{color:"#94A3B8",label:"Baixo"}}
                   const {color,label}=rc[r.level]??{color:"#94A3B8",label:r.level}
                   return (
-                    <div key={i} style={{borderLeft:`3px solid ${color}`,paddingLeft:10,paddingBottom:i<Math.min(data.risks.items.length,4)-1?8:0,borderBottom:i<Math.min(data.risks.items.length,4)-1?"1px solid rgba(255,255,255,0.07)":"none"}}>
-                      <div className="flex items-center gap-2 mb-2">
-                        <span style={{fontSize:12,fontWeight:800,color,textTransform:"uppercase"}}>{label}</span>
-                        {r.owner&&<span style={{fontSize:12,color:"rgba(180,210,255,0.55)"}}>· {r.owner}</span>}
+                    <div key={i} style={{flex:1,minHeight:0,borderLeft:`3px solid ${color}`,paddingLeft:9,overflow:"hidden",paddingBottom:i<Math.min(data.risks.items.length,4)-1?6:0,borderBottom:i<Math.min(data.risks.items.length,4)-1?"1px solid rgba(255,255,255,0.07)":"none",marginBottom:i<Math.min(data.risks.items.length,4)-1?6:0}}>
+                      <div className="flex items-center gap-2" style={{marginBottom:3}}>
+                        <span style={{fontSize:11,fontWeight:800,color,textTransform:"uppercase"}}>{label}</span>
+                        {r.owner&&<span style={{fontSize:11,color:"rgba(180,210,255,0.55)"}}>· {r.owner}</span>}
                       </div>
-                      <p style={{fontSize:13,color:"rgba(215,230,255,0.85)",lineHeight:1.4,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as const}}>{r.description}</p>
-                      {r.mitigation&&<p style={{fontSize:12,color:"rgba(160,195,255,0.62)",lineHeight:1.4,marginTop:3,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const}}>↳ {r.mitigation}</p>}
+                      <p style={{fontSize:12,color:"rgba(215,230,255,0.85)",lineHeight:1.35,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as const}}>{r.description}</p>
+                      {r.mitigation&&<p style={{fontSize:11,color:"rgba(160,195,255,0.62)",lineHeight:1.35,marginTop:2,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const}}>↳ {r.mitigation}</p>}
                     </div>
                   )
                 })}
