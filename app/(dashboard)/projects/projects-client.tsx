@@ -22,7 +22,7 @@ export type ProjectRow = {
 
 // ─── Filter config ────────────────────────────────────────────────────────────
 
-type FilterKey = "ALL" | "PENDING_GO_NO_GO" | "PLANNING" | "IN_PROGRESS" | "ON_HOLD" | "GO_LIVE" | "COMPLETED" | "FUTURE_ANALYSIS" | "PAUSED"
+type FilterKey = "ALL" | "PENDING_GO_NO_GO" | "PLANNING" | "IN_PROGRESS" | "ON_HOLD" | "GO_LIVE" | "COMPLETED" | "PAUSED"
 
 const FILTERS: { key: FilterKey; label: string; statuses: string[]; color: string }[] = [
   { key: "ALL",             label: "Todos",             statuses: [],                                          color: "#2463FF" },
@@ -32,7 +32,6 @@ const FILTERS: { key: FilterKey; label: string; statuses: string[]; color: strin
   { key: "ON_HOLD",         label: "Em Validação",      statuses: ["ON_HOLD", "PILOT"],                        color: "#8B5CF6" },
   { key: "GO_LIVE",         label: "Go Live",           statuses: ["GO_LIVE", "POST_GOLIVE"],                  color: "#059669" },
   { key: "COMPLETED",       label: "Concluído",         statuses: ["COMPLETED"],                               color: "#6D28D9" },
-  { key: "FUTURE_ANALYSIS", label: "Análise Futura",    statuses: ["FUTURE_ANALYSIS"],                         color: "#9333EA" },
   { key: "PAUSED",          label: "Pausado",           statuses: ["PAUSED"],                                  color: "#64748B" },
 ]
 
