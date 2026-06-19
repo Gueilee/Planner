@@ -220,13 +220,6 @@ export function DashboardClient({
                 <FolderKanban className="w-3.5 h-3.5" /> Ver Projetos
               </Button>
             </Link>
-            <Link href="/projects/new">
-              <Button size="sm"
-                className="h-9 text-white border-0 hover:opacity-90 gap-2 font-semibold rounded-xl text-xs"
-                style={{ background: "linear-gradient(135deg, #7B2FBE 0%, #9333EA 60%)", boxShadow: "0 4px 16px rgba(123,47,190,0.35)" }}>
-                <Zap className="w-3.5 h-3.5" /> Novo Projeto
-              </Button>
-            </Link>
           </div>
         </div>
       </div>
@@ -327,21 +320,6 @@ export function DashboardClient({
           })}
         </div>
 
-        {/* Parked statuses */}
-        <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mr-1">Fora do fluxo</span>
-          {[
-            { key: "FUTURE_ANALYSIS", filterKey: "FUTURE_ANALYSIS", count: futureAnalysis, label: "Análise Futura" },
-            { key: "CANCELLED",       filterKey: "ALL",              count: cancelled,      label: "Cancelados" },
-          ].map(({ key, filterKey, count, label }) => (
-            <Link key={key} href={`/projects?filter=${filterKey}`}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all hover:opacity-80 hover:-translate-y-0.5"
-              style={{ background: `${STATUS_COLOR[key]}12`, color: STATUS_COLOR[key], border: `1px solid ${STATUS_COLOR[key]}25` }}>
-              <CircleDot className="w-3 h-3" />
-              {label}: {count}
-            </Link>
-          ))}
-        </div>
       </div>
 
       {/* ── Bottom Grid ───────────────────────────────────────────────── */}
