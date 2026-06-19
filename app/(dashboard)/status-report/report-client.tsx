@@ -1070,6 +1070,11 @@ export function ReportClient({slides:allSlides,totalMeetings}:{slides:ProjectSli
   const prev=useCallback(()=>go(current-1),[current,go])
 
   useEffect(()=>{
+    if(!started)return
+    if(!document.fullscreenElement){containerRef.current?.requestFullscreen().catch(()=>{});setIsFs(true)}
+  },[started])
+
+  useEffect(()=>{
     if(!started)return;resetIdle()
     const onKey=(e:KeyboardEvent)=>{
       if(e.key==="ArrowRight"||e.key===" "){e.preventDefault();next()}
