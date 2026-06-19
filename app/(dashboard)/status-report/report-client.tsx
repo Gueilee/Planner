@@ -229,10 +229,10 @@ function toTL(v:string|null|undefined):TL{return (v&&v in LIGHT)?v as TL:"GREEN"
 function TDot({light,label}:{light:TL;label:string}) {
   const c=LIGHT[light]
   return (
-    <div className="flex flex-col items-center gap-1.5">
-      <div style={{width:40,height:40,borderRadius:10,background:`linear-gradient(135deg,${c.color}EE,${c.color}99)`,boxShadow:`0 0 18px ${c.glow},0 0 36px ${c.glow}55,inset 0 1.5px 0 rgba(255,255,255,0.35)`,border:`2px solid ${c.color}80`}}/>
-      <span style={{fontSize:10,fontWeight:700,color:"rgba(200,220,255,0.60)",textTransform:"uppercase",letterSpacing:"0.08em"}}>{label}</span>
-      <span style={{fontSize:9,fontWeight:600,color:c.color}}>{c.label}</span>
+    <div className="flex flex-col items-center gap-1">
+      <div style={{width:28,height:28,borderRadius:7,background:`linear-gradient(135deg,${c.color}EE,${c.color}88)`,boxShadow:`0 0 12px ${c.glow},inset 0 1px 0 rgba(255,255,255,0.30)`,border:`1.5px solid ${c.color}70`}}/>
+      <span style={{fontSize:9,fontWeight:700,color:"rgba(200,220,255,0.55)",textTransform:"uppercase",letterSpacing:"0.06em"}}>{label}</span>
+      <span style={{fontSize:8.5,fontWeight:600,color:c.color}}>{c.label}</span>
     </div>
   )
 }
@@ -488,6 +488,24 @@ function AgendaSlide({ slides, date }: { slides: ProjectSlideData[]; date: strin
   )
 }
 
+// ─── Animated Progress Bar ────────────────────────────────────────────────────
+
+function AnimProgressBar({ value, color }: { value: number; color: string }) {
+  const [anim, setAnim] = useState(0)
+  useEffect(() => { const t = setTimeout(() => setAnim(value), 300); return () => clearTimeout(t) }, [value])
+  return (
+    <div style={{ height: 16, background: "rgba(255,255,255,0.08)", borderRadius: 8, overflow: "hidden" }}>
+      <div style={{
+        height: "100%", width: `${anim}%`,
+        background: `linear-gradient(90deg, ${color}66, ${color})`,
+        borderRadius: 8,
+        boxShadow: `0 0 14px ${color}55`,
+        transition: "width 1.4s cubic-bezier(0.22,1,0.36,1)",
+      }} />
+    </div>
+  )
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // PROJECT SLIDE  — 3 COLUNAS COMPLETAS
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -506,10 +524,10 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
       <Particles n={6}/>
 
       {/* ── HEADER ── */}
-      <div className="relative z-10 shrink-0 px-6 pt-4 pb-2">
+      <div className="relative z-10 shrink-0 px-6 pt-3 pb-1.5">
         {/* Phase bar — full width, always labeled */}
         <div style={{marginBottom:8}}><PhaseBar status={data.status} color={status.color}/></div>
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1.5">
               <span style={{fontSize:11,fontWeight:800,padding:"3px 12px",borderRadius:20,background:status.bg,color:status.color,border:`1px solid ${status.color}40`,textTransform:"uppercase",letterSpacing:"0.08em"}}>
@@ -526,27 +544,6 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
               {daysStr&&<span style={{fontSize:10.5,fontWeight:700,padding:"2px 10px",borderRadius:20,background:data.daysLeft!==null&&data.daysLeft<0?"rgba(239,68,68,0.14)":"rgba(59,130,246,0.11)",border:`1px solid ${data.daysLeft!==null&&data.daysLeft<0?"rgba(239,68,68,0.28)":"rgba(96,165,250,0.22)"}`,color:data.daysLeft!==null&&data.daysLeft<0?"#FCA5A5":"#93C5FD"}}>{daysStr}</span>}
             </div>
           </div>
-          {/* Progress ring — destaque */}
-          <div className="shrink-0 flex flex-col items-center gap-1.5" style={{
-            background:`rgba(255,255,255,0.05)`,
-            border:`1.5px solid ${status.color}35`,
-            borderRadius:18,
-            padding:"12px 16px",
-            boxShadow:`0 0 32px ${status.color}22, inset 0 1px 0 rgba(255,255,255,0.08)`,
-            backdropFilter:"blur(12px)",
-          }}>
-            <ProgressRing value={data.progress} color={status.color} size={110}/>
-            <p style={{fontSize:10,color:"rgba(180,210,255,0.60)",fontWeight:800,textTransform:"uppercase",letterSpacing:"0.14em",marginTop:2}}>PROGRESSO</p>
-            {data.progressDelta!==null&&data.progressDelta!==0&&(
-              <span style={{fontSize:10,fontWeight:800,padding:"2px 10px",borderRadius:20,
-                background:data.progressDelta>0?"rgba(16,185,129,0.14)":"rgba(239,68,68,0.12)",
-                color:data.progressDelta>0?"#10B981":"#FCA5A5",
-                border:`1px solid ${data.progressDelta>0?"rgba(16,185,129,0.28)":"rgba(239,68,68,0.25)"}`,
-              }}>
-                {data.progressDelta>0?`▲ +${data.progressDelta}%`:`▼ ${data.progressDelta}%`}
-              </span>
-            )}
-          </div>
         </div>
       </div>
 
@@ -559,19 +556,12 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
           {/* Semáforo */}
           <GCard style={{padding:"9px 10px",flexShrink:0}}>
             <SL>🚦 Semáforo</SL>
-            <div className="grid grid-cols-2 gap-2 justify-items-center">
+            <div className="flex justify-around">
               <TDot light={costL} label="Custo"/>
               <TDot light={schL}  label="Prazo"/>
               <TDot light={resL}  label="Recursos"/>
-              <TDot light={ovL}   label="Geral"/>
             </div>
             {data.reportStatus.notes&&<p style={{fontSize:8,color:"rgba(200,220,255,0.42)",marginTop:5,lineHeight:1.4,borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:5}}>{data.reportStatus.notes}</p>}
-          </GCard>
-
-          {/* Timeline thermometer */}
-          <GCard style={{padding:"9px 10px",flexShrink:0}}>
-            <SL>⏱ Cronograma vs Real</SL>
-            <TimelineThermometer timelineProgress={data.timelineProgress} progress={data.progress}/>
           </GCard>
 
           {/* Budget */}
@@ -692,22 +682,54 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
           </GCard>
         </div>
 
-        {/* ════ COL 3: Equipe + Reuniões + Riscos + WBS ════ */}
+        {/* ════ COL 3: Progresso + Riscos ════ */}
         <div className="flex flex-col gap-2 min-h-0 overflow-hidden">
 
-          {/* Reuniões por tipo */}
-          <GCard style={{padding:"13px 15px",flexShrink:0}}>
-            <SL right={<span style={{fontSize:13,color:"#C084FC",fontWeight:800}}>{data.meetingsCount} total</span>}>📋 Reuniões</SL>
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(data.meetingsByType).filter(([,v])=>v>0).map(([type,count])=>(
-                <span key={type} style={{fontSize:12,fontWeight:700,padding:"4px 11px",borderRadius:20,background:"rgba(192,132,252,0.12)",border:"1px solid rgba(192,132,252,0.28)",color:"#C084FC"}}>
-                  {MTG_LABELS[type]??type}: {count}
+          {/* Progresso do projeto — card destaque */}
+          <GCard style={{padding:"16px 15px",flexShrink:0,border:`1.5px solid ${status.color}30`,boxShadow:`0 0 24px ${status.color}18`}}>
+            <p style={{fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.16em",color:"rgba(170,205,255,0.50)",marginBottom:6}}>Progresso do Projeto</p>
+            <div className="flex items-baseline gap-2" style={{marginBottom:10}}>
+              <span style={{fontSize:"2.6rem",fontWeight:900,lineHeight:1,color:status.color,filter:`drop-shadow(0 0 12px ${status.color}88)`}}>
+                {data.progress}%
+              </span>
+              {data.progressDelta!==null&&data.progressDelta!==0&&(
+                <span style={{fontSize:12,fontWeight:800,
+                  color:data.progressDelta>0?"#10B981":"#FCA5A5",
+                  background:data.progressDelta>0?"rgba(16,185,129,0.12)":"rgba(239,68,68,0.10)",
+                  padding:"2px 8px",borderRadius:12,
+                  border:`1px solid ${data.progressDelta>0?"rgba(16,185,129,0.25)":"rgba(239,68,68,0.22)"}`,
+                }}>
+                  {data.progressDelta>0?`▲ +${data.progressDelta}%`:`▼ ${data.progressDelta}%`}
                 </span>
-              ))}
-              {Object.keys(data.meetingsByType).length===0&&(
-                <p style={{fontSize:13,color:"rgba(148,185,255,0.50)",fontStyle:"italic"}}>Nenhuma reunião registrada</p>
               )}
             </div>
+            <AnimProgressBar value={data.progress} color={status.color}/>
+            {data.timelineProgress!==null&&(
+              <div style={{marginTop:8}}>
+                <div className="flex justify-between" style={{marginBottom:4}}>
+                  <span style={{fontSize:10,color:"rgba(165,200,255,0.50)",fontWeight:600}}>Prazo decorrido</span>
+                  <span style={{fontSize:10,fontWeight:800,color:"#60A5FA"}}>{data.timelineProgress}%</span>
+                </div>
+                <div style={{height:6,background:"rgba(255,255,255,0.07)",borderRadius:4,overflow:"hidden"}}>
+                  <div style={{height:"100%",width:`${data.timelineProgress}%`,background:"#3B82F6",borderRadius:4,transition:"width 1.2s ease"}}/>
+                </div>
+                <div style={{marginTop:6,textAlign:"center"}}>
+                  {(() => {
+                    const ahead = data.progress >= data.timelineProgress
+                    const delta = Math.abs(data.progress - data.timelineProgress)
+                    return (
+                      <span style={{fontSize:10,fontWeight:800,padding:"2px 10px",borderRadius:12,
+                        background:ahead?"rgba(16,185,129,0.10)":"rgba(239,68,68,0.10)",
+                        color:ahead?"#10B981":"#FCA5A5",
+                        border:`1px solid ${ahead?"rgba(16,185,129,0.22)":"rgba(239,68,68,0.20)"}`,
+                      }}>
+                        {ahead?`▲ ${delta}% à frente`:`▼ ${delta}% atrás`}
+                      </span>
+                    )
+                  })()}
+                </div>
+              </div>
+            )}
           </GCard>
 
           {/* Riscos com mitigação */}
@@ -750,7 +772,7 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
         const highlights = cleanHtml(cp.highlights)?.slice(0,220)??null
         const decisions  = cleanHtml(cp.decisions)?.replace(/^[-•*\d.]\s*/gm,"").trim().slice(0,220)??null
         return (
-          <div className="relative z-10 shrink-0 px-6 pb-2.5 pt-1.5">
+          <div className="relative z-10 shrink-0 px-6 pb-1.5 pt-1">
             <div style={{ background:"rgba(255,255,255,0.055)",border:"1px solid rgba(255,255,255,0.12)",borderLeft:"4px solid rgba(192,132,252,0.70)",borderRadius:12,padding:"10px 16px" }}>
               <div className="flex items-center gap-3 mb-2.5">
                 <Calendar style={{width:14,height:14,color:"#C084FC",flexShrink:0}}/>
