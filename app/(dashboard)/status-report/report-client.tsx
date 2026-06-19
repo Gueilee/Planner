@@ -548,9 +548,9 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
       </div>
 
       {/* ── BODY — 3 COLUNAS ── */}
-      <div className="relative z-10 flex-1 grid gap-2 px-6 min-h-0 overflow-hidden pb-0" style={{gridTemplateColumns:"24% 48% 28%"}}>
+      <div className="relative z-10 flex-1 grid gap-2 px-6 min-h-0 overflow-hidden pb-0" style={{gridTemplateColumns:"23% 49% 28%"}}>
 
-        {/* ════ COL 1: Indicadores ════ */}
+        {/* ════ COL 1: Status + Checkpoint ════ */}
         <div className="flex flex-col gap-2 min-h-0 overflow-hidden">
 
           {/* Semáforo */}
@@ -564,151 +564,136 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
             {data.reportStatus.notes&&<p style={{fontSize:8,color:"rgba(200,220,255,0.42)",marginTop:5,lineHeight:1.4,borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:5}}>{data.reportStatus.notes}</p>}
           </GCard>
 
-          {/* Budget */}
-          <GCard style={{padding:"9px 10px",flexShrink:0}}>
-            <SL>💰 Financeiro</SL>
-            <div className="space-y-2">
-              {[{label:"Orçamento",val:currency(data.budget),color:"#60A5FA"},{label:"Economia",val:currency(data.economy),color:"#34D399"}].map(({label,val,color})=>(
-                <div key={label} className="flex justify-between items-center">
-                  <span style={{fontSize:11,color:"rgba(200,220,255,0.55)"}}>{label}</span>
-                  <span style={{fontSize:12.5,fontWeight:800,color}}>{val}</span>
+          {/* Mini stats — Concluídas / Andamento / Atraso */}
+          <GCard style={{padding:"8px 10px",flexShrink:0}}>
+            <div className="flex justify-around">
+              {[
+                {n:data.tasks.completed, label:"Concluídas", color:"#10B981"},
+                {n:data.tasks.inProgress,label:"Andamento",  color:"#60A5FA"},
+                {n:data.tasks.delayed,   label:"Atraso",     color:data.tasks.delayed>0?"#FCA5A5":"#94A3B8"},
+              ].map(({n,label,color})=>(
+                <div key={label} className="flex flex-col items-center gap-0.5">
+                  <span style={{fontSize:"1.4rem",fontWeight:900,lineHeight:1,color}}>{n}</span>
+                  <span style={{fontSize:8,fontWeight:600,color:"rgba(180,210,255,0.45)",textTransform:"uppercase",letterSpacing:"0.08em"}}>{label}</span>
                 </div>
               ))}
-              {data.dates.end&&(
-                <div className="flex justify-between items-center">
-                  <span style={{fontSize:11,color:"rgba(200,220,255,0.55)"}}>Término</span>
-                  <span style={{fontSize:12,fontWeight:700,color:"rgba(220,235,255,0.75)"}}>{fmt(data.dates.end)}</span>
-                </div>
-              )}
-              {data.dates.goLive&&(
-                <div className="flex justify-between items-center">
-                  <span style={{fontSize:11,color:"rgba(200,220,255,0.55)"}}>Go Live</span>
-                  <span style={{fontSize:12,fontWeight:700,color:"#34D399"}}>{fmt(data.dates.goLive)}</span>
-                </div>
-              )}
             </div>
           </GCard>
 
           {/* Último Checkpoint — Destaques & Decisões */}
-          {data.lastCheckpoint && (() => {
+          {data.lastCheckpoint ? (() => {
             const cp = data.lastCheckpoint!
             const cleanHtml = (s:string|null) => s ? s.replace(/<[^>]+>/g,"").replace(/&nbsp;/g," ").trim() : null
             const highlights = cleanHtml(cp.highlights)
             const decisions  = cleanHtml(cp.decisions)?.replace(/^[-•*\d.]\s*/gm,"").trim() ?? null
-            if (!highlights && !decisions) return null
+            const hasContent = !!(highlights || decisions)
             return (
               <GCard style={{padding:"9px 10px", flex:1, minHeight:0, overflow:"hidden", display:"flex", flexDirection:"column"}}>
-                <div className="flex items-center gap-2" style={{marginBottom:6,flexShrink:0}}>
-                  <Calendar style={{width:12,height:12,color:"#C084FC",flexShrink:0}}/>
+                <div className="flex items-center gap-2" style={{marginBottom:5,flexShrink:0}}>
+                  <Calendar style={{width:11,height:11,color:"#C084FC",flexShrink:0}}/>
                   <span style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.13em",color:"#C084FC"}}>Último Checkpoint</span>
                 </div>
-                <p style={{fontSize:8.5,color:"rgba(160,200,255,0.45)",marginBottom:8,flexShrink:0}}>
+                <p style={{fontSize:8,color:"rgba(160,200,255,0.45)",marginBottom:hasContent?7:0,flexShrink:0}}>
                   {fmtLong(cp.date)}{cp.title ? ` · ${cp.title}` : ""}
                 </p>
-                <div style={{display:"flex",flexDirection:"column",gap:8,flex:1,minHeight:0,overflow:"hidden"}}>
-                  {highlights && (
-                    <div style={{flex:1,minHeight:0,overflow:"hidden"}}>
-                      <p style={{fontSize:8,fontWeight:700,color:"rgba(170,200,255,0.55)",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:3}}>Destaques</p>
-                      <p style={{fontSize:11.5,color:"rgba(215,230,255,0.85)",lineHeight:1.5,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:4,WebkitBoxOrient:"vertical" as const}}>{highlights}</p>
-                    </div>
-                  )}
-                  {decisions && decisions !== highlights && (
-                    <div style={{flex:1,minHeight:0,overflow:"hidden"}}>
-                      <p style={{fontSize:8,fontWeight:700,color:"rgba(170,200,255,0.55)",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:3}}>Decisões</p>
-                      <p style={{fontSize:11.5,color:"rgba(215,230,255,0.85)",lineHeight:1.5,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:4,WebkitBoxOrient:"vertical" as const}}>{decisions}</p>
-                    </div>
-                  )}
-                </div>
+                {hasContent ? (
+                  <div style={{display:"flex",flexDirection:"column",gap:7,flex:1,minHeight:0,overflow:"hidden"}}>
+                    {highlights && (
+                      <div style={{flex:1,minHeight:0,overflow:"hidden"}}>
+                        <p style={{fontSize:8,fontWeight:700,color:"rgba(170,200,255,0.50)",textTransform:"uppercase",letterSpacing:"0.10em",marginBottom:3}}>Destaques</p>
+                        <p style={{fontSize:11.5,color:"rgba(215,230,255,0.88)",lineHeight:1.55,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:5,WebkitBoxOrient:"vertical" as const}}>{highlights}</p>
+                      </div>
+                    )}
+                    {decisions && decisions !== highlights && (
+                      <div style={{flex:1,minHeight:0,overflow:"hidden"}}>
+                        <p style={{fontSize:8,fontWeight:700,color:"rgba(170,200,255,0.50)",textTransform:"uppercase",letterSpacing:"0.10em",marginBottom:3}}>Decisões</p>
+                        <p style={{fontSize:11.5,color:"rgba(215,230,255,0.88)",lineHeight:1.55,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:5,WebkitBoxOrient:"vertical" as const}}>{decisions}</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p style={{fontSize:11,color:"rgba(148,185,255,0.40)",fontStyle:"italic"}}>Reunião sem detalhamento de conteúdo.</p>
+                )}
               </GCard>
             )
-          })()}
+          })() : (
+            <GCard style={{padding:"9px 10px",flex:1,minHeight:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <p style={{fontSize:11,color:"rgba(148,185,255,0.35)",fontStyle:"italic",textAlign:"center"}}>Nenhum checkpoint registrado</p>
+            </GCard>
+          )}
         </div>
 
         {/* ════ COL 2: Atividades ════ */}
         <div className="flex flex-col gap-2 min-h-0 overflow-hidden">
 
-          {/* Atividades concluídas */}
-          <GCard style={{padding:"13px 15px",flexShrink:0}}>
-            <SL right={<span style={{fontSize:13,color:"#10B981",fontWeight:800,background:"rgba(16,185,129,0.12)",padding:"3px 10px",borderRadius:20,border:"1px solid rgba(16,185,129,0.25)"}}>{data.tasks.completed}</span>}>✅ Concluídas</SL>
-            {td.recentlyCompleted.length>0?(
-              <div className="flex flex-col gap-2">
-                {td.recentlyCompleted.slice(0,3).map((t,i)=>(
-                  <div key={i} className="flex items-center gap-2.5">
-                    <CheckCircle2 style={{width:13,height:13,color:"#10B981",flexShrink:0}}/>
-                    <span style={{fontSize:14,color:"rgba(220,238,255,0.90)",overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const,lineHeight:1.35,fontWeight:500}}>{t.title}</span>
-                  </div>
-                ))}
-              </div>
-            ):(
-              <p style={{fontSize:13,color:"rgba(148,185,255,0.50)",fontStyle:"italic"}}>Nenhuma atividade concluída ainda</p>
-            )}
-          </GCard>
-
           {/* Em andamento */}
-          <GCard style={{padding:"13px 15px",flexShrink:0}}>
-            <SL right={<span style={{fontSize:13,color:"#60A5FA",fontWeight:800,background:"rgba(96,165,250,0.12)",padding:"3px 10px",borderRadius:20,border:"1px solid rgba(96,165,250,0.25)"}}>{data.tasks.inProgress}</span>}>🔵 Em Andamento</SL>
+          <GCard style={{padding:"10px 13px",flexShrink:0}}>
+            <SL right={<span style={{fontSize:12,color:"#60A5FA",fontWeight:800,background:"rgba(96,165,250,0.12)",padding:"2px 9px",borderRadius:20,border:"1px solid rgba(96,165,250,0.25)"}}>{data.tasks.inProgress}</span>}>🔵 Em Andamento</SL>
             {td.inProgress.length>0?(
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col" style={{gap:7}}>
                 {td.inProgress.slice(0,3).map((t,i)=>(
-                  <div key={i} style={{paddingBottom:i<Math.min(td.inProgress.length,3)-1?10:0,borderBottom:i<Math.min(td.inProgress.length,3)-1?"1px solid rgba(255,255,255,0.07)":"none"}}>
-                    <p style={{fontSize:15,color:"rgba(220,238,255,0.95)",fontWeight:600,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const,marginBottom:4}}>{t.title}</p>
+                  <div key={i} style={{paddingBottom:i<Math.min(td.inProgress.length,3)-1?7:0,borderBottom:i<Math.min(td.inProgress.length,3)-1?"1px solid rgba(255,255,255,0.07)":"none"}}>
+                    <p style={{fontSize:13,color:"rgba(220,238,255,0.95)",fontWeight:600,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const,marginBottom:2}}>{t.title}</p>
                     <div className="flex items-center gap-3 flex-wrap">
-                      {t.responsible&&<span style={{fontSize:12.5,color:"rgba(165,200,255,0.78)"}}>👤 {t.responsible}</span>}
-                      {(t.startDate||t.endDate)&&<span style={{fontSize:12.5,color:"rgba(148,185,255,0.60)"}}>📅 {fmt(t.startDate)} → {fmt(t.endDate)}</span>}
+                      {t.responsible&&<span style={{fontSize:11,color:"rgba(165,200,255,0.70)"}}>👤 {t.responsible}</span>}
+                      {(t.startDate||t.endDate)&&<span style={{fontSize:11,color:"rgba(148,185,255,0.55)"}}>📅 {fmt(t.startDate)} → {fmt(t.endDate)}</span>}
                     </div>
                   </div>
                 ))}
               </div>
             ):(
-              <p style={{fontSize:13,color:"rgba(148,185,255,0.50)",fontStyle:"italic"}}>Nenhuma atividade em andamento</p>
+              <p style={{fontSize:12,color:"rgba(148,185,255,0.45)",fontStyle:"italic"}}>Nenhuma atividade em andamento</p>
             )}
           </GCard>
 
           {/* Em atraso */}
-          <GCard style={{padding:"13px 15px",flexShrink:0}}>
-            <SL right={<span style={{fontSize:13,color:"#EF4444",fontWeight:800,background:"rgba(239,68,68,0.12)",padding:"3px 10px",borderRadius:20,border:"1px solid rgba(239,68,68,0.25)"}}>{data.tasks.delayed}</span>}>🔴 Em Atraso</SL>
+          <GCard style={{padding:"10px 13px",flexShrink:0}}>
+            <SL right={<span style={{fontSize:12,color:"#EF4444",fontWeight:800,background:"rgba(239,68,68,0.12)",padding:"2px 9px",borderRadius:20,border:"1px solid rgba(239,68,68,0.25)"}}>{data.tasks.delayed}</span>}>🔴 Em Atraso</SL>
             {td.delayed.length>0?(
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col" style={{gap:7}}>
                 {td.delayed.slice(0,3).map((t,i)=>(
-                  <div key={i} style={{paddingBottom:i<Math.min(td.delayed.length,3)-1?10:0,borderBottom:i<Math.min(td.delayed.length,3)-1?"1px solid rgba(255,255,255,0.07)":"none"}}>
+                  <div key={i} style={{paddingBottom:i<Math.min(td.delayed.length,3)-1?7:0,borderBottom:i<Math.min(td.delayed.length,3)-1?"1px solid rgba(255,255,255,0.07)":"none"}}>
                     <div className="flex items-start justify-between gap-2">
-                      <p style={{fontSize:15,color:"rgba(255,185,185,0.95)",fontWeight:700,flex:1,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const,marginBottom:4}}>{t.title}</p>
-                      <span style={{fontSize:13,fontWeight:800,color:"#FCA5A5",flexShrink:0,background:"rgba(239,68,68,0.18)",padding:"3px 9px",borderRadius:8}}>{t.daysLate}d</span>
+                      <p style={{fontSize:13,color:"rgba(255,185,185,0.95)",fontWeight:700,flex:1,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const,marginBottom:2}}>{t.title}</p>
+                      <span style={{fontSize:12,fontWeight:800,color:"#FCA5A5",flexShrink:0,background:"rgba(239,68,68,0.18)",padding:"2px 8px",borderRadius:8}}>{t.daysLate}d</span>
                     </div>
                     <div className="flex items-center gap-3 flex-wrap">
-                      {t.responsible&&<span style={{fontSize:12.5,color:"rgba(255,165,165,0.72)"}}>👤 {t.responsible}</span>}
-                      {(t.startDate||t.endDate)&&<span style={{fontSize:12.5,color:"rgba(255,165,165,0.55)"}}>📅 {fmt(t.startDate)} → {fmt(t.endDate)}</span>}
+                      {t.responsible&&<span style={{fontSize:11,color:"rgba(255,165,165,0.68)"}}>👤 {t.responsible}</span>}
+                      {(t.startDate||t.endDate)&&<span style={{fontSize:11,color:"rgba(255,165,165,0.50)"}}>📅 {fmt(t.startDate)} → {fmt(t.endDate)}</span>}
                     </div>
                   </div>
                 ))}
               </div>
             ):(
-              <p style={{fontSize:13,color:"rgba(148,185,255,0.50)",fontStyle:"italic"}}>✅ Nenhuma atividade em atraso</p>
+              <p style={{fontSize:12,color:"rgba(148,185,255,0.45)",fontStyle:"italic"}}>✅ Nenhuma atividade em atraso</p>
             )}
           </GCard>
 
-          {/* Próximas a vencer */}
-          <GCard style={{padding:"13px 15px",flex:1,minHeight:0,overflow:"hidden"}}>
-            <SL right={<span style={{fontSize:13,color:"#FCD34D",fontWeight:800}}>{td.upcoming.length}</span>}>📅 Próximas Atividades</SL>
+          {/* Próximas atividades — flex:1 → sempre preenche o espaço restante */}
+          <GCard style={{padding:"10px 13px",flex:1,minHeight:0,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+            <SL right={<span style={{fontSize:12,color:"#FCD34D",fontWeight:800,background:"rgba(245,158,11,0.10)",padding:"2px 9px",borderRadius:20,border:"1px solid rgba(245,158,11,0.25)"}}>{td.upcoming.length}</span>}>📅 Próximas Atividades</SL>
             {td.upcoming.length>0?(
-              <div className="flex flex-col gap-3">
-                {td.upcoming.slice(0,3).map((t,i)=>(
-                  <div key={i} style={{paddingBottom:i<Math.min(td.upcoming.length,3)-1?10:0,borderBottom:i<Math.min(td.upcoming.length,3)-1?"1px solid rgba(255,255,255,0.07)":"none"}}>
-                    <div className="flex items-start justify-between gap-2">
-                      <p style={{fontSize:15,color:"rgba(220,235,255,0.92)",fontWeight:600,flex:1,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const,marginBottom:4}}>{t.title}</p>
-                      <span style={{fontSize:13,fontWeight:800,flexShrink:0,color:t.daysUntil===0?"#FCA5A5":t.daysUntil<=3?"#FCD34D":"#86EFAC",background:t.daysUntil===0?"rgba(239,68,68,0.12)":t.daysUntil<=3?"rgba(245,158,11,0.12)":"rgba(16,185,129,0.10)",padding:"3px 9px",borderRadius:8}}>
-                        {t.daysUntil===0?"Hoje":`${t.daysUntil}d`}
-                      </span>
+              <div style={{display:"flex",flexDirection:"column",flex:1,minHeight:0,overflow:"hidden",gap:0}}>
+                {td.upcoming.slice(0,6).map((t,i)=>{
+                  const total6=Math.min(td.upcoming.length,6)
+                  return (
+                    <div key={i} style={{flex:1,minHeight:0,overflow:"hidden",paddingBottom:i<total6-1?6:0,borderBottom:i<total6-1?"1px solid rgba(255,255,255,0.06)":"none",marginBottom:i<total6-1?6:0}}>
+                      <div className="flex items-start justify-between gap-2">
+                        <p style={{fontSize:13,color:"rgba(220,235,255,0.92)",fontWeight:600,flex:1,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const,marginBottom:2}}>{t.title}</p>
+                        <span style={{fontSize:11,fontWeight:800,flexShrink:0,color:t.daysUntil===0?"#FCA5A5":t.daysUntil<=3?"#FCD34D":"#86EFAC",background:t.daysUntil===0?"rgba(239,68,68,0.12)":t.daysUntil<=3?"rgba(245,158,11,0.12)":"rgba(16,185,129,0.10)",padding:"2px 8px",borderRadius:8}}>
+                          {t.daysUntil===0?"Hoje":`${t.daysUntil}d`}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        {t.responsible&&<span style={{fontSize:11,color:"rgba(165,200,255,0.68)"}}>👤 {t.responsible}</span>}
+                        {(t.startDate||t.endDate)&&<span style={{fontSize:11,color:"rgba(148,185,255,0.55)"}}>📅 {fmt(t.startDate)} → {fmt(t.endDate)}</span>}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 flex-wrap">
-                      {t.responsible&&<span style={{fontSize:12.5,color:"rgba(165,200,255,0.72)"}}>👤 {t.responsible}</span>}
-                      {(t.startDate||t.endDate)&&<span style={{fontSize:12.5,color:"rgba(148,185,255,0.60)"}}>📅 {fmt(t.startDate)} → {fmt(t.endDate)}</span>}
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             ):(
-              <p style={{fontSize:13,color:"rgba(148,185,255,0.50)",fontStyle:"italic"}}>Sem atividades previstas próximas</p>
+              <p style={{fontSize:12,color:"rgba(148,185,255,0.45)",fontStyle:"italic"}}>Sem atividades previstas próximas</p>
             )}
           </GCard>
         </div>
