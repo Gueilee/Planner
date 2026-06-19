@@ -25,6 +25,10 @@ export async function createProjectRequest(data: {
   budget?: number
   risks: Array<{ description: string; level: string; mitigation: string }>
   files: Array<{ name: string; url: string; size: number }>
+  benefits: Array<{
+    category: string; type: string; description: string
+    unit: string; plannedValue: number; frequency: string
+  }>
 }) {
   const session = await auth()
   if (!session?.user) throw new Error("Não autorizado")
@@ -76,6 +80,21 @@ export async function createProjectRequest(data: {
               fileUrl:  f.url,
               fileSize: f.size,
               fileType: f.name.split(".").pop()?.toLowerCase() ?? "",
+            })),
+          }
+        : undefined,
+      benefits: data.benefits.length > 0
+        ? {
+            create: data.benefits.map((b) => ({
+              category:     b.category as never,
+              type:         b.type     as never,
+              description:  b.description,
+              unit:         b.unit || "R$",
+              plannedValue: b.plannedValue,
+              realizedValue: 0,
+              frequency:    b.frequency as never,
+              status:       "PLANNED" as never,
+              createdById:  session.user.id!,
             })),
           }
         : undefined,

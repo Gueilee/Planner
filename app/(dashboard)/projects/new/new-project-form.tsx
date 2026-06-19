@@ -7,14 +7,22 @@ import {
   ChevronLeft, ChevronRight, Check, Loader2, Send,
   Plus, Trash2, Upload, X, FileText, FileImage,
   FileArchive, File, AlertTriangle, DollarSign,
-  Building2, User, Users, Globe, Lightbulb,
+  Building2, User, Users, Globe, Lightbulb, Gem,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createProjectRequest } from "@/lib/actions/project-request"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type RiskItem = { description: string; level: "LOW" | "MEDIUM" | "HIGH"; mitigation: string }
-type FileItem = { name: string; url: string; size: number; localFile?: File }
+type RiskItem    = { description: string; level: "LOW" | "MEDIUM" | "HIGH"; mitigation: string }
+type FileItem    = { name: string; url: string; size: number; localFile?: File }
+type BenefitItem = {
+  category: "FINANCIAL" | "OPERATIONAL" | "STRATEGIC"
+  type: string
+  description: string
+  unit: string
+  plannedValue: string
+  frequency: "ONCE" | "MONTHLY" | "ANNUAL"
+}
 type FormState = {
   title: string; area: string; projectArea: string; sponsorId: string; areaSolicitante: string; origin: string
   stakeholders: string[]
@@ -23,6 +31,7 @@ type FormState = {
   expectedStart: string; expectedEnd: string
   economy: string; estimatedCosts: string; budget: string
   risks: RiskItem[]
+  benefits: BenefitItem[]
   files: FileItem[]
 }
 
@@ -32,8 +41,50 @@ const STEPS = [
   { id: 2, label: "Escopo & Contexto",      desc: "Escopo, AS IS e TO BE",         icon: AlignLeft },
   { id: 3, label: "Premissas & Financeiro", desc: "Restrições, datas e orçamento", icon: CalendarDays },
   { id: 4, label: "Riscos",                 desc: "Análise de riscos do projeto",  icon: ShieldAlert },
-  { id: 5, label: "Documentos & Envio",     desc: "Anexos e revisão final",        icon: Paperclip },
+  { id: 5, label: "Benefícios Esperados",   desc: "Valor e retorno planejados",    icon: Gem },
+  { id: 6, label: "Documentos & Envio",     desc: "Anexos e revisão final",        icon: Paperclip },
 ]
+
+const BENEFIT_CATEGORIES = [
+  { value: "FINANCIAL",   label: "Financeiro",   color: "#059669", icon: "💰", desc: "Economia, receita e custos" },
+  { value: "OPERATIONAL", label: "Operacional",  color: "#2563EB", icon: "⚙️",  desc: "Produtividade e processos" },
+  { value: "STRATEGIC",   label: "Estratégico",  color: "#7B2FBE", icon: "🎯", desc: "Risco, qualidade e compliance" },
+] as const
+
+const BENEFIT_TYPES: Record<string, { value: string; label: string }[]> = {
+  FINANCIAL: [
+    { value: "COST_REDUCTION",    label: "Redução de Custos" },
+    { value: "REVENUE_INCREASE",  label: "Aumento de Receita" },
+    { value: "OPEX_REDUCTION",    label: "Redução de OPEX" },
+    { value: "ANNUAL_SAVINGS",    label: "Economia Anual" },
+    { value: "MONTHLY_SAVINGS",   label: "Economia Mensal" },
+  ],
+  OPERATIONAL: [
+    { value: "HOURS_SAVED",         label: "Horas Economizadas" },
+    { value: "PRODUCTIVITY_GAIN",   label: "Ganho de Produtividade" },
+    { value: "PROCESS_AUTOMATION",  label: "Automação de Processo" },
+    { value: "REWORK_REDUCTION",    label: "Redução de Retrabalho" },
+    { value: "TIME_REDUCTION",      label: "Redução de Tempo" },
+  ],
+  STRATEGIC: [
+    { value: "CUSTOMER_EXPERIENCE", label: "Experiência do Cliente" },
+    { value: "RISK_REDUCTION",      label: "Redução de Risco" },
+    { value: "COMPLIANCE",          label: "Compliance" },
+    { value: "QUALITY",             label: "Qualidade" },
+    { value: "GOVERNANCE",          label: "Governança" },
+    { value: "USER_SATISFACTION",   label: "Satisfação do Usuário" },
+  ],
+}
+
+const FREQUENCIES = [
+  { value: "MONTHLY", label: "Mensal",  desc: "Por mês" },
+  { value: "ANNUAL",  label: "Anual",   desc: "Por ano" },
+  { value: "ONCE",    label: "Único",   desc: "Pontual" },
+] as const
+
+const EMPTY_BENEFIT: BenefitItem = {
+  category: "FINANCIAL", type: "COST_REDUCTION", description: "", unit: "R$", plannedValue: "", frequency: "MONTHLY",
+}
 
 const AREAS = ["Tecnologia", "Projetos", "Qualidade", "Operações", "Financeiro", "Comercial",
   "Transportes", "RH", "Marketing", "Compras", "Controller", "Diretoria"]
@@ -112,6 +163,7 @@ export function NewProjectForm({ users, currentUserId }: Props) {
     expectedStart: "", expectedEnd: "",
     economy: "", estimatedCosts: "", budget: "",
     risks: [{ description: "", level: "MEDIUM", mitigation: "" }],
+    benefits: [],
     files: [],
   })
 
@@ -160,6 +212,16 @@ export function NewProjectForm({ users, currentUserId }: Props) {
         estimatedCosts: parseBRL(form.estimatedCosts),
         budget:         parseBRL(form.budget),
         risks:          form.risks.filter(r => r.description.trim()),
+        benefits:       form.benefits
+          .filter(b => b.description.trim() && b.plannedValue)
+          .map(b => ({
+            category:     b.category,
+            type:         b.type,
+            description:  b.description,
+            unit:         b.unit || "R$",
+            plannedValue: parseBRL(b.plannedValue) ?? 0,
+            frequency:    b.frequency,
+          })),
         files:          form.files,
       })
       router.push(`/projects/${id}`)
@@ -554,8 +616,152 @@ export function NewProjectForm({ users, currentUserId }: Props) {
               </>
             )}
 
-            {/* ══ STEP 5 — Documentos & Envio ═════════════════════════ */}
+            {/* ══ STEP 5 — Benefícios Esperados ══════════════════════ */}
             {step === 5 && (
+              <>
+                <div className="flex items-center justify-between mb-1">
+                  <div>
+                    <p className="text-sm font-semibold text-[#1a1625]">Benefícios Planejados</p>
+                    <p className="text-[11px] text-[#9c99b0]">
+                      Informe os retornos esperados com a execução deste projeto
+                    </p>
+                  </div>
+                  <button type="button"
+                    onClick={() => set("benefits", [...form.benefits, { ...EMPTY_BENEFIT }])}
+                    className="flex items-center gap-1.5 px-3 h-8 text-xs font-semibold rounded-lg text-[#7B2FBE] bg-[rgba(123,47,190,0.08)] hover:bg-[rgba(123,47,190,0.14)] transition-colors">
+                    <Plus className="w-3.5 h-3.5" />
+                    Adicionar Benefício
+                  </button>
+                </div>
+
+                {form.benefits.length === 0 && (
+                  <div className="text-center py-12 text-[#9c99b0] text-sm border-2 border-dashed border-[rgba(0,0,0,0.08)] rounded-xl">
+                    <Gem className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                    Nenhum benefício adicionado — clique em "Adicionar Benefício"
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  {form.benefits.map((ben, i) => {
+                    const cat = BENEFIT_CATEGORIES.find(c => c.value === ben.category)!
+                    const typeOptions = BENEFIT_TYPES[ben.category] ?? []
+                    return (
+                      <div key={i} className="rounded-xl border border-[rgba(0,0,0,0.08)] overflow-hidden">
+                        {/* Card header */}
+                        <div className="flex items-center justify-between px-4 py-2.5 border-b border-[rgba(0,0,0,0.06)]"
+                          style={{ background: `${cat.color}0d` }}>
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">{cat.icon}</span>
+                            <span className="text-xs font-bold" style={{ color: cat.color }}>
+                              Benefício {i + 1}
+                            </span>
+                          </div>
+                          {/* Category selector */}
+                          <div className="flex items-center gap-1">
+                            {BENEFIT_CATEGORIES.map(c => (
+                              <button key={c.value} type="button"
+                                onClick={() => {
+                                  const bs = [...form.benefits]
+                                  bs[i] = { ...bs[i], category: c.value, type: BENEFIT_TYPES[c.value][0].value }
+                                  set("benefits", bs)
+                                }}
+                                className="px-2 py-0.5 rounded-md text-[10px] font-bold transition-all"
+                                style={ben.category === c.value
+                                  ? { background: c.color, color: "#fff" }
+                                  : { background: "rgba(0,0,0,0.05)", color: "#9c99b0" }
+                                }>
+                                {c.label}
+                              </button>
+                            ))}
+                            <button type="button"
+                              onClick={() => set("benefits", form.benefits.filter((_, j) => j !== i))}
+                              className="p-1 ml-2 rounded-lg text-[#9c99b0] hover:text-red-500 hover:bg-red-50 transition-all">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Card body */}
+                        <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {/* Tipo */}
+                          <div>
+                            <Label>Tipo de Benefício</Label>
+                            <select
+                              value={ben.type}
+                              onChange={e => {
+                                const bs = [...form.benefits]; bs[i] = { ...bs[i], type: e.target.value }; set("benefits", bs)
+                              }}
+                              className={inputCls}>
+                              {typeOptions.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                            </select>
+                          </div>
+
+                          {/* Frequência */}
+                          <div>
+                            <Label>Frequência</Label>
+                            <div className="flex gap-2 h-[46px] items-center">
+                              {FREQUENCIES.map(f => (
+                                <button key={f.value} type="button"
+                                  onClick={() => {
+                                    const bs = [...form.benefits]; bs[i] = { ...bs[i], frequency: f.value }; set("benefits", bs)
+                                  }}
+                                  className={cn(
+                                    "flex-1 h-[38px] rounded-xl text-xs font-bold border-2 transition-all",
+                                    ben.frequency === f.value
+                                      ? "border-[#7B2FBE] text-[#7B2FBE] bg-[rgba(123,47,190,0.07)]"
+                                      : "border-[rgba(0,0,0,0.09)] text-[#9c99b0] hover:border-[rgba(0,0,0,0.2)]"
+                                  )}>
+                                  {f.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Descrição */}
+                          <div className="md:col-span-2">
+                            <Label required>Descrição</Label>
+                            <textarea
+                              className={cn(textareaCls, "h-20 resize-none")} rows={2}
+                              placeholder="Descreva o benefício esperado..."
+                              value={ben.description}
+                              onChange={e => {
+                                const bs = [...form.benefits]; bs[i] = { ...bs[i], description: e.target.value }; set("benefits", bs)
+                              }} />
+                          </div>
+
+                          {/* Valor planejado */}
+                          <div>
+                            <Label required>Valor Planejado</Label>
+                            <input
+                              className={inputCls}
+                              placeholder="R$ 0,00"
+                              value={ben.plannedValue}
+                              onChange={e => {
+                                const bs = [...form.benefits]; bs[i] = { ...bs[i], plannedValue: fmt(e.target.value) }; set("benefits", bs)
+                              }} />
+                          </div>
+
+                          {/* Unidade */}
+                          <div>
+                            <Label>Unidade</Label>
+                            <input
+                              className={inputCls}
+                              placeholder="R$, horas, %, processos..."
+                              value={ben.unit}
+                              onChange={e => {
+                                const bs = [...form.benefits]; bs[i] = { ...bs[i], unit: e.target.value }; set("benefits", bs)
+                              }} />
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+
+            {/* ══ STEP 6 — Documentos & Envio ═════════════════════════ */}
+            {step === 6 && (
               <>
                 {/* Drop zone */}
                 <div>
@@ -632,8 +838,9 @@ export function NewProjectForm({ users, currentUserId }: Props) {
                       { label: "Término",       value: form.expectedEnd   ? new Date(form.expectedEnd).toLocaleDateString("pt-BR")   : "—" },
                       { label: "Economia",      value: form.economy || "—" },
                       { label: "Custo Est.",    value: form.estimatedCosts || "—" },
-                      { label: "Riscos",        value: `${form.risks.filter(r => r.description).length} identificado(s)` },
-                      { label: "Documentos",    value: `${form.files.length} anexo(s)` },
+                      { label: "Riscos",      value: `${form.risks.filter(r => r.description).length} identificado(s)` },
+                      { label: "Benefícios",  value: `${form.benefits.filter(b => b.description).length} planejado(s)` },
+                      { label: "Documentos",  value: `${form.files.length} anexo(s)` },
                     ].map(({ label, value }) => (
                       <div key={label} className="flex items-start gap-2 py-2 border-b border-[rgba(0,0,0,0.05)] last:border-0">
                         <span className="text-[10px] font-bold uppercase tracking-[0.07em] text-[#9c99b0] w-24 shrink-0 mt-0.5">{label}</span>
