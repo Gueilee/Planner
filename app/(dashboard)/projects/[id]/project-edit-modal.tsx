@@ -989,12 +989,12 @@ export function ProjectEditModal({ project, members, allUsers, risks, benefits }
             </div>
 
             {/* Section tabs */}
-            <div className="flex gap-1 px-6 py-2.5 shrink-0 flex-wrap" style={{ borderBottom: "1px solid #F1F5F9", background: "#FAFBFC" }}>
+            <div className="flex gap-0.5 px-4 py-2 shrink-0 overflow-x-auto" style={{ borderBottom: "1px solid #F1F5F9", background: "#FAFBFC" }}>
               {SECTIONS.map(s => (
                 <button
                   key={s.id}
                   onClick={() => setSection(s.id)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap shrink-0"
                   style={section === s.id
                     ? { background: "linear-gradient(135deg, #2463FF, #8B2FFF)", color: "white" }
                     : { background: "transparent", color: "#94A3B8" }
