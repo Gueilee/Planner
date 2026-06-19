@@ -180,68 +180,69 @@ export function ProjectsClient({ projects }: { projects: ProjectRow[] }) {
         })}
       </div>
 
-      {/* Filter + action bar */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300" />
-            <input
-              value={search}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              placeholder="Buscar projeto..."
-              className="pl-8 pr-8 h-8 text-xs rounded-xl border border-slate-200 bg-white outline-none focus:border-[#7B2FBE] transition-colors w-52"
-            />
-            {search && (
-              <button onClick={() => handleSearchChange("")} className="absolute right-2.5 top-1/2 -translate-y-1/2">
-                <X className="w-3 h-3 text-slate-400" />
-              </button>
-            )}
-          </div>
+      {/* Search */}
+      <div className="relative self-start">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300" />
+        <input
+          value={search}
+          onChange={(e) => handleSearchChange(e.target.value)}
+          placeholder="Buscar projeto..."
+          className="pl-8 pr-8 h-8 text-xs rounded-xl border border-slate-200 bg-white outline-none focus:border-[#7B2FBE] transition-colors w-64"
+        />
+        {search && (
+          <button onClick={() => handleSearchChange("")} className="absolute right-2.5 top-1/2 -translate-y-1/2">
+            <X className="w-3 h-3 text-slate-400" />
+          </button>
+        )}
+      </div>
 
-          {/* Filter chips */}
-          <div className="flex gap-1.5 flex-wrap">
-            {FILTERS.map((f) => {
-              const isActive = activeFilter === f.key
-              const count = f.statuses.length === 0
-                ? projects.length
-                : projects.filter((p) => f.statuses.includes(p.status)).length
-              return (
-                <button
-                  key={f.key}
-                  onClick={() => handleFilterChange(f.key)}
-                  className="px-3 h-8 text-xs font-semibold rounded-xl border transition-all"
-                  style={isActive ? {
-                    background: `${f.color}15`,
-                    color: f.color,
-                    borderColor: `${f.color}40`,
-                  } : {
-                    background: "#ffffff",
-                    color: "#64748B",
-                    borderColor: "#E2E8F0",
+      {/* Filter chips + sort — single scrollable row */}
+      <div className="flex items-center gap-2">
+        {/* Chips — scroll horizontally if needed */}
+        <div
+          className="flex gap-1.5 flex-1 min-w-0 overflow-x-auto pb-0.5"
+          style={{ scrollbarWidth: "none" }}
+        >
+          {FILTERS.map((f) => {
+            const isActive = activeFilter === f.key
+            const count = f.statuses.length === 0
+              ? projects.length
+              : projects.filter((p) => f.statuses.includes(p.status)).length
+            return (
+              <button
+                key={f.key}
+                onClick={() => handleFilterChange(f.key)}
+                className="shrink-0 px-3 h-8 text-xs font-semibold rounded-xl border transition-all"
+                style={isActive ? {
+                  background: `${f.color}15`,
+                  color: f.color,
+                  borderColor: `${f.color}40`,
+                } : {
+                  background: "#ffffff",
+                  color: "#64748B",
+                  borderColor: "#E2E8F0",
+                }}
+              >
+                {f.label}
+                <span
+                  className="ml-1.5 text-[9px] font-black px-1 py-0.5 rounded-full"
+                  style={{
+                    background: isActive ? `${f.color}20` : "#F1F5F9",
+                    color: isActive ? f.color : "#94A3B8",
                   }}
                 >
-                  {f.label}
-                  <span
-                    className="ml-1.5 text-[9px] font-black px-1 py-0.5 rounded-full"
-                    style={{
-                      background: isActive ? `${f.color}20` : "#F1F5F9",
-                      color: isActive ? f.color : "#94A3B8",
-                    }}
-                  >
-                    {count}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
+                  {count}
+                </span>
+              </button>
+            )
+          })}
         </div>
 
-        {/* Sort dropdown */}
-        <div className="relative" ref={sortRef}>
+        {/* Sort — pinned to the right, never wraps */}
+        <div className="relative shrink-0" ref={sortRef}>
           <button
             onClick={() => setSortOpen((v) => !v)}
-            className="flex items-center gap-1.5 px-3 h-8 text-xs font-semibold rounded-xl border transition-all"
+            className="flex items-center gap-1.5 px-3 h-8 text-xs font-semibold rounded-xl border transition-all whitespace-nowrap"
             style={sortKey !== "status" ? {
               background: "rgba(123,47,190,0.08)",
               color: "#7B2FBE",
@@ -258,8 +259,13 @@ export function ProjectsClient({ projects }: { projects: ProjectRow[] }) {
 
           {sortOpen && (
             <div
-              className="absolute right-0 top-10 z-50 w-52 rounded-xl overflow-hidden py-1"
-              style={{ background: "#fff", border: "1px solid #E2E8F0", boxShadow: "0 8px 24px rgba(15,23,42,0.12)" }}
+              className="absolute right-0 top-10 w-52 rounded-xl overflow-hidden py-1"
+              style={{
+                background: "#fff",
+                border: "1px solid #E2E8F0",
+                boxShadow: "0 8px 32px rgba(15,23,42,0.18)",
+                zIndex: 9999,
+              }}
             >
               {SORT_OPTIONS.map((opt) => (
                 <button
