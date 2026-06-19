@@ -82,6 +82,10 @@ export default async function ProjectDetailPage({
         },
       },
       risks: { orderBy: { createdAt: "asc" } },
+      benefits: {
+        orderBy: { createdAt: "asc" as const },
+        select: { id: true, category: true, type: true, description: true, unit: true, plannedValue: true, realizedValue: true, frequency: true, status: true },
+      },
       meetings: {
         orderBy: { date: "asc" },
         include: {
@@ -297,6 +301,17 @@ export default async function ProjectDetailPage({
                       description: r.description,
                       level:       r.status,
                       mitigation:  r.mitigation,
+                    }))}
+                    benefits={project.benefits.map(b => ({
+                      id:           b.id,
+                      category:     b.category as "FINANCIAL" | "OPERATIONAL" | "STRATEGIC",
+                      type:         b.type,
+                      description:  b.description,
+                      unit:         b.unit,
+                      plannedValue: b.plannedValue,
+                      realizedValue:b.realizedValue,
+                      frequency:    b.frequency as "ONCE" | "MONTHLY" | "ANNUAL",
+                      status:       b.status as "PLANNED" | "IN_PROGRESS" | "REALIZED" | "NOT_REALIZED",
                     }))}
                   />
 

@@ -3,18 +3,89 @@
 import { useState, useTransition, useEffect, useCallback } from "react"
 import {
   Pencil, X, Save, Loader2, Calendar, DollarSign, FileText,
-  Info, Users, AlertTriangle, Plus, Trash2, ChevronDown,
+  Info, Users, AlertTriangle, Plus, Trash2, ChevronDown, Gem, ChevronUp,
 } from "lucide-react"
 import {
   updateProjectDetails, addProjectMember, removeProjectMember,
   createRisk, updateRisk, deleteRisk,
 } from "@/lib/actions/projects"
+import { createBenefit, updateBenefit, deleteBenefit } from "@/lib/actions/benefits"
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type Member = { userId: string; role: string; user: { id: string; name: string; department: string | null; role: string } }
 type AvailUser = { id: string; name: string; department: string | null; role: string }
 type RiskItem = { id: string; description: string; level: string; mitigation: string | null }
+type BenefitRow = {
+  id: string
+  category: "FINANCIAL" | "OPERATIONAL" | "STRATEGIC"
+  type: string
+  description: string
+  unit: string
+  plannedValue: number
+  realizedValue: number
+  frequency: "ONCE" | "MONTHLY" | "ANNUAL"
+  status: "PLANNED" | "IN_PROGRESS" | "REALIZED" | "NOT_REALIZED"
+}
+
+// ── Benefits constants ──────────────────────────────────────────────────────
+
+const BEN_CATEGORIES = [
+  { value: "FINANCIAL",   label: "Financeiro",  color: "#059669", bg: "#ECFDF5", icon: "💰" },
+  { value: "OPERATIONAL", label: "Operacional", color: "#2563EB", bg: "#EFF6FF", icon: "⚙️"  },
+  { value: "STRATEGIC",   label: "Estratégico", color: "#7B2FBE", bg: "#F5F3FF", icon: "🎯" },
+] as const
+
+const BEN_META: Record<string, { label: string; unit: string; valueType: "currency"|"hours"|"percent"|"count"|"score"; suffix: string; showFrequency: boolean }> = {
+  COST_REDUCTION:     { label: "Redução de Custos",      unit: "R$",       valueType: "currency", suffix: "R$",        showFrequency: true  },
+  REVENUE_INCREASE:   { label: "Aumento de Receita",     unit: "R$",       valueType: "currency", suffix: "R$",        showFrequency: true  },
+  OPEX_REDUCTION:     { label: "Redução de OPEX",        unit: "R$",       valueType: "currency", suffix: "R$",        showFrequency: true  },
+  ANNUAL_SAVINGS:     { label: "Economia Anual",         unit: "R$",       valueType: "currency", suffix: "R$/ano",    showFrequency: false },
+  MONTHLY_SAVINGS:    { label: "Economia Mensal",        unit: "R$",       valueType: "currency", suffix: "R$/mês",    showFrequency: false },
+  HOURS_SAVED:        { label: "Horas Economizadas",     unit: "horas",    valueType: "hours",    suffix: "horas",     showFrequency: true  },
+  PRODUCTIVITY_GAIN:  { label: "Ganho de Produtividade", unit: "%",        valueType: "percent",  suffix: "%",         showFrequency: false },
+  PROCESS_AUTOMATION: { label: "Automação de Processo",  unit: "processos",valueType: "count",    suffix: "processos", showFrequency: false },
+  REWORK_REDUCTION:   { label: "Redução de Retrabalho",  unit: "%",        valueType: "percent",  suffix: "%",         showFrequency: false },
+  TIME_REDUCTION:     { label: "Redução de Lead Time",   unit: "dias",     valueType: "count",    suffix: "dias",      showFrequency: false },
+  CUSTOMER_EXPERIENCE:{ label: "Experiência do Cliente", unit: "pontos",   valueType: "score",    suffix: "pontos",    showFrequency: false },
+  RISK_REDUCTION:     { label: "Redução de Risco",       unit: "%",        valueType: "percent",  suffix: "%",         showFrequency: false },
+  COMPLIANCE:         { label: "Compliance",             unit: "%",        valueType: "percent",  suffix: "%",         showFrequency: false },
+  QUALITY:            { label: "Qualidade",              unit: "%",        valueType: "percent",  suffix: "%",         showFrequency: false },
+  GOVERNANCE:         { label: "Governança",             unit: "pontos",   valueType: "score",    suffix: "pontos",    showFrequency: false },
+  USER_SATISFACTION:  { label: "Satisfação do Usuário",  unit: "%",        valueType: "percent",  suffix: "%",         showFrequency: false },
+}
+
+const BEN_TYPES_BY_CAT: Record<string, string[]> = {
+  FINANCIAL:   ["COST_REDUCTION","REVENUE_INCREASE","OPEX_REDUCTION","ANNUAL_SAVINGS","MONTHLY_SAVINGS"],
+  OPERATIONAL: ["HOURS_SAVED","PRODUCTIVITY_GAIN","PROCESS_AUTOMATION","REWORK_REDUCTION","TIME_REDUCTION"],
+  STRATEGIC:   ["CUSTOMER_EXPERIENCE","RISK_REDUCTION","COMPLIANCE","QUALITY","GOVERNANCE","USER_SATISFACTION"],
+}
+
+const BEN_STATUSES = [
+  { value: "PLANNED",       label: "Planejado",       color: "#64748B", bg: "#F1F5F9" },
+  { value: "IN_PROGRESS",   label: "Em Andamento",    color: "#2563EB", bg: "#EFF6FF" },
+  { value: "REALIZED",      label: "Realizado",       color: "#059669", bg: "#ECFDF5" },
+  { value: "NOT_REALIZED",  label: "Não Realizado",   color: "#DC2626", bg: "#FEF2F2" },
+]
+
+const BEN_FREQS = [
+  { value: "MONTHLY", label: "Por mês" },
+  { value: "ANNUAL",  label: "Por ano" },
+  { value: "ONCE",    label: "Pontual" },
+] as const
+
+function fmtBRL(v: number) {
+  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })
+}
+function parseBRLEdit(v: string) {
+  const n = parseFloat(v.replace(/[R$\s.]/g, "").replace(",", "."))
+  return isNaN(n) ? 0 : n
+}
+function fmtBRLInput(raw: string) {
+  const d = raw.replace(/\D/g, "")
+  if (!d) return ""
+  return (parseInt(d, 10) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+}
 
 const PROJECT_AREAS = [
   { value: "TECNOLOGIA",  label: "Tecnologia",            desc: "Sistemas, TI e projetos digitais", color: "#0891B2", icon: "💻" },
@@ -44,6 +115,7 @@ type Props = {
   members: Member[]
   allUsers: AvailUser[]
   risks: RiskItem[]
+  benefits: BenefitRow[]
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -77,7 +149,351 @@ const SECTIONS = [
   { id: "scope",        label: "Escopo",       icon: FileText },
   { id: "team",         label: "Equipe",       icon: Users },
   { id: "risks",        label: "Riscos",       icon: AlertTriangle },
+  { id: "benefits",     label: "Benefícios",   icon: Gem },
 ]
+
+// ── BenefitsSection ─────────────────────────────────────────────────────────
+
+type NewBenefit = { category: "FINANCIAL"|"OPERATIONAL"|"STRATEGIC"; type: string; description: string; plannedValue: string; frequency: "ONCE"|"MONTHLY"|"ANNUAL" }
+const EMPTY_NEW: NewBenefit = { category: "FINANCIAL", type: "COST_REDUCTION", description: "", plannedValue: "", frequency: "MONTHLY" }
+
+function BenefitsSection({ projectId, initialBenefits }: { projectId: string; initialBenefits: BenefitRow[] }) {
+  const [benefits, setBenefits] = useState<BenefitRow[]>(initialBenefits)
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [editValues, setEditValues] = useState<Record<string, { description: string; plannedValue: string; status: string; frequency: string }>>({})
+  const [adding, setAdding] = useState(false)
+  const [newBen, setNewBen] = useState<NewBenefit>({ ...EMPTY_NEW })
+  const [isPending, startTransition] = useTransition()
+  const [savingId, setSavingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  function toggleExpand(id: string, b: BenefitRow) {
+    if (expanded === id) { setExpanded(null); return }
+    setExpanded(id)
+    const meta = BEN_META[b.type]
+    setEditValues(ev => ({
+      ...ev,
+      [id]: {
+        description:  b.description,
+        plannedValue: meta?.valueType === "currency" ? fmtBRL(b.plannedValue) : String(b.plannedValue),
+        status:       b.status,
+        frequency:    b.frequency,
+      },
+    }))
+  }
+
+  function handleSaveBenefit(b: BenefitRow) {
+    const ev = editValues[b.id]
+    if (!ev) return
+    setSavingId(b.id)
+    const meta = BEN_META[b.type]
+    const val  = meta?.valueType === "currency" ? parseBRLEdit(ev.plannedValue) : parseFloat(ev.plannedValue) || 0
+    startTransition(async () => {
+      await updateBenefit(b.id, {
+        description:  ev.description,
+        plannedValue: val,
+        status:       ev.status as never,
+        frequency:    ev.frequency as never,
+        unit:         meta?.unit ?? b.unit,
+      })
+      setBenefits(prev => prev.map(x => x.id === b.id
+        ? { ...x, description: ev.description, plannedValue: val, status: ev.status as BenefitRow["status"], frequency: ev.frequency as BenefitRow["frequency"] }
+        : x
+      ))
+      setSavingId(null)
+      setExpanded(null)
+    })
+  }
+
+  function handleDelete(id: string) {
+    setDeletingId(id)
+    startTransition(async () => {
+      await deleteBenefit(id)
+      setBenefits(prev => prev.filter(b => b.id !== id))
+      setDeletingId(null)
+      if (expanded === id) setExpanded(null)
+    })
+  }
+
+  function handleAdd() {
+    const meta = BEN_META[newBen.type]
+    const val  = meta?.valueType === "currency" ? parseBRLEdit(newBen.plannedValue) : parseFloat(newBen.plannedValue) || 0
+    startTransition(async () => {
+      await createBenefit(projectId, {
+        category:        newBen.category as never,
+        type:            newBen.type     as never,
+        description:     newBen.description,
+        unit:            meta?.unit ?? "R$",
+        plannedValue:    val,
+        realizedValue:   0,
+        frequency:       newBen.frequency as never,
+        status:          "PLANNED" as never,
+        baselineDate:    null,
+        realizationDate: null,
+        evidence:        null,
+      })
+      // reload page data via revalidate — just reset UI
+      setAdding(false)
+      setNewBen({ ...EMPTY_NEW })
+      // Optimistically add placeholder (page revalidates on next load)
+      setBenefits(prev => [...prev, {
+        id: `new-${Date.now()}`, category: newBen.category, type: newBen.type,
+        description: newBen.description, unit: meta?.unit ?? "R$",
+        plannedValue: val, realizedValue: 0, frequency: newBen.frequency, status: "PLANNED",
+      }])
+    })
+  }
+
+  const inpCls = "w-full h-10 px-3 text-sm rounded-xl border border-slate-200 bg-white text-slate-800 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all"
+
+  return (
+    <div className="space-y-3">
+      {benefits.length === 0 && !adding && (
+        <div className="py-8 rounded-xl text-center" style={{ border: "1px dashed #CBD5E1", background: "#F8FAFC" }}>
+          <Gem className="w-6 h-6 mx-auto mb-2 text-slate-300" />
+          <p className="text-xs text-slate-400">Nenhum benefício registrado</p>
+        </div>
+      )}
+
+      {/* Existing benefits */}
+      {benefits.map(b => {
+        const meta   = BEN_META[b.type]
+        const cat    = BEN_CATEGORIES.find(c => c.value === b.category)!
+        const stCfg  = BEN_STATUSES.find(s => s.value === b.status)!
+        const isExp  = expanded === b.id
+        const ev     = editValues[b.id]
+
+        return (
+          <div key={b.id} className="rounded-xl border overflow-hidden" style={{ borderColor: `${cat.color}25` }}>
+            {/* Row header */}
+            <div className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors"
+              style={{ background: isExp ? cat.bg : "#fff" }}
+              onClick={() => toggleExpand(b.id, b)}>
+              <span className="text-sm">{cat.icon}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-slate-800 truncate">{meta?.label ?? b.type}</p>
+                <p className="text-[10px] text-slate-400 truncate">{b.description || "—"}</p>
+              </div>
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full shrink-0"
+                style={{ background: stCfg.bg, color: stCfg.color }}>
+                {stCfg.label}
+              </span>
+              <span className="text-xs font-semibold text-slate-600 shrink-0">
+                {meta?.valueType === "currency" ? fmtBRL(b.plannedValue) : `${b.plannedValue} ${meta?.suffix ?? ""}`}
+              </span>
+              <button type="button"
+                onClick={e => { e.stopPropagation(); handleDelete(b.id) }}
+                disabled={isPending}
+                className="p-1 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all ml-1">
+                {deletingId === b.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+              </button>
+              {isExp ? <ChevronUp className="w-3.5 h-3.5 text-slate-400 shrink-0" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
+            </div>
+
+            {/* Expanded edit */}
+            {isExp && ev && (
+              <div className="px-4 pb-4 pt-2 space-y-3 border-t" style={{ borderColor: `${cat.color}15`, background: cat.bg }}>
+                {/* Descrição */}
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">Descrição</p>
+                  <textarea rows={2} className={`${inpCls} h-auto py-2 resize-none`}
+                    value={ev.description}
+                    onChange={e => setEditValues(v => ({ ...v, [b.id]: { ...v[b.id], description: e.target.value } }))} />
+                </div>
+
+                {/* Valor + Frequência */}
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">
+                      {meta?.valueType === "currency" ? "Valor (R$)" : `Resultado (${meta?.suffix})`}
+                    </p>
+                    {meta?.valueType === "currency" ? (
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-emerald-600">R$</span>
+                        <input className={`${inpCls} pl-8`}
+                          value={ev.plannedValue}
+                          onChange={e => {
+                            const raw = e.target.value.replace(/\D/g, "")
+                            setEditValues(v => ({ ...v, [b.id]: { ...v[b.id], plannedValue: raw ? fmtBRLInput(raw) : "" } }))
+                          }} />
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        <input type="number" min={0} className={`${inpCls} pr-16`}
+                          value={ev.plannedValue}
+                          onChange={e => setEditValues(v => ({ ...v, [b.id]: { ...v[b.id], plannedValue: e.target.value } }))} />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold px-1.5 py-0.5 rounded"
+                          style={{ background: `${cat.color}15`, color: cat.color }}>
+                          {meta?.suffix}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  {meta?.showFrequency && (
+                    <div className="shrink-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">Frequência</p>
+                      <div className="flex gap-1.5">
+                        {BEN_FREQS.map(f => (
+                          <button key={f.value} type="button"
+                            onClick={() => setEditValues(v => ({ ...v, [b.id]: { ...v[b.id], frequency: f.value } }))}
+                            className="h-10 px-2.5 rounded-xl text-[11px] font-bold border-2 transition-all"
+                            style={ev.frequency === f.value
+                              ? { borderColor: cat.color, background: cat.color, color: "#fff" }
+                              : { borderColor: "#E2E8F0", background: "#fff", color: "#94A3B8" }}>
+                            {f.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Status */}
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">Status</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {BEN_STATUSES.map(s => (
+                      <button key={s.value} type="button"
+                        onClick={() => setEditValues(v => ({ ...v, [b.id]: { ...v[b.id], status: s.value } }))}
+                        className="px-3 py-1 rounded-full text-[11px] font-bold border-2 transition-all"
+                        style={ev.status === s.value
+                          ? { borderColor: s.color, background: s.color, color: "#fff" }
+                          : { borderColor: "#E2E8F0", background: "#fff", color: "#94A3B8" }}>
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Save row */}
+                <div className="flex justify-end gap-2 pt-1">
+                  <button type="button" onClick={() => setExpanded(null)}
+                    className="px-3 h-8 text-xs font-semibold rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition-all">
+                    Cancelar
+                  </button>
+                  <button type="button" onClick={() => handleSaveBenefit(b)}
+                    disabled={isPending}
+                    className="flex items-center gap-1.5 px-3 h-8 text-xs font-semibold rounded-lg text-white transition-all disabled:opacity-50"
+                    style={{ background: `linear-gradient(135deg, ${cat.color}, ${cat.color}cc)` }}>
+                    {savingId === b.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                    Salvar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })}
+
+      {/* Add new benefit */}
+      {!adding ? (
+        <button type="button" onClick={() => setAdding(true)}
+          className="w-full flex items-center justify-center gap-1.5 h-9 text-xs font-semibold rounded-xl border-2 border-dashed border-slate-200 text-slate-400 hover:border-purple-300 hover:text-purple-600 hover:bg-purple-50 transition-all">
+          <Plus className="w-3.5 h-3.5" /> Adicionar Benefício
+        </button>
+      ) : (
+        <div className="rounded-xl border-2 border-purple-200 overflow-hidden">
+          {/* Category selector */}
+          <div className="flex gap-1.5 px-4 py-3 border-b border-purple-100 bg-purple-50">
+            {BEN_CATEGORIES.map(c => (
+              <button key={c.value} type="button"
+                onClick={() => setNewBen(n => ({ ...n, category: c.value, type: BEN_TYPES_BY_CAT[c.value][0] }))}
+                className="px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all"
+                style={newBen.category === c.value
+                  ? { background: c.color, color: "#fff" }
+                  : { background: "rgba(0,0,0,0.05)", color: "#9c99b0" }}>
+                {c.icon} {c.label}
+              </button>
+            ))}
+          </div>
+          <div className="p-4 space-y-3">
+            {/* Type pills */}
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">Tipo</p>
+              <div className="flex flex-wrap gap-1.5">
+                {BEN_TYPES_BY_CAT[newBen.category].map(t => {
+                  const cat = BEN_CATEGORIES.find(c => c.value === newBen.category)!
+                  return (
+                    <button key={t} type="button"
+                      onClick={() => setNewBen(n => ({ ...n, type: t, plannedValue: "" }))}
+                      className="px-2.5 py-1 rounded-full text-[11px] font-semibold border-2 transition-all"
+                      style={newBen.type === t
+                        ? { borderColor: cat.color, background: cat.color, color: "#fff" }
+                        : { borderColor: "#E2E8F0", background: "#fff", color: "#6b6880" }}>
+                      {BEN_META[t]?.label ?? t}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+            {/* Description */}
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">Descrição</p>
+              <textarea rows={2} className={`${inpCls} h-auto py-2 resize-none`}
+                placeholder="Como este benefício será gerado?"
+                value={newBen.description}
+                onChange={e => setNewBen(n => ({ ...n, description: e.target.value }))} />
+            </div>
+            {/* Value */}
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">
+                  {BEN_META[newBen.type]?.valueType === "currency" ? "Valor (R$)" : `Resultado (${BEN_META[newBen.type]?.suffix})`}
+                </p>
+                {BEN_META[newBen.type]?.valueType === "currency" ? (
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-emerald-600">R$</span>
+                    <input className={`${inpCls} pl-8`} placeholder="0,00"
+                      value={newBen.plannedValue}
+                      onChange={e => { const raw = e.target.value.replace(/\D/g, ""); setNewBen(n => ({ ...n, plannedValue: raw ? fmtBRLInput(raw) : "" })) }} />
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <input type="number" min={0} className={`${inpCls} pr-16`}
+                      placeholder="0" value={newBen.plannedValue}
+                      onChange={e => setNewBen(n => ({ ...n, plannedValue: e.target.value }))} />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-purple-600">{BEN_META[newBen.type]?.suffix}</span>
+                  </div>
+                )}
+              </div>
+              {BEN_META[newBen.type]?.showFrequency && (
+                <div className="shrink-0">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">Frequência</p>
+                  <div className="flex gap-1.5">
+                    {BEN_FREQS.map(f => (
+                      <button key={f.value} type="button"
+                        onClick={() => setNewBen(n => ({ ...n, frequency: f.value }))}
+                        className="h-10 px-2.5 rounded-xl text-[11px] font-bold border-2 transition-all"
+                        style={newBen.frequency === f.value
+                          ? { borderColor: "#7B2FBE", background: "#7B2FBE", color: "#fff" }
+                          : { borderColor: "#E2E8F0", background: "#fff", color: "#94A3B8" }}>
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            {/* Actions */}
+            <div className="flex justify-end gap-2 pt-1">
+              <button type="button" onClick={() => { setAdding(false); setNewBen({ ...EMPTY_NEW }) }}
+                className="px-3 h-8 text-xs font-semibold rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition-all">
+                Cancelar
+              </button>
+              <button type="button" onClick={handleAdd}
+                disabled={isPending || !newBen.description.trim()}
+                className="flex items-center gap-1.5 px-3 h-8 text-xs font-semibold rounded-lg text-white transition-all disabled:opacity-50"
+                style={{ background: "linear-gradient(135deg, #7B2FBE, #9333EA)" }}>
+                {isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                Adicionar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ── Sub-components ──────────────────────────────────────────────────────────
 
@@ -454,7 +870,7 @@ function RisksSection({
 
 // ── Main Component ──────────────────────────────────────────────────────────
 
-export function ProjectEditModal({ project, members, allUsers, risks }: Props) {
+export function ProjectEditModal({ project, members, allUsers, risks, benefits }: Props) {
   const [open, setOpen] = useState(false)
   const [section, setSection] = useState("info")
   const [isPending, startTransition] = useTransition()
@@ -720,6 +1136,11 @@ export function ProjectEditModal({ project, members, allUsers, risks }: Props) {
               {/* ── Riscos ──────────────────────────────────────── */}
               {section === "risks" && (
                 <RisksSection projectId={project.id} initialRisks={risks} />
+              )}
+
+              {/* ── Benefícios ──────────────────────────────────── */}
+              {section === "benefits" && (
+                <BenefitsSection projectId={project.id} initialBenefits={benefits} />
               )}
             </div>
 
