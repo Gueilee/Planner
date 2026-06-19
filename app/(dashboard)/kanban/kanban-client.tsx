@@ -1159,20 +1159,19 @@ export function KanbanClient({ projects: initial }: { projects: KanbanProject[] 
         </div>
 
         {/* Pipeline mini-stats */}
-        <div className="hidden xl:flex items-center gap-1.5 ml-auto">
+        <div className="hidden xl:flex items-center gap-1 ml-auto">
           {COLUMNS.map((col) => {
             const count = filtered.filter((p) => col.displayStatuses.includes(p.status as never)).length
+            const Icon = col.icon
             return (
               <div
                 key={col.id}
-                className="flex items-center gap-1.5 px-2.5 h-7 rounded-full text-[10px] font-bold"
-                style={{ background: `${col.color}10`, color: col.color }}
+                className="flex items-center gap-1 px-2 h-7 rounded-lg text-[10px] font-bold"
+                style={{ background: `${col.color}0D`, color: col.color, border: `1px solid ${col.color}20` }}
+                title={col.label}
               >
-                <span
-                  className="w-1.5 h-1.5 rounded-full"
-                  style={{ background: col.color }}
-                />
-                {count}
+                <Icon className="w-3 h-3 shrink-0" style={{ color: col.color }} />
+                <span className="font-black">{count}</span>
               </div>
             )
           })}
@@ -1204,19 +1203,26 @@ export function KanbanClient({ projects: initial }: { projects: KanbanProject[] 
 
       {/* ── Urgency Legend ── */}
       <div
-        className="flex items-center gap-5 px-6 py-1.5 shrink-0 bg-white"
-        style={{ borderBottom: "1px solid rgba(15,23,42,0.05)" }}
+        className="flex items-center gap-4 px-6 py-1.5 shrink-0"
+        style={{ borderBottom: "1px solid rgba(15,23,42,0.05)", background: "#FAFBFC" }}
       >
-        <span className="text-[9px] font-bold uppercase tracking-widest text-slate-300">Prazo</span>
+        <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Borda do card indica prazo:</span>
         {(["on_time", "at_risk", "delayed"] as UrgencyLevel[]).map((level) => {
           const c = URGENCY_CFG[level]
           return (
-            <div key={level} className="flex items-center gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-[3px]" style={{ background: c.leftBorder }} />
-              <span className="text-[10px] font-semibold" style={{ color: c.badge!.color }}>{c.badge!.text}</span>
+            <div key={level} className="flex items-center gap-2">
+              {/* Vertical bar mimicking card left border */}
+              <div
+                className="w-1 h-5 rounded-full shrink-0"
+                style={{ background: c.leftBorder }}
+              />
+              <span className="text-[10px] font-semibold" style={{ color: c.badge!.color }}>
+                {c.badge!.text}
+              </span>
             </div>
           )
         })}
+        <span className="text-[9px] text-slate-300 ml-1">· cards sem data não exibem borda</span>
       </div>
 
       {/* ── Board / List ── */}
