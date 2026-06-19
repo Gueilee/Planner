@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition, useRef } from "react"
+import { useState, useTransition, useRef, useEffect } from "react"
 import { ProjectTasksKanban } from "./project-tasks-kanban"
 import {
   DndContext, DragOverlay, closestCorners,
@@ -18,6 +18,7 @@ import {
   TrendingUp, Calendar, ExternalLink,
   ChevronRight, CheckCircle2, Loader2,
   Clock, Layers, CircleCheck, ArrowRight, Zap, PauseCircle, UserRound,
+  Maximize2, Minimize2,
 } from "lucide-react"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -1005,16 +1006,32 @@ function ListView({ projects, onRowClick }: { projects: KanbanProject[]; onRowCl
 // ─── Main Client ──────────────────────────────────────────────────────────────
 
 export function KanbanClient({ projects: initial }: { projects: KanbanProject[] }) {
-  const [projects,    setProjects]    = useState<KanbanProject[]>(initial)
-  const [activeId,    setActiveId]    = useState<string | null>(null)
-  const [overId,      setOverId]      = useState<string | null>(null)
-  const [view,        setView]        = useState<"kanban" | "list">("kanban")
-  const [search,      setSearch]      = useState("")
-  const [activeArea,  setActiveArea]  = useState<AreaKey>("ALL")
-  const [selected,    setSelected]    = useState<KanbanProject | null>(null)
-  const [saving,      setSaving]      = useState<string | null>(null)
+  const [projects,      setProjects]      = useState<KanbanProject[]>(initial)
+  const [activeId,      setActiveId]      = useState<string | null>(null)
+  const [overId,        setOverId]        = useState<string | null>(null)
+  const [view,          setView]          = useState<"kanban" | "list">("kanban")
+  const [search,        setSearch]        = useState("")
+  const [activeArea,    setActiveArea]    = useState<AreaKey>("ALL")
+  const [selected,      setSelected]      = useState<KanbanProject | null>(null)
+  const [saving,        setSaving]        = useState<string | null>(null)
+  const [isFullscreen,  setIsFullscreen]  = useState(false)
   const [, startTransition] = useTransition()
-  const prevStatuses = useRef<Record<string, string>>({})
+  const prevStatuses  = useRef<Record<string, string>>({})
+  const containerRef  = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const onFsChange = () => setIsFullscreen(!!document.fullscreenElement)
+    document.addEventListener("fullscreenchange", onFsChange)
+    return () => document.removeEventListener("fullscreenchange", onFsChange)
+  }, [])
+
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      containerRef.current?.requestFullscreen()
+    } else {
+      document.exitFullscreen()
+    }
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -1071,7 +1088,11 @@ export function KanbanClient({ projects: initial }: { projects: KanbanProject[] 
   }
 
   return (
-    <div className="flex flex-col h-full" style={{ background: "#F1F5F9" }}>
+    <div
+      ref={containerRef}
+      className="flex flex-col h-full"
+      style={{ background: "#F1F5F9" }}
+    >
 
       {/* ── Top Bar ── */}
       <div
@@ -1177,8 +1198,33 @@ export function KanbanClient({ projects: initial }: { projects: KanbanProject[] 
           })}
         </div>
 
+        {/* Fullscreen button */}
+        <button
+          onClick={toggleFullscreen}
+          title={isFullscreen ? "Sair da tela cheia (ESC)" : "Modo tela cheia"}
+          className="flex items-center gap-2 px-3 h-8 rounded-xl text-xs font-bold transition-all shrink-0"
+          style={isFullscreen ? {
+            background: "linear-gradient(135deg, #7B2FBE, #9333EA)",
+            color: "#fff",
+            border: "1.5px solid transparent",
+            boxShadow: "0 4px 14px rgba(123,47,190,0.40)",
+          } : {
+            background: "#F8FAFC",
+            color: "#64748B",
+            border: "1.5px solid rgba(15,23,42,0.09)",
+          }}
+        >
+          {isFullscreen
+            ? <Minimize2 className="w-3.5 h-3.5" />
+            : <Maximize2 className="w-3.5 h-3.5" />
+          }
+          <span className="hidden sm:inline">
+            {isFullscreen ? "Sair" : "Tela Cheia"}
+          </span>
+        </button>
+
         {/* View toggle */}
-        <div className="flex items-center ml-auto xl:ml-3">
+        <div className="flex items-center xl:ml-0">
           <div
             className="flex items-center p-1 rounded-xl"
             style={{ background: "#F1F5F9", border: "1.5px solid rgba(15,23,42,0.08)" }}
@@ -1223,6 +1269,17 @@ export function KanbanClient({ projects: initial }: { projects: KanbanProject[] 
           )
         })}
         <span className="text-[9px] text-slate-300 ml-1">· cards sem data não exibem borda</span>
+
+        {isFullscreen && (
+          <div className="ml-auto flex items-center gap-1.5 px-2.5 h-6 rounded-lg"
+            style={{ background: "rgba(123,47,190,0.07)", border: "1px solid rgba(123,47,190,0.15)" }}>
+            <kbd className="text-[9px] font-bold px-1.5 py-px rounded"
+              style={{ background: "rgba(123,47,190,0.12)", color: "#7B2FBE", fontFamily: "monospace" }}>
+              ESC
+            </kbd>
+            <span className="text-[9px] font-semibold" style={{ color: "#7B2FBE" }}>para sair da tela cheia</span>
+          </div>
+        )}
       </div>
 
       {/* ── Board / List ── */}
