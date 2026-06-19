@@ -20,9 +20,6 @@ export async function createProjectRequest(data: {
   restrictions: string
   expectedStart: string
   expectedEnd: string
-  economy?: number
-  estimatedCosts?: number
-  budget?: number
   risks: Array<{ description: string; level: string; mitigation: string }>
   files: Array<{ name: string; url: string; size: number }>
   benefits: Array<{
@@ -48,9 +45,6 @@ export async function createProjectRequest(data: {
       toBe:           data.toBe || null,
       assumptions:    data.assumptions || null,
       restrictions:   data.restrictions || null,
-      budget:         data.budget         ?? null,
-      estimatedCosts: data.estimatedCosts ?? null,
-      economy:        data.economy        ?? null,
       expectedStart:  data.expectedStart ? new Date(data.expectedStart) : null,
       expectedEnd:    data.expectedEnd   ? new Date(data.expectedEnd)   : null,
       sponsorId:      data.sponsorId || null,

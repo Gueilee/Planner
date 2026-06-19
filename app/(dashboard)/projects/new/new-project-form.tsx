@@ -29,7 +29,6 @@ type FormState = {
   scope: string; asIs: string; toBe: string
   assumptions: string; restrictions: string
   expectedStart: string; expectedEnd: string
-  economy: string; estimatedCosts: string; budget: string
   risks: RiskItem[]
   benefits: BenefitItem[]
   files: FileItem[]
@@ -161,7 +160,6 @@ export function NewProjectForm({ users, currentUserId }: Props) {
     scope: "", asIs: "", toBe: "",
     assumptions: "", restrictions: "",
     expectedStart: "", expectedEnd: "",
-    economy: "", estimatedCosts: "", budget: "",
     risks: [{ description: "", level: "MEDIUM", mitigation: "" }],
     benefits: [],
     files: [],
@@ -208,9 +206,6 @@ export function NewProjectForm({ users, currentUserId }: Props) {
         restrictions:   form.restrictions,
         expectedStart:  form.expectedStart,
         expectedEnd:    form.expectedEnd,
-        economy:        parseBRL(form.economy),
-        estimatedCosts: parseBRL(form.estimatedCosts),
-        budget:         parseBRL(form.budget),
         risks:          form.risks.filter(r => r.description.trim()),
         benefits:       form.benefits
           .filter(b => b.description.trim() && b.plannedValue)
@@ -493,44 +488,6 @@ export function NewProjectForm({ users, currentUserId }: Props) {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-4">
-                  {([
-                    { field: "economy" as const, label: "Economia Esperada", color: "#059669" },
-                    { field: "estimatedCosts" as const, label: "Custos Estimados", color: "#D97706" },
-                    { field: "budget" as const, label: "Orçamento (Budget)", color: "#7B2FBE" },
-                  ]).map(({ field, label, color }) => (
-                    <div key={field}>
-                      <Label>{label}</Label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold" style={{ color }}>R$</span>
-                        <input type="text" className={cn(inputCls, "pl-9")} placeholder="0,00"
-                          value={form[field]}
-                          onChange={e => {
-                            const raw = e.target.value.replace(/\D/g, "")
-                            set(field, raw ? fmt(raw) : "")
-                          }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {(form.economy || form.estimatedCosts || form.budget) && (
-                  <div className="rounded-xl p-4 border border-[rgba(123,47,190,0.15)] bg-[rgba(123,47,190,0.03)]">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#9c99b0] mb-3">Resumo Financeiro</p>
-                    <div className="grid grid-cols-3 gap-4 text-center">
-                      {[
-                        { label: "Economia", value: form.economy, color: "#059669" },
-                        { label: "Custo Estimado", value: form.estimatedCosts, color: "#D97706" },
-                        { label: "Budget", value: form.budget, color: "#7B2FBE" },
-                      ].map(({ label, value, color }) => (
-                        <div key={label}>
-                          <p className="text-[10px] text-[#9c99b0]">{label}</p>
-                          <p className="text-sm font-black mt-0.5" style={{ color }}>{value || "—"}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </>
             )}
 
@@ -836,8 +793,6 @@ export function NewProjectForm({ users, currentUserId }: Props) {
                       { label: "Origem",        value: ORIGINS.find(o => o.value === form.origin)?.label || "—" },
                       { label: "Início",        value: form.expectedStart ? new Date(form.expectedStart).toLocaleDateString("pt-BR") : "—" },
                       { label: "Término",       value: form.expectedEnd   ? new Date(form.expectedEnd).toLocaleDateString("pt-BR")   : "—" },
-                      { label: "Economia",      value: form.economy || "—" },
-                      { label: "Custo Est.",    value: form.estimatedCosts || "—" },
                       { label: "Riscos",      value: `${form.risks.filter(r => r.description).length} identificado(s)` },
                       { label: "Benefícios",  value: `${form.benefits.filter(b => b.description).length} planejado(s)` },
                       { label: "Documentos",  value: `${form.files.length} anexo(s)` },
