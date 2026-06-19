@@ -548,7 +548,7 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
       </div>
 
       {/* ── BODY — 3 COLUNAS ── */}
-      <div className="relative z-10 flex-1 grid gap-2 px-6 min-h-0 overflow-hidden pb-0" style={{gridTemplateColumns:"21% 51% 28%"}}>
+      <div className="relative z-10 flex-1 grid gap-2 px-6 min-h-0 overflow-hidden pb-0" style={{gridTemplateColumns:"24% 48% 28%"}}>
 
         {/* ════ COL 1: Indicadores ════ */}
         <div className="flex flex-col gap-2 min-h-0 overflow-hidden">
@@ -589,8 +589,39 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
             </div>
           </GCard>
 
-          {/* Spacer if needed */}
-          <div style={{flex:1}}/>
+          {/* Último Checkpoint — Destaques & Decisões */}
+          {data.lastCheckpoint && (() => {
+            const cp = data.lastCheckpoint!
+            const cleanHtml = (s:string|null) => s ? s.replace(/<[^>]+>/g,"").replace(/&nbsp;/g," ").trim() : null
+            const highlights = cleanHtml(cp.highlights)
+            const decisions  = cleanHtml(cp.decisions)?.replace(/^[-•*\d.]\s*/gm,"").trim() ?? null
+            if (!highlights && !decisions) return null
+            return (
+              <GCard style={{padding:"9px 10px", flex:1, minHeight:0, overflow:"hidden", display:"flex", flexDirection:"column"}}>
+                <div className="flex items-center gap-2" style={{marginBottom:6,flexShrink:0}}>
+                  <Calendar style={{width:12,height:12,color:"#C084FC",flexShrink:0}}/>
+                  <span style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.13em",color:"#C084FC"}}>Último Checkpoint</span>
+                </div>
+                <p style={{fontSize:8.5,color:"rgba(160,200,255,0.45)",marginBottom:8,flexShrink:0}}>
+                  {fmtLong(cp.date)}{cp.title ? ` · ${cp.title}` : ""}
+                </p>
+                <div style={{display:"flex",flexDirection:"column",gap:8,flex:1,minHeight:0,overflow:"hidden"}}>
+                  {highlights && (
+                    <div style={{flex:1,minHeight:0,overflow:"hidden"}}>
+                      <p style={{fontSize:8,fontWeight:700,color:"rgba(170,200,255,0.55)",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:3}}>Destaques</p>
+                      <p style={{fontSize:11.5,color:"rgba(215,230,255,0.85)",lineHeight:1.5,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:4,WebkitBoxOrient:"vertical" as const}}>{highlights}</p>
+                    </div>
+                  )}
+                  {decisions && decisions !== highlights && (
+                    <div style={{flex:1,minHeight:0,overflow:"hidden"}}>
+                      <p style={{fontSize:8,fontWeight:700,color:"rgba(170,200,255,0.55)",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:3}}>Decisões</p>
+                      <p style={{fontSize:11.5,color:"rgba(215,230,255,0.85)",lineHeight:1.5,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:4,WebkitBoxOrient:"vertical" as const}}>{decisions}</p>
+                    </div>
+                  )}
+                </div>
+              </GCard>
+            )
+          })()}
         </div>
 
         {/* ════ COL 2: Atividades ════ */}
@@ -733,7 +764,7 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
           </GCard>
 
           {/* Riscos com mitigação */}
-          <GCard style={{padding:"13px 15px",flex:1,minHeight:0,overflow:"hidden",overflowY:"auto"}}>
+          <GCard style={{padding:"13px 15px",flex:1,minHeight:0,overflow:"hidden"}}>
             <SL right={
               <div className="flex gap-1.5">
                 {data.risks.critical>0&&<span style={{fontSize:12,fontWeight:800,padding:"3px 9px",borderRadius:10,background:"rgba(239,68,68,0.15)",color:"#FCA5A5"}}>⚠ {data.risks.critical} crít.</span>}
@@ -742,11 +773,11 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
             }>🛡️ Riscos & Issues</SL>
             {data.risks.items.length>0?(
               <div className="flex flex-col gap-3 overflow-hidden">
-                {data.risks.items.slice(0,3).map((r,i)=>{
+                {data.risks.items.slice(0,4).map((r,i)=>{
                   const rc:{[k:string]:{color:string;label:string}}={CRITICAL:{color:"#FCA5A5",label:"Crítico"},HIGH:{color:"#FCD34D",label:"Alto"},MEDIUM:{color:"#86EFAC",label:"Médio"},LOW:{color:"#94A3B8",label:"Baixo"}}
                   const {color,label}=rc[r.level]??{color:"#94A3B8",label:r.level}
                   return (
-                    <div key={i} style={{borderLeft:`3px solid ${color}`,paddingLeft:10,paddingBottom:i<Math.min(data.risks.items.length,3)-1?10:0,borderBottom:i<Math.min(data.risks.items.length,3)-1?"1px solid rgba(255,255,255,0.07)":"none"}}>
+                    <div key={i} style={{borderLeft:`3px solid ${color}`,paddingLeft:10,paddingBottom:i<Math.min(data.risks.items.length,4)-1?8:0,borderBottom:i<Math.min(data.risks.items.length,4)-1?"1px solid rgba(255,255,255,0.07)":"none"}}>
                       <div className="flex items-center gap-2 mb-2">
                         <span style={{fontSize:12,fontWeight:800,color,textTransform:"uppercase"}}>{label}</span>
                         {r.owner&&<span style={{fontSize:12,color:"rgba(180,210,255,0.55)"}}>· {r.owner}</span>}
@@ -765,56 +796,6 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
         </div>
       </div>
 
-      {/* ── ÚLTIMO CHECKPOINT — rodapé sempre visível ── */}
-      {data.lastCheckpoint && (() => {
-        const cp = data.lastCheckpoint!
-        const cleanHtml = (s:string|null)=>s?s.replace(/<[^>]+>/g,"").replace(/&nbsp;/g," ").trim():null
-        const highlights = cleanHtml(cp.highlights)?.slice(0,220)??null
-        const decisions  = cleanHtml(cp.decisions)?.replace(/^[-•*\d.]\s*/gm,"").trim().slice(0,220)??null
-        return (
-          <div className="relative z-10 shrink-0 px-6 pb-1.5 pt-1">
-            <div style={{ background:"rgba(255,255,255,0.055)",border:"1px solid rgba(255,255,255,0.12)",borderLeft:"4px solid rgba(192,132,252,0.70)",borderRadius:12,padding:"10px 16px" }}>
-              <div className="flex items-center gap-3 mb-2.5">
-                <Calendar style={{width:14,height:14,color:"#C084FC",flexShrink:0}}/>
-                <span style={{fontSize:12,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.14em",color:"#C084FC"}}>Último Checkpoint</span>
-                <span style={{fontSize:13,color:"rgba(215,232,255,0.80)",fontWeight:600}}>
-                  {fmtLong(cp.date)}{cp.title?` · ${cp.title}`:""}{cp.location?` · 📍${cp.location}`:""}
-                </span>
-              </div>
-              <div className="flex gap-5">
-                {highlights&&(
-                  <div style={{flex:1,minWidth:0}}>
-                    <p style={{fontSize:11,fontWeight:700,color:"rgba(170,200,255,0.65)",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:4}}>Destaques</p>
-                    <p style={{fontSize:13,color:"rgba(215,232,255,0.85)",lineHeight:1.5,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as const}}>{highlights}{(highlights?.length??0)>=220?"…":""}</p>
-                  </div>
-                )}
-                {decisions&&decisions!==highlights&&(
-                  <div style={{flex:1,minWidth:0}}>
-                    <p style={{fontSize:11,fontWeight:700,color:"rgba(170,200,255,0.65)",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:4}}>Decisões</p>
-                    <p style={{fontSize:13,color:"rgba(215,232,255,0.85)",lineHeight:1.5,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as const}}>{decisions}{(decisions?.length??0)>=220?"…":""}</p>
-                  </div>
-                )}
-                {cp.nextSteps.length>0&&(
-                  <div style={{flex:1,minWidth:0}}>
-                    <p style={{fontSize:11,fontWeight:700,color:"rgba(170,200,255,0.65)",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:4}}>Próximos Passos</p>
-                    <div className="flex flex-col gap-1">
-                      {cp.nextSteps.slice(0,3).map((s,i)=>(
-                        <div key={i} className="flex items-start gap-2">
-                          <ArrowRight style={{width:9,height:9,color:"#C084FC",flexShrink:0,marginTop:3}}/>
-                          <span style={{fontSize:12,color:"rgba(215,232,255,0.80)",lineHeight:1.4,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const}}>{s}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {!highlights&&!decisions&&cp.nextSteps.length===0&&(
-                  <p style={{fontSize:12,color:"rgba(200,220,255,0.45)"}}>Reunião registrada sem detalhamento de conteúdo.</p>
-                )}
-              </div>
-            </div>
-          </div>
-        )
-      })()}
     </div>
   )
 }
