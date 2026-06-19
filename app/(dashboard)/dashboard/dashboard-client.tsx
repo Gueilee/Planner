@@ -280,16 +280,15 @@ export function DashboardClient({
         />
 
         {/* Stage cards */}
-        <div className="grid grid-cols-6 gap-2 mb-4">
+        <div className="grid grid-cols-7 gap-1.5 mb-4">
           {PIPELINE.map((stage, idx) => {
             const count  = stageCount(stage)
             const isLast = idx === PIPELINE.length - 1
             const barPct = Math.round((count / maxPipelineCount) * 100)
-            // Sub-statuses note for "Em Andamento"
             const subNote = stage.key === "IN_PROGRESS"
               ? (() => {
-                  const pilot   = countByStatus["PILOT"]   ?? 0
-                  const rampUp  = countByStatus["RAMP_UP"] ?? 0
+                  const pilot  = countByStatus["PILOT"]   ?? 0
+                  const rampUp = countByStatus["RAMP_UP"] ?? 0
                   return pilot + rampUp > 0 ? `${pilot} piloto · ${rampUp} ramp-up` : null
                 })()
               : null
@@ -297,17 +296,17 @@ export function DashboardClient({
               <div key={stage.key} className="flex items-center gap-0">
                 <Link href={`/projects?filter=${stage.filterKey}`} className="flex-1 group">
                   <div
-                    className="rounded-xl p-4 text-center transition-all hover:shadow-md hover:-translate-y-0.5"
+                    className="rounded-xl p-3 text-center transition-all hover:shadow-md hover:-translate-y-0.5"
                     style={{ border: `1px solid ${stage.color}20`, background: `${stage.color}08` }}
                   >
-                    <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden mb-3">
+                    <div className="h-1 rounded-full bg-slate-100 overflow-hidden mb-2.5">
                       <div
                         className="h-full rounded-full transition-all duration-700"
                         style={{ width: `${barPct}%`, background: stage.color }}
                       />
                     </div>
                     <p
-                      className="text-3xl font-black leading-none mb-1.5 transition-colors"
+                      className="text-2xl font-black leading-none mb-1 transition-colors"
                       style={{ color: count > 0 ? stage.color : "#CBD5E1" }}
                     >
                       {count}
@@ -316,12 +315,12 @@ export function DashboardClient({
                       {stage.label}
                     </p>
                     {subNote && (
-                      <p className="text-[9px] text-slate-400 mt-1 leading-tight">{subNote}</p>
+                      <p className="text-[9px] text-slate-400 mt-0.5 leading-tight">{subNote}</p>
                     )}
                   </div>
                 </Link>
                 {!isLast && (
-                  <ArrowRight className="w-3.5 h-3.5 text-slate-200 mx-1 shrink-0" />
+                  <ArrowRight className="w-3 h-3 text-slate-200 mx-0.5 shrink-0" />
                 )}
               </div>
             )
