@@ -12,7 +12,6 @@ import {
   CheckCheck, ListTodo, Play, Search, BarChart3,
   DollarSign, Target, RefreshCw, Activity, MapPin,
   Shield, Milestone, ChevronRight as ChevRight,
-  Volume2, VolumeX,
 } from "lucide-react"
 import { UserAvatar } from "@/components/ui/user-avatar"
 
@@ -1073,45 +1072,10 @@ export function ReportClient({slides:allSlides,totalMeetings}:{slides:ProjectSli
   const [dir,setDir]           =useState(1)
   const [isFullscreen,setIsFs] =useState(false)
   const [idle,setIdle]         =useState(false)
-  const [muted,setMuted]       =useState(false)
   const containerRef=useRef<HTMLDivElement>(null)
   const idleTimer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined)
-  const audioRef=useRef<HTMLAudioElement|null>(null)
-  const fadeRef=useRef<ReturnType<typeof setInterval>|undefined>(undefined)
   const resetIdle=useCallback(()=>{setIdle(false);clearTimeout(idleTimer.current);idleTimer.current=setTimeout(()=>setIdle(true),4500)},[])
 
-  // ── Áudio: fade in/out suave ─────────────────────────────────────────────
-  const clearFade=useCallback(()=>{
-    if(fadeRef.current)clearInterval(fadeRef.current)
-  },[])
-
-  const fadeIn=useCallback((targetVol=0.38)=>{
-    const audio=audioRef.current
-    if(!audio)return
-    clearFade()
-    audio.volume=0
-    audio.play().catch(()=>{})
-    fadeRef.current=setInterval(()=>{
-      if(!audioRef.current)return
-      const next=Math.min(targetVol,audioRef.current.volume+0.025)
-      audioRef.current.volume=next
-      if(next>=targetVol)clearFade()
-    },80)
-  },[clearFade])
-
-  const fadeOut=useCallback(()=>{
-    const audio=audioRef.current
-    if(!audio)return
-    clearFade()
-    fadeRef.current=setInterval(()=>{
-      if(!audioRef.current)return
-      const next=Math.max(0,audioRef.current.volume-0.025)
-      audioRef.current.volume=next
-      if(next<=0){audioRef.current.pause();clearFade()}
-    },80)
-  },[clearFade])
-
-  // Reage à mudança de slide: toca na capa e no encerramento, silencia nos demais
   const slideType=useMemo(()=>{
     const allList=[
       "cover" as const,"agenda" as const,
@@ -1121,28 +1085,6 @@ export function ReportClient({slides:allSlides,totalMeetings}:{slides:ProjectSli
     ]
     return allList[current]
   },[activeSlides,current])
-
-  const isMusicalSlide=slideType==="cover"||slideType==="closing"
-
-  useEffect(()=>{
-    if(!started){fadeOut();return}
-    if(isMusicalSlide&&!muted){fadeIn()}
-    else{fadeOut()}
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[slideType,started,muted])
-
-  // Para a música ao desmontar
-  useEffect(()=>()=>{clearFade();audioRef.current?.pause()},[clearFade])
-
-  function toggleMute(){
-    if(muted){
-      setMuted(false)
-      if(isMusicalSlide)fadeIn()
-    }else{
-      setMuted(true)
-      fadeOut()
-    }
-  }
 
   // Slide list (mantido para compatibilidade com renders)
   const allList=useMemo(()=>[
@@ -1164,12 +1106,11 @@ export function ReportClient({slides:allSlides,totalMeetings}:{slides:ProjectSli
       if(e.key==="ArrowRight"||e.key===" "){e.preventDefault();next()}
       if(e.key==="ArrowLeft"){e.preventDefault();prev()}
       if(e.key.toLowerCase()==="f")toggleFullscreen()
-      if(e.key.toLowerCase()==="m")toggleMute()
     }
     window.addEventListener("keydown",onKey)
     return()=>window.removeEventListener("keydown",onKey)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[started,next,prev,resetIdle,muted,isMusicalSlide])
+  },[started,next,prev,resetIdle])
 
   const toggleFullscreen=()=>{
     if(!document.fullscreenElement){containerRef.current?.requestFullscreen().catch(()=>{});setIsFs(true)}
@@ -1189,10 +1130,6 @@ export function ReportClient({slides:allSlides,totalMeetings}:{slides:ProjectSli
     <div ref={containerRef} className="relative flex-1 overflow-hidden cursor-pointer"
       onClick={(e)=>{if((e.target as HTMLElement).closest("button,a"))return;next()}}
       onMouseMove={resetIdle}>
-
-      {/* ── Áudio de fundo — toca na capa e no encerramento ── */}
-      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-      <audio ref={audioRef} src="/music.mp3" loop preload="auto" style={{display:"none"}}/>
 
       <AnimatePresence custom={dir} initial={false}>
         <motion.div key={current} custom={dir} variants={slideVariants} initial="enter" animate="center" exit="exit"
@@ -1230,32 +1167,7 @@ export function ReportClient({slides:allSlides,totalMeetings}:{slides:ProjectSli
           </button>
         </div>
         <div className="flex items-center gap-2">
-          <span style={{fontSize:11,color:"rgba(148,185,255,0.22)"}}>{current+1}/{total} · F tela cheia · M som</span>
-
-          {/* Botão de som — pulsante quando tocando */}
-          <button onClick={toggleMute}
-            className="w-8 h-8 rounded-full flex items-center justify-center transition-all relative"
-            style={{
-              background: isMusicalSlide&&!muted ? "rgba(192,132,252,0.18)" : "rgba(255,255,255,0.07)",
-              border: `1px solid ${isMusicalSlide&&!muted ? "rgba(192,132,252,0.45)" : "rgba(255,255,255,0.11)"}`,
-              color: isMusicalSlide&&!muted ? "#C084FC" : "rgba(180,210,255,0.45)",
-              cursor:"pointer",
-              boxShadow: isMusicalSlide&&!muted ? "0 0 10px rgba(192,132,252,0.40)" : "none",
-            }}
-            title={muted?"Ativar som (M)":"Silenciar (M)"}>
-            {/* Onda animada quando tocando */}
-            {isMusicalSlide&&!muted&&(
-              <span style={{
-                position:"absolute",inset:0,borderRadius:"50%",
-                border:"1px solid rgba(192,132,252,0.50)",
-                animation:"orbPulse 1.8s ease-in-out infinite",
-              }}/>
-            )}
-            {muted
-              ? <VolumeX className="w-3.5 h-3.5"/>
-              : <Volume2 className="w-3.5 h-3.5"/>
-            }
-          </button>
+          <span style={{fontSize:11,color:"rgba(148,185,255,0.22)"}}>{current+1}/{total} · F tela cheia</span>
 
           <button onClick={toggleFullscreen} className="w-8 h-8 rounded-full flex items-center justify-center"
             style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.11)",color:"rgba(180,210,255,0.45)",cursor:"pointer"}}>
