@@ -1124,9 +1124,9 @@ export function ReportClient({slides:allSlides,totalMeetings}:{slides:ProjectSli
         style={{height:58,background:"linear-gradient(to top,rgba(4,12,28,0.97) 0%,rgba(4,12,28,0.55) 70%,transparent 100%)",zIndex:50,borderTop:"1px solid rgba(255,255,255,0.05)"}}
         onClick={(e)=>e.stopPropagation()}>
         <button onClick={()=>{setStarted(false);setCurrent(0)}} className="flex items-center gap-1.5 text-xs font-semibold"
-          style={{color:"rgba(148,185,255,0.28)",border:"none",background:"none",cursor:"pointer"}}
-          onMouseEnter={(e)=>{(e.currentTarget as HTMLElement).style.color="rgba(148,185,255,0.68)"}}
-          onMouseLeave={(e)=>{(e.currentTarget as HTMLElement).style.color="rgba(148,185,255,0.28)"}}>
+          style={{color:"rgba(180,210,255,0.75)",border:"1px solid rgba(148,185,255,0.22)",background:"rgba(148,185,255,0.08)",borderRadius:8,padding:"4px 10px",cursor:"pointer",transition:"all 0.15s"}}
+          onMouseEnter={(e)=>{const el=e.currentTarget as HTMLElement;el.style.color="rgba(220,235,255,1)";el.style.background="rgba(148,185,255,0.18)";el.style.borderColor="rgba(148,185,255,0.45)"}}
+          onMouseLeave={(e)=>{const el=e.currentTarget as HTMLElement;el.style.color="rgba(180,210,255,0.75)";el.style.background="rgba(148,185,255,0.08)";el.style.borderColor="rgba(148,185,255,0.22)"}}>
           <ArrowLeft className="w-3.5 h-3.5"/> Seleção
         </button>
         <div className="flex items-center gap-4">
