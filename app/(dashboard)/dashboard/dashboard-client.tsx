@@ -278,13 +278,7 @@ export function DashboardClient({
             const count  = stageCount(stage)
             const isLast = idx === PIPELINE.length - 1
             const barPct = Math.round((count / maxPipelineCount) * 100)
-            const subNote = stage.key === "IN_PROGRESS"
-              ? (() => {
-                  const pilot  = countByStatus["PILOT"]   ?? 0
-                  const rampUp = countByStatus["RAMP_UP"] ?? 0
-                  return pilot + rampUp > 0 ? `${pilot} piloto · ${rampUp} ramp-up` : null
-                })()
-              : null
+            const subNote = null
             return (
               <div key={stage.key} className="flex items-center gap-0">
                 <Link href={`/projects?filter=${stage.filterKey}`} className="flex-1 group">
