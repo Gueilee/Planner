@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useRef, useEffect } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { Plus, FolderKanban, ChevronRight, Search, X, ChevronLeft } from "lucide-react"
+import { FolderKanban, ChevronRight, Search, X, ChevronLeft, ArrowUpDown, Check } from "lucide-react"
 import { StatusBadge } from "@/components/kronex/status-badge"
 import { UserAvatar } from "@/components/ui/user-avatar"
 
@@ -36,10 +36,43 @@ const FILTERS: { key: FilterKey; label: string; statuses: string[]; color: strin
   { key: "PAUSED",          label: "Pausado",           statuses: ["PAUSED"],                                  color: "#64748B" },
 ]
 
+// ─── Sort config ─────────────────────────────────────────────────────────────
+
+type SortKey = "status" | "az" | "za" | "progress_desc" | "progress_asc"
+
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: "status",        label: "Por Status (Pipeline)" },
+  { key: "az",            label: "Nome A → Z" },
+  { key: "za",            label: "Nome Z → A" },
+  { key: "progress_desc", label: "Maior Progresso" },
+  { key: "progress_asc",  label: "Menor Progresso" },
+]
+
+const STATUS_ORDER: Record<string, number> = {
+  PENDING_GO_NO_GO: 0,
+  PLANNING:         1,
+  IN_PROGRESS:      2,
+  RAMP_UP:          3,
+  ON_HOLD:          4,
+  PILOT:            5,
+  GO_LIVE:          6,
+  POST_GOLIVE:      7,
+  COMPLETED:        8,
+  PAUSED:           9,
+  FUTURE_ANALYSIS:  10,
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function avg(arr: number[]) {
   return arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0
+}
+
+function projectProgress(p: ProjectRow): number {
+  if (p.tasks.length > 0) return avg(p.tasks.map((t) => t.progress))
+  if (p.status === "COMPLETED") return 100
+  if (p.status === "PLANNING")  return 0
+  return -1
 }
 
 // ─── Area config ─────────────────────────────────────────────────────────────
@@ -67,6 +100,17 @@ export function ProjectsClient({ projects }: { projects: ProjectRow[] }) {
   )
   const [search, setSearch] = useState("")
   const [page, setPage] = useState(1)
+  const [sortKey, setSortKey] = useState<SortKey>("status")
+  const [sortOpen, setSortOpen] = useState(false)
+  const sortRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function onOutside(e: MouseEvent) {
+      if (sortRef.current && !sortRef.current.contains(e.target as Node)) setSortOpen(false)
+    }
+    document.addEventListener("mousedown", onOutside)
+    return () => document.removeEventListener("mousedown", onOutside)
+  }, [])
 
   function handleAreaChange(key: AreaKey) {
     setActiveArea(key)
@@ -85,14 +129,23 @@ export function ProjectsClient({ projects }: { projects: ProjectRow[] }) {
 
   const filtered = useMemo(() => {
     const filter = FILTERS.find((f) => f.key === activeFilter)!
-    return projects.filter((p) => {
+    const list = projects.filter((p) => {
       const matchesArea   = activeArea === "ALL" || p.projectArea === activeArea
       const matchesStatus = filter.statuses.length === 0 || filter.statuses.includes(p.status)
       const q = search.trim().toLowerCase()
       const matchesSearch = !q || p.title.toLowerCase().includes(q) || (p.description ?? "").toLowerCase().includes(q)
       return matchesArea && matchesStatus && matchesSearch
     })
-  }, [projects, activeArea, activeFilter, search])
+
+    return [...list].sort((a, b) => {
+      if (sortKey === "az") return a.title.localeCompare(b.title, "pt-BR")
+      if (sortKey === "za") return b.title.localeCompare(a.title, "pt-BR")
+      if (sortKey === "progress_desc") return projectProgress(b) - projectProgress(a)
+      if (sortKey === "progress_asc")  return projectProgress(a) - projectProgress(b)
+      // "status" — pipeline order
+      return (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99)
+    })
+  }, [projects, activeArea, activeFilter, search, sortKey])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
@@ -184,6 +237,44 @@ export function ProjectsClient({ projects }: { projects: ProjectRow[] }) {
           </div>
         </div>
 
+        {/* Sort dropdown */}
+        <div className="relative" ref={sortRef}>
+          <button
+            onClick={() => setSortOpen((v) => !v)}
+            className="flex items-center gap-1.5 px-3 h-8 text-xs font-semibold rounded-xl border transition-all"
+            style={sortKey !== "status" ? {
+              background: "rgba(123,47,190,0.08)",
+              color: "#7B2FBE",
+              borderColor: "rgba(123,47,190,0.3)",
+            } : {
+              background: "#fff",
+              color: "#64748B",
+              borderColor: "#E2E8F0",
+            }}
+          >
+            <ArrowUpDown className="w-3.5 h-3.5" />
+            {SORT_OPTIONS.find(s => s.key === sortKey)?.label}
+          </button>
+
+          {sortOpen && (
+            <div
+              className="absolute right-0 top-10 z-50 w-52 rounded-xl overflow-hidden py-1"
+              style={{ background: "#fff", border: "1px solid #E2E8F0", boxShadow: "0 8px 24px rgba(15,23,42,0.12)" }}
+            >
+              {SORT_OPTIONS.map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => { setSortKey(opt.key); setSortOpen(false); setPage(1) }}
+                  className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-slate-50 transition-colors"
+                  style={{ color: sortKey === opt.key ? "#7B2FBE" : "#475569" }}
+                >
+                  {opt.label}
+                  {sortKey === opt.key && <Check className="w-3 h-3" />}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Project list */}
