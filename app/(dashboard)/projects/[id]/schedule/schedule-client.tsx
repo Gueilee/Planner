@@ -1980,7 +1980,6 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
           <div ref={listHeaderRef} style={{ overflowX: "hidden", overflowY: "visible", flexShrink: 0 }}>
             <div className="flex items-center border-b border-slate-100 bg-[#0F172A]" style={{ height: 44, minWidth: LIST_MIN_W }}>
               <div style={{ width: 24, flexShrink: 0 }} />
-              <div style={{ width: 72, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest pl-4">EAP</div>
               <div style={{ width: 84, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Ações</div>
               <div style={{ width: COL_NAME, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest px-2">Nome da Atividade</div>
               <div style={{ width: 130, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Status</div>
@@ -2041,13 +2040,12 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                         <GripVertical className="w-3.5 h-3.5" />
                       </div>
 
-                      {/* EAP + collapse toggle */}
+                      {/* collapse toggle */}
                       <div
-                        style={{ width: 72 }}
                         className="flex items-center justify-end gap-1 pr-2 shrink-0 cursor-pointer"
+                        style={{ width: 84 }}
                         onClick={() => toggleArea(row.id)}
                       >
-                        <span className="text-[10px] font-mono font-bold text-slate-400">{row.eap}</span>
                         {isExp
                           ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                           : <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
@@ -2178,12 +2176,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                       <GripVertical className="w-3.5 h-3.5" />
                     </div>
 
-                    {/* EAP */}
-                    <div style={{ width: 72 }} className="shrink-0 flex items-center justify-end pr-2">
-                      <span className="text-[10px] font-mono text-slate-300">{eap}</span>
-                    </div>
-
-                    {/* Inline action buttons — always visible, between EAP and name */}
+                    {/* Inline action buttons */}
                     <div style={{ width: 84 }} className="flex items-center justify-center gap-0.5 shrink-0">
                       {!isTarefa && (
                         <button
