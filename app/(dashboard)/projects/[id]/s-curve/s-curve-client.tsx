@@ -273,11 +273,9 @@ export function SCurveClient({ projectId, initialData }: { projectId: string; in
                     </p>
                   </div>
                 </div>
-                {bl.number > 0 && (
-                  <button onClick={() => deleteBaseline(bl.id)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                )}
+                <button onClick={() => deleteBaseline(bl.id)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="Excluir baseline">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
             ))}
           </div>
