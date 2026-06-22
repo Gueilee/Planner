@@ -1501,177 +1501,174 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
     <div className="flex flex-col h-full" style={{ background: "#F8FAFC" }}>
 
       {/* ── Top bar ──────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 px-5 h-14 border-b border-slate-200 bg-white shrink-0">
-        <Link href={`/projects/${project.id}`}
-          className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-[#0F172A] transition-colors font-medium">
-          <ArrowLeft className="w-4 h-4" /> Voltar
-        </Link>
-        <div className="w-px h-5 bg-slate-200" />
-        <div className="min-w-0">
-          <p className="text-xs text-slate-400 font-medium">Cronograma</p>
-          <p className="text-sm font-black text-[#0F172A] truncate">{project.title}</p>
+      <div className="flex flex-col border-b border-slate-200 bg-white shrink-0">
+
+        {/* Linha 1: navegação + CTA primário */}
+        <div className="flex items-center gap-3 px-5 h-12">
+          <Link href={`/projects/${project.id}`}
+            className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-[#0F172A] transition-colors font-medium shrink-0">
+            <ArrowLeft className="w-4 h-4" /> Voltar
+          </Link>
+          <div className="w-px h-5 bg-slate-200 shrink-0" />
+          <p className="text-sm font-black text-[#0F172A] truncate min-w-0">{project.title}</p>
+
+          <div className="flex-1" />
+
+          {/* View toggle */}
+          <div className="flex items-center gap-0.5 p-0.5 rounded-xl bg-slate-100 border border-slate-200 shrink-0">
+            <button onClick={() => setViewMode("list")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-lg transition-all ${viewMode === "list" ? "bg-white text-[#0F172A] shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>
+              <List className="w-3.5 h-3.5" /> Lista
+            </button>
+            <button onClick={() => setViewMode("gantt")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-lg transition-all ${viewMode === "gantt" ? "bg-white text-[#0F172A] shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>
+              <BarChart2 className="w-3.5 h-3.5" /> Gantt
+            </button>
+          </div>
+
+          {/* Nova Atividade */}
+          <button onClick={() => openAdd()}
+            className="inline-flex items-center gap-2 px-4 h-8 text-xs font-bold rounded-xl text-white transition-all hover:opacity-90 shrink-0"
+            style={{ background: "linear-gradient(135deg, #7B2FBE, #2463FF)", boxShadow: "0 4px 12px rgba(123,47,190,0.30)" }}>
+            <Plus className="w-3.5 h-3.5" /> Nova Atividade
+          </button>
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
-          <span>{tasks.length} atividades</span>
-          <span className="text-slate-200">·</span>
-          <span>{completedCount} concluídas</span>
-          {filterResponsible && filterVisibleIds !== null && (
-            <>
-              <span className="text-slate-200">·</span>
-              <span className="text-[#7B2FBE] font-semibold">
-                {[...filterVisibleIds].filter(id => tasks.find(t => t.id === id && t.responsibleId === filterResponsible)).length} da pessoa
-              </span>
-            </>
-          )}
-        </div>
+        {/* Linha 2: stats + filtros + ferramentas secundárias */}
+        <div className="flex items-center gap-2 px-5 h-9 border-t border-slate-100">
 
-        {/* Filtro por responsável — visível nos dois modos (lista e Gantt) */}
-        {members.length > 0 && (
-          <div className="flex items-center gap-1.5">
-            <Users className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-            <select
-              value={filterResponsible}
-              onChange={(e) => setFilterResponsible(e.target.value)}
-              className={`h-8 pl-2.5 pr-7 text-xs rounded-xl border outline-none cursor-pointer transition-all appearance-none ${
-                filterResponsible
-                  ? "border-[#7B2FBE] text-[#7B2FBE] bg-violet-50 font-semibold"
-                  : "border-slate-200 text-slate-500 bg-white hover:border-slate-300"
-              }`}
-              style={{ minWidth: 148 }}
-            >
-              <option value="">Todos</option>
-              {members.map((m) => (
-                <option key={m.id} value={m.id}>{m.name}</option>
-              ))}
-            </select>
-            {filterResponsible && (
-              <button
-                onClick={() => setFilterResponsible("")}
-                title="Limpar filtro"
-                className="p-1 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-400 transition-colors"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
+          {/* Stats */}
+          <div className="flex items-center gap-1.5 shrink-0 text-xs text-slate-400 font-medium">
+            <span>{tasks.length} atividades</span>
+            <span className="text-slate-200">·</span>
+            <span>{completedCount} concluídas</span>
+            {filterResponsible && filterVisibleIds !== null && (
+              <>
+                <span className="text-slate-200">·</span>
+                <span className="text-[#7B2FBE] font-semibold">
+                  {[...filterVisibleIds].filter(id => tasks.find(t => t.id === id && t.responsibleId === filterResponsible)).length} da pessoa
+                </span>
+              </>
             )}
           </div>
-        )}
 
-        <div className="flex-1" />
+          {members.length > 0 && <div className="w-px h-3.5 bg-slate-200 mx-0.5 shrink-0" />}
 
-        {/* List controls */}
-        {viewMode === "list" && (
-          <>
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar atividade..."
-                className="pl-8 pr-3 h-8 text-xs rounded-xl border border-slate-200 bg-white outline-none focus:border-[#7B2FBE] transition-colors w-48"
-              />
-            </div>
-            <button
-              onClick={() => setHideDone((v) => !v)}
-              className={`inline-flex items-center gap-1.5 px-3 h-8 text-xs font-semibold rounded-xl border transition-all ${hideDone ? "bg-violet-50 border-violet-200 text-[#7B2FBE]" : "border-slate-200 text-slate-500 bg-white hover:border-slate-300"}`}>
-              Ocultar concluídos
-            </button>
-            <button
-              onClick={() => setSortBy(s => s === "startDate" ? "endDate" : s === "endDate" ? null : "startDate")}
-              className={`inline-flex items-center gap-1.5 px-3 h-8 text-xs font-semibold rounded-xl border transition-all ${sortBy ? "bg-blue-50 border-blue-200 text-blue-600" : "border-slate-200 text-slate-500 bg-white hover:border-slate-300"}`}
-              title="Ordenar por data"
-            >
-              <ArrowUpDown className="w-3.5 h-3.5" />
-              {sortBy === "startDate" ? "Início ↑" : sortBy === "endDate" ? "Fim ↑" : "Ordenar"}
-            </button>
-            <div className="flex items-center gap-1">
-              <button onClick={expandAll} title="Expandir tudo" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">
-                <ChevronDown className="w-4 h-4" />
-              </button>
-              <button onClick={collapseAll} title="Recolher tudo" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* Gantt controls */}
-        {viewMode === "gantt" && (
-          <>
-            <div className="flex items-center gap-0.5 p-0.5 rounded-xl bg-slate-100 border border-slate-200">
-              {(["month", "week", "day"] as Zoom[]).map((z) => (
-                <button key={z} onClick={() => setZoom(z)}
-                  className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${zoom === z ? "bg-white text-[#0F172A] shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>
-                  {z === "month" ? "Mês" : z === "week" ? "Semana" : "Dia"}
+          {/* Filtro por responsável */}
+          {members.length > 0 && (
+            <div className="flex items-center gap-1 shrink-0">
+              <Users className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <div className="relative">
+                <select
+                  value={filterResponsible}
+                  onChange={(e) => setFilterResponsible(e.target.value)}
+                  className={`h-7 pl-2 pr-6 text-xs rounded-lg border outline-none cursor-pointer transition-all appearance-none ${
+                    filterResponsible
+                      ? "border-[#7B2FBE] text-[#7B2FBE] bg-violet-50 font-semibold"
+                      : "border-slate-200 text-slate-500 bg-white hover:border-slate-300"
+                  }`}
+                  style={{ minWidth: 120 }}
+                >
+                  <option value="">Todos</option>
+                  {members.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
+              </div>
+              {filterResponsible && (
+                <button onClick={() => setFilterResponsible("")} title="Limpar filtro"
+                  className="p-0.5 rounded-md hover:bg-red-50 text-slate-400 hover:text-red-400 transition-colors">
+                  <X className="w-3 h-3" />
                 </button>
-              ))}
+              )}
             </div>
-            <button
-              onClick={() => rightRef.current && (rightRef.current.scrollLeft = Math.max(0, todayX - 250))}
-              className="inline-flex items-center gap-1.5 px-3 h-8 text-xs font-semibold rounded-xl border border-slate-200 text-slate-500 hover:border-[#7B2FBE] hover:text-[#7B2FBE] transition-all bg-white">
-              <CalendarDays className="w-3.5 h-3.5" /> Hoje
-            </button>
-          </>
-        )}
+          )}
 
-        {/* View toggle */}
-        <div className="flex items-center gap-0.5 p-0.5 rounded-xl bg-slate-100 border border-slate-200">
-          <button onClick={() => setViewMode("list")}
-            className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-lg transition-all ${viewMode === "list" ? "bg-white text-[#0F172A] shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>
-            <List className="w-3.5 h-3.5" /> Lista
+          <div className="flex-1" />
+
+          {/* List-mode controls */}
+          {viewMode === "list" && (
+            <>
+              <div className="relative shrink-0">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-300" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Buscar atividade..."
+                  className="pl-7 pr-3 h-7 text-xs rounded-lg border border-slate-200 bg-white outline-none focus:border-[#7B2FBE] transition-colors w-44"
+                />
+              </div>
+              <button
+                onClick={() => setHideDone((v) => !v)}
+                className={`inline-flex items-center gap-1.5 px-2.5 h-7 text-xs font-semibold rounded-lg border transition-all shrink-0 ${hideDone ? "bg-violet-50 border-violet-200 text-[#7B2FBE]" : "border-slate-200 text-slate-500 bg-white hover:border-slate-300"}`}>
+                Ocultar concluídos
+              </button>
+              <button
+                onClick={() => setSortBy(s => s === "startDate" ? "endDate" : s === "endDate" ? null : "startDate")}
+                className={`inline-flex items-center gap-1.5 px-2.5 h-7 text-xs font-semibold rounded-lg border transition-all shrink-0 ${sortBy ? "bg-blue-50 border-blue-200 text-blue-600" : "border-slate-200 text-slate-500 bg-white hover:border-slate-300"}`}
+                title="Ordenar por data">
+                <ArrowUpDown className="w-3.5 h-3.5" />
+                {sortBy === "startDate" ? "Início ↑" : sortBy === "endDate" ? "Fim ↑" : "Ordenar"}
+              </button>
+              <div className="flex items-center gap-0.5 shrink-0">
+                <button onClick={expandAll} title="Expandir tudo" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={collapseAll} title="Recolher tudo" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="w-px h-3.5 bg-slate-200 mx-0.5 shrink-0" />
+            </>
+          )}
+
+          {/* Gantt-mode controls */}
+          {viewMode === "gantt" && (
+            <>
+              <div className="flex items-center gap-0.5 p-0.5 rounded-xl bg-slate-100 border border-slate-200 shrink-0">
+                {(["month", "week", "day"] as Zoom[]).map((z) => (
+                  <button key={z} onClick={() => setZoom(z)}
+                    className={`px-2.5 py-0.5 text-xs font-bold rounded-lg transition-all ${zoom === z ? "bg-white text-[#0F172A] shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>
+                    {z === "month" ? "Mês" : z === "week" ? "Semana" : "Dia"}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => rightRef.current && (rightRef.current.scrollLeft = Math.max(0, todayX - 250))}
+                className="inline-flex items-center gap-1.5 px-2.5 h-7 text-xs font-semibold rounded-lg border border-slate-200 text-slate-500 hover:border-[#7B2FBE] hover:text-[#7B2FBE] transition-all bg-white shrink-0">
+                <CalendarDays className="w-3.5 h-3.5" /> Hoje
+              </button>
+              <div className="w-px h-3.5 bg-slate-200 mx-0.5 shrink-0" />
+            </>
+          )}
+
+          {/* Nova Área (list only) */}
+          {viewMode === "list" && (
+            <button onClick={() => setAddingArea(true)}
+              className="inline-flex items-center gap-1.5 px-2.5 h-7 text-xs font-semibold rounded-lg border border-slate-200 text-slate-500 hover:border-[#7B2FBE] hover:text-[#7B2FBE] transition-all bg-white shrink-0">
+              <FolderOpen className="w-3.5 h-3.5" /> Nova Área
+            </button>
+          )}
+
+          {/* Exportar Excel */}
+          <button
+            onClick={handleExport}
+            disabled={exporting || tasks.length === 0}
+            className="inline-flex items-center gap-1.5 px-2.5 h-7 text-xs font-semibold rounded-lg border transition-all hover:border-emerald-300 hover:text-emerald-600 hover:bg-emerald-50 active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+            style={{ borderColor: "#D1FAE5", color: "#059669", background: "white" }}
+            title="Exportar cronograma em Excel">
+            {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileSpreadsheet className="w-3.5 h-3.5" />}
+            {exporting ? "Exportando…" : "Excel"}
           </button>
-          <button onClick={() => setViewMode("gantt")}
-            className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-lg transition-all ${viewMode === "gantt" ? "bg-white text-[#0F172A] shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>
-            <BarChart2 className="w-3.5 h-3.5" /> Gantt
+
+          {/* Usar Modelo */}
+          <button onClick={openTemplateModal}
+            className="inline-flex items-center gap-1.5 px-2.5 h-7 text-xs font-semibold rounded-lg border border-slate-200 text-slate-500 hover:border-[#7B2FBE] hover:text-[#7B2FBE] transition-all bg-white shrink-0"
+            title={tasks.length === 0 ? "Iniciar cronograma a partir de um modelo" : "Adicionar atividades de um modelo"}>
+            <LayoutTemplate className="w-3.5 h-3.5" /> Usar Modelo
           </button>
         </div>
-
-        {/* Add area (list only) */}
-        {viewMode === "list" && (
-          <button onClick={() => setAddingArea(true)}
-            className="inline-flex items-center gap-2 px-3 h-8 text-xs font-semibold rounded-xl border border-slate-200 text-slate-500 hover:border-[#7B2FBE] hover:text-[#7B2FBE] transition-all bg-white">
-            <FolderOpen className="w-3.5 h-3.5" /> Nova Área
-          </button>
-        )}
-
-        {/* Export Excel */}
-        <button
-          onClick={handleExport}
-          disabled={exporting || tasks.length === 0}
-          className="inline-flex items-center gap-2 px-3 h-8 text-xs font-semibold rounded-xl border transition-all hover:border-emerald-300 hover:text-emerald-600 hover:bg-emerald-50 active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{ borderColor: "#D1FAE5", color: "#059669", background: "white" }}
-          title="Exportar cronograma em Excel"
-        >
-          {exporting
-            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            : <FileSpreadsheet className="w-3.5 h-3.5" />
-          }
-          {exporting ? "Exportando…" : "Excel"}
-        </button>
-
-        {/* Use template */}
-        {tasks.length === 0 && (
-          <button onClick={openTemplateModal}
-            className="inline-flex items-center gap-2 px-4 h-8 text-xs font-bold rounded-xl border transition-all hover:opacity-90"
-            style={{ borderColor: "#7B2FBE", color: "#7B2FBE", background: "rgba(123,47,190,0.06)" }}
-            title="Iniciar cronograma a partir de um modelo">
-            <LayoutTemplate className="w-3.5 h-3.5" /> Usar Modelo
-          </button>
-        )}
-        {tasks.length > 0 && (
-          <button onClick={openTemplateModal}
-            className="inline-flex items-center gap-2 px-3 h-8 text-xs font-semibold rounded-xl border border-slate-200 text-slate-500 hover:border-[#7B2FBE] hover:text-[#7B2FBE] transition-all bg-white"
-            title="Adicionar atividades de um modelo ao cronograma">
-            <LayoutTemplate className="w-3.5 h-3.5" /> Usar Modelo
-          </button>
-        )}
-
-        {/* Add task */}
-        <button onClick={() => openAdd()}
-          className="inline-flex items-center gap-2 px-4 h-8 text-xs font-bold rounded-xl text-white transition-all hover:opacity-90"
-          style={{ background: "linear-gradient(135deg, #7B2FBE, #2463FF)", boxShadow: "0 4px 12px rgba(123,47,190,0.30)" }}>
-          <Plus className="w-3.5 h-3.5" /> Nova Atividade
-        </button>
       </div>
 
       {/* ── LIST VIEW ────────────────────────────────────────────────────── */}
