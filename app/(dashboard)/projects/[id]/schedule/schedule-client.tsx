@@ -1057,6 +1057,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
   const [tplSelected,     setTplSelected]     = useState<Template | null>(null)
   const [tplStartDate,    setTplStartDate]    = useState<string>("")
   const [tplApplying,     setTplApplying]     = useState(false)
+  const [cascadeInfo, setCascadeInfo] = useState<{ count: number; delta: number } | null>(null)
 
   async function openTemplateModal() {
     setTplModalOpen(true)
@@ -1090,6 +1091,12 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
   // Always-current ref — safe to read inside async callbacks
   const tasksRef = useRef(tasks)
   useLayoutEffect(() => { tasksRef.current = tasks })
+
+  useEffect(() => {
+    if (!cascadeInfo) return
+    const timer = setTimeout(() => setCascadeInfo(null), 4000)
+    return () => clearTimeout(timer)
+  }, [cascadeInfo])
 
   // Gantt-specific expand + inline edit state
   const [expandedGanttAreas, setExpandedGanttAreas] = useState<Set<string>>(
@@ -1341,6 +1348,64 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await updateTask(taskId, project.id, data as any)
       applyTaskUpdates(result.task as Task, result.ancestors)
+    })
+  }
+
+  function saveDateField(taskId: string, field: "startDate" | "endDate", newVal: string | null) {
+    const target = tasksRef.current.find(t => t.id === taskId)
+    if (!target) { saveTaskField(taskId, { [field]: newVal }); return }
+
+    const oldVal = (target[field as keyof Task] as string | null) ?? null
+    if (!oldVal || !newVal) { saveTaskField(taskId, { [field]: newVal }); return }
+
+    const delta = differenceInDays(new Date(newVal), new Date(oldVal))
+    if (delta === 0) { saveTaskField(taskId, { [field]: newVal }); return }
+
+    // Build visual order via DFS (same traversal as buildListRows)
+    const allTasks = tasksRef.current
+    const childMap = new Map<string | null, Task[]>()
+    for (const t of allTasks) {
+      const key = t.parentId ?? null
+      if (!childMap.has(key)) childMap.set(key, [])
+      childMap.get(key)!.push(t)
+    }
+    const byOrder = (arr: Task[]) => [...arr].sort((a, b) => a.order - b.order)
+    const ordered: Task[] = []
+    const walkAll = (pid: string | null): void => {
+      for (const t of byOrder(childMap.get(pid) ?? [])) {
+        ordered.push(t)
+        walkAll(t.id)
+      }
+    }
+    walkAll(null)
+
+    const idx = ordered.findIndex(t => t.id === taskId)
+    if (idx === -1) { saveTaskField(taskId, { [field]: newVal }); return }
+
+    const toShift = ordered.slice(idx + 1).filter(t => t.startDate || t.endDate)
+
+    // Optimistic: update target + all tasks below
+    setTasks(prev => prev.map(t => {
+      if (t.id === taskId) return { ...t, [field]: newVal }
+      if (!toShift.find(s => s.id === t.id)) return t
+      const ns = t.startDate ? addDays(new Date(t.startDate), delta).toISOString().slice(0, 10) : null
+      const ne = t.endDate   ? addDays(new Date(t.endDate),   delta).toISOString().slice(0, 10) : null
+      return { ...t, startDate: ns, endDate: ne }
+    }))
+
+    if (toShift.length > 0) setCascadeInfo({ count: toShift.length, delta })
+
+    start(async () => {
+      const calls = [
+        updateTask(taskId, project.id, { [field]: newVal }),
+        ...toShift.map(t => {
+          const ns = t.startDate ? addDays(new Date(t.startDate), delta).toISOString() : null
+          const ne = t.endDate   ? addDays(new Date(t.endDate),   delta).toISOString() : null
+          return updateTask(t.id, project.id, { startDate: ns, endDate: ne })
+        }),
+      ]
+      const results = await Promise.all(calls)
+      results.forEach(r => { if (r?.task) applyTaskUpdates(r.task as Task, r.ancestors) })
     })
   }
 
@@ -2036,7 +2101,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                       <WorkingDayPicker
                         compact
                         value={t.startDate?.slice(0, 10) ?? ""}
-                        onChange={(v) => saveTaskField(t.id, { startDate: v || null })}
+                        onChange={(v) => saveDateField(t.id, "startDate", v || null)}
                         placeholder="—"
                       />
                     </div>
@@ -2046,7 +2111,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                       <WorkingDayPicker
                         compact
                         value={t.endDate?.slice(0, 10) ?? ""}
-                        onChange={(v) => saveTaskField(t.id, { endDate: v || null })}
+                        onChange={(v) => saveDateField(t.id, "endDate", v || null)}
                         placeholder="—"
                       />
                     </div>
@@ -2887,6 +2952,15 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Cascade date-shift toast */}
+      {cascadeInfo && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl text-sm font-semibold text-white select-none"
+          style={{ background: "linear-gradient(135deg, #2463FF, #7B2FBE)", boxShadow: "0 8px 24px rgba(36,99,255,0.35)" }}>
+          <Zap className="w-4 h-4 shrink-0" />
+          {cascadeInfo.count} atividade{cascadeInfo.count !== 1 ? "s" : ""} replanejada{cascadeInfo.count !== 1 ? "s" : ""} automaticamente ({cascadeInfo.delta > 0 ? "+" : ""}{cascadeInfo.delta}d)
         </div>
       )}
     </div>
