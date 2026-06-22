@@ -3,7 +3,7 @@
 import { useState, useCallback, useTransition, useRef, useEffect } from "react"
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, AreaChart, Area, Legend,
+  PieChart, Pie, Cell, AreaChart, Area, Legend, LabelList,
 } from "recharts"
 import Link from "next/link"
 import {
@@ -385,32 +385,58 @@ export function BenefitsClient({ summary, charts, projects, users, userRole }: P
               Top Projetos por Valor Planejado
             </h3>
           </div>
-          <p className="text-[11px] text-slate-400 mb-4">Benefícios planejados + realizados — valor anualizado — todas as categorias</p>
+          <p className="text-[11px] text-slate-400 mb-4">Benefícios planejados + realizados · valor anualizado · todas as categorias</p>
           {currentCharts.topProjects.length === 0 ? (
             <div className="h-56 flex items-center justify-center text-slate-400 text-sm">Nenhum benefício registrado ainda</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={currentCharts.topProjects} layout="vertical" margin={{ left: 0, right: 32 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" horizontal={false} />
-                <XAxis type="number" tickFormatter={(v) => fmtBRL(v)} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis type="category" dataKey="name" width={145} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                <Tooltip content={<CustomBarTooltip />} />
-                <Legend
-                  verticalAlign="top"
-                  align="right"
-                  iconType="circle"
-                  iconSize={8}
-                  wrapperStyle={{ fontSize: 11, paddingBottom: 8 }}
-                  formatter={() => "Valor Planejado"}
-                />
-                <Bar dataKey="value" name="Valor Planejado" radius={[0, 4, 4, 0]}>
-                  {currentCharts.topProjects.map((_, i) => (
-                    <Cell key={i} fill={`hsl(${270 - i * 15}, 70%, ${55 + i * 3}%)`} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
+          ) : (() => {
+            // Truncate long project names to avoid Y-axis wrapping (which makes bars look doubled)
+            const chartData = currentCharts.topProjects.map((p) => ({
+              ...p,
+              shortName: p.name.length > 28 ? p.name.slice(0, 26) + "…" : p.name,
+            }))
+            const barH   = 28
+            const chartH = Math.max(160, chartData.length * (barH + 16) + 32)
+            return (
+              <ResponsiveContainer width="100%" height={chartH}>
+                <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 72, top: 4, bottom: 4 }} barSize={barH}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" horizontal={false} />
+                  <XAxis type="number" tickFormatter={(v) => fmtBRL(v)} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis
+                    type="category"
+                    dataKey="shortName"
+                    width={160}
+                    tick={{ fontSize: 11, fill: "#374151" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null
+                      const d = payload[0].payload as typeof chartData[0]
+                      return (
+                        <div className="bg-white border border-slate-100 rounded-xl shadow-lg p-3 text-xs max-w-[220px]">
+                          <p className="font-semibold text-slate-700 mb-1 leading-snug">{d.name}</p>
+                          <p className="text-slate-500">Valor planejado: <span className="font-bold text-slate-800">{fmtBRL(d.value)}</span></p>
+                          {d.roi !== null && <p className="text-slate-500">ROI: <span className="font-bold text-purple-700">{Math.round(d.roi as number)}%</span></p>}
+                        </div>
+                      )
+                    }}
+                  />
+                  <Bar dataKey="value" radius={[0, 6, 6, 0]}>
+                    {chartData.map((_, i) => (
+                      <Cell key={i} fill={`hsl(${270 - i * 18}, 72%, ${52 + i * 2}%)`} />
+                    ))}
+                    <LabelList
+                      dataKey="value"
+                      position="right"
+                      formatter={(v: unknown) => fmtBRL(Number(v))}
+                      style={{ fontSize: 11, fontWeight: 700, fill: "#374151" }}
+                    />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )
+          })()}
         </div>
 
         {/* Pie — category breakdown */}

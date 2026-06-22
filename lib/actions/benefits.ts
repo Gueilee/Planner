@@ -128,10 +128,12 @@ export async function getPortfolioBenefits(filters?: {
     },
   })
 
-  const allProjects = rawProjects.map((p) => ({
-    ...p,
-    benefits: p.benefits.map(serializeBenefit),
-  }))
+  // Deduplicate — Prisma can return the same project row more than once when
+  // relation filters (members) produce an implicit join in certain DB drivers
+  const seenIds = new Set<string>()
+  const allProjects = rawProjects
+    .filter((p) => { if (seenIds.has(p.id)) return false; seenIds.add(p.id); return true })
+    .map((p) => ({ ...p, benefits: p.benefits.map(serializeBenefit) }))
 
   // Portfolio max values for score normalization
   const portfolioMaxFinancial = Math.max(1, ...allProjects.map((p) => computeFinancialRealized(p.benefits)))
