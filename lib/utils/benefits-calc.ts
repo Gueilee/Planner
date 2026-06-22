@@ -110,25 +110,37 @@ export function computePaybackMonths(investment: number, benefits: BenefitItem[]
   return investment / monthlyTotal
 }
 
-// ── Total financial realized (for ROI and portfolio KPIs) ────────────────────
+// ── Effective value: realizedValue when done, plannedValue otherwise ──────────
+function effectiveValue(b: BenefitItem): number {
+  return (b.status === "REALIZED" || b.status === "IN_PROGRESS") ? b.realizedValue : b.plannedValue
+}
+
+// ── Total financial value (planned pipeline + realized) ───────────────────────
 export function computeFinancialRealized(benefits: BenefitItem[]): number {
+  return benefits
+    .filter((b) => b.category === "FINANCIAL")
+    .reduce((s, b) => s + annualizeValue(effectiveValue(b), b.frequency), 0)
+}
+
+// ── Revenue value (planned pipeline + realized) ───────────────────────────────
+export function computeRevenueRealized(benefits: BenefitItem[]): number {
+  return benefits
+    .filter((b) => b.type === "REVENUE_INCREASE")
+    .reduce((s, b) => s + annualizeValue(effectiveValue(b), b.frequency), 0)
+}
+
+// ── Hours saved value (planned pipeline + realized) ───────────────────────────
+export function computeHoursSaved(benefits: BenefitItem[]): number {
+  return benefits
+    .filter((b) => b.type === "HOURS_SAVED")
+    .reduce((s, b) => s + effectiveValue(b), 0)
+}
+
+// ── Strictly-realized helpers (for ROI, payback, project-level tracking) ─────
+export function computeFinancialRealizedStrict(benefits: BenefitItem[]): number {
   return benefits
     .filter((b) => b.category === "FINANCIAL" && (b.status === "REALIZED" || b.status === "IN_PROGRESS"))
     .reduce((s, b) => s + annualizeValue(b.realizedValue, b.frequency), 0)
-}
-
-// ── Revenue realized ──────────────────────────────────────────────────────────
-export function computeRevenueRealized(benefits: BenefitItem[]): number {
-  return benefits
-    .filter((b) => b.type === "REVENUE_INCREASE" && (b.status === "REALIZED" || b.status === "IN_PROGRESS"))
-    .reduce((s, b) => s + annualizeValue(b.realizedValue, b.frequency), 0)
-}
-
-// ── Hours saved (raw value sum) ───────────────────────────────────────────────
-export function computeHoursSaved(benefits: BenefitItem[]): number {
-  return benefits
-    .filter((b) => b.type === "HOURS_SAVED" && (b.status === "REALIZED" || b.status === "IN_PROGRESS"))
-    .reduce((s, b) => s + b.realizedValue, 0)
 }
 
 // ── Build monthly cumulative timeline ────────────────────────────────────────

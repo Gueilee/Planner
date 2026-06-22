@@ -177,7 +177,7 @@ function CustomBarTooltip({ active, payload }: { active?: boolean; payload?: { n
   return (
     <div className="bg-white border border-slate-100 rounded-xl shadow-lg p-3 text-xs">
       <p className="font-semibold text-slate-700 mb-1">{payload[0].payload.name}</p>
-      <p className="text-slate-500">Valor gerado: <span className="font-bold text-slate-800">{fmtBRL(payload[0].value)}</span></p>
+      <p className="text-slate-500">Valor planejado: <span className="font-bold text-slate-800">{fmtBRL(payload[0].value)}</span></p>
       {payload[1] && <p className="text-slate-500">ROI: <span className="font-bold text-purple-700">{payload[1].value !== null ? `${Math.round(payload[1].value as number)}%` : "—"}</span></p>}
     </div>
   )
@@ -245,7 +245,7 @@ export function BenefitsClient({ summary, charts, projects, users, userRole }: P
   const sorted = [...currentProjects].sort((a, b) => {
     if (sortBy === "roi")   return (b.roi ?? -999) - (a.roi ?? -999)
     if (sortBy === "score") return b.impactScore - a.impactScore
-    return b.totalRealized - a.totalRealized
+    return b.totalPlanned - a.totalPlanned
   })
 
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)
@@ -258,7 +258,7 @@ export function BenefitsClient({ summary, charts, projects, users, userRole }: P
         <KpiCard
           label="Total Economizado"
           value={fmtBRL(currentSummary.totalEconomy)}
-          sub={`${currentSummary.realizedProjectCount} projetos com retorno`}
+          sub={`${currentSummary.projectCount} projetos com benefícios`}
           gradient="linear-gradient(135deg,#065F46,#10B981)"
           glow="rgba(16,185,129,0.3)"
           icon={DollarSign}
@@ -266,7 +266,7 @@ export function BenefitsClient({ summary, charts, projects, users, userRole }: P
         <KpiCard
           label="Receita Gerada"
           value={fmtBRL(currentSummary.totalRevenue)}
-          sub="Aumento de receita realizado"
+          sub="Receita planejada e realizada"
           gradient="linear-gradient(135deg,#1E40AF,#3B82F6)"
           glow="rgba(59,130,246,0.3)"
           icon={TrendingUp}
@@ -499,7 +499,7 @@ export function BenefitsClient({ summary, charts, projects, users, userRole }: P
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
-                {["Projeto", "Área", "Benefícios", "Realizado", "Investimento", "ROI", "Payback", "Score de Impacto", ""].map((h) => (
+                {["Projeto", "Área", "Benefícios", "Planejado", "Investimento", "ROI", "Payback", "Score de Impacto", ""].map((h) => (
                   <th key={h} className="text-left px-4 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -517,7 +517,7 @@ export function BenefitsClient({ summary, charts, projects, users, userRole }: P
                     <span className="font-semibold text-slate-800">{p.realizedCount}</span>
                     <span className="text-slate-400">/{p.benefitCount}</span>
                   </td>
-                  <td className="px-4 py-3 font-bold text-green-700">{fmtBRL(p.totalRealized)}</td>
+                  <td className="px-4 py-3 font-bold text-green-700">{fmtBRL(p.totalPlanned)}</td>
                   <td className="px-4 py-3 text-slate-600">{p.investment > 0 ? fmtBRL(p.investment) : <span className="text-slate-300">—</span>}</td>
                   <td className="px-4 py-3">
                     {p.roi !== null ? (
@@ -553,7 +553,7 @@ export function BenefitsClient({ summary, charts, projects, users, userRole }: P
         {sorted.length > 0 && (
           <div className="flex items-center gap-8 px-5 py-3 bg-slate-50 border-t border-slate-100 text-xs">
             <span className="text-slate-500 font-medium">Totais:</span>
-            <span className="font-bold text-green-700">{fmtBRL(currentSummary.totalRealized)} realizados</span>
+            <span className="font-bold text-green-700">{fmtBRL(currentSummary.totalEconomy)} planejados</span>
             <span className="font-bold text-slate-700">{fmtBRL(currentSummary.totalInvestment)} investidos</span>
             {currentSummary.averageRoi !== null && (
               <span className="font-bold text-purple-700">ROI médio: {Math.round(currentSummary.averageRoi)}%</span>

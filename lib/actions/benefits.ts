@@ -150,24 +150,30 @@ export async function getPortfolioBenefits(filters?: {
   const rois            = projectMetrics.filter((p) => p.roi !== null).map((p) => p.roi!)
   const averageRoi      = rois.length > 0 ? rois.reduce((a, b) => a + b, 0) / rois.length : null
 
-  // Top projects chart
+  // Top projects chart — sort by totalPlanned to show pipeline value
   const topProjects = [...projectMetrics]
-    .sort((a, b) => b.totalRealized - a.totalRealized)
+    .sort((a, b) => b.totalPlanned - a.totalPlanned)
     .slice(0, 10)
-    .map((p) => ({ name: p.projectTitle, value: p.totalRealized, roi: p.roi }))
+    .map((p) => ({ name: p.projectTitle, value: p.totalPlanned, roi: p.roi }))
 
-  // Category breakdown
+  // Category breakdown — effective value (planned or realized)
   const catFinancial   = allProjects.reduce((s, p) => s + computeFinancialRealized(p.benefits), 0)
   const catOperational = allProjects.reduce((s, p) =>
     s + p.benefits
-      .filter((b) => b.category === "OPERATIONAL" && (b.status === "REALIZED" || b.status === "IN_PROGRESS"))
-      .reduce((ss, b) => ss + annualizeValue(b.realizedValue, b.frequency), 0),
+      .filter((b) => b.category === "OPERATIONAL")
+      .reduce((ss, b) => {
+        const v = (b.status === "REALIZED" || b.status === "IN_PROGRESS") ? b.realizedValue : b.plannedValue
+        return ss + annualizeValue(v, b.frequency)
+      }, 0),
     0,
   )
   const catStrategic = allProjects.reduce((s, p) =>
     s + p.benefits
-      .filter((b) => b.category === "STRATEGIC" && (b.status === "REALIZED" || b.status === "IN_PROGRESS"))
-      .reduce((ss, b) => ss + annualizeValue(b.realizedValue, b.frequency), 0),
+      .filter((b) => b.category === "STRATEGIC")
+      .reduce((ss, b) => {
+        const v = (b.status === "REALIZED" || b.status === "IN_PROGRESS") ? b.realizedValue : b.plannedValue
+        return ss + annualizeValue(v, b.frequency)
+      }, 0),
     0,
   )
 
