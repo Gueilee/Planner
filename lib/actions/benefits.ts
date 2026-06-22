@@ -18,7 +18,7 @@ function serializeBenefit(b: {
   id: string; projectId: string; category: string; type: string; description: string
   unit: string; plannedValue: number; realizedValue: number; frequency: string
   baselineDate: Date | null; realizationDate: Date | null; evidence: string | null
-  status: string; createdById: string; createdAt: Date; updatedAt: Date
+  status: string; customTypeName: string | null; createdById: string; createdAt: Date; updatedAt: Date
   measurements: { id: string; measuredAt: Date; measuredValue: number; notes: string | null; createdBy: { name: string }; createdAt: Date }[]
   attachments: { id: string; fileName: string; fileUrl: string; fileType: string; fileSize: number | null; uploadedAt: Date }[]
 }): BenefitItem {
@@ -36,6 +36,7 @@ function serializeBenefit(b: {
     realizationDate: b.realizationDate ? b.realizationDate.toISOString() : null,
     evidence:        b.evidence,
     status:          b.status as BenefitItem["status"],
+    customTypeName:  b.customTypeName,
     createdById:     b.createdById,
     createdAt:       b.createdAt.toISOString(),
     updatedAt:       b.updatedAt.toISOString(),
@@ -211,6 +212,7 @@ export async function createBenefit(projectId: string, data: BenefitFormData) {
       realizationDate: data.realizationDate ? new Date(data.realizationDate) : null,
       evidence:        data.evidence,
       status:          data.status,
+      customTypeName:  data.type === "OTHER" ? (data.customTypeName ?? null) : null,
     },
   })
 
@@ -232,6 +234,7 @@ export async function updateBenefit(benefitId: string, data: Partial<BenefitForm
       ...data,
       baselineDate:    data.baselineDate    ? new Date(data.baselineDate)    : undefined,
       realizationDate: data.realizationDate ? new Date(data.realizationDate) : undefined,
+      customTypeName:  data.type === "OTHER" ? (data.customTypeName ?? null) : null,
     },
   })
 

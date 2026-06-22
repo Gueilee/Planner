@@ -141,6 +141,8 @@ enum BenefitType {
   QUALITY
   GOVERNANCE
   USER_SATISFACTION
+  // Other
+  OTHER
 }
 
 enum BenefitFrequency {
@@ -659,6 +661,7 @@ model ProjectBenefit {
   realizationDate DateTime?
   evidence        String?
   status          BenefitStatus    @default(PLANNED)
+  customTypeName  String?
   createdById     String
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt

@@ -13,7 +13,7 @@ import {
 import {
   createBenefit, updateBenefit, deleteBenefit, addMeasurement,
   deleteMeasurement, addBenefitAttachment, deleteBenefitAttachment,
-  updateProjectInvestment,
+  updateProjectInvestment, getProjectBenefits,
 } from "@/lib/actions/benefits"
 import { impactColor, impactBg, impactLabel } from "@/lib/utils/benefits-calc"
 import type {
@@ -58,6 +58,7 @@ const BLANK: BenefitFormData = {
   category: "FINANCIAL", type: "COST_REDUCTION", description: "",
   unit: "R$", plannedValue: 0, realizedValue: 0, frequency: "ONCE",
   baselineDate: null, realizationDate: null, evidence: null, status: "PLANNED",
+  customTypeName: null,
 }
 
 // ── Impact Gauge ──────────────────────────────────────────────────────────────
@@ -137,7 +138,7 @@ function BenefitCard({
                 {st.label}
               </span>
               <span className="text-[10px] text-slate-400 font-medium">
-                {BENEFIT_TYPE_LABELS[benefit.type]}
+                {benefit.type === "OTHER" ? (benefit.customTypeName || "Outros") : BENEFIT_TYPE_LABELS[benefit.type]}
               </span>
             </div>
             <p className="text-sm font-semibold text-slate-800 leading-snug">{benefit.description}</p>
@@ -330,7 +331,7 @@ function BenefitModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="field-label">Categoria</label>
-              <select className="field-input" value={form.category} onChange={(e) => { set("category", e.target.value); set("type", BENEFIT_TYPE_BY_CATEGORY[e.target.value as BenefitCategory][0]) }}>
+              <select className="field-input" value={form.category} onChange={(e) => { set("category", e.target.value); set("type", BENEFIT_TYPE_BY_CATEGORY[e.target.value as BenefitCategory][0]); set("customTypeName", null) }}>
                 {(Object.keys(BENEFIT_CATEGORY_LABELS) as BenefitCategory[]).map((k) => (
                   <option key={k} value={k}>{BENEFIT_CATEGORY_LABELS[k]}</option>
                 ))}
@@ -338,11 +339,26 @@ function BenefitModal({
             </div>
             <div>
               <label className="field-label">Tipo de Benefício</label>
-              <select className="field-input" value={form.type} onChange={(e) => set("type", e.target.value)}>
+              <select className="field-input" value={form.type} onChange={(e) => { set("type", e.target.value); if (e.target.value !== "OTHER") set("customTypeName", null) }}>
                 {types.map((t) => <option key={t} value={t}>{BENEFIT_TYPE_LABELS[t]}</option>)}
               </select>
             </div>
           </div>
+
+          {/* Custom type name — shown only when "Outros" is selected */}
+          {form.type === "OTHER" && (
+            <div>
+              <label className="field-label">Nome do Tipo de Benefício</label>
+              <input
+                type="text"
+                className="field-input"
+                value={form.customTypeName ?? ""}
+                onChange={(e) => set("customTypeName", e.target.value || null)}
+                placeholder="Descreva o tipo de benefício..."
+                autoFocus
+              />
+            </div>
+          )}
 
           {/* Description */}
           <div>
@@ -411,7 +427,7 @@ function BenefitModal({
           <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-all">Cancelar</button>
           <button
             onClick={() => onSave(form)}
-            disabled={loading || !form.description.trim()}
+            disabled={loading || !form.description.trim() || (form.type === "OTHER" && !form.customTypeName?.trim())}
             className="px-5 py-2 rounded-lg text-sm font-semibold text-white transition-all disabled:opacity-50 flex items-center gap-2"
             style={{ background: "linear-gradient(135deg,#7B2FBE,#A855F7)" }}
           >
@@ -522,36 +538,41 @@ export function ProjectBenefitsClient({ projectId, projectTitle, benefits: initi
   const [isPending, startTransition] = useTransition()
   const [activeCategory, setActiveCategory] = useState<BenefitCategory | "ALL">("ALL")
 
-  // ── Refresh data ────────────────────────────────────────────────────────────
-  const refresh = () => {
-    startTransition(async () => {
-      const { getProjectBenefits } = await import("@/lib/actions/benefits")
-      const data = await getProjectBenefits(projectId)
-      setBenefits(data.benefits)
-      setMetrics(data.metrics)
-      setInvestmentState(data.investment)
-    })
+  // ── Refresh data (plain async — chamada dentro das transitions existentes) ──
+  const refresh = async () => {
+    const data = await getProjectBenefits(projectId)
+    setBenefits(data.benefits)
+    setMetrics(data.metrics)
+    setInvestmentState(data.investment)
   }
 
   // ── Create / update benefit ─────────────────────────────────────────────────
   const handleSaveBenefit = (data: BenefitFormData) => {
     startTransition(async () => {
-      if (editBenefit) {
-        await updateBenefit(editBenefit.id, data)
-      } else {
-        await createBenefit(projectId, data)
+      try {
+        if (editBenefit) {
+          await updateBenefit(editBenefit.id, data)
+        } else {
+          await createBenefit(projectId, data)
+        }
+        setFormOpen(false)
+        setEditBenefit(null)
+        await refresh()
+      } catch (err) {
+        console.error("Erro ao salvar benefício:", err)
       }
-      setFormOpen(false)
-      setEditBenefit(null)
-      refresh()
     })
   }
 
   const handleDelete = (id: string) => {
     if (!confirm("Excluir este benefício?")) return
     startTransition(async () => {
-      await deleteBenefit(id)
-      refresh()
+      try {
+        await deleteBenefit(id)
+        await refresh()
+      } catch (err) {
+        console.error("Erro ao deletar benefício:", err)
+      }
     })
   }
 
@@ -559,19 +580,27 @@ export function ProjectBenefitsClient({ projectId, projectTitle, benefits: initi
   const handleSaveMeasurement = (data: MeasurementFormData) => {
     if (!measBenefit) return
     startTransition(async () => {
-      await addMeasurement(measBenefit.id, data)
-      setMeasOpen(false)
-      setMeasBenefit(null)
-      refresh()
+      try {
+        await addMeasurement(measBenefit.id, data)
+        setMeasOpen(false)
+        setMeasBenefit(null)
+        await refresh()
+      } catch (err) {
+        console.error("Erro ao salvar medição:", err)
+      }
     })
   }
 
   // ── Investment ─────────────────────────────────────────────────────────────
   const handleSaveInvestment = () => {
     startTransition(async () => {
-      await updateProjectInvestment(projectId, Number(invInput) || 0)
-      setEditingInvestment(false)
-      refresh()
+      try {
+        await updateProjectInvestment(projectId, Number(invInput) || 0)
+        setEditingInvestment(false)
+        await refresh()
+      } catch (err) {
+        console.error("Erro ao salvar investimento:", err)
+      }
     })
   }
 
@@ -587,7 +616,7 @@ export function ProjectBenefitsClient({ projectId, projectTitle, benefits: initi
         const mime = files[0]?.type ?? "application/octet-stream"
         await addBenefitAttachment(benefitId, { fileName: f.name, fileUrl: f.url, fileType: mime, fileSize: f.size })
       }
-      refresh()
+      await refresh()
     } finally {
       setUploadingBenefitId(null)
     }

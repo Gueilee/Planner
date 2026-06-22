@@ -3,6 +3,7 @@ export type BenefitType =
   | "COST_REDUCTION" | "REVENUE_INCREASE" | "OPEX_REDUCTION" | "ANNUAL_SAVINGS" | "MONTHLY_SAVINGS"
   | "HOURS_SAVED" | "PRODUCTIVITY_GAIN" | "PROCESS_AUTOMATION" | "REWORK_REDUCTION" | "TIME_REDUCTION"
   | "CUSTOMER_EXPERIENCE" | "RISK_REDUCTION" | "COMPLIANCE" | "QUALITY" | "GOVERNANCE" | "USER_SATISFACTION"
+  | "OTHER"
 export type BenefitFrequency = "ONCE" | "MONTHLY" | "ANNUAL"
 export type BenefitStatus = "PLANNED" | "IN_PROGRESS" | "REALIZED" | "NOT_REALIZED"
 
@@ -37,6 +38,7 @@ export interface BenefitItem {
   realizationDate: string | null
   evidence: string | null
   status: BenefitStatus
+  customTypeName: string | null
   createdById: string
   createdAt: string
   updatedAt: string
@@ -93,6 +95,7 @@ export interface BenefitFormData {
   realizationDate: string | null
   evidence: string | null
   status: BenefitStatus
+  customTypeName?: string | null
 }
 
 export interface MeasurementFormData {
@@ -126,6 +129,7 @@ export const BENEFIT_TYPE_LABELS: Record<BenefitType, string> = {
   QUALITY:             "Qualidade",
   GOVERNANCE:          "Governança",
   USER_SATISFACTION:   "Satisfação dos Usuários",
+  OTHER:               "Outros",
 }
 
 export const BENEFIT_STATUS_LABELS: Record<BenefitStatus, string> = {
@@ -143,12 +147,12 @@ export const BENEFIT_FREQUENCY_LABELS: Record<BenefitFrequency, string> = {
 
 export const BENEFIT_TYPE_BY_CATEGORY: Record<BenefitCategory, BenefitType[]> = {
   FINANCIAL: [
-    "COST_REDUCTION", "REVENUE_INCREASE", "OPEX_REDUCTION", "ANNUAL_SAVINGS", "MONTHLY_SAVINGS",
+    "COST_REDUCTION", "REVENUE_INCREASE", "OPEX_REDUCTION", "ANNUAL_SAVINGS", "MONTHLY_SAVINGS", "OTHER",
   ],
   OPERATIONAL: [
-    "HOURS_SAVED", "PRODUCTIVITY_GAIN", "PROCESS_AUTOMATION", "REWORK_REDUCTION", "TIME_REDUCTION",
+    "HOURS_SAVED", "PRODUCTIVITY_GAIN", "PROCESS_AUTOMATION", "REWORK_REDUCTION", "TIME_REDUCTION", "OTHER",
   ],
   STRATEGIC: [
-    "CUSTOMER_EXPERIENCE", "RISK_REDUCTION", "COMPLIANCE", "QUALITY", "GOVERNANCE", "USER_SATISFACTION",
+    "CUSTOMER_EXPERIENCE", "RISK_REDUCTION", "COMPLIANCE", "QUALITY", "GOVERNANCE", "USER_SATISFACTION", "OTHER",
   ],
 }
