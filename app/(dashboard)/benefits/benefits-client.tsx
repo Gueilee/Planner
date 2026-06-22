@@ -256,20 +256,26 @@ export function BenefitsClient({ summary, charts, projects, users, userRole }: P
       {/* ── KPI Row ─────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         <KpiCard
-          label="Total Economizado"
+          label="Valor Total de Benefícios"
           value={fmtBRL(currentSummary.totalEconomy)}
-          sub={`${currentSummary.projectCount} projetos com benefícios`}
+          sub={`${currentSummary.projectCount} projetos · todas as categorias`}
           gradient="linear-gradient(135deg,#065F46,#10B981)"
           glow="rgba(16,185,129,0.3)"
           icon={DollarSign}
         />
         <KpiCard
-          label="Receita Gerada"
-          value={fmtBRL(currentSummary.totalRevenue)}
-          sub="Receita planejada e realizada"
+          label="Score de Impacto Médio"
+          value={currentSummary.averageImpactScore !== null ? `${Math.round(currentSummary.averageImpactScore)} pts` : "—"}
+          sub={currentSummary.averageImpactScore !== null
+            ? (currentSummary.averageImpactScore <= 20 ? "Baixo Impacto"
+              : currentSummary.averageImpactScore <= 40 ? "Moderado"
+              : currentSummary.averageImpactScore <= 60 ? "Relevante"
+              : currentSummary.averageImpactScore <= 80 ? "Alto Impacto"
+              : "Transformacional")
+            : "Sem dados"}
           gradient="linear-gradient(135deg,#1E40AF,#3B82F6)"
           glow="rgba(59,130,246,0.3)"
-          icon={TrendingUp}
+          icon={Sparkles}
         />
         <KpiCard
           label="ROI Médio Portfólio"
@@ -373,22 +379,31 @@ export function BenefitsClient({ summary, charts, projects, users, userRole }: P
           className="xl:col-span-2 rounded-2xl p-5"
           style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
         >
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-1">
             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
               <BarChart3 className="w-4 h-4 text-purple-600" />
-              Top Projetos por Valor Gerado
+              Top Projetos por Valor Planejado
             </h3>
           </div>
+          <p className="text-[11px] text-slate-400 mb-4">Benefícios planejados + realizados — valor anualizado — todas as categorias</p>
           {currentCharts.topProjects.length === 0 ? (
             <div className="h-56 flex items-center justify-center text-slate-400 text-sm">Nenhum benefício registrado ainda</div>
           ) : (
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={currentCharts.topProjects} layout="vertical" margin={{ left: 0, right: 16 }}>
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={currentCharts.topProjects} layout="vertical" margin={{ left: 0, right: 32 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" horizontal={false} />
                 <XAxis type="number" tickFormatter={(v) => fmtBRL(v)} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="name" width={145} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                 <Tooltip content={<CustomBarTooltip />} />
-                <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                <Legend
+                  verticalAlign="top"
+                  align="right"
+                  iconType="circle"
+                  iconSize={8}
+                  wrapperStyle={{ fontSize: 11, paddingBottom: 8 }}
+                  formatter={() => "Valor Planejado"}
+                />
+                <Bar dataKey="value" name="Valor Planejado" radius={[0, 4, 4, 0]}>
                   {currentCharts.topProjects.map((_, i) => (
                     <Cell key={i} fill={`hsl(${270 - i * 15}, 70%, ${55 + i * 3}%)`} />
                   ))}
@@ -436,15 +451,20 @@ export function BenefitsClient({ summary, charts, projects, users, userRole }: P
       </div>
 
       {/* ── Timeline ─────────────────────────────────────────────────────────── */}
-      {currentCharts.timeline.length > 0 && (
-        <div
-          className="rounded-2xl p-5"
-          style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
-        >
-          <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-4">
+      <div
+        className="rounded-2xl p-5"
+        style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
+      >
+        <div className="mb-1">
+          <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-purple-600" />
-            Evolução Acumulada do Retorno
+            Crescimento do Portfólio de Benefícios
           </h3>
+          <p className="text-[11px] text-slate-400 mt-0.5">Valor acumulado conforme os benefícios foram registrados — PLANNED pelo mês de cadastro, REALIZED pela data de realização</p>
+        </div>
+        {currentCharts.timeline.length === 0 ? (
+          <div className="h-48 flex items-center justify-center text-slate-400 text-sm">Nenhum benefício registrado ainda</div>
+        ) : (
           <ResponsiveContainer width="100%" height={200}>
             <AreaChart data={currentCharts.timeline} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
               <defs>
@@ -460,14 +480,14 @@ export function BenefitsClient({ summary, charts, projects, users, userRole }: P
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" />
               <XAxis dataKey="month" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
               <YAxis tickFormatter={(v) => fmtBRL(v)} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-              <Tooltip formatter={(v) => fmtBRL(v as number)} />
+              <Tooltip formatter={(v, name) => [fmtBRL(v as number), name]} />
               <Legend iconType="circle" wrapperStyle={{ fontSize: 11 }} />
-              <Area type="monotone" dataKey="cumulative" name="Acumulado" stroke="#7B2FBE" fill="url(#grad-cum)" strokeWidth={2} dot={false} />
-              <Area type="monotone" dataKey="monthly"    name="No Mês"    stroke="#10B981" fill="url(#grad-mon)" strokeWidth={2} dot={false} />
+              <Area type="monotone" dataKey="cumulative" name="Acumulado"     stroke="#7B2FBE" fill="url(#grad-cum)" strokeWidth={2} dot={false} />
+              <Area type="monotone" dataKey="monthly"    name="No Período"    stroke="#10B981" fill="url(#grad-mon)" strokeWidth={2} dot={false} />
             </AreaChart>
           </ResponsiveContainer>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* ── Projects Table ───────────────────────────────────────────────────── */}
       <div

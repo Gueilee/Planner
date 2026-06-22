@@ -8,7 +8,7 @@ import type {
 } from "@/lib/types/benefits"
 import {
   computeProjectMetrics, computeFinancialRealized, computeRevenueRealized,
-  computeHoursSaved, buildTimelineData, annualizeValue,
+  computeHoursSaved, computeTotalEffective, buildTimelineData, annualizeValue, effectiveValue,
 } from "@/lib/utils/benefits-calc"
 
 const CAN_MANAGE = new Set(["ADMIN", "PROJECT_MANAGER"])
@@ -142,13 +142,15 @@ export async function getPortfolioBenefits(filters?: {
   )
 
   // Summary KPIs
-  const totalEconomy    = projectMetrics.reduce((s, p) => s + p.financialRealized, 0)
+  const totalEconomy    = allProjects.reduce((s, p) => s + computeTotalEffective(p.benefits), 0)
   const totalRevenue    = allProjects.reduce((s, p) => s + computeRevenueRealized(p.benefits), 0)
   const totalHours      = allProjects.reduce((s, p) => s + computeHoursSaved(p.benefits), 0)
   const totalRealized   = projectMetrics.reduce((s, p) => s + p.totalRealized, 0)
   const totalInvestment = projectMetrics.reduce((s, p) => s + p.investment, 0)
   const rois            = projectMetrics.filter((p) => p.roi !== null).map((p) => p.roi!)
   const averageRoi      = rois.length > 0 ? rois.reduce((a, b) => a + b, 0) / rois.length : null
+  const scores          = projectMetrics.filter((p) => p.benefitCount > 0).map((p) => p.impactScore)
+  const averageImpactScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : null
 
   // Top projects chart — sort by totalPlanned to show pipeline value
   const topProjects = [...projectMetrics]
@@ -161,25 +163,19 @@ export async function getPortfolioBenefits(filters?: {
   const catOperational = allProjects.reduce((s, p) =>
     s + p.benefits
       .filter((b) => b.category === "OPERATIONAL")
-      .reduce((ss, b) => {
-        const v = (b.status === "REALIZED" || b.status === "IN_PROGRESS") ? b.realizedValue : b.plannedValue
-        return ss + annualizeValue(v, b.frequency)
-      }, 0),
+      .reduce((ss, b) => ss + annualizeValue(effectiveValue(b), b.frequency), 0),
     0,
   )
   const catStrategic = allProjects.reduce((s, p) =>
     s + p.benefits
       .filter((b) => b.category === "STRATEGIC")
-      .reduce((ss, b) => {
-        const v = (b.status === "REALIZED" || b.status === "IN_PROGRESS") ? b.realizedValue : b.plannedValue
-        return ss + annualizeValue(v, b.frequency)
-      }, 0),
+      .reduce((ss, b) => ss + annualizeValue(effectiveValue(b), b.frequency), 0),
     0,
   )
 
   return {
     summary: {
-      totalEconomy, totalRevenue, totalHours, averageRoi,
+      totalEconomy, totalRevenue, totalHours, averageRoi, averageImpactScore,
       totalRealized, totalInvestment,
       projectCount: allProjects.length,
       realizedProjectCount: projectMetrics.filter((p) => p.realizedCount > 0).length,

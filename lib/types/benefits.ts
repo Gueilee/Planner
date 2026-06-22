@@ -67,10 +67,11 @@ export interface ProjectBenefitMetrics {
 }
 
 export interface PortfolioSummary {
-  totalEconomy: number
-  totalRevenue: number
-  totalHours: number
+  totalEconomy: number        // total effective value — ALL categories
+  totalRevenue: number        // REVENUE_INCREASE effective value
+  totalHours: number          // HOURS_SAVED effective value
   averageRoi: number | null
+  averageImpactScore: number | null
   totalRealized: number
   totalInvestment: number
   projectCount: number
