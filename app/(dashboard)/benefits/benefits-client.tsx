@@ -242,11 +242,15 @@ export function BenefitsClient({ summary, charts, projects, users, userRole }: P
     runFilter(EMPTY_FILTERS)
   }
 
-  const sorted = [...currentProjects].sort((a, b) => {
-    if (sortBy === "roi")   return (b.roi ?? -999) - (a.roi ?? -999)
-    if (sortBy === "score") return b.impactScore - a.impactScore
-    return b.totalPlanned - a.totalPlanned
-  })
+  const sorted = [...currentProjects]
+    .filter((p) => p.benefitCount > 0)
+    .sort((a, b) => {
+      if (sortBy === "roi")   return (b.roi ?? -999) - (a.roi ?? -999)
+      if (sortBy === "score") return b.impactScore - a.impactScore
+      const totalA = a.financialRealized + a.operationalRealized + a.strategicRealized
+      const totalB = b.financialRealized + b.operationalRealized + b.strategicRealized
+      return totalB - totalA
+    })
 
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)
 
@@ -382,26 +386,28 @@ export function BenefitsClient({ summary, charts, projects, users, userRole }: P
           <div className="flex items-center justify-between mb-1">
             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
               <BarChart3 className="w-4 h-4 text-purple-600" />
-              Top Projetos — Valor Financeiro Anual
+              Top Projetos por Valor de Benefícios
             </h3>
           </div>
-          <p className="text-[11px] text-slate-400 mb-4">Soma dos benefícios financeiros planejados, anualizado em R$ · apenas categoria Financeiro</p>
+          <p className="text-[11px] text-slate-400 mb-4">Valor efetivo anualizado · financeiro + operacional + estratégico · top 10 projetos</p>
           {(() => {
-            // Only financial benefits have a monetary unit — mixing hours/scores/R$ is not explainable
             const chartData = [...currentProjects]
-              .filter((p) => p.financialRealized > 0)
-              .sort((a, b) => b.financialRealized - a.financialRealized)
-              .slice(0, 10)
+              .filter((p) => p.benefitCount > 0)
               .map((p) => ({
                 name:      p.projectTitle,
                 shortName: p.projectTitle.length > 28 ? p.projectTitle.slice(0, 26) + "…" : p.projectTitle,
-                value:     p.financialRealized,
+                value:     p.financialRealized + p.operationalRealized + p.strategicRealized,
+                fin:       p.financialRealized,
+                op:        p.operationalRealized,
+                strat:     p.strategicRealized,
                 score:     p.impactScore,
                 label:     p.impactLabel,
                 count:     p.benefitCount,
               }))
+              .sort((a, b) => b.value - a.value)
+              .slice(0, 10)
             if (chartData.length === 0) {
-              return <div className="h-56 flex items-center justify-center text-slate-400 text-sm">Nenhum projeto com benefícios financeiros registrados</div>
+              return <div className="h-56 flex items-center justify-center text-slate-400 text-sm">Nenhum benefício cadastrado ainda</div>
             }
             const barH   = 28
             const chartH = Math.max(160, chartData.length * (barH + 16) + 32)
@@ -424,10 +430,12 @@ export function BenefitsClient({ summary, charts, projects, users, userRole }: P
                       const d = payload[0].payload as typeof chartData[0]
                       return (
                         <div className="bg-white border border-slate-100 rounded-xl shadow-lg p-3 text-xs max-w-[240px]">
-                          <p className="font-semibold text-slate-700 mb-1 leading-snug">{d.name}</p>
-                          <p className="text-slate-500">Valor financeiro anual: <span className="font-bold text-slate-800">{fmtBRL(d.value)}</span></p>
-                          <p className="text-slate-500">Score de impacto: <span className="font-bold text-purple-700">{d.score}/100 · {d.label}</span></p>
-                          <p className="text-slate-400">{d.count} benefício{d.count !== 1 ? "s" : ""} cadastrado{d.count !== 1 ? "s" : ""}</p>
+                          <p className="font-semibold text-slate-700 mb-2 leading-snug">{d.name}</p>
+                          <p className="text-slate-500">Valor total: <span className="font-bold text-slate-800">{fmtBRL(d.value)}</span></p>
+                          {d.fin  > 0 && <p className="text-slate-400">Financeiro: {fmtBRL(d.fin)}</p>}
+                          {d.op   > 0 && <p className="text-slate-400">Operacional: {fmtBRL(d.op)}</p>}
+                          {d.strat > 0 && <p className="text-slate-400">Estratégico: {fmtBRL(d.strat)}</p>}
+                          <p className="text-purple-600 font-semibold mt-1">Score: {d.score}/100 · {d.label}</p>
                         </div>
                       )
                     }}
@@ -496,21 +504,22 @@ export function BenefitsClient({ summary, charts, projects, users, userRole }: P
           <div className="mb-3">
             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
               <BarChart3 className="w-4 h-4 text-blue-600" />
-              Valor Financeiro por Área
+              Valor de Benefícios por Área
             </h3>
-            <p className="text-[11px] text-slate-400 mt-0.5">Soma dos benefícios financeiros anualizados por área de negócio</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Valor efetivo anualizado por área de negócio · todas as categorias</p>
           </div>
           {(() => {
             const areaMap: Record<string, number> = {}
             for (const p of currentProjects) {
-              if (p.financialRealized > 0)
-                areaMap[p.projectArea] = (areaMap[p.projectArea] ?? 0) + p.financialRealized
+              const total = p.financialRealized + p.operationalRealized + p.strategicRealized
+              if (total > 0)
+                areaMap[p.projectArea] = (areaMap[p.projectArea] ?? 0) + total
             }
             const areaData = Object.entries(areaMap)
               .sort(([, a], [, b]) => b - a)
               .map(([name, value]) => ({ name, value }))
             if (areaData.length === 0) {
-              return <div className="h-40 flex items-center justify-center text-slate-400 text-sm">Nenhum projeto com benefícios financeiros</div>
+              return <div className="h-40 flex items-center justify-center text-slate-400 text-sm">Nenhum benefício cadastrado</div>
             }
             const h = Math.max(120, areaData.length * 44 + 32)
             return (
@@ -549,10 +558,12 @@ export function BenefitsClient({ summary, charts, projects, users, userRole }: P
               { label: "Moderado",         color: "#2563EB" },
               { label: "Baixo Impacto",    color: "#64748B" },
             ]
+            // exclude projects with no benefits — their score=0 is not meaningful data
+            const withBenefits = currentProjects.filter((p) => p.benefitCount > 0)
             const tierData = TIERS
               .map((t) => ({
                 name:  t.label,
-                value: currentProjects.filter((p) => p.impactLabel === t.label).length,
+                value: withBenefits.filter((p) => p.impactLabel === t.label).length,
                 color: t.color,
               }))
               .filter((t) => t.value > 0)
@@ -627,7 +638,7 @@ export function BenefitsClient({ summary, charts, projects, users, userRole }: P
                     <span className="font-semibold text-slate-800">{p.realizedCount}</span>
                     <span className="text-slate-400">/{p.benefitCount}</span>
                   </td>
-                  <td className="px-4 py-3 font-bold text-green-700">{fmtBRL(p.totalPlanned)}</td>
+                  <td className="px-4 py-3 font-bold text-green-700">{fmtBRL(p.financialRealized + p.operationalRealized + p.strategicRealized)}</td>
                   <td className="px-4 py-3 text-slate-600">{p.investment > 0 ? fmtBRL(p.investment) : <span className="text-slate-300">—</span>}</td>
                   <td className="px-4 py-3">
                     {p.roi !== null ? (
