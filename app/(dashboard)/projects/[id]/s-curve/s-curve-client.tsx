@@ -7,7 +7,7 @@ import {
 } from "recharts"
 import { format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { Plus, Trash2, RefreshCw, Info, TrendingUp } from "lucide-react"
+import { Plus, Trash2, RefreshCw, Info, TrendingUp, AlertTriangle } from "lucide-react"
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -59,6 +59,8 @@ export function SCurveClient({ projectId, initialData }: { projectId: string; in
   const [blDesc, setBlDesc] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [hiddenLines, setHiddenLines] = useState<Set<string>>(new Set())
+  const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const today = new Date().toISOString().split("T")[0] + "T00:00:00.000Z"
 
@@ -93,10 +95,16 @@ export function SCurveClient({ projectId, initialData }: { projectId: string; in
     }
   }
 
-  async function deleteBaseline(id: string) {
-    if (!confirm("Excluir esta baseline?")) return
-    await fetch(`/api/projects/${projectId}/baselines/${id}`, { method: "DELETE" })
-    await refresh()
+  async function confirmAndDelete() {
+    if (!confirmDelete) return
+    setDeleting(true)
+    try {
+      await fetch(`/api/projects/${projectId}/baselines/${confirmDelete.id}`, { method: "DELETE" })
+      setConfirmDelete(null)
+      await refresh()
+    } finally {
+      setDeleting(false)
+    }
   }
 
   function toggleLine(key: string) {
@@ -273,7 +281,7 @@ export function SCurveClient({ projectId, initialData }: { projectId: string; in
                     </p>
                   </div>
                 </div>
-                <button onClick={() => deleteBaseline(bl.id)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="Excluir baseline">
+                <button onClick={() => setConfirmDelete({ id: bl.id, name: bl.name })} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="Excluir baseline">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -322,6 +330,45 @@ export function SCurveClient({ projectId, initialData }: { projectId: string; in
               </button>
               <button onClick={createBaseline} disabled={creating} className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-sm font-bold text-white hover:from-blue-700 hover:to-violet-700 transition-colors disabled:opacity-50">
                 {creating ? "Criando..." : "Criar Baseline"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm delete modal */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(2px)" }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-start gap-4 mb-5">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: "rgba(239,68,68,0.10)" }}>
+                <AlertTriangle className="w-5 h-5 text-red-500" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Excluir baseline</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  Tem certeza que deseja excluir <strong className="text-gray-700">{confirmDelete.name}</strong>?
+                  Essa ação não poderá ser desfeita.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                disabled={deleting}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50">
+                Cancelar
+              </button>
+              <button
+                onClick={confirmAndDelete}
+                disabled={deleting}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 hover:opacity-90"
+                style={{ background: "linear-gradient(135deg, #EF4444, #DC2626)", boxShadow: "0 4px 12px rgba(239,68,68,0.30)" }}>
+                {deleting
+                  ? <span className="flex items-center justify-center gap-2"><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Excluindo…</span>
+                  : <span className="flex items-center justify-center gap-2"><Trash2 className="w-3.5 h-3.5" /> Excluir</span>}
               </button>
             </div>
           </div>
