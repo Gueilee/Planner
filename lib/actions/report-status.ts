@@ -25,9 +25,23 @@ export async function updateReportStatus(data: ReportStatusInput) {
       reportStatusResources: data.reportStatusResources,
       reportStatusOverall:   data.reportStatusOverall,
       reportStatusNotes:     data.reportStatusNotes?.trim() || null,
+      reportStatusManual:    true,  // lock out auto-overwrite once user saves manually
     },
   })
 
   revalidatePath(`/projects/${data.projectId}`)
+  revalidatePath("/status-report")
+}
+
+export async function resetReportStatusToAuto(projectId: string) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+
+  await db.project.update({
+    where: { id: projectId },
+    data: { reportStatusManual: false },
+  })
+
+  revalidatePath(`/projects/${projectId}`)
   revalidatePath("/status-report")
 }

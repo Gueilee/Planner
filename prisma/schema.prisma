@@ -253,6 +253,8 @@ model Project {
   reportStatusResources String  @default("GREEN")
   reportStatusOverall   String  @default("GREEN")
   reportStatusNotes     String?
+  // When true the user has manually overridden the auto-computed status — skip auto-overwrite
+  reportStatusManual    Boolean @default(false)
 
   members        ProjectMember[]
   wbsAreas       WbsArea[]

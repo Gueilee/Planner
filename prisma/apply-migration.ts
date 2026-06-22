@@ -104,6 +104,7 @@ async function main() {
   const alters = [
     `ALTER TABLE "Attachment" ADD COLUMN "benefitId" TEXT REFERENCES "ProjectBenefit"("id") ON DELETE CASCADE`,
     `ALTER TABLE "Project"    ADD COLUMN "investment" REAL NOT NULL DEFAULT 0`,
+    `ALTER TABLE "Project"    ADD COLUMN "reportStatusManual" INTEGER NOT NULL DEFAULT 0`,
   ]
   for (const sql of alters) {
     try {

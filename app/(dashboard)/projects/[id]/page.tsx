@@ -137,22 +137,25 @@ export default async function ProjectDetailPage({
     risks: project.risks.map(r => ({ status: r.status })),
   })
 
-  const statusChanged =
-    autoStatus.cost      !== project.reportStatusCost      ||
-    autoStatus.schedule  !== project.reportStatusSchedule  ||
-    autoStatus.resources !== project.reportStatusResources ||
-    autoStatus.overall   !== project.reportStatusOverall
-
-  if (statusChanged) {
-    await db.project.update({
-      where: { id },
-      data: {
-        reportStatusCost:      autoStatus.cost,
-        reportStatusSchedule:  autoStatus.schedule,
-        reportStatusResources: autoStatus.resources,
-        reportStatusOverall:   autoStatus.overall,
-      },
-    })
+  // Only auto-overwrite when the project is still in auto mode (user hasn't manually overridden)
+  const isManualMode = project.reportStatusManual
+  if (!isManualMode) {
+    const statusChanged =
+      autoStatus.cost      !== project.reportStatusCost      ||
+      autoStatus.schedule  !== project.reportStatusSchedule  ||
+      autoStatus.resources !== project.reportStatusResources ||
+      autoStatus.overall   !== project.reportStatusOverall
+    if (statusChanged) {
+      await db.project.update({
+        where: { id },
+        data: {
+          reportStatusCost:      autoStatus.cost,
+          reportStatusSchedule:  autoStatus.schedule,
+          reportStatusResources: autoStatus.resources,
+          reportStatusOverall:   autoStatus.overall,
+        },
+      })
+    }
   }
 
   const userRole   = session?.user?.role ?? ""
@@ -928,11 +931,13 @@ export default async function ProjectDetailPage({
               {/* Status para o Report */}
               <ReportStatusWidget
                 projectId={id}
+                isManual={isManualMode}
+                autoSuggestion={autoStatus}
                 initial={{
-                  cost:      autoStatus.cost,
-                  schedule:  autoStatus.schedule,
-                  resources: autoStatus.resources,
-                  overall:   autoStatus.overall,
+                  cost:      isManualMode ? (project.reportStatusCost      as "GREEN"|"YELLOW"|"RED") : autoStatus.cost,
+                  schedule:  isManualMode ? (project.reportStatusSchedule  as "GREEN"|"YELLOW"|"RED") : autoStatus.schedule,
+                  resources: isManualMode ? (project.reportStatusResources as "GREEN"|"YELLOW"|"RED") : autoStatus.resources,
+                  overall:   isManualMode ? (project.reportStatusOverall   as "GREEN"|"YELLOW"|"RED") : autoStatus.overall,
                   notes:     project.reportStatusNotes ?? null,
                 }}
               />

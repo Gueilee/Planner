@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { updateReportStatus } from "@/lib/actions/report-status"
-import { Zap } from "lucide-react"
+import { updateReportStatus, resetReportStatusToAuto } from "@/lib/actions/report-status"
+import { Zap, PenLine, RotateCcw } from "lucide-react"
 
 type TrafficLight = "GREEN" | "YELLOW" | "RED"
 
@@ -15,14 +15,16 @@ const LIGHT_CFG: Record<TrafficLight, { label: string; color: string; bg: string
 const ORDER: TrafficLight[] = ["GREEN", "YELLOW", "RED"]
 
 const INDICATOR_HINTS: Record<string, string> = {
-  cost:      "Budget vs custo estimado + risco de custos",
-  schedule:  "Progresso real vs progresso esperado pela timeline + tarefas vencidas",
-  resources: "Taxa de entrega das tarefas dentro do prazo previsto",
-  overall:   "Pior status entre Custos, Cronograma e Recursos",
+  cost:      "Budget vs custo estimado + risco de custos — clique para ciclar",
+  schedule:  "Progresso real vs progresso esperado + tarefas vencidas — clique para ciclar",
+  resources: "Taxa de entrega das tarefas dentro do prazo — clique para ciclar",
+  overall:   "Pior status entre Custos, Cronograma e Recursos — clique para ciclar",
 }
 
 interface Props {
-  projectId: string
+  projectId:      string
+  isManual:       boolean
+  autoSuggestion: { cost: TrafficLight; schedule: TrafficLight; resources: TrafficLight; overall: TrafficLight }
   initial: {
     cost:      TrafficLight
     schedule:  TrafficLight
@@ -32,25 +34,47 @@ interface Props {
   }
 }
 
-export function ReportStatusWidget({ projectId, initial }: Props) {
+export function ReportStatusWidget({ projectId, isManual, autoSuggestion, initial }: Props) {
   const [cost,      setCost]      = useState<TrafficLight>(initial.cost)
   const [schedule,  setSchedule]  = useState<TrafficLight>(initial.schedule)
   const [resources, setResources] = useState<TrafficLight>(initial.resources)
   const [overall,   setOverall]   = useState<TrafficLight>(initial.overall)
   const [notes,     setNotes]     = useState(initial.notes ?? "")
+  const [manual,    setManual]    = useState(isManual)
   const [saved,     setSaved]     = useState(false)
   const [pending,   startTransition] = useTransition()
 
   function cycle(val: TrafficLight, set: (v: TrafficLight) => void) {
     const next = ORDER[(ORDER.indexOf(val) + 1) % ORDER.length]
     set(next)
+    setManual(true)
     setSaved(false)
   }
 
   function save() {
     startTransition(async () => {
-      await updateReportStatus({ projectId, reportStatusCost: cost, reportStatusSchedule: schedule, reportStatusResources: resources, reportStatusOverall: overall, reportStatusNotes: notes })
+      await updateReportStatus({
+        projectId,
+        reportStatusCost:      cost,
+        reportStatusSchedule:  schedule,
+        reportStatusResources: resources,
+        reportStatusOverall:   overall,
+        reportStatusNotes:     notes,
+      })
+      setManual(true)
       setSaved(true)
+    })
+  }
+
+  function resetToAuto() {
+    startTransition(async () => {
+      await resetReportStatusToAuto(projectId)
+      setCost(autoSuggestion.cost)
+      setSchedule(autoSuggestion.schedule)
+      setResources(autoSuggestion.resources)
+      setOverall(autoSuggestion.overall)
+      setManual(false)
+      setSaved(false)
     })
   }
 
@@ -67,38 +91,72 @@ export function ReportStatusWidget({ projectId, initial }: Props) {
         <div>
           <div className="flex items-center gap-2">
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Status para o Report</p>
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold"
-              style={{ background: "rgba(123,47,190,0.08)", color: "#7B2FBE" }}>
-              <Zap className="w-2.5 h-2.5" /> Auto
-            </span>
+            {manual ? (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold"
+                style={{ background: "rgba(217,119,6,0.10)", color: "#D97706" }}>
+                <PenLine className="w-2.5 h-2.5" /> Manual
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold"
+                style={{ background: "rgba(123,47,190,0.08)", color: "#7B2FBE" }}>
+                <Zap className="w-2.5 h-2.5" /> Auto
+              </span>
+            )}
           </div>
-          <p className="text-[11px] text-slate-400 mt-0.5">Calculado automaticamente — clique para ajustar manualmente</p>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            {manual
+              ? "Modo manual — os valores foram definidos por você"
+              : "Calculado automaticamente — clique em um indicador para ajustar"}
+          </p>
         </div>
-        <button
-          onClick={save}
-          disabled={pending}
-          className="flex items-center gap-2 px-4 h-8 text-xs font-bold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-60"
-          style={{ background: "linear-gradient(135deg, #7B2FBE, #2463FF)", boxShadow: "0 4px 16px rgba(123,47,190,0.30)" }}
-        >
-          {pending ? "Salvando…" : saved ? "✓ Salvo" : "Salvar"}
-        </button>
+        <div className="flex items-center gap-2">
+          {manual && (
+            <button
+              onClick={resetToAuto}
+              disabled={pending}
+              className="flex items-center gap-1.5 px-3 h-8 text-xs font-semibold rounded-xl border transition-all hover:bg-slate-50 disabled:opacity-50"
+              style={{ borderColor: "#E2E8F0", color: "#64748B" }}
+              title="Voltar ao cálculo automático"
+            >
+              <RotateCcw className="w-3 h-3" />
+              Voltar ao Auto
+            </button>
+          )}
+          <button
+            onClick={save}
+            disabled={pending}
+            className="flex items-center gap-2 px-4 h-8 text-xs font-bold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-60"
+            style={{ background: "linear-gradient(135deg, #7B2FBE, #2463FF)", boxShadow: "0 4px 16px rgba(123,47,190,0.30)" }}
+          >
+            {pending ? "Salvando…" : saved ? "✓ Salvo" : "Salvar"}
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-4 gap-3">
         {indicators.map(({ key, label, val, set }) => {
-          const cfg = LIGHT_CFG[val]
+          const cfg    = LIGHT_CFG[val]
+          const autoCfg = LIGHT_CFG[autoSuggestion[key as keyof typeof autoSuggestion]]
+          const differsFromAuto = manual && val !== autoSuggestion[key as keyof typeof autoSuggestion]
           return (
             <button
               key={key}
               onClick={() => cycle(val, set)}
               title={INDICATOR_HINTS[key]}
-              className="flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all hover:scale-[1.03] active:scale-[0.98] cursor-pointer"
+              className="flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all hover:scale-[1.03] active:scale-[0.98] cursor-pointer relative"
               style={{
                 background: cfg.bg,
                 borderColor: cfg.border,
                 boxShadow: `0 0 0 3px ${cfg.ring}`,
               }}
             >
+              {differsFromAuto && (
+                <span
+                  className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full"
+                  style={{ background: autoCfg.color }}
+                  title={`Auto: ${autoCfg.label}`}
+                />
+              )}
               <div
                 className="w-8 h-8 rounded-lg"
                 style={{
