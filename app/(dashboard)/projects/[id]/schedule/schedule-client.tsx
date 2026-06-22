@@ -17,8 +17,9 @@ import {
   List, BarChart2, Search, FolderOpen, Paperclip,
   Link2, Lock, ArrowRight, GripVertical, FileSpreadsheet, ArrowUpDown,
   Upload, Download, FileText, FileImage, FileArchive, Users,
-  LayoutTemplate, Milestone, Zap, Award, Star, Globe2,
+  LayoutTemplate, Milestone, Zap, Award, Star, Globe2, TrendingUp,
 } from "lucide-react"
+import { SCurveClient, type SCurveData } from "../s-curve/s-curve-client"
 import {
   createTask, updateTask, deleteTask, createArea,
   reorderAreas, reorderTasks,
@@ -1020,7 +1021,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
   const [tasks, setTasks]   = useState<Task[]>(initialTasks)
   const [areas, setAreas]   = useState<Area[]>(initialAreas)
   const [members, setMembers] = useState<Member[]>(initialMembers)
-  const [viewMode, setViewMode] = useState<"list" | "gantt">("list")
+  const [viewMode, setViewMode] = useState<"list" | "gantt" | "curva-s">("list")
 
   // List view state
   const [expandedAreas, setExpandedAreas] = useState<Set<string>>(() => new Set(initialAreas.map((a) => a.id)))
@@ -1058,6 +1059,18 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
   const [tplStartDate,    setTplStartDate]    = useState<string>("")
   const [tplApplying,     setTplApplying]     = useState(false)
   const [cascadeInfo, setCascadeInfo] = useState<{ count: number; delta: number } | null>(null)
+
+  // ── Curva S view state ───────────────────────────────────────────────────
+  const [sCurveData, setSCurveData]     = useState<SCurveData | null>(null)
+  const [sCurveLoading, setSCurveLoading] = useState(false)
+  const [sCurveKey, setSCurveKey]       = useState(0)
+
+  // ── Baseline modal state ─────────────────────────────────────────────────
+  const [baselineModal,    setBaselineModal]    = useState(false)
+  const [baselineName,     setBaselineName]     = useState("")
+  const [baselineDesc,     setBaselineDesc]     = useState("")
+  const [baselineCreating, setBaselineCreating] = useState(false)
+  const [baselineToast,    setBaselineToast]    = useState<string | null>(null)
 
   async function openTemplateModal() {
     setTplModalOpen(true)
@@ -1097,6 +1110,57 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
     const timer = setTimeout(() => setCascadeInfo(null), 4000)
     return () => clearTimeout(timer)
   }, [cascadeInfo])
+
+  useEffect(() => {
+    if (!baselineToast) return
+    const t = setTimeout(() => setBaselineToast(null), 4000)
+    return () => clearTimeout(t)
+  }, [baselineToast])
+
+  useEffect(() => {
+    if (viewMode !== "curva-s") return
+    if (sCurveData) return
+    loadSCurve()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode])
+
+  async function loadSCurve() {
+    setSCurveLoading(true)
+    try {
+      const res = await fetch(`/api/projects/${project.id}/s-curve`)
+      const json = await res.json()
+      setSCurveData(json)
+    } finally {
+      setSCurveLoading(false)
+    }
+  }
+
+  async function createBaselineFromHeader() {
+    setBaselineCreating(true)
+    try {
+      const res = await fetch(`/api/projects/${project.id}/baselines`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name:        baselineName  || undefined,
+          description: baselineDesc || undefined,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) { alert(json.error ?? "Erro ao gravar baseline"); return }
+      setBaselineModal(false)
+      setBaselineName("")
+      setBaselineDesc("")
+      setBaselineToast(`${json.name} gravada com sucesso`)
+      // Refresh S-Curve data (forces remount with fresh data)
+      const fresh = await fetch(`/api/projects/${project.id}/s-curve`)
+      const freshJson = await fresh.json()
+      setSCurveData(freshJson)
+      setSCurveKey(k => k + 1)
+    } finally {
+      setBaselineCreating(false)
+    }
+  }
 
   // Gantt-specific expand + inline edit state
   const [expandedGanttAreas, setExpandedGanttAreas] = useState<Set<string>>(
@@ -1524,7 +1588,19 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
               className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-lg transition-all ${viewMode === "gantt" ? "bg-white text-[#0F172A] shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>
               <BarChart2 className="w-3.5 h-3.5" /> Gantt
             </button>
+            <button onClick={() => setViewMode("curva-s")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-lg transition-all ${viewMode === "curva-s" ? "bg-white text-[#0F172A] shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>
+              <TrendingUp className="w-3.5 h-3.5" /> Curva S
+            </button>
           </div>
+
+          {/* Gravar Baseline */}
+          <button onClick={() => setBaselineModal(true)}
+            className="inline-flex items-center gap-1.5 px-3 h-8 text-xs font-semibold rounded-xl border transition-all hover:opacity-90 shrink-0"
+            style={{ borderColor: "rgba(245,158,11,0.4)", color: "#D97706", background: "rgba(245,158,11,0.07)" }}
+            title="Congela as datas Início/Fim Plan. atuais como baseline de comparação">
+            <Award className="w-3.5 h-3.5" /> Gravar Baseline
+          </button>
 
           {/* Nova Atividade */}
           <button onClick={() => openAdd()}
@@ -1651,23 +1727,25 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
             </button>
           )}
 
-          {/* Exportar Excel */}
-          <button
-            onClick={handleExport}
-            disabled={exporting || tasks.length === 0}
-            className="inline-flex items-center gap-1.5 px-2.5 h-7 text-xs font-semibold rounded-lg border transition-all hover:border-emerald-300 hover:text-emerald-600 hover:bg-emerald-50 active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
-            style={{ borderColor: "#D1FAE5", color: "#059669", background: "white" }}
-            title="Exportar cronograma em Excel">
-            {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileSpreadsheet className="w-3.5 h-3.5" />}
-            {exporting ? "Exportando…" : "Excel"}
-          </button>
-
-          {/* Usar Modelo */}
-          <button onClick={openTemplateModal}
-            className="inline-flex items-center gap-1.5 px-2.5 h-7 text-xs font-semibold rounded-lg border border-slate-200 text-slate-500 hover:border-[#7B2FBE] hover:text-[#7B2FBE] transition-all bg-white shrink-0"
-            title={tasks.length === 0 ? "Iniciar cronograma a partir de um modelo" : "Adicionar atividades de um modelo"}>
-            <LayoutTemplate className="w-3.5 h-3.5" /> Usar Modelo
-          </button>
+          {/* Exportar Excel e Usar Modelo — ocultados na view Curva S */}
+          {viewMode !== "curva-s" && (
+            <>
+              <button
+                onClick={handleExport}
+                disabled={exporting || tasks.length === 0}
+                className="inline-flex items-center gap-1.5 px-2.5 h-7 text-xs font-semibold rounded-lg border transition-all hover:border-emerald-300 hover:text-emerald-600 hover:bg-emerald-50 active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                style={{ borderColor: "#D1FAE5", color: "#059669", background: "white" }}
+                title="Exportar cronograma em Excel">
+                {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileSpreadsheet className="w-3.5 h-3.5" />}
+                {exporting ? "Exportando…" : "Excel"}
+              </button>
+              <button onClick={openTemplateModal}
+                className="inline-flex items-center gap-1.5 px-2.5 h-7 text-xs font-semibold rounded-lg border border-slate-200 text-slate-500 hover:border-[#7B2FBE] hover:text-[#7B2FBE] transition-all bg-white shrink-0"
+                title={tasks.length === 0 ? "Iniciar cronograma a partir de um modelo" : "Adicionar atividades de um modelo"}>
+                <LayoutTemplate className="w-3.5 h-3.5" /> Usar Modelo
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -2952,12 +3030,98 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
         </div>
       )}
 
+      {/* ── CURVA S VIEW ─────────────────────────────────────────────────── */}
+      {viewMode === "curva-s" && (
+        <div className="flex-1 overflow-auto p-6 bg-slate-50">
+          {sCurveLoading && !sCurveData ? (
+            <div className="flex flex-col items-center justify-center h-64 gap-3">
+              <Loader2 className="w-8 h-8 animate-spin text-slate-300" />
+              <p className="text-sm text-slate-400 font-medium">Carregando Curva S…</p>
+            </div>
+          ) : sCurveData ? (
+            <SCurveClient key={sCurveKey} projectId={project.id} initialData={sCurveData} />
+          ) : null}
+        </div>
+      )}
+
+      {/* ── Baseline modal ──────────────────────────────────────────────────── */}
+      {baselineModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(2px)" }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: "rgba(245,158,11,0.12)" }}>
+                <Award className="w-4.5 h-4.5 text-amber-500" style={{ width: 18, height: 18 }} />
+              </div>
+              <h3 className="text-base font-bold text-[#0F172A]">Gravar Baseline</h3>
+            </div>
+            <p className="text-sm text-slate-500 mb-5 ml-12">
+              Congela as datas <strong>Início/Fim Plan.</strong> atuais do cronograma como referência de comparação na Curva S.
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-1.5">Nome</label>
+                <input
+                  type="text"
+                  value={baselineName}
+                  onChange={(e) => setBaselineName(e.target.value)}
+                  placeholder="Ex: Baseline Original, Replanejamento Mai/26…"
+                  autoFocus
+                  onKeyDown={(e) => e.key === "Enter" && !baselineCreating && createBaselineFromHeader()}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-1.5">
+                  Motivo do replanejamento <span className="font-normal normal-case">— opcional</span>
+                </label>
+                <textarea
+                  value={baselineDesc}
+                  onChange={(e) => setBaselineDesc(e.target.value)}
+                  rows={3}
+                  placeholder="Ex: Atraso na entrega do fornecedor, extensão de escopo, mudança de prioridade…"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 transition-all resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => { setBaselineModal(false); setBaselineName(""); setBaselineDesc("") }}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">
+                Cancelar
+              </button>
+              <button
+                onClick={createBaselineFromHeader}
+                disabled={baselineCreating}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 hover:opacity-90"
+                style={{ background: "linear-gradient(135deg, #D97706, #F59E0B)", boxShadow: "0 4px 12px rgba(217,119,6,0.30)" }}>
+                {baselineCreating
+                  ? <span className="flex items-center justify-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Gravando…</span>
+                  : <span className="flex items-center justify-center gap-2"><Award className="w-3.5 h-3.5" /> Gravar Baseline</span>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Cascade date-shift toast */}
       {cascadeInfo && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl text-sm font-semibold text-white select-none"
           style={{ background: "linear-gradient(135deg, #2463FF, #7B2FBE)", boxShadow: "0 8px 24px rgba(36,99,255,0.35)" }}>
           <Zap className="w-4 h-4 shrink-0" />
           {cascadeInfo.count} atividade{cascadeInfo.count !== 1 ? "s" : ""} replanejada{cascadeInfo.count !== 1 ? "s" : ""} automaticamente ({cascadeInfo.delta > 0 ? "+" : ""}{cascadeInfo.delta}d)
+        </div>
+      )}
+
+      {/* Baseline created toast */}
+      {baselineToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl text-sm font-semibold text-white select-none"
+          style={{ background: "linear-gradient(135deg, #D97706, #F59E0B)", boxShadow: "0 8px 24px rgba(217,119,6,0.35)" }}>
+          <Award className="w-4 h-4 shrink-0" />
+          {baselineToast}
         </div>
       )}
     </div>

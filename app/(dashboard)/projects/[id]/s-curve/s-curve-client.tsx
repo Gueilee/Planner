@@ -20,7 +20,7 @@ interface BaselineMeta {
   snapCount: number
 }
 
-interface SCurveData {
+export interface SCurveData {
   series: Record<string, number | string>[]
   baselines: BaselineMeta[]
   totalTasks: number
