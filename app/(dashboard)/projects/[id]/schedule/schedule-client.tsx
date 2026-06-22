@@ -7,7 +7,7 @@ import Link from "next/link"
 import {
   format, differenceInDays, startOfMonth, endOfMonth,
   eachMonthOfInterval, addMonths, subMonths, addDays, subDays,
-  isSaturday, isSunday, min, max, isAfter, isBefore, eachWeekOfInterval,
+  isSaturday, isSunday, min, max, isAfter, isBefore, eachWeekOfInterval, parseISO,
 } from "date-fns"
 import { parseDateStr, fmtDateShort, todayStr } from "@/lib/date-utils"
 import { ptBR } from "date-fns/locale"
@@ -17,7 +17,7 @@ import {
   List, BarChart2, Search, FolderOpen, Paperclip,
   Link2, Lock, ArrowRight, GripVertical, FileSpreadsheet, ArrowUpDown,
   Upload, Download, FileText, FileImage, FileArchive, Users,
-  LayoutTemplate, Milestone, Zap, Award, Star, Globe2, TrendingUp,
+  LayoutTemplate, Milestone, Zap, Award, Star, Globe2, TrendingUp, Clock,
 } from "lucide-react"
 import { SCurveClient, type SCurveData } from "../s-curve/s-curve-client"
 import {
@@ -735,6 +735,228 @@ function TaskForm({ mode, initial, areas, members, allTasks, onSave, onDelete, o
   )
 }
 
+// ─── Time Panel ──────────────────────────────────────────────────────────────
+
+interface TimeEntryItem {
+  id: string
+  hours: number
+  date: string
+  note: string | null
+  user: { id: string; name: string; image: string | null }
+  createdAt: string
+}
+
+function TimePanel({ taskId, projectId, taskTitle, estimatedEffort, onClose, onUpdated }: {
+  taskId: string
+  projectId: string
+  taskTitle: string
+  estimatedEffort: number | null
+  onClose: () => void
+  onUpdated: (newActualEffort: number) => void
+}) {
+  const [entries, setEntries]     = useState<TimeEntryItem[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [date, setDate]           = useState(todayStr())
+  const [hours, setHours]         = useState("")
+  const [note, setNote]           = useState("")
+  const [error, setError]         = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch(`/api/projects/${projectId}/tasks/${taskId}/time-entries`)
+      .then(r => r.json())
+      .then(data => { setEntries(data); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [taskId, projectId])
+
+  const totalHours = entries.reduce((s, e) => s + e.hours, 0)
+  const pctEst = estimatedEffort && estimatedEffort > 0
+    ? Math.round((totalHours / estimatedEffort) * 100)
+    : null
+  const overBudget = pctEst !== null && pctEst > 100
+
+  async function addEntry() {
+    const h = parseFloat(hours)
+    if (!h || h <= 0) { setError("Informe um valor de horas válido"); return }
+    setSubmitting(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/tasks/${taskId}/time-entries`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hours: h, date, note: note || undefined }),
+      })
+      const json = await res.json()
+      if (!res.ok) { setError(json.error ?? "Erro ao lançar horas"); return }
+      setEntries(json.entries)
+      setHours("")
+      setNote("")
+      onUpdated(json.actualEffort)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function deleteEntry(entryId: string) {
+    const res = await fetch(`/api/projects/${projectId}/tasks/${taskId}/time-entries/${entryId}`, { method: "DELETE" })
+    if (res.ok) {
+      const json = await res.json()
+      setEntries(prev => prev.filter(e => e.id !== entryId))
+      onUpdated(json.actualEffort)
+    }
+  }
+
+  return (
+    <div className="fixed inset-y-0 right-0 z-50 flex flex-col bg-white shadow-2xl"
+      style={{ width: 380, borderLeft: "1px solid #E2E8F0" }}>
+
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
+        <div className="min-w-0">
+          <h3 className="font-black text-[#0F172A] text-sm flex items-center gap-2">
+            <Clock className="w-4 h-4 text-amber-500" /> Apontamento de Horas
+          </h3>
+          <p className="text-xs text-slate-400 truncate mt-0.5">{taskTitle}</p>
+        </div>
+        <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Summary */}
+      <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 shrink-0">
+        <div className="flex items-center gap-4">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Lançado</p>
+            <p className="text-2xl font-black text-[#0F172A] leading-none mt-1">{totalHours.toFixed(1)}<span className="text-sm font-semibold text-slate-400 ml-0.5">h</span></p>
+          </div>
+          {estimatedEffort && estimatedEffort > 0 && (
+            <>
+              <div className="w-px h-8 bg-slate-200" />
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Estimado</p>
+                <p className="text-2xl font-black text-[#0F172A] leading-none mt-1">{estimatedEffort.toFixed(1)}<span className="text-sm font-semibold text-slate-400 ml-0.5">h</span></p>
+              </div>
+              <div className="w-px h-8 bg-slate-200" />
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">% Est.</p>
+                <p className={`text-2xl font-black leading-none mt-1 ${overBudget ? "text-red-500" : "text-emerald-500"}`}>
+                  {pctEst}%
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+        {estimatedEffort && estimatedEffort > 0 && (
+          <div className="mt-3 bg-slate-200 rounded-full h-1.5 overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${overBudget ? "bg-red-400" : "bg-amber-400"}`}
+              style={{ width: `${Math.min(100, (totalHours / estimatedEffort) * 100)}%` }}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Add entry form */}
+      <div className="px-5 py-4 border-b border-slate-100 shrink-0">
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Lançar Horas</p>
+        <div className="flex gap-2 mb-2">
+          <div className="flex-1">
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1 block">Data</label>
+            <input
+              type="date"
+              value={date}
+              onChange={e => setDate(e.target.value)}
+              className="w-full h-8 px-2.5 text-xs rounded-lg border border-slate-200 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-100 transition-colors"
+            />
+          </div>
+          <div style={{ width: 88 }}>
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1 block">Horas</label>
+            <input
+              type="number"
+              min="0.25" max="24" step="0.25"
+              value={hours}
+              onChange={e => setHours(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && !submitting && addEntry()}
+              placeholder="0,0"
+              className="w-full h-8 px-2.5 text-xs rounded-lg border border-slate-200 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-100 transition-colors text-center font-bold"
+            />
+          </div>
+        </div>
+        <input
+          type="text"
+          value={note}
+          onChange={e => setNote(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && !submitting && addEntry()}
+          placeholder="O que foi feito? (opcional)"
+          className="w-full h-8 px-2.5 text-xs rounded-lg border border-slate-200 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-100 transition-colors mb-2.5"
+        />
+        {error && <p className="text-xs text-red-500 font-medium mb-2">{error}</p>}
+        <button
+          onClick={addEntry}
+          disabled={submitting || !hours}
+          className="w-full h-8 rounded-xl text-xs font-bold text-white transition-all disabled:opacity-50 hover:opacity-90 active:scale-[0.98]"
+          style={{ background: "linear-gradient(135deg, #D97706, #F59E0B)", boxShadow: "0 3px 10px rgba(217,119,6,0.25)" }}>
+          {submitting
+            ? <span className="flex items-center justify-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Lançando…</span>
+            : <span className="flex items-center justify-center gap-1.5"><Plus className="w-3.5 h-3.5" /> Lançar Horas</span>}
+        </button>
+      </div>
+
+      {/* Entries list */}
+      <div className="flex-1 overflow-y-auto px-5 py-3">
+        {loading ? (
+          <div className="flex justify-center py-10">
+            <Loader2 className="w-5 h-5 animate-spin text-slate-300" />
+          </div>
+        ) : entries.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-14 text-center gap-2">
+            <Clock className="w-9 h-9 text-slate-200" />
+            <p className="text-sm font-semibold text-slate-400">Nenhuma hora lançada</p>
+            <p className="text-xs text-slate-300">Use o formulário acima para registrar horas trabalhadas</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+              Histórico ({entries.length} {entries.length === 1 ? "lançamento" : "lançamentos"})
+            </p>
+            {entries.map(e => (
+              <div key={e.id}
+                className="flex items-start gap-3 p-3 rounded-xl border border-slate-100 hover:border-amber-200 hover:bg-amber-50/40 transition-all group">
+                <div className="w-7 h-7 rounded-full bg-amber-100 flex items-center justify-center shrink-0 text-xs font-black text-amber-700 overflow-hidden">
+                  {e.user.image
+                    ? <img src={e.user.image} className="w-7 h-7 object-cover" alt="" />
+                    : e.user.name.slice(0, 1).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-1">
+                    <p className="text-xs font-semibold text-slate-700 truncate">{e.user.name}</p>
+                    <span className="text-xs font-black text-amber-600 shrink-0 bg-amber-50 px-1.5 py-0.5 rounded-md">
+                      {e.hours % 1 === 0 ? e.hours : e.hours.toFixed(2)}h
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    {format(parseISO(e.date.slice(0, 10) + "T12:00:00"), "dd/MM/yyyy", { locale: ptBR })}
+                  </p>
+                  {e.note && (
+                    <p className="text-xs text-slate-500 mt-1 italic leading-relaxed">{e.note}</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => deleteEntry(e.id)}
+                  className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all shrink-0"
+                  title="Remover lançamento">
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Evidence Panel ───────────────────────────────────────────────────────────
 
 function EvidencePanel({ taskId, projectId, taskTitle, onClose, onUploaded }: {
@@ -1042,6 +1264,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
 
   const [panel, setPanel]         = useState<{ mode: "add" | "edit"; task: Partial<Task> & { projectId: string } } | null>(null)
   const [evidencePanel, setEvidencePanel] = useState<{ taskId: string; title: string } | null>(null)
+  const [timePanel, setTimePanel] = useState<{ taskId: string; title: string; estimatedEffort: number | null } | null>(null)
   const [pending, start]          = useTransition()
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
@@ -1993,6 +2216,18 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                         <Paperclip className="w-3 h-3" />
                       </button>
                       <button
+                        onClick={() => setTimePanel({ taskId: t.id, title: t.title, estimatedEffort: t.estimatedEffort })}
+                        title="Lançar horas"
+                        className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
+                        style={
+                          t.actualEffort && t.actualEffort > 0
+                            ? { background: "#FEF3C7", color: "#D97706" }
+                            : { background: "#F1F5F9", color: "#94A3B8" }
+                        }
+                      >
+                        <Clock className="w-3 h-3" />
+                      </button>
+                      <button
                         onClick={() => handleDelete(t.id)}
                         title="Excluir"
                         className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
@@ -2867,6 +3102,25 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
             onSave={handleSaved}
             onDelete={panel.mode === "edit" && panel.task.id ? () => handleDelete(panel.task.id!) : undefined}
             onClose={() => setPanel(null)}
+          />
+        </>
+      )}
+
+      {/* ── Time panel ───────────────────────────────────────────────────── */}
+      {timePanel && (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[1px]" onClick={() => setTimePanel(null)} />
+          <TimePanel
+            taskId={timePanel.taskId}
+            projectId={project.id}
+            taskTitle={timePanel.title}
+            estimatedEffort={timePanel.estimatedEffort}
+            onClose={() => setTimePanel(null)}
+            onUpdated={(newActualEffort) => {
+              setTasks(prev => prev.map(t =>
+                t.id === timePanel.taskId ? { ...t, actualEffort: newActualEffort } : t
+              ))
+            }}
           />
         </>
       )}

@@ -188,6 +188,7 @@ model User {
   scheduleTemplates       ScheduleTemplate[]
   createdBenefits         ProjectBenefit[]
   createdMeasurements     BenefitMeasurement[]
+  timeEntries             TimeEntry[]
 }
 
 // ─────────────────────────────────────────────
@@ -340,9 +341,30 @@ model ScheduleTask {
 
   comments    Comment[]
   attachments Attachment[]
+  timeEntries TimeEntry[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// TIME ENTRIES — Apontamento de Horas
+// ─────────────────────────────────────────────
+
+model TimeEntry {
+  id        String       @id @default(cuid())
+  taskId    String
+  userId    String
+  hours     Float
+  date      DateTime     @default(now())
+  note      String?
+  createdAt DateTime     @default(now())
+
+  task ScheduleTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User         @relation(fields: [userId], references: [id])
+
+  @@index([taskId])
+  @@index([userId])
 }
 
 // ─────────────────────────────────────────────
