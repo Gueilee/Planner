@@ -156,8 +156,8 @@ const SECTIONS = [
 
 // ── BenefitsSection ─────────────────────────────────────────────────────────
 
-type NewBenefit = { category: "FINANCIAL"|"OPERATIONAL"|"STRATEGIC"; type: string; description: string; plannedValue: string; frequency: "ONCE"|"MONTHLY"|"ANNUAL"; customTypeName: string }
-const EMPTY_NEW: NewBenefit = { category: "FINANCIAL", type: "COST_REDUCTION", description: "", plannedValue: "", frequency: "MONTHLY", customTypeName: "" }
+type NewBenefit = { category: "FINANCIAL"|"OPERATIONAL"|"STRATEGIC"; types: string[]; description: string; plannedValue: string; frequency: "ONCE"|"MONTHLY"|"ANNUAL"; customTypeName: string }
+const EMPTY_NEW: NewBenefit = { category: "FINANCIAL", types: ["COST_REDUCTION"], description: "", plannedValue: "", frequency: "MONTHLY", customTypeName: "" }
 
 function BenefitsSection({ projectId, initialBenefits }: { projectId: string; initialBenefits: BenefitRow[] }) {
   const [benefits, setBenefits] = useState<BenefitRow[]>(initialBenefits)
@@ -228,32 +228,45 @@ function BenefitsSection({ projectId, initialBenefits }: { projectId: string; in
   }
 
   function handleAdd() {
-    const meta = BEN_META[newBen.type]
-    const val  = meta?.valueType === "currency" ? parseBRLEdit(newBen.plannedValue) : parseFloat(newBen.plannedValue) || 0
+    const firstMeta = BEN_META[newBen.types[0]]
+    const val = firstMeta?.valueType === "currency" ? parseBRLEdit(newBen.plannedValue) : parseFloat(newBen.plannedValue) || 0
+    const snapshot = { ...newBen }
     startTransition(async () => {
       try {
-        await createBenefit(projectId, {
-          category:        newBen.category as never,
-          type:            newBen.type     as never,
-          description:     newBen.description,
-          unit:            meta?.unit ?? "R$",
-          plannedValue:    val,
-          realizedValue:   0,
-          frequency:       newBen.frequency as never,
-          status:          "PLANNED" as never,
-          baselineDate:    null,
-          realizationDate: null,
-          evidence:        null,
-          customTypeName:  newBen.type === "OTHER" ? (newBen.customTypeName || null) : null,
-        })
+        await Promise.all(snapshot.types.map(t =>
+          createBenefit(projectId, {
+            category:        snapshot.category as never,
+            type:            t as never,
+            description:     snapshot.description,
+            unit:            BEN_META[t]?.unit ?? "R$",
+            plannedValue:    val,
+            realizedValue:   0,
+            frequency:       snapshot.frequency as never,
+            status:          "PLANNED" as never,
+            baselineDate:    null,
+            realizationDate: null,
+            evidence:        null,
+            customTypeName:  t === "OTHER" ? (snapshot.customTypeName || null) : null,
+          })
+        ))
         setAdding(false)
         setNewBen({ ...EMPTY_NEW })
-        setBenefits(prev => [...prev, {
-          id: `new-${Date.now()}`, category: newBen.category, type: newBen.type,
-          description: newBen.description, unit: meta?.unit ?? "R$",
-          plannedValue: val, realizedValue: 0, frequency: newBen.frequency, status: "PLANNED",
-          customTypeName: newBen.type === "OTHER" ? (newBen.customTypeName || null) : null,
-        }])
+        const ts = Date.now()
+        setBenefits(prev => [
+          ...prev,
+          ...snapshot.types.map((t, i) => ({
+            id: `new-${ts}-${i}`,
+            category:       snapshot.category,
+            type:           t,
+            description:    snapshot.description,
+            unit:           BEN_META[t]?.unit ?? "R$",
+            plannedValue:   val,
+            realizedValue:  0,
+            frequency:      snapshot.frequency,
+            status:         "PLANNED" as const,
+            customTypeName: t === "OTHER" ? (snapshot.customTypeName || null) : null,
+          })),
+        ])
       } catch (err) {
         console.error("Erro ao adicionar benefício:", err)
       }
@@ -409,120 +422,143 @@ function BenefitsSection({ projectId, initialBenefits }: { projectId: string; in
           className="w-full flex items-center justify-center gap-1.5 h-9 text-xs font-semibold rounded-xl border-2 border-dashed border-slate-200 text-slate-400 hover:border-purple-300 hover:text-purple-600 hover:bg-purple-50 transition-all">
           <Plus className="w-3.5 h-3.5" /> Adicionar Benefício
         </button>
-      ) : (
-        <div className="rounded-xl border-2 border-purple-200 overflow-hidden">
-          {/* Category selector */}
-          <div className="flex gap-1.5 px-4 py-3 border-b border-purple-100 bg-purple-50">
-            {BEN_CATEGORIES.map(c => (
-              <button key={c.value} type="button"
-                onClick={() => setNewBen(n => ({ ...n, category: c.value, type: BEN_TYPES_BY_CAT[c.value][0], customTypeName: "" }))}
-                className="px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all"
-                style={newBen.category === c.value
-                  ? { background: c.color, color: "#fff" }
-                  : { background: "rgba(0,0,0,0.05)", color: "#9c99b0" }}>
-                {c.icon} {c.label}
-              </button>
-            ))}
-          </div>
-          <div className="p-4 space-y-3">
-            {/* Type pills */}
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">Tipo</p>
-              <div className="flex flex-wrap gap-1.5">
-                {BEN_TYPES_BY_CAT[newBen.category].map(t => {
-                  const cat = BEN_CATEGORIES.find(c => c.value === newBen.category)!
-                  return (
-                    <button key={t} type="button"
-                      onClick={() => setNewBen(n => ({ ...n, type: t, plannedValue: "", customTypeName: "" }))}
-                      className="px-2.5 py-1 rounded-full text-[11px] font-semibold border-2 transition-all"
-                      style={newBen.type === t
-                        ? { borderColor: cat.color, background: cat.color, color: "#fff" }
-                        : { borderColor: "#E2E8F0", background: "#fff", color: "#6b6880" }}>
-                      {BEN_META[t]?.label ?? t}
-                    </button>
-                  )
-                })}
-              </div>
+      ) : (() => {
+        const activeCat = BEN_CATEGORIES.find(c => c.value === newBen.category)!
+        const firstMeta = BEN_META[newBen.types[0]]
+        const showFreq  = newBen.types.some(t => BEN_META[t]?.showFrequency)
+        const hasOther  = newBen.types.includes("OTHER")
+        const canAdd    = newBen.types.length > 0 && newBen.description.trim() && (!hasOther || newBen.customTypeName.trim())
+        return (
+          <div className="rounded-xl border-2 border-purple-200 overflow-hidden">
+            {/* Category selector */}
+            <div className="flex gap-1.5 px-4 py-3 border-b border-purple-100 bg-purple-50">
+              {BEN_CATEGORIES.map(c => (
+                <button key={c.value} type="button"
+                  onClick={() => setNewBen(n => ({ ...n, category: c.value, types: [BEN_TYPES_BY_CAT[c.value][0]], customTypeName: "" }))}
+                  className="px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all"
+                  style={newBen.category === c.value
+                    ? { background: c.color, color: "#fff" }
+                    : { background: "rgba(0,0,0,0.05)", color: "#9c99b0" }}>
+                  {c.icon} {c.label}
+                </button>
+              ))}
             </div>
-            {/* Custom type name — only when Outros is selected */}
-            {newBen.type === "OTHER" && (
+            <div className="p-4 space-y-3">
+              {/* Type pills — multi-select */}
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">Nome do Tipo de Benefício</p>
-                <input
-                  className={inpCls}
-                  placeholder="Ex: Redução de licenças, Melhora em NPS..."
-                  value={newBen.customTypeName}
-                  onChange={e => setNewBen(n => ({ ...n, customTypeName: e.target.value }))}
-                  autoFocus
-                />
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Tipo</p>
+                  {newBen.types.length > 1 && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                      style={{ background: `${activeCat.color}18`, color: activeCat.color }}>
+                      {newBen.types.length} selecionados
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {BEN_TYPES_BY_CAT[newBen.category].map(t => {
+                    const isSelected = newBen.types.includes(t)
+                    return (
+                      <button key={t} type="button"
+                        onClick={() => setNewBen(n => {
+                          const next = isSelected
+                            ? n.types.filter(x => x !== t)
+                            : [...n.types, t]
+                          return { ...n, types: next.length > 0 ? next : [t], customTypeName: next.includes("OTHER") ? n.customTypeName : "" }
+                        })}
+                        className="px-2.5 py-1 rounded-full text-[11px] font-semibold border-2 transition-all"
+                        style={isSelected
+                          ? { borderColor: activeCat.color, background: activeCat.color, color: "#fff" }
+                          : { borderColor: "#E2E8F0", background: "#fff", color: "#6b6880" }}>
+                        {BEN_META[t]?.label ?? t}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-            )}
 
-            {/* Description */}
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">Descrição</p>
-              <textarea rows={2} className={`${inpCls} h-auto py-2 resize-none`}
-                placeholder="Como este benefício será gerado?"
-                value={newBen.description}
-                onChange={e => setNewBen(n => ({ ...n, description: e.target.value }))} />
-            </div>
-            {/* Value */}
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">
-                  {BEN_META[newBen.type]?.valueType === "currency" ? "Valor (R$)" : `Resultado (${BEN_META[newBen.type]?.suffix})`}
-                </p>
-                {BEN_META[newBen.type]?.valueType === "currency" ? (
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-emerald-600">R$</span>
-                    <input className={`${inpCls} pl-8`} placeholder="0,00"
-                      value={newBen.plannedValue}
-                      onChange={e => { const raw = e.target.value.replace(/\D/g, ""); setNewBen(n => ({ ...n, plannedValue: raw ? fmtBRLInput(raw) : "" })) }} />
-                  </div>
-                ) : (
-                  <div className="relative">
-                    <input type="number" min={0} className={`${inpCls} pr-16`}
-                      placeholder="0" value={newBen.plannedValue}
-                      onChange={e => setNewBen(n => ({ ...n, plannedValue: e.target.value }))} />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-purple-600">{BEN_META[newBen.type]?.suffix}</span>
+              {/* Custom type name — only when Outros is selected */}
+              {hasOther && (
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">Nome do Benefício "Outros"</p>
+                  <input
+                    className={inpCls}
+                    placeholder="Ex: Redução de licenças, Melhora em NPS..."
+                    value={newBen.customTypeName}
+                    onChange={e => setNewBen(n => ({ ...n, customTypeName: e.target.value }))}
+                    autoFocus
+                  />
+                </div>
+              )}
+
+              {/* Description */}
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">Descrição</p>
+                <textarea rows={2} className={`${inpCls} h-auto py-2 resize-none`}
+                  placeholder="Como este benefício será gerado?"
+                  value={newBen.description}
+                  onChange={e => setNewBen(n => ({ ...n, description: e.target.value }))} />
+              </div>
+
+              {/* Value + Frequency */}
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">
+                    {firstMeta?.valueType === "currency" ? "Valor (R$)" : `Resultado (${firstMeta?.suffix ?? ""})`}
+                  </p>
+                  {firstMeta?.valueType === "currency" ? (
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-emerald-600">R$</span>
+                      <input className={`${inpCls} pl-8`} placeholder="0,00"
+                        value={newBen.plannedValue}
+                        onChange={e => { const raw = e.target.value.replace(/\D/g, ""); setNewBen(n => ({ ...n, plannedValue: raw ? fmtBRLInput(raw) : "" })) }} />
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <input type="number" min={0} className={`${inpCls} pr-16`}
+                        placeholder="0" value={newBen.plannedValue}
+                        onChange={e => setNewBen(n => ({ ...n, plannedValue: e.target.value }))} />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-purple-600">{firstMeta?.suffix}</span>
+                    </div>
+                  )}
+                </div>
+                {showFreq && (
+                  <div className="shrink-0">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">Frequência</p>
+                    <div className="flex gap-1.5">
+                      {BEN_FREQS.map(f => (
+                        <button key={f.value} type="button"
+                          onClick={() => setNewBen(n => ({ ...n, frequency: f.value }))}
+                          className="h-10 px-2.5 rounded-xl text-[11px] font-bold border-2 transition-all"
+                          style={newBen.frequency === f.value
+                            ? { borderColor: "#7B2FBE", background: "#7B2FBE", color: "#fff" }
+                            : { borderColor: "#E2E8F0", background: "#fff", color: "#94A3B8" }}>
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
-              {BEN_META[newBen.type]?.showFrequency && (
-                <div className="shrink-0">
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">Frequência</p>
-                  <div className="flex gap-1.5">
-                    {BEN_FREQS.map(f => (
-                      <button key={f.value} type="button"
-                        onClick={() => setNewBen(n => ({ ...n, frequency: f.value }))}
-                        className="h-10 px-2.5 rounded-xl text-[11px] font-bold border-2 transition-all"
-                        style={newBen.frequency === f.value
-                          ? { borderColor: "#7B2FBE", background: "#7B2FBE", color: "#fff" }
-                          : { borderColor: "#E2E8F0", background: "#fff", color: "#94A3B8" }}>
-                        {f.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-            {/* Actions */}
-            <div className="flex justify-end gap-2 pt-1">
-              <button type="button" onClick={() => { setAdding(false); setNewBen({ ...EMPTY_NEW }) }}
-                className="px-3 h-8 text-xs font-semibold rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition-all">
-                Cancelar
-              </button>
-              <button type="button" onClick={handleAdd}
-                disabled={isPending || !newBen.description.trim() || (newBen.type === "OTHER" && !newBen.customTypeName.trim())}
-                className="flex items-center gap-1.5 px-3 h-8 text-xs font-semibold rounded-lg text-white transition-all disabled:opacity-50"
-                style={{ background: "linear-gradient(135deg, #7B2FBE, #9333EA)" }}>
-                {isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
-                Adicionar
-              </button>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-2 pt-1">
+                <button type="button" onClick={() => { setAdding(false); setNewBen({ ...EMPTY_NEW }) }}
+                  className="px-3 h-8 text-xs font-semibold rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition-all">
+                  Cancelar
+                </button>
+                <button type="button" onClick={handleAdd}
+                  disabled={isPending || !canAdd}
+                  className="flex items-center gap-1.5 px-4 h-8 text-xs font-semibold rounded-lg text-white transition-all disabled:opacity-50"
+                  style={{ background: "linear-gradient(135deg, #7B2FBE, #9333EA)" }}>
+                  {isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                  {newBen.types.length > 1 ? `Adicionar ${newBen.types.length} benefícios` : "Adicionar"}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
     </div>
   )
 }
