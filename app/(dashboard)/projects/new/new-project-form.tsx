@@ -17,7 +17,8 @@ type RiskItem    = { description: string; level: "LOW" | "MEDIUM" | "HIGH"; miti
 type FileItem    = { name: string; url: string; size: number; localFile?: File }
 type BenefitItem = {
   category: "FINANCIAL" | "OPERATIONAL" | "STRATEGIC"
-  type: string
+  types: string[]
+  customTypeName: string
   description: string
   plannedValue: string
   frequency: "ONCE" | "MONTHLY" | "ANNUAL"
@@ -78,12 +79,13 @@ const BENEFIT_META: Record<string, {
   QUALITY:            { label: "Qualidade",               unit: "%",         valueType: "percent",  valueLabel: "Melhoria de qualidade",     valuePlaceholder: "0",     suffix: "%",           showFrequency: false },
   GOVERNANCE:         { label: "Governança",              unit: "pontos",    valueType: "score",    valueLabel: "Maturidade de governança",  valuePlaceholder: "0",     suffix: "pontos",      showFrequency: false },
   USER_SATISFACTION:  { label: "Satisfação do Usuário",   unit: "%",         valueType: "percent",  valueLabel: "Satisfação dos usuários",   valuePlaceholder: "0",     suffix: "%",           showFrequency: false },
+  OTHER:              { label: "Outros",                   unit: "R$",        valueType: "currency", valueLabel: "Valor esperado",            valuePlaceholder: "0,00",  suffix: "R$",          showFrequency: true  },
 }
 
 const BENEFIT_TYPES_BY_CAT: Record<string, string[]> = {
-  FINANCIAL:   ["COST_REDUCTION", "REVENUE_INCREASE", "OPEX_REDUCTION", "ANNUAL_SAVINGS", "MONTHLY_SAVINGS"],
-  OPERATIONAL: ["HOURS_SAVED", "PRODUCTIVITY_GAIN", "PROCESS_AUTOMATION", "REWORK_REDUCTION", "TIME_REDUCTION"],
-  STRATEGIC:   ["CUSTOMER_EXPERIENCE", "RISK_REDUCTION", "COMPLIANCE", "QUALITY", "GOVERNANCE", "USER_SATISFACTION"],
+  FINANCIAL:   ["COST_REDUCTION", "REVENUE_INCREASE", "OPEX_REDUCTION", "ANNUAL_SAVINGS", "MONTHLY_SAVINGS", "OTHER"],
+  OPERATIONAL: ["HOURS_SAVED", "PRODUCTIVITY_GAIN", "PROCESS_AUTOMATION", "REWORK_REDUCTION", "TIME_REDUCTION", "OTHER"],
+  STRATEGIC:   ["CUSTOMER_EXPERIENCE", "RISK_REDUCTION", "COMPLIANCE", "QUALITY", "GOVERNANCE", "USER_SATISFACTION", "OTHER"],
 }
 
 const FREQUENCIES = [
@@ -93,7 +95,7 @@ const FREQUENCIES = [
 ] as const
 
 const EMPTY_BENEFIT: BenefitItem = {
-  category: "FINANCIAL", type: "COST_REDUCTION", description: "", plannedValue: "", frequency: "MONTHLY",
+  category: "FINANCIAL", types: ["COST_REDUCTION"], customTypeName: "", description: "", plannedValue: "", frequency: "MONTHLY",
 }
 
 const AREAS = ["Tecnologia", "Projetos", "Qualidade", "Operações", "Financeiro", "Comercial",
@@ -180,8 +182,17 @@ export function NewProjectForm({ users, currentUserId }: Props) {
     setForm(p => ({ ...p, [k]: v }))
 
   const canNext = () => {
-    if (step === 1) return form.title.trim() && form.area && form.sponsorId && form.origin
-    return true
+    switch (step) {
+      case 1: return !!(form.title.trim() && form.projectArea && form.area && form.areaSolicitante && form.sponsorId && form.origin)
+      case 2: return !!(form.scope.trim() && form.asIs.trim() && form.toBe.trim())
+      case 3: return !!(form.assumptions.trim() && form.restrictions.trim() && form.expectedStart && form.expectedEnd)
+      case 4: return form.risks.length > 0 && form.risks.every(r => r.description.trim() && r.mitigation.trim())
+      case 5: return form.benefits.length > 0 && form.benefits.every(b =>
+        b.description.trim() && b.plannedValue.trim() &&
+        (!b.types.includes("OTHER") || b.customTypeName.trim())
+      )
+      default: return true
+    }
   }
 
   // ── File upload ──────────────────────────────────────────────────────────
@@ -219,21 +230,24 @@ export function NewProjectForm({ users, currentUserId }: Props) {
         expectedEnd:    form.expectedEnd,
         risks:          form.risks.filter(r => r.description.trim()),
         benefits:       form.benefits
-          .filter(b => b.description.trim())
-          .map(b => {
-            const meta = BENEFIT_META[b.type]
-            const raw  = b.plannedValue
-            const val  = meta?.valueType === "currency"
-              ? (parseBRL(raw) ?? 0)
-              : (parseFloat(raw) || 0)
-            return {
-              category:     b.category,
-              type:         b.type,
-              description:  b.description,
-              unit:         meta?.unit ?? "R$",
-              plannedValue: val,
-              frequency:    b.frequency,
-            }
+          .filter(b => b.description.trim() && b.plannedValue.trim())
+          .flatMap(b => {
+            const raw = b.plannedValue
+            return b.types.map(t => {
+              const meta = BENEFIT_META[t]
+              const val  = meta?.valueType === "currency"
+                ? (parseBRL(raw) ?? 0)
+                : (parseFloat(raw) || 0)
+              return {
+                category:      b.category,
+                type:          t,
+                description:   b.description,
+                unit:          meta?.unit ?? "R$",
+                plannedValue:  val,
+                frequency:     b.frequency,
+                customTypeName: t === "OTHER" ? (b.customTypeName || null) : null,
+              }
+            })
           }),
         files:          form.files,
       })
@@ -363,7 +377,7 @@ export function NewProjectForm({ users, currentUserId }: Props) {
                     </select>
                   </div>
                   <div>
-                    <Label>Área Solicitante</Label>
+                    <Label required>Área Solicitante</Label>
                     <select className={inputCls} value={form.areaSolicitante} onChange={e => set("areaSolicitante", e.target.value)}>
                       <option value="">Selecione a área...</option>
                       {AREAS.map(a => <option key={a} value={a}>{a}</option>)}
@@ -447,7 +461,7 @@ export function NewProjectForm({ users, currentUserId }: Props) {
                   <div className="rounded-xl border border-[rgba(0,0,0,0.08)] overflow-hidden">
                     <div className="px-4 py-2.5 border-b border-[rgba(0,0,0,0.06)]"
                       style={{ background: "rgba(239,68,68,0.04)" }}>
-                      <p className="text-xs font-bold text-[#DC2626] uppercase tracking-[0.08em]">AS IS — Situação Atual</p>
+                      <p className="text-xs font-bold text-[#DC2626] uppercase tracking-[0.08em]">AS IS — Situação Atual <span className="text-red-500">*</span></p>
                     </div>
                     <div className="p-3">
                       <textarea className={cn(textareaCls, "border-0 shadow-none focus:shadow-none bg-transparent p-0")} rows={5}
@@ -459,7 +473,7 @@ export function NewProjectForm({ users, currentUserId }: Props) {
                   <div className="rounded-xl border border-[rgba(0,0,0,0.08)] overflow-hidden">
                     <div className="px-4 py-2.5 border-b border-[rgba(0,0,0,0.06)]"
                       style={{ background: "rgba(16,185,129,0.05)" }}>
-                      <p className="text-xs font-bold text-[#059669] uppercase tracking-[0.08em]">TO BE — Situação Futura</p>
+                      <p className="text-xs font-bold text-[#059669] uppercase tracking-[0.08em]">TO BE — Situação Futura <span className="text-red-500">*</span></p>
                     </div>
                     <div className="p-3">
                       <textarea className={cn(textareaCls, "border-0 shadow-none focus:shadow-none bg-transparent p-0")} rows={5}
@@ -476,14 +490,14 @@ export function NewProjectForm({ users, currentUserId }: Props) {
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label>Premissas</Label>
+                    <Label required>Premissas</Label>
                     <p className="text-[11px] text-[#9c99b0] mb-2">Eventos que devem acontecer para o projeto ter sucesso</p>
                     <textarea className={textareaCls} rows={5}
                       placeholder="Recursos estarão disponíveis; Apoio das partes interessadas garantido..."
                       value={form.assumptions} onChange={e => set("assumptions", e.target.value)} />
                   </div>
                   <div>
-                    <Label>Restrições</Label>
+                    <Label required>Restrições</Label>
                     <p className="text-[11px] text-[#9c99b0] mb-2">Limitações que podem afetar o desempenho</p>
                     <textarea className={textareaCls} rows={5}
                       placeholder="Prazo fixo de 90 dias; Orçamento limitado; Não interferir nas operações..."
@@ -495,12 +509,12 @@ export function NewProjectForm({ users, currentUserId }: Props) {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label>Data de Início Esperada</Label>
+                    <Label required>Data de Início Esperada</Label>
                     <input type="date" className={inputCls}
                       value={form.expectedStart} onChange={e => set("expectedStart", e.target.value)} />
                   </div>
                   <div>
-                    <Label>Data de Conclusão Esperada</Label>
+                    <Label required>Data de Conclusão Esperada</Label>
                     <input type="date" className={inputCls}
                       value={form.expectedEnd} onChange={e => set("expectedEnd", e.target.value)} />
                   </div>
@@ -526,8 +540,9 @@ export function NewProjectForm({ users, currentUserId }: Props) {
                 </div>
 
                 {form.risks.length === 0 && (
-                  <div className="text-center py-10 text-[#9c99b0] text-sm border-2 border-dashed border-[rgba(0,0,0,0.08)] rounded-xl">
-                    Nenhum risco adicionado — clique em "Adicionar Risco" acima
+                  <div className="text-center py-10 text-sm border-2 border-dashed rounded-xl" style={{ borderColor: "rgba(239,68,68,0.3)", color: "#EF4444", background: "rgba(239,68,68,0.03)" }}>
+                    <AlertTriangle className="w-6 h-6 mx-auto mb-2 opacity-50" />
+                    Adicione ao menos um risco para continuar
                   </div>
                 )}
 
@@ -566,7 +581,7 @@ export function NewProjectForm({ users, currentUserId }: Props) {
                         </div>
                         <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div>
-                            <Label>Descrição do Risco</Label>
+                            <Label required>Descrição do Risco</Label>
                             <textarea className={cn(textareaCls, "h-20 resize-none")} rows={3}
                               placeholder="Descreva o risco identificado..."
                               value={risk.description}
@@ -575,7 +590,7 @@ export function NewProjectForm({ users, currentUserId }: Props) {
                               }} />
                           </div>
                           <div>
-                            <Label>Estratégia de Mitigação</Label>
+                            <Label required>Estratégia de Mitigação</Label>
                             <textarea className={cn(textareaCls, "h-20 resize-none")} rows={3}
                               placeholder="Como será mitigado este risco?"
                               value={risk.mitigation}
@@ -608,18 +623,21 @@ export function NewProjectForm({ users, currentUserId }: Props) {
                 </div>
 
                 {form.benefits.length === 0 && (
-                  <div className="text-center py-12 text-[#9c99b0] text-sm border-2 border-dashed border-[rgba(0,0,0,0.08)] rounded-xl">
-                    <Gem className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                    <p className="font-medium">Nenhum benefício adicionado</p>
-                    <p className="text-[11px] mt-1">Exemplos: redução de R$ 50k/mês em custos, 200 horas/mês economizadas, 30% menos retrabalho</p>
+                  <div className="text-center py-12 text-sm border-2 border-dashed rounded-xl" style={{ borderColor: "rgba(239,68,68,0.3)", color: "#EF4444", background: "rgba(239,68,68,0.03)" }}>
+                    <Gem className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p className="font-medium">Adicione ao menos um benefício para continuar</p>
+                    <p className="text-[11px] mt-1 opacity-70">Ex: redução de R$ 50k/mês em custos, 200 horas/mês economizadas</p>
                   </div>
                 )}
 
                 <div className="space-y-5">
                   {form.benefits.map((ben, i) => {
-                    const cat  = BENEFIT_CATEGORIES.find(c => c.value === ben.category)!
-                    const meta = BENEFIT_META[ben.type]
-                    const types = BENEFIT_TYPES_BY_CAT[ben.category] ?? []
+                    const cat   = BENEFIT_CATEGORIES.find(c => c.value === ben.category)!
+                    const avail = BENEFIT_TYPES_BY_CAT[ben.category] ?? []
+                    const meta  = BENEFIT_META[ben.types[0]]
+                    const hasOther   = ben.types.includes("OTHER")
+                    const showFreq   = ben.types.some(t => BENEFIT_META[t]?.showFrequency)
+                    const multiCount = ben.types.length
 
                     const updateBen = (patch: Partial<BenefitItem>) => {
                       const bs = [...form.benefits]; bs[i] = { ...bs[i], ...patch }; set("benefits", bs)
@@ -643,7 +661,7 @@ export function NewProjectForm({ users, currentUserId }: Props) {
                           <div className="flex items-center gap-1.5">
                             {BENEFIT_CATEGORIES.map(c => (
                               <button key={c.value} type="button"
-                                onClick={() => updateBen({ category: c.value, type: BENEFIT_TYPES_BY_CAT[c.value][0], plannedValue: "" })}
+                                onClick={() => updateBen({ category: c.value as BenefitItem["category"], types: [BENEFIT_TYPES_BY_CAT[c.value][0]], customTypeName: "", plannedValue: "" })}
                                 className="px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all"
                                 style={ben.category === c.value
                                   ? { background: c.color, color: "#fff" }
@@ -660,18 +678,29 @@ export function NewProjectForm({ users, currentUserId }: Props) {
                           </div>
                         </div>
 
-                        {/* ── Tipo: pill grid ───────────────────────────── */}
+                        {/* ── Tipo: pill multi-select ────────────────────── */}
                         <div className="px-4 pt-4 pb-3">
-                          <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#4a4760] mb-2">
-                            Tipo de Benefício
-                          </p>
+                          <div className="flex items-center gap-2 mb-2">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#4a4760]">
+                              Tipo de Benefício
+                            </p>
+                            {multiCount > 1 && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black text-white" style={{ background: cat.color }}>
+                                {multiCount} selecionados
+                              </span>
+                            )}
+                          </div>
                           <div className="flex flex-wrap gap-1.5">
-                            {types.map(t => {
+                            {avail.map(t => {
                               const tMeta = BENEFIT_META[t]
-                              const sel   = ben.type === t
+                              const sel   = ben.types.includes(t)
                               return (
                                 <button key={t} type="button"
-                                  onClick={() => updateBen({ type: t, plannedValue: "" })}
+                                  onClick={() => {
+                                    if (sel && ben.types.length === 1) return
+                                    const newTypes = sel ? ben.types.filter(x => x !== t) : [...ben.types, t]
+                                    updateBen({ types: newTypes, plannedValue: "", ...(t === "OTHER" && !sel ? {} : { customTypeName: sel && t === "OTHER" ? "" : ben.customTypeName }) })
+                                  }}
                                   className="px-3 py-1.5 rounded-full text-[11px] font-semibold border-2 transition-all"
                                   style={sel
                                     ? { borderColor: cat.color, background: cat.color, color: "#fff" }
@@ -684,8 +713,19 @@ export function NewProjectForm({ users, currentUserId }: Props) {
                           </div>
                         </div>
 
-                        {/* ── Corpo: descrição + valor ──────────────────── */}
+                        {/* ── Corpo: nome personalizado + descrição + valor ─ */}
                         <div className="px-4 pb-4 space-y-3">
+
+                          {/* Nome personalizado — só aparece quando OTHER está selecionado */}
+                          {hasOther && (
+                            <div>
+                              <Label required>Nome do tipo de benefício</Label>
+                              <input className={inputCls}
+                                placeholder="Ex: Redução de multas contratuais, Melhoria de processos aduaneiros..."
+                                value={ben.customTypeName}
+                                onChange={e => updateBen({ customTypeName: e.target.value })} />
+                            </div>
+                          )}
 
                           {/* Descrição */}
                           <div>
@@ -712,7 +752,6 @@ export function NewProjectForm({ users, currentUserId }: Props) {
                             </p>
 
                             {meta?.valueType === "currency" ? (
-                              /* FINANCEIRO: R$ + frequência */
                               <div className="flex gap-3 items-end">
                                 <div className="flex-1">
                                   <div className="relative">
@@ -726,7 +765,7 @@ export function NewProjectForm({ users, currentUserId }: Props) {
                                       }} />
                                   </div>
                                 </div>
-                                {meta.showFrequency && (
+                                {showFreq && (
                                   <div className="flex gap-1.5 shrink-0">
                                     {FREQUENCIES.map(f => (
                                       <button key={f.value} type="button"
@@ -743,7 +782,6 @@ export function NewProjectForm({ users, currentUserId }: Props) {
                                 )}
                               </div>
                             ) : (
-                              /* OPERACIONAL / ESTRATÉGICO: número + sufixo fixo */
                               <div className="relative">
                                 <input type="number" min={0}
                                   className={cn(inputCls, "pr-24")}

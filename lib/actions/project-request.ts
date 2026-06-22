@@ -25,6 +25,7 @@ export async function createProjectRequest(data: {
   benefits: Array<{
     category: string; type: string; description: string
     unit: string; plannedValue: number; frequency: string
+    customTypeName?: string | null
   }>
 }) {
   const session = await auth()
@@ -80,15 +81,16 @@ export async function createProjectRequest(data: {
       benefits: data.benefits.length > 0
         ? {
             create: data.benefits.map((b) => ({
-              category:     b.category as never,
-              type:         b.type     as never,
-              description:  b.description,
-              unit:         b.unit || "R$",
-              plannedValue: b.plannedValue,
+              category:      b.category as never,
+              type:          b.type     as never,
+              description:   b.description,
+              unit:          b.unit || "R$",
+              plannedValue:  b.plannedValue,
               realizedValue: 0,
-              frequency:    b.frequency as never,
-              status:       "PLANNED" as never,
-              createdById:  session.user.id!,
+              frequency:     b.frequency as never,
+              status:        "PLANNED"   as never,
+              customTypeName: b.customTypeName ?? null,
+              createdById:   session.user.id!,
             })),
           }
         : undefined,
