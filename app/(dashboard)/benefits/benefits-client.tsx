@@ -3,11 +3,11 @@
 import { useState, useCallback, useTransition, useRef, useEffect } from "react"
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, AreaChart, Area, Legend, LabelList,
+  PieChart, Pie, Cell, LabelList,
 } from "recharts"
 import Link from "next/link"
 import {
-  TrendingUp, DollarSign, Clock, BarChart3, Award, Filter,
+  DollarSign, Clock, BarChart3, Award, Filter,
   ChevronRight, Sparkles, Target, ArrowUpRight, ChevronDown, X, Loader2,
 } from "lucide-react"
 import { getPortfolioBenefits } from "@/lib/actions/benefits"
@@ -382,18 +382,27 @@ export function BenefitsClient({ summary, charts, projects, users, userRole }: P
           <div className="flex items-center justify-between mb-1">
             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
               <BarChart3 className="w-4 h-4 text-purple-600" />
-              Top Projetos por Valor Planejado
+              Top Projetos — Valor Financeiro Anual
             </h3>
           </div>
-          <p className="text-[11px] text-slate-400 mb-4">Benefícios planejados + realizados · valor anualizado · todas as categorias</p>
-          {currentCharts.topProjects.length === 0 ? (
-            <div className="h-56 flex items-center justify-center text-slate-400 text-sm">Nenhum benefício registrado ainda</div>
-          ) : (() => {
-            // Truncate long project names to avoid Y-axis wrapping (which makes bars look doubled)
-            const chartData = currentCharts.topProjects.map((p) => ({
-              ...p,
-              shortName: p.name.length > 28 ? p.name.slice(0, 26) + "…" : p.name,
-            }))
+          <p className="text-[11px] text-slate-400 mb-4">Soma dos benefícios financeiros planejados, anualizado em R$ · apenas categoria Financeiro</p>
+          {(() => {
+            // Only financial benefits have a monetary unit — mixing hours/scores/R$ is not explainable
+            const chartData = [...currentProjects]
+              .filter((p) => p.financialRealized > 0)
+              .sort((a, b) => b.financialRealized - a.financialRealized)
+              .slice(0, 10)
+              .map((p) => ({
+                name:      p.projectTitle,
+                shortName: p.projectTitle.length > 28 ? p.projectTitle.slice(0, 26) + "…" : p.projectTitle,
+                value:     p.financialRealized,
+                score:     p.impactScore,
+                label:     p.impactLabel,
+                count:     p.benefitCount,
+              }))
+            if (chartData.length === 0) {
+              return <div className="h-56 flex items-center justify-center text-slate-400 text-sm">Nenhum projeto com benefícios financeiros registrados</div>
+            }
             const barH   = 28
             const chartH = Math.max(160, chartData.length * (barH + 16) + 32)
             return (
@@ -414,10 +423,11 @@ export function BenefitsClient({ summary, charts, projects, users, userRole }: P
                       if (!active || !payload?.length) return null
                       const d = payload[0].payload as typeof chartData[0]
                       return (
-                        <div className="bg-white border border-slate-100 rounded-xl shadow-lg p-3 text-xs max-w-[220px]">
+                        <div className="bg-white border border-slate-100 rounded-xl shadow-lg p-3 text-xs max-w-[240px]">
                           <p className="font-semibold text-slate-700 mb-1 leading-snug">{d.name}</p>
-                          <p className="text-slate-500">Valor planejado: <span className="font-bold text-slate-800">{fmtBRL(d.value)}</span></p>
-                          {d.roi !== null && <p className="text-slate-500">ROI: <span className="font-bold text-purple-700">{Math.round(d.roi as number)}%</span></p>}
+                          <p className="text-slate-500">Valor financeiro anual: <span className="font-bold text-slate-800">{fmtBRL(d.value)}</span></p>
+                          <p className="text-slate-500">Score de impacto: <span className="font-bold text-purple-700">{d.score}/100 · {d.label}</span></p>
+                          <p className="text-slate-400">{d.count} benefício{d.count !== 1 ? "s" : ""} cadastrado{d.count !== 1 ? "s" : ""}</p>
                         </div>
                       )
                     }}
@@ -476,43 +486,97 @@ export function BenefitsClient({ summary, charts, projects, users, userRole }: P
         </div>
       </div>
 
-      {/* ── Timeline ─────────────────────────────────────────────────────────── */}
-      <div
-        className="rounded-2xl p-5"
-        style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
-      >
-        <div className="mb-1">
-          <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-purple-600" />
-            Crescimento do Portfólio de Benefícios
-          </h3>
-          <p className="text-[11px] text-slate-400 mt-0.5">Valor acumulado conforme os benefícios foram registrados — PLANNED pelo mês de cadastro, REALIZED pela data de realização</p>
+      {/* ── Portfolio Health Panel ─────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Valor por Área */}
+        <div
+          className="rounded-2xl p-5"
+          style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
+        >
+          <div className="mb-3">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-blue-600" />
+              Valor Financeiro por Área
+            </h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">Soma dos benefícios financeiros anualizados por área de negócio</p>
+          </div>
+          {(() => {
+            const areaMap: Record<string, number> = {}
+            for (const p of currentProjects) {
+              if (p.financialRealized > 0)
+                areaMap[p.projectArea] = (areaMap[p.projectArea] ?? 0) + p.financialRealized
+            }
+            const areaData = Object.entries(areaMap)
+              .sort(([, a], [, b]) => b - a)
+              .map(([name, value]) => ({ name, value }))
+            if (areaData.length === 0) {
+              return <div className="h-40 flex items-center justify-center text-slate-400 text-sm">Nenhum projeto com benefícios financeiros</div>
+            }
+            const h = Math.max(120, areaData.length * 44 + 32)
+            return (
+              <ResponsiveContainer width="100%" height={h}>
+                <BarChart data={areaData} layout="vertical" margin={{ top: 0, right: 90, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => fmtBRL(v)} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={90} />
+                  <Tooltip formatter={(v: unknown) => [fmtBRL(Number(v)), "Valor Planejado"]} />
+                  <Bar dataKey="value" fill="#3B82F6" radius={[0, 4, 4, 0]} barSize={20}>
+                    <LabelList dataKey="value" position="right" formatter={(v: unknown) => fmtBRL(Number(v))} style={{ fontSize: 10, fill: "#64748B" }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )
+          })()}
         </div>
-        {currentCharts.timeline.length === 0 ? (
-          <div className="h-48 flex items-center justify-center text-slate-400 text-sm">Nenhum benefício registrado ainda</div>
-        ) : (
-          <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={currentCharts.timeline} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-              <defs>
-                <linearGradient id="grad-cum" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#7B2FBE" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#7B2FBE" stopOpacity={0}   />
-                </linearGradient>
-                <linearGradient id="grad-mon" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#10B981" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#10B981" stopOpacity={0}   />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" />
-              <XAxis dataKey="month" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tickFormatter={(v) => fmtBRL(v)} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-              <Tooltip formatter={(v, name) => [fmtBRL(v as number), name]} />
-              <Legend iconType="circle" wrapperStyle={{ fontSize: 11 }} />
-              <Area type="monotone" dataKey="cumulative" name="Acumulado"     stroke="#7B2FBE" fill="url(#grad-cum)" strokeWidth={2} dot={false} />
-              <Area type="monotone" dataKey="monthly"    name="No Período"    stroke="#10B981" fill="url(#grad-mon)" strokeWidth={2} dot={false} />
-            </AreaChart>
-          </ResponsiveContainer>
-        )}
+
+        {/* Distribuição de Impacto */}
+        <div
+          className="rounded-2xl p-5"
+          style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
+        >
+          <div className="mb-3">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <Award className="w-4 h-4 text-purple-600" />
+              Distribuição de Impacto
+            </h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">Quantidade de projetos por nível de impacto no portfólio</p>
+          </div>
+          {(() => {
+            const TIERS = [
+              { label: "Transformacional", color: "#7B2FBE" },
+              { label: "Alto Impacto",     color: "#EA580C" },
+              { label: "Relevante",        color: "#D97706" },
+              { label: "Moderado",         color: "#2563EB" },
+              { label: "Baixo Impacto",    color: "#64748B" },
+            ]
+            const tierData = TIERS
+              .map((t) => ({
+                name:  t.label,
+                value: currentProjects.filter((p) => p.impactLabel === t.label).length,
+                color: t.color,
+              }))
+              .filter((t) => t.value > 0)
+            if (tierData.length === 0) {
+              return <div className="h-40 flex items-center justify-center text-slate-400 text-sm">Nenhum projeto avaliado</div>
+            }
+            return (
+              <ResponsiveContainer width="100%" height={Math.max(120, tierData.length * 44 + 32)}>
+                <BarChart data={tierData} layout="vertical" margin={{ top: 0, right: 40, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={100} />
+                  <Tooltip formatter={(v: unknown) => [`${Number(v)} projeto${Number(v) !== 1 ? "s" : ""}`, "Quantidade"]} />
+                  <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20}>
+                    {tierData.map((entry, i) => (
+                      <Cell key={i} fill={entry.color} />
+                    ))}
+                    <LabelList dataKey="value" position="right" style={{ fontSize: 10, fill: "#64748B" }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )
+          })()}
+        </div>
       </div>
 
       {/* ── Projects Table ───────────────────────────────────────────────────── */}
