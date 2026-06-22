@@ -234,7 +234,10 @@ export async function updateBenefit(benefitId: string, data: Partial<BenefitForm
       ...data,
       baselineDate:    data.baselineDate    ? new Date(data.baselineDate)    : undefined,
       realizationDate: data.realizationDate ? new Date(data.realizationDate) : undefined,
-      customTypeName:  data.type === "OTHER" ? (data.customTypeName ?? null) : null,
+      // Only touch customTypeName when type is explicitly provided in the update
+      ...(data.type !== undefined
+        ? { customTypeName: data.type === "OTHER" ? (data.customTypeName ?? null) : null }
+        : {}),
     },
   })
 

@@ -26,6 +26,7 @@ type BenefitRow = {
   realizedValue: number
   frequency: "ONCE" | "MONTHLY" | "ANNUAL"
   status: "PLANNED" | "IN_PROGRESS" | "REALIZED" | "NOT_REALIZED"
+  customTypeName: string | null
 }
 
 // ── Benefits constants ──────────────────────────────────────────────────────
@@ -53,12 +54,13 @@ const BEN_META: Record<string, { label: string; unit: string; valueType: "curren
   QUALITY:            { label: "Qualidade",              unit: "%",        valueType: "percent",  suffix: "%",         showFrequency: false },
   GOVERNANCE:         { label: "Governança",             unit: "pontos",   valueType: "score",    suffix: "pontos",    showFrequency: false },
   USER_SATISFACTION:  { label: "Satisfação do Usuário",  unit: "%",        valueType: "percent",  suffix: "%",         showFrequency: false },
+  OTHER:              { label: "Outros",                 unit: "R$",       valueType: "currency", suffix: "R$",        showFrequency: true  },
 }
 
 const BEN_TYPES_BY_CAT: Record<string, string[]> = {
-  FINANCIAL:   ["COST_REDUCTION","REVENUE_INCREASE","OPEX_REDUCTION","ANNUAL_SAVINGS","MONTHLY_SAVINGS"],
-  OPERATIONAL: ["HOURS_SAVED","PRODUCTIVITY_GAIN","PROCESS_AUTOMATION","REWORK_REDUCTION","TIME_REDUCTION"],
-  STRATEGIC:   ["CUSTOMER_EXPERIENCE","RISK_REDUCTION","COMPLIANCE","QUALITY","GOVERNANCE","USER_SATISFACTION"],
+  FINANCIAL:   ["COST_REDUCTION","REVENUE_INCREASE","OPEX_REDUCTION","ANNUAL_SAVINGS","MONTHLY_SAVINGS","OTHER"],
+  OPERATIONAL: ["HOURS_SAVED","PRODUCTIVITY_GAIN","PROCESS_AUTOMATION","REWORK_REDUCTION","TIME_REDUCTION","OTHER"],
+  STRATEGIC:   ["CUSTOMER_EXPERIENCE","RISK_REDUCTION","COMPLIANCE","QUALITY","GOVERNANCE","USER_SATISFACTION","OTHER"],
 }
 
 const BEN_STATUSES = [
@@ -154,8 +156,8 @@ const SECTIONS = [
 
 // ── BenefitsSection ─────────────────────────────────────────────────────────
 
-type NewBenefit = { category: "FINANCIAL"|"OPERATIONAL"|"STRATEGIC"; type: string; description: string; plannedValue: string; frequency: "ONCE"|"MONTHLY"|"ANNUAL" }
-const EMPTY_NEW: NewBenefit = { category: "FINANCIAL", type: "COST_REDUCTION", description: "", plannedValue: "", frequency: "MONTHLY" }
+type NewBenefit = { category: "FINANCIAL"|"OPERATIONAL"|"STRATEGIC"; type: string; description: string; plannedValue: string; frequency: "ONCE"|"MONTHLY"|"ANNUAL"; customTypeName: string }
+const EMPTY_NEW: NewBenefit = { category: "FINANCIAL", type: "COST_REDUCTION", description: "", plannedValue: "", frequency: "MONTHLY", customTypeName: "" }
 
 function BenefitsSection({ projectId, initialBenefits }: { projectId: string; initialBenefits: BenefitRow[] }) {
   const [benefits, setBenefits] = useState<BenefitRow[]>(initialBenefits)
@@ -189,29 +191,39 @@ function BenefitsSection({ projectId, initialBenefits }: { projectId: string; in
     const meta = BEN_META[b.type]
     const val  = meta?.valueType === "currency" ? parseBRLEdit(ev.plannedValue) : parseFloat(ev.plannedValue) || 0
     startTransition(async () => {
-      await updateBenefit(b.id, {
-        description:  ev.description,
-        plannedValue: val,
-        status:       ev.status as never,
-        frequency:    ev.frequency as never,
-        unit:         meta?.unit ?? b.unit,
-      })
-      setBenefits(prev => prev.map(x => x.id === b.id
-        ? { ...x, description: ev.description, plannedValue: val, status: ev.status as BenefitRow["status"], frequency: ev.frequency as BenefitRow["frequency"] }
-        : x
-      ))
-      setSavingId(null)
-      setExpanded(null)
+      try {
+        await updateBenefit(b.id, {
+          description:  ev.description,
+          plannedValue: val,
+          status:       ev.status as never,
+          frequency:    ev.frequency as never,
+          unit:         meta?.unit ?? b.unit,
+        })
+        setBenefits(prev => prev.map(x => x.id === b.id
+          ? { ...x, description: ev.description, plannedValue: val, status: ev.status as BenefitRow["status"], frequency: ev.frequency as BenefitRow["frequency"] }
+          : x
+        ))
+        setExpanded(null)
+      } catch (err) {
+        console.error("Erro ao salvar benefício:", err)
+      } finally {
+        setSavingId(null)
+      }
     })
   }
 
   function handleDelete(id: string) {
     setDeletingId(id)
     startTransition(async () => {
-      await deleteBenefit(id)
-      setBenefits(prev => prev.filter(b => b.id !== id))
-      setDeletingId(null)
-      if (expanded === id) setExpanded(null)
+      try {
+        await deleteBenefit(id)
+        setBenefits(prev => prev.filter(b => b.id !== id))
+        if (expanded === id) setExpanded(null)
+      } catch (err) {
+        console.error("Erro ao deletar benefício:", err)
+      } finally {
+        setDeletingId(null)
+      }
     })
   }
 
@@ -219,28 +231,32 @@ function BenefitsSection({ projectId, initialBenefits }: { projectId: string; in
     const meta = BEN_META[newBen.type]
     const val  = meta?.valueType === "currency" ? parseBRLEdit(newBen.plannedValue) : parseFloat(newBen.plannedValue) || 0
     startTransition(async () => {
-      await createBenefit(projectId, {
-        category:        newBen.category as never,
-        type:            newBen.type     as never,
-        description:     newBen.description,
-        unit:            meta?.unit ?? "R$",
-        plannedValue:    val,
-        realizedValue:   0,
-        frequency:       newBen.frequency as never,
-        status:          "PLANNED" as never,
-        baselineDate:    null,
-        realizationDate: null,
-        evidence:        null,
-      })
-      // reload page data via revalidate — just reset UI
-      setAdding(false)
-      setNewBen({ ...EMPTY_NEW })
-      // Optimistically add placeholder (page revalidates on next load)
-      setBenefits(prev => [...prev, {
-        id: `new-${Date.now()}`, category: newBen.category, type: newBen.type,
-        description: newBen.description, unit: meta?.unit ?? "R$",
-        plannedValue: val, realizedValue: 0, frequency: newBen.frequency, status: "PLANNED",
-      }])
+      try {
+        await createBenefit(projectId, {
+          category:        newBen.category as never,
+          type:            newBen.type     as never,
+          description:     newBen.description,
+          unit:            meta?.unit ?? "R$",
+          plannedValue:    val,
+          realizedValue:   0,
+          frequency:       newBen.frequency as never,
+          status:          "PLANNED" as never,
+          baselineDate:    null,
+          realizationDate: null,
+          evidence:        null,
+          customTypeName:  newBen.type === "OTHER" ? (newBen.customTypeName || null) : null,
+        })
+        setAdding(false)
+        setNewBen({ ...EMPTY_NEW })
+        setBenefits(prev => [...prev, {
+          id: `new-${Date.now()}`, category: newBen.category, type: newBen.type,
+          description: newBen.description, unit: meta?.unit ?? "R$",
+          plannedValue: val, realizedValue: 0, frequency: newBen.frequency, status: "PLANNED",
+          customTypeName: newBen.type === "OTHER" ? (newBen.customTypeName || null) : null,
+        }])
+      } catch (err) {
+        console.error("Erro ao adicionar benefício:", err)
+      }
     })
   }
 
@@ -271,7 +287,9 @@ function BenefitsSection({ projectId, initialBenefits }: { projectId: string; in
               onClick={() => toggleExpand(b.id, b)}>
               <span className="text-sm">{cat.icon}</span>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-slate-800 truncate">{meta?.label ?? b.type}</p>
+                <p className="text-xs font-bold text-slate-800 truncate">
+                  {b.type === "OTHER" ? (b.customTypeName || "Outros") : (meta?.label ?? b.type)}
+                </p>
                 <p className="text-[10px] text-slate-400 truncate">{b.description || "—"}</p>
               </div>
               <span className="text-xs font-bold px-2 py-0.5 rounded-full shrink-0"
@@ -397,7 +415,7 @@ function BenefitsSection({ projectId, initialBenefits }: { projectId: string; in
           <div className="flex gap-1.5 px-4 py-3 border-b border-purple-100 bg-purple-50">
             {BEN_CATEGORIES.map(c => (
               <button key={c.value} type="button"
-                onClick={() => setNewBen(n => ({ ...n, category: c.value, type: BEN_TYPES_BY_CAT[c.value][0] }))}
+                onClick={() => setNewBen(n => ({ ...n, category: c.value, type: BEN_TYPES_BY_CAT[c.value][0], customTypeName: "" }))}
                 className="px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all"
                 style={newBen.category === c.value
                   ? { background: c.color, color: "#fff" }
@@ -415,7 +433,7 @@ function BenefitsSection({ projectId, initialBenefits }: { projectId: string; in
                   const cat = BEN_CATEGORIES.find(c => c.value === newBen.category)!
                   return (
                     <button key={t} type="button"
-                      onClick={() => setNewBen(n => ({ ...n, type: t, plannedValue: "" }))}
+                      onClick={() => setNewBen(n => ({ ...n, type: t, plannedValue: "", customTypeName: "" }))}
                       className="px-2.5 py-1 rounded-full text-[11px] font-semibold border-2 transition-all"
                       style={newBen.type === t
                         ? { borderColor: cat.color, background: cat.color, color: "#fff" }
@@ -426,6 +444,20 @@ function BenefitsSection({ projectId, initialBenefits }: { projectId: string; in
                 })}
               </div>
             </div>
+            {/* Custom type name — only when Outros is selected */}
+            {newBen.type === "OTHER" && (
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">Nome do Tipo de Benefício</p>
+                <input
+                  className={inpCls}
+                  placeholder="Ex: Redução de licenças, Melhora em NPS..."
+                  value={newBen.customTypeName}
+                  onChange={e => setNewBen(n => ({ ...n, customTypeName: e.target.value }))}
+                  autoFocus
+                />
+              </div>
+            )}
+
             {/* Description */}
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">Descrição</p>
@@ -481,7 +513,7 @@ function BenefitsSection({ projectId, initialBenefits }: { projectId: string; in
                 Cancelar
               </button>
               <button type="button" onClick={handleAdd}
-                disabled={isPending || !newBen.description.trim()}
+                disabled={isPending || !newBen.description.trim() || (newBen.type === "OTHER" && !newBen.customTypeName.trim())}
                 className="flex items-center gap-1.5 px-3 h-8 text-xs font-semibold rounded-lg text-white transition-all disabled:opacity-50"
                 style={{ background: "linear-gradient(135deg, #7B2FBE, #9333EA)" }}>
                 {isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
