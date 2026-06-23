@@ -14,7 +14,7 @@ import { ptBR } from "date-fns/locale"
 import {
   ArrowLeft, Plus, ChevronRight, ChevronDown, Pencil, Trash2,
   Loader2, X, Check, CalendarDays, AlertTriangle, Layers,
-  List, BarChart2, Search, FolderOpen, Paperclip,
+  List, BarChart2, Search, FolderOpen, Paperclip, MessageSquare,
   Link2, Lock, ArrowRight, GripVertical, FileSpreadsheet, ArrowUpDown,
   Upload, Download, FileText, FileImage, FileArchive, Users,
   LayoutTemplate, Milestone, Zap, Award, Star, Globe2, TrendingUp, Clock,
@@ -2308,8 +2308,26 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                           {t.dependencies.map(d => eapById.get(d) ?? "?").join(", ")}
                         </span>
                       )}
-                      {t._count.comments   > 0 && <span className="text-[9px] text-slate-300 shrink-0">💬</span>}
-                      {t._count.attachments > 0 && <span className="text-[9px] text-slate-300 shrink-0">📎</span>}
+                      {t._count.comments > 0 && (
+                        <span
+                          className="flex items-center gap-0.5 shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                          style={{ background: "rgba(36,99,255,0.08)", color: "#2463FF" }}
+                          title={`${t._count.comments} comentário${t._count.comments !== 1 ? "s" : ""}`}
+                        >
+                          <MessageSquare className="w-2.5 h-2.5" />
+                          {t._count.comments}
+                        </span>
+                      )}
+                      {t._count.attachments > 0 && (
+                        <span
+                          className="flex items-center gap-0.5 shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                          style={{ background: "rgba(100,116,139,0.08)", color: "#475569" }}
+                          title={`${t._count.attachments} anexo${t._count.attachments !== 1 ? "s" : ""}`}
+                        >
+                          <Paperclip className="w-2.5 h-2.5" />
+                          {t._count.attachments}
+                        </span>
+                      )}
                     </div>
 
                     {/* Status — dropdown */}
@@ -2865,6 +2883,26 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                                 border: `1px solid ${isLate && t.status !== "DELAYED" ? "#EF444430" : `${STATUS_CFG[t.status]?.color}30`}`,
                               }}>
                               {isLate && t.status !== "DELAYED" ? "Atrasado" : STATUS_CFG[t.status]?.label}
+                            </span>
+                          )}
+                          {!isEditing && t._count.comments > 0 && (
+                            <span
+                              className="flex items-center gap-0.5 shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                              style={{ background: "rgba(36,99,255,0.08)", color: "#2463FF" }}
+                              title={`${t._count.comments} comentário${t._count.comments !== 1 ? "s" : ""}`}
+                            >
+                              <MessageSquare className="w-2.5 h-2.5" />
+                              {t._count.comments}
+                            </span>
+                          )}
+                          {!isEditing && t._count.attachments > 0 && (
+                            <span
+                              className="flex items-center gap-0.5 shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                              style={{ background: "rgba(100,116,139,0.08)", color: "#475569" }}
+                              title={`${t._count.attachments} anexo${t._count.attachments !== 1 ? "s" : ""}`}
+                            >
+                              <Paperclip className="w-2.5 h-2.5" />
+                              {t._count.attachments}
                             </span>
                           )}
                         </div>

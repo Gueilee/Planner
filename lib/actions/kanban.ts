@@ -12,20 +12,22 @@ export async function getProjectTasksForKanban(projectId: string) {
     include: {
       wbsArea:     { select: { name: true, color: true } },
       responsible: { select: { id: true, name: true, image: true } },
-      _count:      { select: { subtasks: true } },
+      _count:      { select: { subtasks: true, comments: true, attachments: true } },
     },
   })
   return tasks.map((t) => ({
-    id:          t.id,
-    title:       t.title,
-    status:      t.status as string,
-    progress:    t.progress,
-    startDate:   t.startDate?.toISOString()  ?? null,
-    endDate:     t.endDate?.toISOString()    ?? null,
-    wbsArea:     t.wbsArea  ?? null,
-    responsible: t.responsible ?? null,
-    parentId:    t.parentId   ?? null,
-    childCount:  t._count.subtasks,
+    id:             t.id,
+    title:          t.title,
+    status:         t.status as string,
+    progress:       t.progress,
+    startDate:      t.startDate?.toISOString()  ?? null,
+    endDate:        t.endDate?.toISOString()    ?? null,
+    wbsArea:        t.wbsArea  ?? null,
+    responsible:    t.responsible ?? null,
+    parentId:       t.parentId   ?? null,
+    childCount:     t._count.subtasks,
+    commentCount:   t._count.comments,
+    attachmentCount: t._count.attachments,
   }))
 }
 

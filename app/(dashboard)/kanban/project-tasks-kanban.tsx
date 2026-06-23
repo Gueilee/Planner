@@ -31,16 +31,18 @@ import type { KanbanProject } from "./kanban-client"
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type TaskItem = {
-  id:          string
-  title:       string
-  status:      string
-  progress:    number
-  startDate:   string | null
-  endDate:     string | null
-  wbsArea:     { name: string; color: string | null } | null
-  responsible: { id: string; name: string; image: string | null } | null
-  parentId:    string | null
-  childCount:  number
+  id:              string
+  title:           string
+  status:          string
+  progress:        number
+  startDate:       string | null
+  endDate:         string | null
+  wbsArea:         { name: string; color: string | null } | null
+  responsible:     { id: string; name: string; image: string | null } | null
+  parentId:        string | null
+  childCount:      number
+  commentCount:    number
+  attachmentCount: number
 }
 
 // ─── Column Config ────────────────────────────────────────────────────────────
@@ -185,6 +187,30 @@ function TaskCard({
             </div>
           </div>
 
+          {/* Comment / attachment indicators */}
+          {(task.commentCount > 0 || task.attachmentCount > 0) && (
+            <div className="flex items-center gap-1.5 mb-2">
+              {task.commentCount > 0 && (
+                <span
+                  className="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                  style={{ background: "rgba(36,99,255,0.08)", color: "#2463FF" }}
+                >
+                  <MessageSquare className="w-2.5 h-2.5" />
+                  {task.commentCount}
+                </span>
+              )}
+              {task.attachmentCount > 0 && (
+                <span
+                  className="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                  style={{ background: "rgba(100,116,139,0.08)", color: "#475569" }}
+                >
+                  <Paperclip className="w-2.5 h-2.5" />
+                  {task.attachmentCount}
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Bottom row: responsible + date */}
           <div className="flex items-center justify-between">
             {task.responsible ? (
@@ -316,7 +342,21 @@ function TaskListView({ tasks, onTaskClick }: { tasks: TaskItem[]; onTaskClick: 
                   <div className="w-1 h-8 rounded-full shrink-0"
                     style={{ background: isPlaying ? col.gradient : isDelayed ? "#EF4444" : col.gradient }} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-slate-800 truncate">{t.title}</p>
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <p className="text-sm font-bold text-slate-800 truncate">{t.title}</p>
+                      {t.commentCount > 0 && (
+                        <span className="flex items-center gap-0.5 text-[8px] font-bold px-1.5 py-0.5 rounded-full shrink-0"
+                          style={{ background: "rgba(36,99,255,0.08)", color: "#2463FF" }}>
+                          <MessageSquare className="w-2 h-2" />{t.commentCount}
+                        </span>
+                      )}
+                      {t.attachmentCount > 0 && (
+                        <span className="flex items-center gap-0.5 text-[8px] font-bold px-1.5 py-0.5 rounded-full shrink-0"
+                          style={{ background: "rgba(100,116,139,0.08)", color: "#475569" }}>
+                          <Paperclip className="w-2 h-2" />{t.attachmentCount}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[10px] text-slate-400 truncate">{t.responsible?.name ?? "Sem responsável"}</p>
                   </div>
                   <span className="text-[9px] font-bold px-2 py-0.5 rounded-full shrink-0 hidden md:inline"
