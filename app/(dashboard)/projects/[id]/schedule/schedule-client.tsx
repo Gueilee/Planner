@@ -41,8 +41,9 @@ const HDR_H   = 64
 const LEFT_W  = 600
 // List view: fixed column widths so header and rows always share the same total width
 const COL_NAME  = 280
-// 24+72+84+280+130+160+88+88+88+88+64+64+68+68+100+84+84
-const LIST_MIN_W = 1634
+const COL_EAP   = 56
+// 24+84+COL_EAP+COL_NAME+130+160+88+88+88+88+64+64+68+68+100+84+84
+const LIST_MIN_W = 1690
 const BAR_H   = 24
 const BAR_PAD = 8
 
@@ -1964,6 +1965,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
             <div className="flex items-center border-b border-slate-100 bg-[#0F172A]" style={{ height: 44, minWidth: LIST_MIN_W }}>
               <div style={{ width: 24, flexShrink: 0 }} />
               <div style={{ width: 84, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Ações</div>
+              <div style={{ width: COL_EAP, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">EAP</div>
               <div style={{ width: COL_NAME, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest px-2">Nome da Atividade</div>
               <div style={{ width: 130, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Status</div>
               <div style={{ width: 160, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest px-3">Responsável</div>
@@ -2046,6 +2048,11 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                             <Plus className="w-3 h-3" />
                           </button>
                         )}
+                      </div>
+
+                      {/* EAP — area */}
+                      <div style={{ width: COL_EAP, flexShrink: 0 }} className="flex items-center justify-center">
+                        <span className="text-[10px] font-bold text-slate-400 font-mono">{row.eap}</span>
                       </div>
 
                       {/* Area name — clickable to expand */}
@@ -2211,6 +2218,11 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                       >
                         <Trash2 className="w-3 h-3" />
                       </button>
+                    </div>
+
+                    {/* EAP */}
+                    <div style={{ width: COL_EAP, flexShrink: 0 }} className="flex items-center justify-center">
+                      <span className="text-[10px] font-bold text-slate-400 font-mono select-all cursor-text">{eap}</span>
                     </div>
 
                     {/* Name */}
