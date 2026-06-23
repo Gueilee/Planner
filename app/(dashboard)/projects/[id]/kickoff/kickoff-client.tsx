@@ -878,9 +878,9 @@ export function KickOffClient({ project, existing, projectParticipants, allUsers
                   selectedIds={attendeeIds}
                   onChange={setAttendeeIds}
                   externalAttendees={externalAttendees.map((e) => ({
-                    id: e.id, name: e.name, area: e.role ?? "", kind: "EXTERNO" as const,
+                    id: e.id, name: e.name, area: e.role ?? "", kind: e.kind ?? "EXTERNO" as const,
                   }))}
-                  onAddExternal={(p) => setExternalAttendees((prev) => [...prev, { id: p.id, name: p.name, role: p.area, type: "EXTERNAL" }])}
+                  onAddExternal={(p) => setExternalAttendees((prev) => [...prev, { id: p.id, name: p.name, role: p.area, kind: p.kind, type: p.kind === "INTERNO" ? "INTERNAL" : "EXTERNAL" }])}
                   onRemoveExternal={(id) => setExternalAttendees((prev) => prev.filter((e) => e.id !== id))}
                 />
 

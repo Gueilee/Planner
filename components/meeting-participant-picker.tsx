@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useMemo, useRef, useEffect } from "react"
-import { Search, X, Check, Users, Plus, UserPlus } from "lucide-react"
+import { useState, useMemo, useRef } from "react"
+import { Search, X, Check, Users, UserPlus, Plus } from "lucide-react"
 import { UserAvatar } from "@/components/ui/user-avatar"
-import type { NewParticipant, ParticipantKind } from "@/components/meeting-new-participant"
+import { NewParticipantForm, ParticipantCard, type NewParticipant, type ParticipantKind } from "@/components/meeting-new-participant"
 
 export type PickerUser = {
   id:         string
@@ -21,7 +21,7 @@ interface MeetingParticipantPickerProps {
   /** IDs selecionados (estado controlado pelo pai) */
   selectedIds:         string[]
   onChange:            (ids: string[]) => void
-  /** Participantes externos (nome livre) */
+  /** Participantes não cadastrados no sistema */
   externalAttendees?:  NewParticipant[]
   onAddExternal?:      (p: NewParticipant) => void
   onRemoveExternal?:   (id: string) => void
@@ -39,53 +39,6 @@ const BADGE_CFG: Record<string, { bg: string; color: string }> = {
 
 function badgeCfg(badge: string) {
   return BADGE_CFG[badge] ?? { bg: "rgba(100,116,139,0.10)", color: "#475569" }
-}
-
-function initials(name: string) {
-  return name.split(" ").slice(0, 2).map((w) => w[0] ?? "").join("").toUpperCase()
-}
-
-// ─── External attendee form ───────────────────────────────────────────────────
-
-function ExternalForm({ onAdd, onCancel }: { onAdd: (p: NewParticipant) => void; onCancel: () => void }) {
-  const [name, setName] = useState("")
-  const [area, setArea] = useState("")
-  const ref = useRef<HTMLInputElement>(null)
-  useEffect(() => { ref.current?.focus() }, [])
-
-  function submit() {
-    const n = name.trim()
-    if (!n) return
-    onAdd({ id: Math.random().toString(36).slice(2), name: n, area: area.trim(), kind: "EXTERNO" as ParticipantKind })
-    setName(""); setArea("")
-  }
-
-  return (
-    <div className="flex items-center gap-2 p-2.5 rounded-xl border border-dashed border-[#7B2FBE] bg-violet-50/40">
-      <input
-        ref={ref}
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") onCancel() }}
-        placeholder="Nome do participante"
-        className="flex-1 text-xs bg-transparent outline-none text-[#0F172A] placeholder:text-slate-300 min-w-0"
-      />
-      <input
-        value={area}
-        onChange={(e) => setArea(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") onCancel() }}
-        placeholder="Área/Empresa (opcional)"
-        className="w-36 text-xs bg-transparent outline-none text-[#0F172A] placeholder:text-slate-300"
-      />
-      <button onClick={submit} disabled={!name.trim()}
-        className="p-1 rounded-lg bg-[#7B2FBE] text-white disabled:opacity-40 hover:bg-[#6D28D9] transition-colors">
-        <Check className="w-3 h-3" />
-      </button>
-      <button onClick={onCancel} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors">
-        <X className="w-3 h-3" />
-      </button>
-    </div>
-  )
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -106,7 +59,6 @@ export function MeetingParticipantPicker({
 
   // Users NOT in project — shown in the search dropdown
   const projectIds = useMemo(() => new Set(projectParticipants.map((p) => p.id)), [projectParticipants])
-  const externalIds = useMemo(() => new Set(externalAttendees.map((e) => e.id)), [externalAttendees])
 
   const otherUsers = useMemo(() =>
     allUsers.filter((u) => !projectIds.has(u.id)),
@@ -280,38 +232,37 @@ export function MeetingParticipantPicker({
 
         {dropdownOpen && search.trim() && searchResults.length === 0 && (
           <div className="absolute top-full left-0 right-0 mt-1 z-50 rounded-xl border border-slate-200 bg-white shadow-xl px-4 py-3">
-            <p className="text-xs text-slate-400">Nenhum usuário encontrado para "{search}"</p>
+            <p className="text-xs text-slate-400">Nenhum usuário encontrado para &quot;{search}&quot;</p>
           </div>
         )}
       </div>
 
-      {/* External attendees */}
+      {/* Participants added manually (internal/external/supplier) */}
       {(onAddExternal || externalAttendees.length > 0) && (
-        <div>
+        <div className="space-y-2">
           {externalAttendees.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-2">
-              {externalAttendees.map((ext) => (
-                <div key={ext.id}
-                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-semibold border"
-                  style={{ background: "#F8FAFC", borderColor: "#E2E8F0", color: "#475569" }}>
-                  <div className="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center text-[8px] font-black text-slate-500 shrink-0">
-                    {initials(ext.name)}
-                  </div>
-                  <span>{ext.name}</span>
-                  {ext.area && <span className="text-[9px] text-slate-400">· {ext.area}</span>}
-                  {onRemoveExternal && (
-                    <button onClick={() => onRemoveExternal(ext.id)} className="ml-1 hover:text-red-500 transition-colors">
-                      <X className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-              ))}
+            <div>
+              <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                Adicionados manualmente
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {externalAttendees.map((ext) => (
+                  <ParticipantCard
+                    key={ext.id}
+                    participant={ext}
+                    onRemove={() => onRemoveExternal?.(ext.id)}
+                  />
+                ))}
+              </div>
             </div>
           )}
 
           {addingExternal ? (
-            <ExternalForm
-              onAdd={(p) => { onAddExternal?.(p); setAddingExt(false) }}
+            <NewParticipantForm
+              onAdd={(p) => {
+                onAddExternal?.({ ...p, id: Math.random().toString(36).slice(2) })
+                setAddingExt(false)
+              }}
               onCancel={() => setAddingExt(false)}
             />
           ) : (
@@ -322,7 +273,7 @@ export function MeetingParticipantPicker({
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-500 border border-dashed border-slate-300 hover:border-[#7B2FBE] hover:text-[#7B2FBE] hover:bg-violet-50 transition-all"
               >
                 <UserPlus className="w-3 h-3" />
-                Adicionar participante externo
+                Adicionar participante não listado
               </button>
             )
           )}

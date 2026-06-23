@@ -31,6 +31,7 @@ export type ExternalAttendee = {
   name: string
   role: string
   type?: "EXTERNAL" | "INTERNAL"
+  kind?: "INTERNO" | "EXTERNO" | "FORNECEDOR"
 }
 
 export type KickOffData = {
