@@ -19,8 +19,8 @@ export type ProjectIndicator = {
   sponsor: string | null
   progress: number
   plannedPct: number | null
-  devio: number | null
-  idp: number | null
+  devio: number | null          // Desvio em pp (pontos percentuais): progress - plannedPct
+  idp: number | null            // Mantido para compatibilidade: progress / plannedPct
   idc: number | null
   budget: number | null
   estimatedCosts: number | null
@@ -32,7 +32,7 @@ export type ProjectIndicator = {
   taskResponsibles: string[]
 }
 
-// Nesses status o projeto ainda não iniciou ou está pausado — não calcular IDP/IDC
+// Nesses status o projeto ainda não iniciou ou está pausado — não calcular KPIs de progresso
 const SKIP_KPI_STATUSES = new Set([
   "PLANNING", "FUTURE_ANALYSIS", "ON_HOLD", "PAUSED", "PENDING_GO_NO_GO",
 ])
@@ -84,72 +84,88 @@ export default async function AnalyticsPage() {
     const tasks   = p.tasks
     const skipKpi = SKIP_KPI_STATUSES.has(p.status)
 
-    // ── Progresso médio ───────────────────────────────────────────
+    // ── Progresso real: média do progresso de todas as tarefas ────────────────
+    // Tarefas concluídas contam como 100%, pendentes como seu % atual
     const progress =
       tasks.length > 0
         ? Math.round(tasks.reduce((s, t) => s + t.progress, 0) / tasks.length)
         : p.status === "COMPLETED" ? 100 : 0
 
-    // ── Desvio / IDP / scheduleStatus ────────────────────────────
-    let devio:          number | null = null
+    // ── Desvio de prazo ───────────────────────────────────────────────────────
+    //
+    // Estratégia de cálculo do % planejado (em ordem de prioridade):
+    //
+    // MÉTODO 1 — Baseado nas datas das tarefas (mais preciso):
+    //   Pergunta: "Qual % das tarefas já deveriam estar concluídas até hoje?"
+    //   plannedPct = (tarefas com endDate ≤ hoje) / (total de tarefas) × 100
+    //   Vantagem: reflete o cronograma real do projeto, não interpolação linear.
+    //
+    // MÉTODO 2 — Calendário (fallback quando tarefas não têm datas):
+    //   plannedPct = (dias decorridos / duração total do projeto) × 100
+    //   Limitação: assume progresso linear, pode super-estimar para projetos
+    //              com trabalho concentrado no final.
+    //
+    // Desvio (devio) = progress - plannedPct  [em pontos percentuais]
+    //   +15pp = 15pp adiantado do planejado
+    //   -10pp = 10pp atrás do planejado
+    //
+    // Classificação (thresholds baseados em tolerância prática de PMO):
+    //   devio ≥ -15pp  → No Prazo  (tolerância de 15pp)
+    //   devio ≥ -30pp  → Em Risco  (15–30pp atrás)
+    //   devio <  -30pp → Atrasado  (mais de 30pp atrás)
+
     let plannedPct:     number | null = null
+    let devio:          number | null = null
     let idp:            number | null = null
     let scheduleStatus: ProjectIndicator["scheduleStatus"] = "ND"
 
     if (p.status === "COMPLETED") {
-      // Projeto concluído: sempre classificado como no prazo
+      // Projeto concluído: considerado no prazo independente de quando finalizou
       scheduleStatus = "ON_TIME"
-      idp = 1.0
+      plannedPct     = 100
+      devio          = progress - 100
+      idp            = 1.0
 
     } else if (!skipKpi) {
-      // Passo 1: % planejado no nível do projeto (linha de base = expectedStart)
-      if (p.expectedStart && p.expectedEnd) {
+
+      // ── MÉTODO 1: baseado em datas das tarefas ────────────────────────────
+      const tasksWithEnd = tasks.filter((t) => t.endDate !== null)
+
+      if (tasksWithEnd.length >= 2) {
+        // Tarefas cujo prazo planejado já chegou (independente do status)
+        const tasksDue    = tasksWithEnd.filter((t) => t.endDate! <= today).length
+        // plannedPct em relação ao TOTAL de tarefas do projeto
+        const base        = tasks.length > 0 ? tasks.length : tasksWithEnd.length
+        plannedPct        = Math.round((tasksDue / base) * 100)
+        devio             = progress - plannedPct
+      }
+
+      // ── MÉTODO 2: interpolação calendário (fallback) ──────────────────────
+      if (plannedPct === null && p.expectedStart && p.expectedEnd) {
         const totalDays   = differenceInDays(p.expectedEnd, p.expectedStart)
         const elapsedDays = differenceInDays(today, p.expectedStart)
+
         if (totalDays > 0 && elapsedDays > 0) {
-          const pct = Math.min(100, (elapsedDays / totalDays) * 100)
-          plannedPct = Math.round(pct)
-          devio      = (progress - pct) / 100
+          // Limita a 100% mesmo que o projeto já tenha passado do prazo
+          plannedPct = Math.min(100, Math.round((elapsedDays / totalDays) * 100))
+          devio      = progress - plannedPct
         }
       }
 
-      // Passo 2: IDP por tarefa individual (mais preciso)
-      const tasksWithDates = tasks.filter((t) => t.startDate && t.endDate)
-      if (tasksWithDates.length >= 2) {
-        let sumActual = 0, sumPlanned = 0, count = 0
-        for (const t of tasksWithDates) {
-          const totalD  = differenceInDays(t.endDate!, t.startDate!)
-          const elapsed = differenceInDays(today, t.startDate!)
-          let planned: number
-          if (elapsed <= 0)     planned = 0   // tarefa ainda não começou
-          else if (totalD <= 0) planned = 100 // duração zero
-          else                  planned = Math.min(100, (elapsed / totalD) * 100)
-          sumActual  += t.progress
-          sumPlanned += planned
-          count++
-        }
-        if (count > 0 && sumPlanned > 0) {
-          idp = Math.round((sumActual / sumPlanned) * 100) / 100
-        }
-      } else if (plannedPct !== null && plannedPct > 5) {
-        // Fallback: IDP no nível do projeto
+      // ── Classificação por desvio em pp ────────────────────────────────────
+      if (devio !== null) {
+        if      (devio >= -15) scheduleStatus = "ON_TIME"
+        else if (devio >= -30) scheduleStatus = "AT_RISK"
+        else                   scheduleStatus = "DELAYED"
+      }
+
+      // IDP mantido como referência auxiliar (progress / plannedPct)
+      if (plannedPct !== null && plannedPct > 0) {
         idp = Math.round((progress / plannedPct) * 100) / 100
-      }
-
-      // Passo 3: classificação baseada no IDP
-      if (idp !== null) {
-        if (idp >= 0.95)      scheduleStatus = "ON_TIME"
-        else if (idp >= 0.80) scheduleStatus = "AT_RISK"
-        else                  scheduleStatus = "DELAYED"
-      } else if (devio !== null) {
-        if (devio >= 0)          scheduleStatus = "ON_TIME"
-        else if (devio >= -0.15) scheduleStatus = "AT_RISK"
-        else                     scheduleStatus = "DELAYED"
       }
     }
 
-    // ── IDC — EVM: Valor Agregado / Custo Real ────────────────────
-    // IDC = EV / AC  onde EV = Σ(custo_orçado × % progresso) e AC = Σ(custo_real)
+    // ── IDC — EVM: Valor Agregado / Custo Real ────────────────────────────────
     let idc: number | null = null
     if (!skipKpi) {
       const earnedValue   = tasks.reduce((s, t) => s + (t.budgetedCost ?? 0) * (t.progress / 100), 0)
@@ -159,7 +175,7 @@ export default async function AnalyticsPage() {
       }
     }
 
-    // ── Riscos ───────────────────────────────────────────────────
+    // ── Riscos ────────────────────────────────────────────────────────────────
     const risks = {
       critical: p.risks.filter((r) => r.status === "CRITICAL").length,
       high:     p.risks.filter((r) => r.status === "HIGH").length,

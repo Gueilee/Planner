@@ -32,6 +32,23 @@ const ACTIVE_STATUSES = new Set([
 ])
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+// devio = progresso real − progresso planejado, em pontos percentuais (pp)
+function devioLabel(devio: number | null): string {
+  if (devio === null) return "N/D"
+  if (devio >= 5)    return "Adiantado"
+  if (devio >= -15)  return "No Prazo"
+  if (devio >= -30)  return "Em Risco"
+  return "Atrasado"
+}
+
+function devioColor(devio: number | null): string {
+  if (devio === null) return C.slate
+  if (devio >= -15)  return C.green
+  if (devio >= -30)  return C.amber
+  return C.red
+}
+
+// idpColor mantido para uso em outros indicadores (IDC etc.)
 function idpLabel(idp: number | null): string {
   if (idp === null) return "N/D"
   if (idp >= 1.05) return "Adiantado"
@@ -166,35 +183,48 @@ function ProgressRing({ pct, color, size = 60 }: { pct: number; color: string; s
   )
 }
 
-// ─── Custom Tooltip for IDP chart ────────────────────────────────────────────
-function IdpTooltip({ active, payload }: TooltipContentProps): React.ReactElement | null {
+// ─── Custom Tooltip for Desvio chart ─────────────────────────────────────────
+function DevioTooltip({ active, payload }: TooltipContentProps): React.ReactElement | null {
   if (!active || !payload?.length) return null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const entry = (payload[0] as any).payload as {
-    fullName?: string; plannedPct?: number | null; actual?: number; idp?: number
+    fullName?: string; plannedPct?: number | null; actual?: number; devio?: number; method?: string
   }
-  const idpVal = entry.idp ?? null
-  const color  = idpColor(idpVal)
-  const label  = idpVal === null ? "N/D"
-    : idpVal >= 1.05 ? "Adiantado"
-    : idpVal >= 0.95 ? "No Prazo"
-    : idpVal >= 0.80 ? "Em Risco"
-    : "Atrasado"
+  const devioVal = entry.devio ?? null
+  const color    = devioColor(devioVal)
+  const label    = devioLabel(devioVal)
+  const sign     = devioVal !== null && devioVal > 0 ? "+" : ""
+
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-lg px-3 py-2.5 text-xs space-y-1 min-w-[210px]">
-      <p className="font-bold text-slate-800">{entry.fullName}</p>
+    <div className="bg-white rounded-xl border border-slate-200 shadow-lg px-3 py-2.5 text-xs space-y-1.5 min-w-[230px]">
+      <p className="font-bold text-slate-800 truncate max-w-[220px]">{entry.fullName}</p>
       <div className="h-px bg-slate-100" />
-      <div className="flex items-center gap-2">
-        <span className="text-base font-black" style={{ color }}>{idpVal?.toFixed(2) ?? "—"}</span>
-        <span className="text-xs font-semibold" style={{ color }}>({label})</span>
+
+      {/* Desvio em destaque */}
+      <div className="flex items-center justify-between">
+        <span className="text-slate-400">Desvio de prazo</span>
+        <span className="text-base font-black" style={{ color }}>
+          {devioVal !== null ? `${sign}${devioVal}pp` : "—"}
+          <span className="text-[10px] font-semibold ml-1.5" style={{ color }}>({label})</span>
+        </span>
       </div>
-      {entry.plannedPct != null && (
-        <p className="text-slate-400">% Planejado hoje: <span className="font-semibold text-slate-600">{entry.plannedPct}%</span></p>
-      )}
-      {entry.actual != null && (
-        <p className="text-slate-400">% Real concluído: <span className="font-semibold text-slate-600">{entry.actual}%</span></p>
-      )}
-      <p className="text-slate-300 text-[10px]">IDP = % Real ÷ % Planejado</p>
+
+      {/* Progresso real vs planejado */}
+      <div className="rounded-lg overflow-hidden" style={{ border: "1px solid #F1F5F9" }}>
+        <div className="flex justify-between px-2.5 py-1.5 bg-slate-50">
+          <span className="text-slate-500">% Planejado hoje</span>
+          <span className="font-bold text-slate-700">{entry.plannedPct != null ? `${entry.plannedPct}%` : "—"}</span>
+        </div>
+        <div className="flex justify-between px-2.5 py-1.5" style={{ borderTop: "1px solid #F1F5F9" }}>
+          <span className="text-slate-500">% Real concluído</span>
+          <span className="font-bold" style={{ color }}>{entry.actual != null ? `${entry.actual}%` : "—"}</span>
+        </div>
+      </div>
+
+      {/* Fórmula */}
+      <p className="text-slate-300 text-[10px]">
+        Desvio = % Real − % Planejado · {entry.method === "tasks" ? "baseado nas datas das tarefas" : "baseado no calendário do projeto"}
+      </p>
     </div>
   )
 }
@@ -414,24 +444,29 @@ export function AnalyticsClient({
   const atRisk  = filtered.filter((p) => p.scheduleStatus === "AT_RISK").length
   const delayed = filtered.filter((p) => p.scheduleStatus === "DELAYED").length
 
+  const devioValues = filtered.map((p) => p.devio).filter((v): v is number => v !== null)
+  const avgDevio = devioValues.length ? Math.round(devioValues.reduce((a, b) => a + b, 0) / devioValues.length) : null
+
   const idpValues = filtered.map((p) => p.idp).filter((v): v is number => v !== null)
   const avgIdp = idpValues.length ? idpValues.reduce((a, b) => a + b, 0) / idpValues.length : null
 
   const idcValues = filtered.map((p) => p.idc).filter((v): v is number => v !== null)
   const avgIdc = idcValues.length ? idcValues.reduce((a, b) => a + b, 0) / idcValues.length : null
 
-  // ── IDP chart data ────────────────────────────────────────────
+  // ── Desvio chart data ─────────────────────────────────────────
+  // Mostra o desvio em pp para cada projeto com dados configurados
   const idpData = filtered
-    .filter((p) => p.idp !== null)
+    .filter((p) => p.devio !== null)
     .map((p) => ({
       name:       truncate(p.title, 20),
       fullName:   p.title,
-      idp:        p.idp!,
-      color:      idpColor(p.idp),
+      devio:      p.devio!,
+      color:      devioColor(p.devio),
       plannedPct: p.plannedPct,
       actual:     p.progress,
+      method:     p.plannedPct !== null ? "tasks" : "calendar",
     }))
-    .sort((a, b) => a.idp - b.idp) // pior IDP no topo do gráfico horizontal
+    .sort((a, b) => a.devio - b.devio) // pior desvio no topo do gráfico
 
   // ── Pie data ──────────────────────────────────────────────────
   const ndCount = filtered.filter((p) => p.scheduleStatus === "ND").length
@@ -691,10 +726,10 @@ export function AnalyticsClient({
               color={C.red}      icon={Activity}
             />
             <KpiChip
-              label="IDP Médio"
-              subtitle="Índice de Desempenho de Prazo"
-              value={avgIdp !== null ? avgIdp.toFixed(2) : "N/D"}
-              color={idpColor(avgIdp)}
+              label="Desvio Médio"
+              subtitle="Desvio de prazo do portfólio"
+              value={avgDevio !== null ? `${avgDevio > 0 ? "+" : ""}${avgDevio}pp` : "N/D"}
+              color={devioColor(avgDevio)}
               icon={Target}
             />
             <KpiChip
@@ -706,15 +741,17 @@ export function AnalyticsClient({
             />
           </div>
 
-          {/* ── Legenda IDP / IDC ───────────────────────────────────── */}
+          {/* ── Como os indicadores são calculados ──────────────────── */}
           <div className="bg-blue-50 border border-blue-100 rounded-2xl px-5 py-4 flex flex-wrap gap-6">
             <div className="flex items-start gap-2.5 flex-1 min-w-[260px]">
               <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
               <div>
-                <p className="text-xs font-bold text-blue-700">IDP — Índice de Desempenho de Prazo</p>
+                <p className="text-xs font-bold text-blue-700">Desvio de Prazo (pp)</p>
                 <p className="text-[11px] text-blue-600 mt-0.5">
-                  IDP = % Concluído Real ÷ % Planejado. Mede se o projeto avança no ritmo do cronograma.
-                  ≥ 0,95 = no prazo · 0,80 – 0,94 = em risco · &lt; 0,80 = atrasado. Projetos em Planejamento ou Pausados não calculam IDP.
+                  Desvio = % Real concluído − % Planejado hoje. Um valor positivo significa adiantamento;
+                  negativo significa atraso. <strong>No Prazo</strong> até −15pp · <strong>Em Risco</strong> −16 a −30pp · <strong>Atrasado</strong> abaixo de −30pp.
+                  O % planejado é calculado com base nas datas das tarefas (preferencial) ou no calendário do projeto (fallback).
+                  Projetos em Planejamento, Análise Futura ou Pausados não são incluídos no cálculo.
                 </p>
               </div>
             </div>
@@ -736,29 +773,29 @@ export function AnalyticsClient({
 
             <div className="grid gap-4" style={{ gridTemplateColumns: "2fr 1fr" }}>
 
-              {/* LEFT: IDP Bar Chart */}
+              {/* LEFT: Desvio de Prazo Bar Chart */}
               <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
                 <div className="mb-4">
                   <p className="text-xs font-black text-slate-700 uppercase tracking-wide">
-                    IDP por Projeto
+                    Desvio de Prazo por Projeto
                   </p>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    IDP = % Concluído Real ÷ % Planejado · Linha de referência em 1,00 = meta
+                    Diferença entre progresso real e progresso planejado para a data de hoje · em pontos percentuais (pp)
                   </p>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3 mb-4 text-[10px] font-semibold text-slate-500">
                   <span className="flex items-center gap-1.5">
                     <span className="w-3 h-3 rounded-sm" style={{ background: C.green }} />
-                    No Prazo (IDP ≥ 0,95)
+                    No Prazo (desvio ≥ −15pp)
                   </span>
                   <span className="flex items-center gap-1.5">
                     <span className="w-3 h-3 rounded-sm" style={{ background: C.amber }} />
-                    Em Risco (0,80 – 0,94)
+                    Em Risco (−16 a −30pp)
                   </span>
                   <span className="flex items-center gap-1.5">
                     <span className="w-3 h-3 rounded-sm" style={{ background: C.red }} />
-                    Atrasado (IDP &lt; 0,80)
+                    Atrasado (abaixo de −30pp)
                   </span>
                 </div>
 
@@ -772,18 +809,18 @@ export function AnalyticsClient({
                     <BarChart
                       data={idpData}
                       layout="vertical"
-                      margin={{ top: 4, right: 56, left: 0, bottom: 20 }}
+                      margin={{ top: 4, right: 64, left: 0, bottom: 20 }}
                     >
                       <CartesianGrid horizontal={false} stroke="#F1F5F9" />
                       <XAxis
                         type="number"
-                        domain={[0, "auto"]}
+                        domain={["auto", "auto"]}
                         tick={{ fontSize: 10, fill: "#94A3B8" }}
-                        tickFormatter={(v: number) => v.toFixed(2)}
+                        tickFormatter={(v: number) => `${v > 0 ? "+" : ""}${v}pp`}
                         axisLine={false}
                         tickLine={false}
                         label={{
-                          value: "← Atrasado    |    No Prazo →",
+                          value: "← Atrasado    |    Adiantado →",
                           position: "insideBottom",
                           offset: -12,
                           style: { fontSize: 10, fill: "#94A3B8", fontWeight: 600 },
@@ -797,17 +834,31 @@ export function AnalyticsClient({
                         axisLine={false}
                         tickLine={false}
                       />
-                      <Tooltip content={IdpTooltip} />
+                      <Tooltip content={DevioTooltip} />
                       <ReferenceLine
-                        x={1}
+                        x={0}
                         stroke="#94A3B8"
                         strokeWidth={2}
                         strokeDasharray="4 2"
-                        label={{ value: "1,00", position: "top", style: { fontSize: 9, fill: "#94A3B8" } }}
+                        label={{ value: "0pp", position: "top", style: { fontSize: 9, fill: "#94A3B8" } }}
                       />
-                      <Bar dataKey="idp" radius={[0, 4, 4, 0]} maxBarSize={22}
+                      <ReferenceLine
+                        x={-15}
+                        stroke={C.amber}
+                        strokeWidth={1}
+                        strokeDasharray="3 3"
+                        label={{ value: "−15pp", position: "insideTopLeft", style: { fontSize: 8, fill: C.amber } }}
+                      />
+                      <ReferenceLine
+                        x={-30}
+                        stroke={C.red}
+                        strokeWidth={1}
+                        strokeDasharray="3 3"
+                        label={{ value: "−30pp", position: "insideTopLeft", style: { fontSize: 8, fill: C.red } }}
+                      />
+                      <Bar dataKey="devio" radius={[0, 4, 4, 0]} maxBarSize={22}
                         label={{ position: "right", fontSize: 9, fill: "#64748B",
-                          formatter: (v: unknown) => typeof v === "number" ? v.toFixed(2) : "" }}>
+                          formatter: (v: unknown) => typeof v === "number" ? `${v > 0 ? "+" : ""}${v}pp` : "" }}>
                         {idpData.map((entry, i) => (
                           <Cell key={i} fill={entry.color} />
                         ))}
@@ -909,7 +960,7 @@ export function AnalyticsClient({
                       <th className="text-left px-4 py-3">Projeto</th>
                       <th className="text-left px-4 py-3">Status</th>
                       <th className="text-center px-4 py-3">Progresso</th>
-                      <th className="text-center px-4 py-3">IDP</th>
+                      <th className="text-center px-4 py-3">Desvio</th>
                       <th className="text-center px-4 py-3">IDC</th>
                       <th className="text-center px-4 py-3">% Plan.</th>
                       <th className="text-center px-4 py-3">Risco</th>
@@ -992,18 +1043,18 @@ export function AnalyticsClient({
                             </div>
                           </td>
 
-                          {/* IDP */}
+                          {/* Desvio */}
                           <td className="px-4 py-3 text-center">
-                            {p.idp !== null ? (
+                            {p.devio !== null ? (
                               <span
                                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
                                 style={{
-                                  background: `${idpColor(p.idp)}18`,
-                                  color: idpColor(p.idp),
+                                  background: `${devioColor(p.devio)}18`,
+                                  color: devioColor(p.devio),
                                 }}
-                                title={`IDP: ${p.idp.toFixed(2)} — ${idpLabel(p.idp)}${p.plannedPct !== null ? ` | % Real: ${p.progress}% / % Plan.: ${p.plannedPct}%` : ""}`}
+                                title={`Desvio: ${p.devio > 0 ? "+" : ""}${p.devio}pp — ${devioLabel(p.devio)} | % Real: ${p.progress}% / % Planejado: ${p.plannedPct ?? "—"}%`}
                               >
-                                {p.idp.toFixed(2)}
+                                {p.devio > 0 ? "+" : ""}{p.devio}pp
                               </span>
                             ) : (
                               <span className="text-slate-300 text-[10px]">N/D</span>
