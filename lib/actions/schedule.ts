@@ -5,6 +5,7 @@ import { auth } from "@/auth"
 import { revalidatePath } from "next/cache"
 import bcrypt from "bcryptjs"
 import { deriveStatus, deriveProgress, type AncestorUpdate } from "@/lib/utils/task-progress"
+import { nextWorkingDay, addWorkingDays, workingDaysBetween } from "@/lib/working-days"
 
 export type TaskInput = {
   projectId: string
@@ -32,6 +33,20 @@ const INCLUDE = {
   wbsArea: { select: { id: true, name: true, color: true } },
   _count: { select: { comments: true, attachments: true } },
 } as const
+
+export type SuccessorUpdate = {
+  id: string
+  startDate: string | null
+  endDate: string | null
+}
+
+function dateToStr(d: Date): string {
+  return d.toISOString().split('T')[0]
+}
+
+function strToDate(s: string): Date {
+  return new Date(s + 'T00:00:00.000Z')
+}
 
 function serialize(t: {
   id: string; projectId: string; wbsAreaId: string | null; parentId: string | null
@@ -96,6 +111,96 @@ export async function createTask(data: TaskInput) {
   return serialize(task)
 }
 
+// Cascades startDate/endDate downstream through FS dependency relationships.
+// Uses BFS in topological order to recalculate each successor's dates from its
+// latest predecessor's endDate, preserving working-day duration when both dates exist.
+async function propagateSuccessorsDown(
+  rootTaskId: string,
+  projectId: string
+): Promise<SuccessorUpdate[]> {
+  const allTasks = await db.scheduleTask.findMany({
+    where: { projectId },
+    select: { id: true, dependencies: true, startDate: true, endDate: true },
+  })
+
+  // Mutable date cache — updated in-place as tasks are processed
+  const dateCache = new Map<string, { start: Date | null; end: Date | null }>(
+    allTasks.map(t => [t.id, { start: t.startDate, end: t.endDate }])
+  )
+
+  const predMap = new Map<string, string[]>()
+  const succMap = new Map<string, string[]>()
+  for (const t of allTasks) {
+    let deps: string[] = []
+    try { deps = t.dependencies ? (JSON.parse(t.dependencies) as string[]) : [] } catch { /* noop */ }
+    predMap.set(t.id, deps)
+    for (const dep of deps) {
+      if (!succMap.has(dep)) succMap.set(dep, [])
+      succMap.get(dep)!.push(t.id)
+    }
+  }
+
+  const updates: SuccessorUpdate[] = []
+  const visited = new Set<string>([rootTaskId])
+  const queue = [rootTaskId]
+
+  while (queue.length > 0) {
+    const current = queue.shift()!
+    for (const succId of (succMap.get(current) ?? [])) {
+      if (visited.has(succId)) continue
+
+      const preds = predMap.get(succId) ?? []
+      const predEnds = preds
+        .map(p => dateCache.get(p)?.end)
+        .filter((d): d is Date => d != null)
+
+      if (predEnds.length === 0) {
+        // No predecessor has an endDate yet — queue for later but don't update
+        visited.add(succId)
+        queue.push(succId)
+        continue
+      }
+
+      const latestEnd = predEnds.reduce((max, d) => d > max ? d : max, predEnds[0])
+      const newStartStr = nextWorkingDay(dateToStr(latestEnd))
+      const newStart = strToDate(newStartStr)
+
+      const cur = dateCache.get(succId)!
+
+      // Skip when start date is already correct
+      if (cur.start && dateToStr(cur.start) === newStartStr) {
+        visited.add(succId)
+        queue.push(succId)
+        continue
+      }
+
+      // Preserve working-day duration when both dates are known
+      let newEnd: Date | null = cur.end
+      if (cur.start && cur.end) {
+        const dur = workingDaysBetween(dateToStr(cur.start), dateToStr(cur.end))
+        if (dur > 0) newEnd = strToDate(addWorkingDays(newStartStr, dur))
+      }
+
+      await db.scheduleTask.update({
+        where: { id: succId },
+        data: { startDate: newStart, ...(newEnd && { endDate: newEnd }) },
+      })
+
+      // Bubble up to parent so parent spans stay accurate
+      const row = await db.scheduleTask.findUnique({ where: { id: succId }, select: { parentId: true } })
+      if (row?.parentId) await propagateParentUp(row.parentId)
+
+      dateCache.set(succId, { start: newStart, end: newEnd })
+      updates.push({ id: succId, startDate: newStart.toISOString(), endDate: newEnd?.toISOString() ?? null })
+
+      visited.add(succId)
+      queue.push(succId)
+    }
+  }
+
+  return updates
+}
+
 // Propagates progress AND dates up the parent chain.
 // parentId = the direct parent of the task that just changed.
 async function propagateParentUp(parentId: string, collected: AncestorUpdate[] = []): Promise<AncestorUpdate[]> {
@@ -154,8 +259,11 @@ export async function updateTask(id: string, projectId: string, data: Partial<Ta
   const session = await auth()
   if (!session?.user) throw new Error("Não autorizado")
 
-  // Fetch current values for auto-derivation
-  const current = await db.scheduleTask.findUnique({ where: { id }, select: { progress: true, status: true } })
+  // Fetch current values for auto-derivation and duration preservation
+  const current = await db.scheduleTask.findUnique({
+    where: { id },
+    select: { progress: true, status: true, startDate: true, endDate: true },
+  })
   const curProgress = current?.progress ?? 0
   const curStatus   = current?.status   ?? "PLANNING"
 
@@ -168,6 +276,21 @@ export async function updateTask(id: string, projectId: string, data: Partial<Ta
     finalProgress = deriveProgress(finalStatus, curProgress)
   }
 
+  // When only startDate changes, auto-preserve working-day duration by shifting endDate
+  const computedEndDate = (() => {
+    if (data.endDate !== undefined) return data.endDate // explicit value (or null to clear)
+    if (
+      data.startDate !== undefined &&
+      data.startDate !== null &&
+      current?.startDate &&
+      current?.endDate
+    ) {
+      const dur = workingDaysBetween(dateToStr(current.startDate), dateToStr(current.endDate))
+      if (dur > 0) return addWorkingDays(data.startDate, dur)
+    }
+    return undefined // leave endDate untouched
+  })()
+
   const task = await db.scheduleTask.update({
     where: { id },
     data: {
@@ -177,7 +300,7 @@ export async function updateTask(id: string, projectId: string, data: Partial<Ta
       ...(data.responsibleId !== undefined && { responsibleId: data.responsibleId }),
       ...(data.parentId !== undefined && { parentId: data.parentId }),
       ...(data.startDate !== undefined && { startDate: data.startDate ? new Date(data.startDate) : null }),
-      ...(data.endDate !== undefined && { endDate: data.endDate ? new Date(data.endDate) : null }),
+      ...(computedEndDate !== undefined && { endDate: computedEndDate ? new Date(computedEndDate) : null }),
       ...(data.actualStart !== undefined && { actualStart: data.actualStart ? new Date(data.actualStart) : null }),
       ...(data.actualEnd !== undefined && { actualEnd: data.actualEnd ? new Date(data.actualEnd) : null }),
       ...(data.estimatedEffort !== undefined && { estimatedEffort: data.estimatedEffort }),
@@ -196,8 +319,15 @@ export async function updateTask(id: string, projectId: string, data: Partial<Ta
 
   const updated = await db.scheduleTask.findUnique({ where: { id }, select: { parentId: true } })
   const ancestors = updated?.parentId ? await propagateParentUp(updated.parentId) : []
+
+  // Cascade to successor tasks when planned dates change
+  const successorUpdates =
+    data.startDate !== undefined || data.endDate !== undefined
+      ? await propagateSuccessorsDown(id, projectId)
+      : []
+
   revalidatePath(`/projects/${projectId}/schedule`)
-  return { task: serialize(task), ancestors }
+  return { task: serialize(task), ancestors, successorUpdates }
 }
 
 export async function deleteTask(id: string, projectId: string) {
