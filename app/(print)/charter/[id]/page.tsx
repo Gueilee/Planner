@@ -315,6 +315,8 @@ export default async function CharterPage({ params }: { params: Promise<{ id: st
                 { label: "Início Previsto", value: fmt(project.expectedStart) },
                 { label: "Término Previsto", value: fmt(project.expectedEnd) },
                 { label: "Budget", value: currency(project.budget) },
+                ...(project.origin === "CLIENT" && project.proposalNumber ? [{ label: "Nº Proposta Comercial", value: project.proposalNumber }] : []),
+                ...(project.origin === "CLIENT" && project.contractNumber ? [{ label: "Nº Contrato / P.V.", value: project.contractNumber }] : []),
               ].map(({ label, value }) => (
                 <div className="cover-card" key={label}>
                   <div className="cover-card-label">{label}</div>
@@ -351,6 +353,8 @@ export default async function CharterPage({ params }: { params: Promise<{ id: st
                 { label: "Custo Estimado", value: currency(project.estimatedCosts) },
                 { label: "Economia Esperada", value: currency(project.economy) },
                 { label: "Gerente do Projeto", value: pm?.user.name ?? "A definir" },
+                ...(project.origin === "CLIENT" && project.proposalNumber ? [{ label: "Nº Proposta Comercial", value: project.proposalNumber }] : []),
+                ...(project.origin === "CLIENT" && project.contractNumber ? [{ label: "Nº Contrato / Pedido de Venda", value: project.contractNumber }] : []),
               ].map(({ label, value }) => (
                 <div className="info-row" key={label}>
                   <span className="info-label">{label}</span>

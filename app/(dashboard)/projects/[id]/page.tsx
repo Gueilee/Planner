@@ -278,21 +278,23 @@ export default async function ProjectDetailPage({
                   <ProjectEditModal
                     project={{
                       id,
-                      title:         project.title,
-                      description:   project.description,
-                      scope:         project.scope,
-                      assumptions:   project.assumptions,
-                      restrictions:  project.restrictions,
-                      origin:        project.origin,
-                      projectArea:   project.projectArea,
+                      title:          project.title,
+                      description:    project.description,
+                      scope:          project.scope,
+                      assumptions:    project.assumptions,
+                      restrictions:   project.restrictions,
+                      origin:         project.origin,
+                      projectArea:    project.projectArea,
+                      proposalNumber: project.proposalNumber,
+                      contractNumber: project.contractNumber,
                       budget:         project.budget,
                       estimatedCosts: project.estimatedCosts,
                       economy:        project.economy,
-                      expectedStart: project.expectedStart,
-                      expectedEnd:   project.expectedEnd,
-                      actualStart:   project.actualStart,
-                      actualEnd:     project.actualEnd,
-                      goLiveDate:    project.goLiveDate,
+                      expectedStart:  project.expectedStart,
+                      expectedEnd:    project.expectedEnd,
+                      actualStart:    project.actualStart,
+                      actualEnd:      project.actualEnd,
+                      goLiveDate:     project.goLiveDate,
                     }}
                     members={project.members.map(m => ({
                       userId: m.userId,
@@ -332,14 +334,16 @@ export default async function ProjectDetailPage({
                         <Play className="w-3.5 h-3.5" />
                         Go/No-Go
                       </Link>
-                      <Link
-                        href={`/projects/${id}/presentation`}
-                        className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.98]"
-                        style={{ background: "linear-gradient(135deg, #0891B2, #06B6D4)", boxShadow: "0 4px 20px rgba(8,145,178,0.30)" }}
-                      >
-                        <Layers className="w-3.5 h-3.5" />
-                        Ap. Técnica
-                      </Link>
+                      {(project.origin === "CLIENT" || project.projectArea === "ESTRATEGICO") && (
+                        <Link
+                          href={`/projects/${id}/presentation`}
+                          className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.98]"
+                          style={{ background: "linear-gradient(135deg, #0891B2, #06B6D4)", boxShadow: "0 4px 20px rgba(8,145,178,0.30)" }}
+                        >
+                          <Layers className="w-3.5 h-3.5" />
+                          Ap. Técnica
+                        </Link>
+                      )}
                       <Link
                         href={`/projects/${id}/schedule`}
                         className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl transition-all hover:opacity-90 active:scale-[0.98]"
@@ -378,14 +382,16 @@ export default async function ProjectDetailPage({
                         <Play className="w-3.5 h-3.5" />
                         Go/No-Go
                       </Link>
-                      <Link
-                        href={`/projects/${id}/presentation`}
-                        className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.98]"
-                        style={{ background: "linear-gradient(135deg, #0891B2, #06B6D4)", boxShadow: "0 4px 20px rgba(8,145,178,0.30)" }}
-                      >
-                        <Layers className="w-3.5 h-3.5" />
-                        Ap. Técnica
-                      </Link>
+                      {(project.origin === "CLIENT" || project.projectArea === "ESTRATEGICO") && (
+                        <Link
+                          href={`/projects/${id}/presentation`}
+                          className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.98]"
+                          style={{ background: "linear-gradient(135deg, #0891B2, #06B6D4)", boxShadow: "0 4px 20px rgba(8,145,178,0.30)" }}
+                        >
+                          <Layers className="w-3.5 h-3.5" />
+                          Ap. Técnica
+                        </Link>
+                      )}
                       <Link
                         href={`/projects/${id}/schedule`}
                         className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl transition-all hover:opacity-90 active:scale-[0.98]"

@@ -206,6 +206,8 @@ model Project {
 
   // Planning / intake fields (previously on Initiative)
   origin         String?
+  proposalNumber String?   // Nº proposta comercial aprovada (projetos CLIENT)
+  contractNumber String?   // Nº do contrato ou pedido de venda (projetos CLIENT)
   scope          String?
   asIs           String?
   toBe           String?

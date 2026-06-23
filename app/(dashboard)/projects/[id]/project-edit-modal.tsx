@@ -105,6 +105,8 @@ type Props = {
     restrictions: string | null
     origin: string | null
     projectArea: string
+    proposalNumber: string | null
+    contractNumber: string | null
     budget: number | null
     estimatedCosts: number | null
     economy: number | null
@@ -952,6 +954,8 @@ export function ProjectEditModal({ project, members, allUsers, risks, benefits }
     restrictions:  project.restrictions  ?? "",
     origin:        project.origin        ?? "INTERNAL",
     projectArea:   project.projectArea   ?? "TECNOLOGIA",
+    proposalNumber: project.proposalNumber ?? "",
+    contractNumber: project.contractNumber ?? "",
     budget:         project.budget         != null ? String(project.budget)         : "",
     estimatedCosts: project.estimatedCosts != null ? String(project.estimatedCosts) : "",
     economy:        project.economy        != null ? String(project.economy)        : "",
@@ -971,6 +975,8 @@ export function ProjectEditModal({ project, members, allUsers, risks, benefits }
       restrictions:  project.restrictions  ?? "",
       origin:        project.origin        ?? "INTERNAL",
       projectArea:   project.projectArea   ?? "TECNOLOGIA",
+      proposalNumber: project.proposalNumber ?? "",
+      contractNumber: project.contractNumber ?? "",
       budget:         project.budget         != null ? String(project.budget)         : "",
       estimatedCosts: project.estimatedCosts != null ? String(project.estimatedCosts) : "",
       economy:        project.economy        != null ? String(project.economy)        : "",
@@ -1001,6 +1007,8 @@ export function ProjectEditModal({ project, members, allUsers, risks, benefits }
         restrictions:  form.restrictions.trim() || null,
         origin:        form.origin || undefined,
         projectArea:   form.projectArea || undefined,
+        proposalNumber: form.proposalNumber.trim() || null,
+        contractNumber: form.contractNumber.trim() || null,
         budget:         parseMoney(form.budget),
         estimatedCosts: parseMoney(form.estimatedCosts),
         economy:        parseMoney(form.economy),
@@ -1098,6 +1106,19 @@ export function ProjectEditModal({ project, members, allUsers, risks, benefits }
                       <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
                     </div>
                   </Field>
+
+                  {form.origin === "CLIENT" && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <Field label="Nº da Proposta Comercial" hint="Número da proposta aprovada pelo cliente">
+                        <input className="lp-inp" value={form.proposalNumber} onChange={set("proposalNumber")}
+                          placeholder="Ex: PROP-2024-001" />
+                      </Field>
+                      <Field label="Nº Contrato / Pedido de Venda" hint="Contrato ou PV (quando aplicável)">
+                        <input className="lp-inp" value={form.contractNumber} onChange={set("contractNumber")}
+                          placeholder="Ex: CONT-123 ou PV-456" />
+                      </Field>
+                    </div>
+                  )}
 
                   <Field label="Portfólio / Área de Gestão">
                     <div className="grid grid-cols-3 gap-2">

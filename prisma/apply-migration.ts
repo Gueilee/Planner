@@ -106,6 +106,8 @@ async function main() {
     `ALTER TABLE "Project"    ADD COLUMN "investment" REAL NOT NULL DEFAULT 0`,
     `ALTER TABLE "Project"    ADD COLUMN "reportStatusManual" INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE "Project"    ADD COLUMN "requestNumber" INTEGER`,
+    `ALTER TABLE "Project"    ADD COLUMN "proposalNumber" TEXT`,
+    `ALTER TABLE "Project"    ADD COLUMN "contractNumber" TEXT`,
   ]
   for (const sql of alters) {
     try {
