@@ -34,7 +34,10 @@ export async function SCurveTab({ projectId }: { projectId: string }) {
           actualEnd: true,
           expectedEnd: true,
           tasks: {
-            select: { id: true, endDate: true, completedAt: true, actualEnd: true, status: true },
+            select: {
+              id: true, endDate: true, completedAt: true, actualEnd: true, status: true,
+              _count: { select: { subtasks: true } },
+            },
             where: { endDate: { not: null } },
           },
         },
@@ -48,28 +51,28 @@ export async function SCurveTab({ projectId }: { projectId: string }) {
 
     if (!project) return null
 
-    const tasks = project.tasks
+    // Usar apenas tarefas FOLHA — tarefas-pai têm endDate inflado cobrindo todos os filhos
+    const tasks = project.tasks.filter((t) => t._count.subtasks === 0)
     const totalTasks = tasks.length
 
     if (totalTasks === 0) {
       return <SCurveClient projectId={projectId} initialData={{ series: [], baselines: [], totalTasks: 0 }} />
     }
 
-    const allDates = [
+    // Range: apenas datas planejadas (endDate) — completedAt não estende o eixo X
+    const plannedDates = [
       project.actualStart,
       project.expectedStart,
       ...tasks.map((t) => t.endDate),
-      ...tasks.map((t) => t.completedAt),
-      ...baselines.flatMap((b) => b.snaps.map((s) => s.plannedEnd)),
     ].filter(Boolean) as Date[]
 
     const rangeStart = startOfWeek(
-      allDates.reduce((min, d) => isBefore(d, min) ? d : min, allDates[0]),
+      plannedDates.reduce((min, d) => isBefore(d, min) ? d : min, plannedDates[0]),
       { weekStartsOn: 1 }
     )
     const rangeEnd = addWeeks(
-      allDates.reduce((max, d) => isAfter(d, max) ? d : max, allDates[0]),
-      2
+      plannedDates.reduce((max, d) => isAfter(d, max) ? d : max, plannedDates[0]),
+      1
     )
 
     const weeks = eachWeekOfInterval({ start: rangeStart, end: rangeEnd }, { weekStartsOn: 1 })

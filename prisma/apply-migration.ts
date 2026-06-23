@@ -100,6 +100,49 @@ async function main() {
     { sql: `CREATE INDEX IF NOT EXISTS "BenefitMeasurement_benefitId_idx" ON "BenefitMeasurement"("benefitId")`, args: [] },
   ], "write")
 
+  // ── Migration 3: S-Curve Baselines ─────────────────────────────────────────
+  await client.batch([
+    {
+      sql: `CREATE TABLE IF NOT EXISTS "ProjectBaseline" (
+        "id"          TEXT     NOT NULL PRIMARY KEY,
+        "projectId"   TEXT     NOT NULL,
+        "number"      INTEGER  NOT NULL,
+        "name"        TEXT     NOT NULL,
+        "description" TEXT,
+        "createdAt"   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "ProjectBaseline_projectId_fkey"
+          FOREIGN KEY ("projectId") REFERENCES "Project" ("id")
+          ON DELETE CASCADE ON UPDATE CASCADE
+      )`,
+      args: [],
+    },
+    {
+      sql: `CREATE UNIQUE INDEX IF NOT EXISTS "ProjectBaseline_projectId_number_key" ON "ProjectBaseline"("projectId", "number")`,
+      args: [],
+    },
+    {
+      sql: `CREATE INDEX IF NOT EXISTS "ProjectBaseline_projectId_idx" ON "ProjectBaseline"("projectId")`,
+      args: [],
+    },
+    {
+      sql: `CREATE TABLE IF NOT EXISTS "BaselineSnap" (
+        "id"         TEXT     NOT NULL PRIMARY KEY,
+        "baselineId" TEXT     NOT NULL,
+        "taskId"     TEXT     NOT NULL,
+        "taskTitle"  TEXT     NOT NULL,
+        "plannedEnd" DATETIME NOT NULL,
+        CONSTRAINT "BaselineSnap_baselineId_fkey"
+          FOREIGN KEY ("baselineId") REFERENCES "ProjectBaseline" ("id")
+          ON DELETE CASCADE ON UPDATE CASCADE
+      )`,
+      args: [],
+    },
+    {
+      sql: `CREATE INDEX IF NOT EXISTS "BaselineSnap_baselineId_idx" ON "BaselineSnap"("baselineId")`,
+      args: [],
+    },
+  ], "write")
+
   // ALTER TABLE — idempotent via try/catch (SQLite ignores ADD COLUMN IF NOT EXISTS)
   const alters = [
     `ALTER TABLE "Attachment" ADD COLUMN "benefitId" TEXT REFERENCES "ProjectBenefit"("id") ON DELETE CASCADE`,

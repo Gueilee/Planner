@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
-import { addDays, startOfWeek, eachWeekOfInterval, isAfter, isBefore, addWeeks } from "date-fns"
+import { startOfWeek, eachWeekOfInterval, isAfter, isBefore, addWeeks } from "date-fns"
 
 export const dynamic = "force-dynamic"
 
