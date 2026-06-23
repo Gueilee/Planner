@@ -14,6 +14,7 @@ import {
   Shield, Milestone, ChevronRight as ChevRight,
 } from "lucide-react"
 import { UserAvatar } from "@/components/ui/user-avatar"
+import { LineChart, Line, XAxis, YAxis, ReferenceLine, ResponsiveContainer } from "recharts"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -54,6 +55,7 @@ export type ProjectSlideData = {
   idc: number | null; idp: number | null; timelineProgress: number | null
   progressDelta: number | null
   meetingsCount: number; meetingsByType: Record<string, number>
+  sCurve: { series: { date: string; planned: number; realized: number }[] } | null
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -510,6 +512,46 @@ function AnimProgressBar({ value, color }: { value: number; color: string }) {
 // PROJECT SLIDE  — 3 COLUNAS COMPLETAS
 // ═══════════════════════════════════════════════════════════════════════════════
 
+function MiniSCurve({series}:{series:{date:string;planned:number;realized:number}[]}) {
+  const todayTs = Date.now()
+  const todayKey = series.length > 0
+    ? series.reduce((c,s) => Math.abs(new Date(s.date).getTime()-todayTs) < Math.abs(new Date(c.date).getTime()-todayTs) ? s : c, series[0]).date
+    : null
+  const step = Math.max(1, Math.floor(series.length / 5))
+  const tickDates = series.filter((_,i) => i % step === 0 || i === series.length-1).map(s => s.date)
+  const fmtTick = (iso:string) => {
+    const d = new Date(iso)
+    return d.toLocaleString('pt-BR',{month:'short'}).replace('.','') + '/' + d.getFullYear().toString().slice(2)
+  }
+  return (
+    <GCard style={{padding:"5px 10px 4px",height:"100%",display:"flex",flexDirection:"column"}}>
+      <div className="flex items-center justify-between shrink-0" style={{marginBottom:2}}>
+        <span style={{fontSize:8.5,fontWeight:800,color:"rgba(180,210,255,0.55)",textTransform:"uppercase",letterSpacing:"0.1em"}}>Curva S — Avanço Físico</span>
+        <div className="flex items-center gap-4">
+          <span style={{fontSize:8,color:"#60A5FA",fontWeight:700}}>╌ Planejado</span>
+          <span style={{fontSize:8,color:"#34D399",fontWeight:700}}>— Realizado</span>
+        </div>
+      </div>
+      <div style={{flex:1,minHeight:0}}>
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={series} margin={{top:2,right:4,bottom:0,left:-20}}>
+            <XAxis dataKey="date" ticks={tickDates} tickFormatter={fmtTick}
+              tick={{fontSize:7.5,fill:"rgba(180,210,255,0.40)",fontWeight:600}}
+              axisLine={{stroke:"rgba(255,255,255,0.06)"}} tickLine={false}/>
+            <YAxis domain={[0,100]} ticks={[0,25,50,75,100]}
+              tick={{fontSize:7,fill:"rgba(180,210,255,0.35)"}}
+              axisLine={false} tickLine={false}
+              tickFormatter={(v:number)=>`${v}`}/>
+            {todayKey&&<ReferenceLine x={todayKey} stroke="rgba(255,255,255,0.22)" strokeDasharray="3 3" label={false}/>}
+            <Line type="monotone" dataKey="planned" stroke="#60A5FA" strokeWidth={1.5} strokeDasharray="5 3" dot={false} isAnimationActive={false}/>
+            <Line type="monotone" dataKey="realized" stroke="#34D399" strokeWidth={2} dot={false} isAnimationActive={false}/>
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </GCard>
+  )
+}
+
 function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;total:number}) {
   const status=STATUS_CFG[data.status]??{label:data.status,color:"#94A3B8",bg:"rgba(148,163,184,0.12)",icon:"📋"}
   const costL=toTL(data.reportStatus.cost); const schL=toTL(data.reportStatus.schedule)
@@ -548,7 +590,8 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
       </div>
 
       {/* ── BODY — 3 COLUNAS ── */}
-      <div className="relative z-10 flex-1 grid gap-2 px-6 min-h-0 overflow-hidden pb-0" style={{gridTemplateColumns:"23% 49% 28%"}}>
+      <div className="relative z-10 flex-1 flex flex-col gap-2 px-6 min-h-0 pb-1">
+      <div className="flex-1 grid gap-2 min-h-0 overflow-hidden" style={{gridTemplateColumns:"23% 49% 28%"}}>
 
         {/* ════ COL 1: Status + Checkpoint ════ */}
         <div className="flex flex-col gap-2 min-h-0 overflow-hidden">
@@ -795,6 +838,12 @@ function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;tot
           </GCard>
 
         </div>
+      </div>
+      {data.sCurve && data.sCurve.series.length > 4 && (
+        <div className="shrink-0" style={{height:104}}>
+          <MiniSCurve series={data.sCurve.series}/>
+        </div>
+      )}
       </div>
 
     </div>

@@ -1,7 +1,7 @@
 import { auth } from "@/auth"
 import { db } from "@/lib/db"
 import { redirect } from "next/navigation"
-import { differenceInDays } from "date-fns"
+import { differenceInDays, startOfWeek, eachWeekOfInterval, isAfter, isBefore, addWeeks } from "date-fns"
 import { ProjectStatus } from "@/lib/generated/prisma/enums"
 import { ReportClient, type ProjectSlideData } from "./report-client"
 
@@ -179,6 +179,35 @@ export default async function StatusReportPage() {
         pct:   Math.round((a.tasks.filter((t) => t.status === "COMPLETED").length / a.tasks.length) * 100),
       }))
 
+    // S-Curve: planned vs realized weekly completion %
+    const sCurveResult = (() => {
+      const tw = tasks.filter(t => t.endDate !== null)
+      if (tw.length < 3) return null
+      const allDates: Date[] = [
+        ...tw.map(t => t.endDate!),
+        ...tw.map(t => t.completedAt).filter((d): d is Date => d !== null),
+        ...[p.actualStart, p.expectedStart].filter((d): d is Date => d !== null),
+      ]
+      const minDate = allDates.reduce((m, d) => isBefore(d, m) ? d : m, allDates[0])
+      const maxDate = allDates.reduce((m, d) => isAfter(d, m)  ? d : m, allDates[0])
+      if (!isBefore(minDate, maxDate)) return null
+      const rangeStart = startOfWeek(minDate, { weekStartsOn: 1 })
+      const rangeEnd   = addWeeks(maxDate, 2)
+      const weeks = eachWeekOfInterval({ start: rangeStart, end: rangeEnd }, { weekStartsOn: 1 })
+      if (weeks.length < 3) return null
+      const total = tw.length
+      const series = weeks.map(ws => ({
+        date:     ws.toISOString(),
+        planned:  Math.round(tw.filter(t => !isAfter(t.endDate!, ws)).length / total * 100),
+        realized: Math.round(tw.filter(t => {
+          if (t.completedAt && !isAfter(t.completedAt, ws)) return true
+          if (t.status === "COMPLETED" && !isAfter(t.endDate!, ws)) return true
+          return false
+        }).length / total * 100),
+      }))
+      return { series }
+    })()
+
     return {
       id: p.id, title: p.title, status: p.status,
       sponsor:  p.sponsor?.name ?? null,
@@ -224,6 +253,7 @@ export default async function StatusReportPage() {
       } : null,
       atRiskTasks: atRiskTasks.slice(0, 6),
       wbsAreas: wbsSummary,
+      sCurve: sCurveResult,
       dates: {
         start:  p.actualStart?.toISOString()  ?? p.expectedStart?.toISOString() ?? null,
         end:    pEnd?.toISOString()            ?? null,
