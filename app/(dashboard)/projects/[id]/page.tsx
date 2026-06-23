@@ -513,7 +513,17 @@ export default async function ProjectDetailPage({
               </div>
 
               {/* ── Row 2: título e descrição em largura total ── */}
-              <h1 className="text-2xl font-black text-[#0F172A] leading-tight tracking-tight mb-2">{project.title}</h1>
+              <div className="flex items-center gap-3 mb-2">
+                {project.requestNumber && (
+                  <span
+                    className="text-xs font-black tracking-wider px-2.5 py-1 rounded-lg shrink-0"
+                    style={{ background: "rgba(36,99,255,0.08)", color: "#2463FF", border: "1px solid rgba(36,99,255,0.15)" }}
+                  >
+                    VDM-{String(project.requestNumber).padStart(4, "0")}
+                  </span>
+                )}
+                <h1 className="text-2xl font-black text-[#0F172A] leading-tight tracking-tight">{project.title}</h1>
+              </div>
               {project.description && (
                 <p className="text-sm text-slate-400 leading-relaxed">{project.description}</p>
               )}

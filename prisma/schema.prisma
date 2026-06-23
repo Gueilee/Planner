@@ -247,6 +247,9 @@ model Project {
   priorityNotes     String?
   priorityUpdatedAt DateTime?
 
+  // Sequential request number — VDM-NNNN format, unique across all projects
+  requestNumber Int? @unique
+
   // Status Report indicators (GREEN | YELLOW | RED)
   reportStatusCost      String  @default("GREEN")
   reportStatusSchedule  String  @default("GREEN")

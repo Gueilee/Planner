@@ -25,6 +25,7 @@ export default async function ProjectsPage() {
         description: true,
         status: true,
         projectArea: true,
+        requestNumber: true,
         members: {
           take: 5,
           select: {
@@ -58,14 +59,15 @@ export default async function ProjectsPage() {
   ]
 
   const serialized: ProjectRow[] = projects.map((p) => ({
-    id:          p.id,
-    title:       p.title,
-    description: p.description,
-    status:      p.status,
-    projectArea: p.projectArea,
-    members:     p.members,
-    tasks:       p.tasks,
-    _count:      p._count,
+    id:            p.id,
+    title:         p.title,
+    description:   p.description,
+    status:        p.status,
+    projectArea:   p.projectArea,
+    requestNumber: p.requestNumber,
+    members:       p.members,
+    tasks:         p.tasks,
+    _count:        p._count,
   }))
 
   return (

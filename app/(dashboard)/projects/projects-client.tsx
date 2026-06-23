@@ -15,9 +15,15 @@ export type ProjectRow = {
   description: string | null
   status: string
   projectArea: string
+  requestNumber: number | null
   members: { id: string; user: { name: string; image: string | null } }[]
   tasks: { status: string; progress: number }[]
   _count: { tasks: number; risks: number }
+}
+
+function fmtCode(n: number | null): string {
+  if (!n) return ""
+  return `VDM-${String(n).padStart(4, "0")}`
 }
 
 // ─── Filter config ────────────────────────────────────────────────────────────
@@ -333,11 +339,21 @@ export function ProjectsClient({ projects }: { projects: ProjectRow[] }) {
                       style={{ background: "linear-gradient(to bottom, #00C4E0, #8B2FFF)" }}
                     />
                     <div className="min-w-0">
-                      <p className="text-sm font-bold text-[#0F172A] group-hover:text-[#2463FF] transition-colors line-clamp-1">
-                        {project.title}
-                      </p>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        {project.requestNumber && (
+                          <span
+                            className="text-[10px] font-black tracking-wider px-1.5 py-0.5 rounded-md shrink-0"
+                            style={{ background: "rgba(36,99,255,0.08)", color: "#2463FF" }}
+                          >
+                            {fmtCode(project.requestNumber)}
+                          </span>
+                        )}
+                        <p className="text-sm font-bold text-[#0F172A] group-hover:text-[#2463FF] transition-colors line-clamp-1">
+                          {project.title}
+                        </p>
+                      </div>
                       {project.description && (
-                        <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">
+                        <p className="text-xs text-slate-400 line-clamp-1">
                           {project.description}
                         </p>
                       )}
