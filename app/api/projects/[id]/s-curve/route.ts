@@ -47,22 +47,22 @@ export async function GET(
   const totalTasks = tasks.length
   if (totalTasks === 0) return NextResponse.json({ series: [], baselines: [], totalTasks: 0 })
 
-  // Determine time range
-  const allDates = [
+  // Determine time range — baseado APENAS nas endDates planejadas das tarefas.
+  // completedAt, actualEnd e datas de baselines afetam os dados mas NÃO o range do eixo X,
+  // para que o gráfico termine sempre na última data planejada do cronograma.
+  const plannedDates = [
     project.actualStart,
     project.expectedStart,
     ...tasks.map((t) => t.endDate),
-    ...tasks.map((t) => t.completedAt),
-    ...baselines.flatMap((b) => b.snaps.map((s) => s.plannedEnd)),
   ].filter(Boolean) as Date[]
 
   const rangeStart = startOfWeek(
-    allDates.reduce((min, d) => isBefore(d, min) ? d : min, allDates[0]),
+    plannedDates.reduce((min, d) => isBefore(d, min) ? d : min, plannedDates[0]),
     { weekStartsOn: 1 }
   )
   const rangeEnd = addWeeks(
-    allDates.reduce((max, d) => isAfter(d, max) ? d : max, allDates[0]),
-    2
+    plannedDates.reduce((max, d) => isAfter(d, max) ? d : max, plannedDates[0]),
+    1
   )
 
   // Generate weekly ticks

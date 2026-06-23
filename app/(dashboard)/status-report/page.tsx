@@ -183,16 +183,16 @@ export default async function StatusReportPage() {
     const sCurveResult = (() => {
       const tw = tasks.filter(t => t.endDate !== null)
       if (tw.length < 3) return null
-      const allDates: Date[] = [
+      // Range calculado apenas pelas endDates planejadas — completedAt não estende o eixo X.
+      const plannedDates: Date[] = [
         ...tw.map(t => t.endDate!),
-        ...tw.map(t => t.completedAt).filter((d): d is Date => d !== null),
         ...[p.actualStart, p.expectedStart].filter((d): d is Date => d !== null),
       ]
-      const minDate = allDates.reduce((m, d) => isBefore(d, m) ? d : m, allDates[0])
-      const maxDate = allDates.reduce((m, d) => isAfter(d, m)  ? d : m, allDates[0])
+      const minDate = plannedDates.reduce((m, d) => isBefore(d, m) ? d : m, plannedDates[0])
+      const maxDate = plannedDates.reduce((m, d) => isAfter(d, m)  ? d : m, plannedDates[0])
       if (!isBefore(minDate, maxDate)) return null
       const rangeStart = startOfWeek(minDate, { weekStartsOn: 1 })
-      const rangeEnd   = addWeeks(maxDate, 2)
+      const rangeEnd   = addWeeks(maxDate, 1)
       const weeks = eachWeekOfInterval({ start: rangeStart, end: rangeEnd }, { weekStartsOn: 1 })
       if (weeks.length < 3) return null
       const total = tw.length
