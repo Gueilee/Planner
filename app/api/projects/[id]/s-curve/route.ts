@@ -29,7 +29,10 @@ export async function GET(
         actualEnd: true,
         expectedEnd: true,
         tasks: {
-          select: { id: true, endDate: true, completedAt: true, actualEnd: true, status: true },
+          select: {
+            id: true, endDate: true, completedAt: true, actualEnd: true, status: true,
+            _count: { select: { subtasks: true } },
+          },
           where: { endDate: { not: null } },
         },
       },
@@ -43,13 +46,13 @@ export async function GET(
 
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
-  const tasks = project.tasks
+  // Usar apenas tarefas FOLHA (sem subtarefas) — tarefas-pai têm endDate inflado que abrange
+  // todos os filhos e empurra a curva planejada e o eixo X para além do cronograma real.
+  const tasks = project.tasks.filter((t) => t._count.subtasks === 0)
   const totalTasks = tasks.length
   if (totalTasks === 0) return NextResponse.json({ series: [], baselines: [], totalTasks: 0 })
 
-  // Determine time range — baseado APENAS nas endDates planejadas das tarefas.
-  // completedAt, actualEnd e datas de baselines afetam os dados mas NÃO o range do eixo X,
-  // para que o gráfico termine sempre na última data planejada do cronograma.
+  // Range determinado pelas endDates das tarefas folha + datas de início do projeto.
   const plannedDates = [
     project.actualStart,
     project.expectedStart,

@@ -181,7 +181,8 @@ export default async function StatusReportPage() {
 
     // S-Curve: planned vs realized weekly completion %
     const sCurveResult = (() => {
-      const tw = tasks.filter(t => t.endDate !== null)
+      // Usa apenas tarefas folha — tarefas-pai têm endDate inflado abrangendo toda a hierarquia
+      const tw = leafTasks.filter(t => t.endDate !== null)
       if (tw.length < 3) return null
       // Range calculado apenas pelas endDates planejadas — completedAt não estende o eixo X.
       const plannedDates: Date[] = [
