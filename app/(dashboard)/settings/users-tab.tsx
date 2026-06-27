@@ -39,6 +39,25 @@ const ROLE_CFG: Record<string, { bg: string; text: string; border: string }> = {
 
 const ALL_ROLES = Object.entries(ROLE_LABELS) as [UserRole, string][]
 
+// Departamentos padronizados da Vendemmia
+const DEPARTMENTS = [
+  "Comercial",
+  "Controladoria",
+  "Customer Success",
+  "Diretoria",
+  "Financeiro",
+  "Fiscal",
+  "Jurídico",
+  "Logística",
+  "Marketing",
+  "Operações",
+  "Projetos",
+  "Qualidade",
+  "Recursos Humanos",
+  "Tecnologia",
+  "Compras",
+]
+
 function initials(name: string) {
   return name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()
 }
@@ -134,26 +153,36 @@ function UserForm({
   const [email,      setEmail]      = useState(initial?.email      ?? "")
   const [password,   setPassword]   = useState("")
   const [role,       setRole]       = useState(initial?.role       ?? "PROJECT_MEMBER")
-  const [department, setDepartment] = useState(initial?.department ?? "")
+  const initDept = initial?.department ?? ""
+  const [department, setDepartment] = useState(
+    DEPARTMENTS.includes(initDept) ? initDept : (initDept ? "__other__" : "")
+  )
+  const [customDept, setCustomDept] = useState(
+    initDept && !DEPARTMENTS.includes(initDept) ? initDept : ""
+  )
   const [phone,      setPhone]      = useState(initial?.phone      ?? "")
   const [imageUrl,   setImageUrl]   = useState<string | null>(initial?.image ?? null)
   const [active,     setActive]     = useState(initial?.active     ?? true)
   const [error,      setError]      = useState<string | null>(null)
   const [isPending,  start]         = useTransition()
 
+  // Effective department: if select is "__other__", use the customDept text
+  const effectiveDept = department === "__other__" ? customDept : department
+
   function handleSubmit() {
     if (!name.trim())  { setError("Nome é obrigatório"); return }
-    if (mode === "create" && !email.trim()) { setError("E-mail é obrigatório"); return }
+    if (!email.trim()) { setError("E-mail é obrigatório"); return }
     if (mode === "create" && password.length < 6) { setError("Senha deve ter no mínimo 6 caracteres"); return }
+    if (department === "__other__" && !customDept.trim()) { setError("Informe o nome do departamento"); return }
     setError(null)
     start(async () => {
       try {
         if (mode === "create") {
-          const created = await createUser({ name, email, password, role, department, phone })
+          const created = await createUser({ name, email, password, role, department: effectiveDept, phone })
           onSave({ ...created, phone: created.phone ?? null, createdAt: undefined })
         } else if (initial) {
-          const updated = await updateUserById(initial.id, { name, department, phone, image: imageUrl, role, active })
-          onSave({ ...initial, ...updated, role: updated.role ?? initial.role, active: updated.active ?? initial.active })
+          const updated = await updateUserById(initial.id, { name, email, department: effectiveDept, phone, image: imageUrl, role, active })
+          onSave({ ...initial, ...updated, email: email.trim().toLowerCase(), role: updated.role ?? initial.role, active: updated.active ?? initial.active })
         }
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : "Erro ao salvar")
@@ -180,9 +209,13 @@ function UserForm({
         {mode === "edit" && initial && (
           <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
             <UserAvatar name={name || initial.name} imageUrl={imageUrl} size={56} editable onUpload={setImageUrl} />
-            <div>
-              <p className="text-xs font-semibold text-slate-700">{name || initial.name}</p>
-              <p className="text-[10px] text-slate-400 mt-0.5">{initial.email}</p>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-slate-700 truncate">{name || initial.name}</p>
+              {initial.email.includes("@ext.planner") ? (
+                <p className="text-[10px] text-orange-500 mt-0.5 font-semibold">⚠ Cadastro incompleto — atualize o e-mail</p>
+              ) : (
+                <p className="text-[10px] text-slate-400 mt-0.5 truncate">{initial.email}</p>
+              )}
               <p className="text-[10px] text-slate-300 mt-0.5">Clique no avatar para trocar a foto</p>
             </div>
           </div>
@@ -193,12 +226,18 @@ function UserForm({
           <input value={name} onChange={(e) => setName(e.target.value)} className={iCls} placeholder="Nome do usuário" />
         </div>
 
-        {mode === "create" && (
-          <div>
-            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">E-mail <span className="text-red-400">*</span></label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={iCls} placeholder="email@empresa.com" />
-          </div>
-        )}
+        <div>
+          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
+            E-mail <span className="text-red-400">*</span>
+          </label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className={iCls}
+            placeholder="nome@vendemmia.com.br"
+          />
+        </div>
 
         {mode === "create" && (
           <div>
@@ -217,15 +256,37 @@ function UserForm({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">Departamento</label>
-            <input value={department} onChange={(e) => setDepartment(e.target.value)} className={iCls} placeholder="Ex: TI, RH..." />
+        <div>
+          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">Departamento</label>
+          <div className="relative">
+            <select
+              value={department}
+              onChange={(e) => {
+                setDepartment(e.target.value)
+                if (e.target.value !== "__other__") setCustomDept("")
+              }}
+              className={`${iCls} appearance-none pr-8 cursor-pointer`}
+            >
+              <option value="">— Selecionar —</option>
+              {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
+              <option value="__other__">Outro (digitar)…</option>
+            </select>
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
           </div>
-          <div>
-            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">Telefone</label>
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} className={iCls} placeholder="(00) 00000-0000" />
-          </div>
+          {department === "__other__" && (
+            <input
+              value={customDept}
+              onChange={(e) => setCustomDept(e.target.value)}
+              className={`${iCls} mt-2`}
+              placeholder="Nome do departamento..."
+              autoFocus
+            />
+          )}
+        </div>
+
+        <div>
+          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">Telefone</label>
+          <input value={phone} onChange={(e) => setPhone(e.target.value)} className={iCls} placeholder="(00) 00000-0000" />
         </div>
 
         {mode === "edit" && initial && initial.id !== currentUserId && (
