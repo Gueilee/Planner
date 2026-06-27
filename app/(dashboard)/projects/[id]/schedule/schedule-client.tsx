@@ -21,7 +21,7 @@ import {
 } from "lucide-react"
 import { SCurveClient, type SCurveData } from "../s-curve/s-curve-client"
 import {
-  createTask, updateTask, deleteTask, createArea,
+  createTask, updateTask, deleteTask, createArea, deleteArea,
   reorderAreas, reorderTasks,
   getTaskAttachments, addTaskAttachments,
   type AttachmentUpload,
@@ -1881,6 +1881,20 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
     })
   }
 
+  function handleDeleteArea(areaId: string, areaName: string) {
+    if (!confirm(`Excluir o módulo "${areaName}" e todas as suas atividades?`)) return
+    start(async () => {
+      await deleteArea(areaId, project.id)
+      setAreas((prev) => prev.filter((a) => a.id !== areaId))
+      setTasks((prev) => {
+        const areaTaskIds = new Set(prev.filter((t) => t.wbsAreaId === areaId).map((t) => t.id))
+        return prev.filter((t) => t.wbsAreaId !== areaId && !areaTaskIds.has(t.parentId ?? ""))
+      })
+      setExpandedAreas((prev) => { const s = new Set(prev); s.delete(areaId); return s })
+      setPanel(null)
+    })
+  }
+
   function saveTaskField(taskId: string, data: Record<string, unknown>) {
     // Optimistic update with derived progress/status
     const current = tasksRef.current.find(t => t.id === taskId)
@@ -2303,14 +2317,24 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                       {/* Inline actions for area */}
                       <div style={{ width: 84 }} className="flex items-center justify-center gap-0.5 shrink-0">
                         {row.id !== "__ungrouped__" && (
-                          <button
-                            onClick={() => openAdd(undefined, row.id)}
-                            title="Nova atividade nesta área"
-                            className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
-                            style={{ background: "#DCFCE7", color: "#16A34A" }}
-                          >
-                            <Plus className="w-3 h-3" />
-                          </button>
+                          <>
+                            <button
+                              onClick={() => openAdd(undefined, row.id)}
+                              title="Nova atividade nesta área"
+                              className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
+                              style={{ background: "#DCFCE7", color: "#16A34A" }}
+                            >
+                              <Plus className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteArea(row.id, row.name)}
+                              title="Excluir módulo e todas as atividades"
+                              className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110 opacity-0 group-hover:opacity-100"
+                              style={{ background: "#FEE2E2", color: "#DC2626" }}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </>
                         )}
                       </div>
 

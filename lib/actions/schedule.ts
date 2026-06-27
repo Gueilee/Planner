@@ -379,6 +379,24 @@ export async function createArea(projectId: string, name: string, color: string)
   return area
 }
 
+export async function deleteArea(areaId: string, projectId: string) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+
+  // Find all tasks in this area, then delete their subtasks, then the tasks, then the area
+  const areaTasks = await db.scheduleTask.findMany({
+    where: { projectId, wbsAreaId: areaId },
+    select: { id: true },
+  })
+  const taskIds = areaTasks.map((t) => t.id)
+  if (taskIds.length > 0) {
+    await db.scheduleTask.deleteMany({ where: { parentId: { in: taskIds } } })
+    await db.scheduleTask.deleteMany({ where: { id: { in: taskIds } } })
+  }
+  await db.wbsArea.delete({ where: { id: areaId } })
+  revalidatePath(`/projects/${projectId}/schedule`)
+}
+
 export async function reorderAreas(projectId: string, orderedIds: string[]) {
   const session = await auth()
   if (!session?.user) throw new Error("Não autorizado")
