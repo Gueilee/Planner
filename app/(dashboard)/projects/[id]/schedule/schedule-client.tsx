@@ -283,37 +283,7 @@ function TaskForm({ mode, initial, areas, members, allTasks, onSave, onDelete, o
     dependencies:    initial.dependencies    ?? [] as string[],
   })
 
-  // ── Attachments ──────────────────────────────────────────────────────────
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const [existingAtts, setExistingAtts] = useState<{ id: string; fileName: string; fileUrl: string }[]>([])
-  const [newAtts,      setNewAtts]      = useState<AttachmentUpload[]>([])
-  const [uploading,    setUploading]    = useState(false)
-
-  useEffect(() => {
-    if (mode === "edit" && initial.id) {
-      getTaskAttachments(initial.id).then(setExistingAtts).catch(() => {})
-    }
-  }, [mode, initial.id])
-
-  async function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? [])
-    if (!files.length) return
-    e.target.value = ""
-    setUploading(true)
-    try {
-      const form = new FormData()
-      for (const f of files) form.append("files", f)
-      const res  = await fetch("/api/upload", { method: "POST", body: form })
-      const json = await res.json() as { files: { name: string; url: string; size: number }[] }
-      const uploaded: AttachmentUpload[] = json.files.map((f, i) => ({
-        fileName: f.name,
-        fileUrl:  f.url,
-        fileType: files[i]?.type ?? "application/octet-stream",
-        fileSize: f.size,
-      }))
-      setNewAtts((prev) => [...prev, ...uploaded])
-    } catch { /* ignore */ }
-    setUploading(false)
+  // ─────────────────────────────────────────────────────────────────────────
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -377,10 +347,6 @@ function TaskForm({ mode, initial, areas, members, allTasks, onSave, onDelete, o
         successors = res.successorUpdates
       } else {
         task = await createTask(data) as Task
-      }
-
-      if (newAtts.length > 0) {
-        await addTaskAttachments(task.id, initial.projectId, newAtts)
       }
 
       onSave(task, ancestors, successors)
@@ -538,70 +504,6 @@ function TaskForm({ mode, initial, areas, members, allTasks, onSave, onDelete, o
               onChange={(e) => upd("progress", Math.min(100, Math.max(0, Number(e.target.value))))}
               className={inputCls} />
           </div>
-        </div>
-
-        <div>
-          <label className={labelCls}>Descrição / Observações</label>
-          <textarea value={form.description} onChange={(e) => upd("description", e.target.value)}
-            rows={3} placeholder="Anotações, contexto, observações..."
-            className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 bg-white text-[#0F172A] outline-none focus:border-[#7B2FBE] transition-colors resize-none"
-          />
-        </div>
-
-        {/* ── Attachments ── */}
-        <div>
-          <label className={labelCls}>Anexos</label>
-
-          {/* Existing */}
-          {existingAtts.length > 0 && (
-            <div className="space-y-1.5 mb-2">
-              {existingAtts.map((att) => (
-                <a
-                  key={att.id}
-                  href={att.fileUrl}
-                  download={att.fileName}
-                  {...(!att.fileUrl.startsWith("data:") ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-                  className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:border-[#7B2FBE] hover:bg-violet-50 transition-all group"
-                >
-                  <Paperclip className="w-3.5 h-3.5 text-slate-400 group-hover:text-[#7B2FBE] shrink-0 transition-colors" />
-                  <span className="flex-1 text-xs text-slate-600 group-hover:text-[#7B2FBE] truncate transition-colors">{att.fileName}</span>
-                </a>
-              ))}
-            </div>
-          )}
-
-          {/* Newly added (not yet saved) */}
-          {newAtts.map((att, i) => (
-            <div
-              key={i}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl border border-emerald-200 bg-emerald-50 mb-1.5"
-            >
-              <Paperclip className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-              <span className="flex-1 text-xs text-emerald-700 truncate">{att.fileName}</span>
-              <button
-                type="button"
-                onClick={() => setNewAtts((prev) => prev.filter((_, j) => j !== i))}
-                className="text-emerald-400 hover:text-red-500 transition-colors shrink-0"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ))}
-
-          {/* Upload button */}
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="w-full flex items-center justify-center gap-2 h-9 rounded-xl border border-dashed border-slate-300 text-xs font-semibold text-slate-400 hover:border-[#7B2FBE] hover:text-[#7B2FBE] transition-all disabled:opacity-50"
-          >
-            {uploading
-              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              : <Paperclip className="w-3.5 h-3.5" />
-            }
-            {uploading ? "Enviando..." : "Adicionar arquivo"}
-          </button>
-          <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFiles} />
         </div>
 
         {/* ── Predecessoras (Dependências) ── */}
