@@ -648,8 +648,12 @@ export function UsersTab({ initialUsers, currentUserId }: { initialUsers: User[]
       {/* ── Side panel (create / edit) ─────────────────────────────────── */}
       {panel !== "none" && (
         <div
-          className="w-80 shrink-0 bg-white rounded-2xl overflow-hidden flex flex-col"
-          style={{ border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 4px 24px rgba(0,0,0,0.08)" }}
+          className="w-80 shrink-0 bg-white rounded-2xl overflow-hidden flex flex-col sticky top-4"
+          style={{
+            border: "1px solid rgba(0,0,0,0.06)",
+            boxShadow: "0 4px 24px rgba(0,0,0,0.08)",
+            maxHeight: "calc(100vh - 120px)",
+          }}
         >
           <UserForm
             mode={panel}

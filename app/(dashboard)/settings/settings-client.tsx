@@ -131,27 +131,6 @@ export function SettingsClient({ profile, allUsers, isAdmin, preferences, notifi
             {activeTab === "users" && isAdmin && (
               <UsersTab initialUsers={allUsers} currentUserId={currentUserId} />
             )}
-
-            {/* Placeholder for future tabs */}
-            {activeTab !== "profile" && (
-              <div
-                className="bg-white rounded-2xl p-12 text-center"
-                style={{ border: "1px solid rgba(0,0,0,0.06)" }}
-              >
-                <div
-                  className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4"
-                  style={{ background: "linear-gradient(135deg, #7B2FBE22, #2463FF22)" }}
-                >
-                  {(() => {
-                    const Tab = TABS.find((t) => t.id === activeTab)
-                    const Icon = Tab?.icon ?? User
-                    return <Icon className="w-7 h-7 text-violet-400" />
-                  })()}
-                </div>
-                <p className="text-base font-bold text-slate-700 mb-1">Em desenvolvimento</p>
-                <p className="text-sm text-slate-400">Esta seção estará disponível em breve.</p>
-              </div>
-            )}
           </div>
 
         </div>
