@@ -150,7 +150,10 @@ function UserForm({
   onCancel:      () => void
 }) {
   const [name,       setName]       = useState(initial?.name       ?? "")
-  const [email,      setEmail]      = useState(initial?.email      ?? "")
+  // Synthetic users get empty email so the user is forced to type a real one
+  const [email,      setEmail]      = useState(
+    initial?.email?.includes("@ext.planner") ? "" : (initial?.email ?? "")
+  )
   const [password,   setPassword]   = useState("")
   const [role,       setRole]       = useState(initial?.role       ?? "PROJECT_MEMBER")
   const initDept = initial?.department ?? ""
@@ -202,6 +205,13 @@ function UserForm({
         </button>
       </div>
 
+      {/* Error — always visible, above the scroll area */}
+      {error && (
+        <div className="mx-6 mt-3 shrink-0 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-50 border border-red-100 text-xs text-red-600 font-medium">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {error}
+        </div>
+      )}
+
       {/* Body */}
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
 
@@ -211,10 +221,10 @@ function UserForm({
             <UserAvatar name={name || initial.name} imageUrl={imageUrl} size={56} editable onUpload={setImageUrl} />
             <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold text-slate-700 truncate">{name || initial.name}</p>
-              {initial.email.includes("@ext.planner") ? (
-                <p className="text-[10px] text-orange-500 mt-0.5 font-semibold">⚠ Cadastro incompleto — atualize o e-mail</p>
+              {(!email.trim() || email.includes("@ext.planner")) ? (
+                <p className="text-[10px] text-orange-500 mt-0.5 font-semibold">⚠ Preencha o e-mail corporativo abaixo</p>
               ) : (
-                <p className="text-[10px] text-slate-400 mt-0.5 truncate">{initial.email}</p>
+                <p className="text-[10px] text-slate-400 mt-0.5 truncate">{email}</p>
               )}
               <p className="text-[10px] text-slate-300 mt-0.5">Clique no avatar para trocar a foto</p>
             </div>
@@ -306,11 +316,6 @@ function UserForm({
           </div>
         )}
 
-        {error && (
-          <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-50 border border-red-100 text-xs text-red-600 font-medium">
-            <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {error}
-          </div>
-        )}
       </div>
 
       {/* Footer */}
