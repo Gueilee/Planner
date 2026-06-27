@@ -175,7 +175,6 @@ export async function deleteUser(userId: string) {
     throw new Error("Erro ao excluir usuário. Tente novamente.")
   }
 
-  try { revalidatePath("/settings") } catch { /* render errors don't affect the delete */ }
   return { success: true }
 }
 
