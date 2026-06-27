@@ -62,29 +62,43 @@ export async function updateUserById(userId: string, data: ProfileInput & { role
   if (!session?.user) throw new Error("Não autorizado")
   if (session.user.role !== "ADMIN") throw new Error("Acesso restrito a administradores")
 
-  // If email is being updated, check uniqueness
-  if (data.email) {
-    const email = data.email.trim().toLowerCase()
-    const conflict = await db.user.findFirst({ where: { email, NOT: { id: userId } } })
-    if (conflict) throw new Error("Já existe outro usuário com este e-mail")
+  const newEmail = data.email?.trim().toLowerCase()
+
+  // Check email uniqueness before attempting the update
+  if (newEmail) {
+    const conflict = await db.user.findFirst({
+      where: { email: { equals: newEmail }, NOT: { id: userId } },
+      select: { id: true },
+    })
+    if (conflict) throw new Error("Já existe outro usuário com este e-mail. Verifique os cadastros duplicados.")
   }
 
-  const updated = await db.user.update({
-    where: { id: userId },
-    data: {
-      name:       data.name.trim(),
-      department: data.department.trim() || null,
-      phone:      data.phone.trim()      || null,
-      image:      data.image             || null,
-      ...(data.email  !== undefined && { email: data.email.trim().toLowerCase() }),
-      ...(data.role   !== undefined && { role:  data.role   as never }),
-      ...(data.active !== undefined && { active: data.active }),
-    },
-    select: { id: true, name: true, email: true, image: true, department: true, role: true, active: true },
-  })
+  try {
+    const updated = await db.user.update({
+      where: { id: userId },
+      data: {
+        name:       data.name.trim(),
+        department: data.department.trim() || null,
+        phone:      data.phone.trim()      || null,
+        image:      data.image             || null,
+        ...(newEmail                       && { email: newEmail }),
+        ...(data.role   !== undefined      && { role:  data.role   as never }),
+        ...(data.active !== undefined      && { active: data.active }),
+      },
+      select: { id: true, name: true, email: true, image: true, department: true, role: true, active: true },
+    })
 
-  revalidatePath("/settings")
-  return updated
+    // Revalidate only after a confirmed successful update
+    revalidatePath("/settings")
+    return updated
+  } catch (err: unknown) {
+    // Prisma P2002 = unique constraint violation (email collision at DB level)
+    const msg = err instanceof Error ? err.message : ""
+    if (msg.includes("P2002") || msg.includes("Unique constraint")) {
+      throw new Error("Já existe outro usuário com este e-mail. Verifique os cadastros duplicados.")
+    }
+    throw new Error("Erro ao salvar as alterações. Tente novamente.")
+  }
 }
 
 // ─── Admin: create new user ───────────────────────────────────────────────────
