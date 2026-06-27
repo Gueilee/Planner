@@ -1,16 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
 import { auth } from "@/auth"
-import { startOfWeek, eachWeekOfInterval, isAfter, isBefore, addWeeks } from "date-fns"
+import { getSCurveData } from "@/lib/actions/s-curve"
 
 export const dynamic = "force-dynamic"
 
-function pct(count: number, total: number) {
-  if (total === 0) return 0
-  return Math.round((count / total) * 100)
-}
-
-// GET /api/projects/[id]/s-curve
+// GET /api/projects/[id]/s-curve — returns full S-curve payload (used by client refresh)
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -19,89 +13,7 @@ export async function GET(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { id } = await params
-
-  const [project, baselines] = await Promise.all([
-    db.project.findUnique({
-      where: { id },
-      select: {
-        actualStart: true,
-        expectedStart: true,
-        actualEnd: true,
-        expectedEnd: true,
-        tasks: {
-          select: {
-            id: true, endDate: true, completedAt: true, actualEnd: true, status: true,
-            _count: { select: { subtasks: true } },
-          },
-          where: { endDate: { not: null } },
-        },
-      },
-    }),
-    db.projectBaseline.findMany({
-      where: { projectId: id },
-      orderBy: { number: "asc" },
-      include: { snaps: true },
-    }),
-  ])
-
-  if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 })
-
-  // Usar apenas tarefas FOLHA (sem subtarefas) — tarefas-pai têm endDate inflado que abrange
-  // todos os filhos e empurra a curva planejada e o eixo X para além do cronograma real.
-  const tasks = project.tasks.filter((t) => t._count.subtasks === 0)
-  const totalTasks = tasks.length
-  if (totalTasks === 0) return NextResponse.json({ series: [], baselines: [], totalTasks: 0 })
-
-  // Range determinado pelas endDates das tarefas folha + datas de início do projeto.
-  const plannedDates = [
-    project.actualStart,
-    project.expectedStart,
-    ...tasks.map((t) => t.endDate),
-  ].filter(Boolean) as Date[]
-
-  const rangeStart = startOfWeek(
-    plannedDates.reduce((min, d) => isBefore(d, min) ? d : min, plannedDates[0]),
-    { weekStartsOn: 1 }
-  )
-  const rangeEnd = addWeeks(
-    plannedDates.reduce((max, d) => isAfter(d, max) ? d : max, plannedDates[0]),
-    1
-  )
-
-  // Generate weekly ticks
-  const weeks = eachWeekOfInterval({ start: rangeStart, end: rangeEnd }, { weekStartsOn: 1 })
-
-  // Build series
-  const series = weeks.map((weekStart) => {
-    const d = weekStart.toISOString()
-
-    // Planejado: tasks with endDate <= weekStart
-    const planned = pct(tasks.filter((t) => t.endDate && !isAfter(t.endDate, weekStart)).length, totalTasks)
-
-    // Realizado: tasks marked as completed by this date
-    const realized = pct(
-      tasks.filter((t) => {
-        const completedDate = t.completedAt ?? t.actualEnd
-        if (completedDate && !isAfter(completedDate, weekStart)) return true
-        if (t.status === "COMPLETED" && t.endDate && !isAfter(t.endDate, weekStart)) return true
-        return false
-      }).length,
-      totalTasks
-    )
-
-    // Each baseline
-    const baselinePcts: Record<string, number> = {}
-    for (const bl of baselines) {
-      const blTotal = bl.snaps.length
-      if (blTotal === 0) continue
-      const count = bl.snaps.filter((s) => !isAfter(s.plannedEnd, weekStart)).length
-      baselinePcts[`b_${bl.id}`] = pct(count, blTotal)
-    }
-
-    return { date: d, planned, realized, ...baselinePcts }
-  })
-
-  const blMeta = baselines.map((b) => ({ id: b.id, number: b.number, name: b.name, description: b.description, createdAt: b.createdAt, snapCount: b.snaps.length }))
-
-  return NextResponse.json({ series, baselines: blMeta, totalTasks })
+  const data = await getSCurveData(id)
+  if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 })
+  return NextResponse.json(data)
 }

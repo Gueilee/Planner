@@ -1,7 +1,7 @@
 "use client"
 
 import {
-  useState, useRef, useMemo, useTransition, useCallback, useEffect, useLayoutEffect,
+  useState, useRef, useMemo, useTransition, useCallback, useEffect, useLayoutEffect, Fragment,
 } from "react"
 import Link from "next/link"
 import {
@@ -17,18 +17,18 @@ import {
   List, BarChart2, Search, FolderOpen, Paperclip, MessageSquare,
   Link2, Lock, ArrowRight, GripVertical, FileSpreadsheet, ArrowUpDown,
   Upload, Download, FileText, FileImage, FileArchive, Users,
-  LayoutTemplate, Milestone, Zap, Award, Star, Globe2, TrendingUp, Clock,
+  LayoutTemplate, Milestone, Zap, Award, Star, Globe2, TrendingUp, Clock, Send,
 } from "lucide-react"
 import { SCurveClient, type SCurveData } from "../s-curve/s-curve-client"
 import {
   createTask, updateTask, deleteTask, createArea,
   reorderAreas, reorderTasks,
   getTaskAttachments, addTaskAttachments,
-  addExternalMember,
   type AttachmentUpload,
   type SuccessorUpdate,
 } from "@/lib/actions/schedule"
 import { getTemplates, applyTemplate, type Template } from "@/lib/actions/templates"
+import { getTaskDetail, addTaskComment } from "@/lib/actions/kanban"
 import { deriveStatus, deriveProgress, type AncestorUpdate } from "@/lib/utils/task-progress"
 import { isHoliday, isWeekend as isWknd, getHolidayName, nextWorkingDay } from "@/lib/working-days"
 import { WorkingDayPicker } from "@/components/working-day-picker"
@@ -52,6 +52,24 @@ const COL_MIN: Record<ColKey, number> = {
   startDate: 64, endDate: 64, actualStart: 64, actualEnd: 64,
   estH: 40, realH: 40, pctEst: 40, pctReal: 40,
   predecessors: 72, budgeted: 56, actual: 56,
+}
+const DEFAULT_COL_ORDER: ColKey[] = ['eap', 'name', 'status', 'responsible', 'startDate', 'endDate', 'actualStart', 'actualEnd', 'estH', 'realH', 'pctEst', 'pctReal', 'predecessors', 'budgeted', 'actual']
+const COL_HEADER_META: Record<ColKey, { label: string; cls: string }> = {
+  eap:          { label: "EAP",               cls: "text-white/40 text-center" },
+  name:         { label: "Nome da Atividade",  cls: "text-white/40 px-2" },
+  status:       { label: "Status",            cls: "text-white/40 text-center" },
+  responsible:  { label: "Responsável",       cls: "text-white/40 px-3" },
+  startDate:    { label: "Início Plan.",      cls: "text-white/40 text-center" },
+  endDate:      { label: "Fim Plan.",         cls: "text-white/40 text-center" },
+  actualStart:  { label: "Início Real",       cls: "text-emerald-400/60 text-center" },
+  actualEnd:    { label: "Fim Real",          cls: "text-emerald-400/60 text-center" },
+  estH:         { label: "Est.h",             cls: "text-violet-400/70 text-center" },
+  realH:        { label: "Real h",            cls: "text-violet-400/70 text-center" },
+  pctEst:       { label: "% Est.",            cls: "text-amber-400/70 text-center" },
+  pctReal:      { label: "% Real",            cls: "text-white/40 text-center" },
+  predecessors: { label: "Predecessoras",     cls: "text-indigo-400/70 text-center" },
+  budgeted:     { label: "R$ Orç.",           cls: "text-emerald-400/80 text-center" },
+  actual:       { label: "R$ Real",           cls: "text-orange-400/80 text-center" },
 }
 const BAR_H   = 24
 const BAR_PAD = 8
@@ -160,6 +178,7 @@ function buildListRows(
   hideDone: boolean,
   // null = sem filtro; Set de IDs = mostra apenas essas tarefas (+ ancestrais)
   visibleIds: Set<string> | null = null,
+  preserveOrder: boolean = false,
 ): Row[] {
   const q = search.trim().toLowerCase()
   const result: Row[] = []
@@ -170,7 +189,7 @@ function buildListRows(
     if (!childrenMap.has(t.parentId)) childrenMap.set(t.parentId, [])
     childrenMap.get(t.parentId)!.push(t)
   }
-  const sortBy = (arr: Task[]) => [...arr].sort((a, b) => a.order - b.order)
+  const sortBy = (arr: Task[]) => preserveOrder ? [...arr] : [...arr].sort((a, b) => a.order - b.order)
 
   function matches(t: Task) {
     if (hideDone && t.status === "COMPLETED") return false
@@ -1101,6 +1120,137 @@ function EvidencePanel({ taskId, projectId, taskTitle, onClose, onUploaded }: {
 
 // ─── Area Form ────────────────────────────────────────────────────────────────
 
+// ─── Comment Panel ────────────────────────────────────────────────────────────
+
+type CmtItem = { id: string; content: string; createdAt: string; user: { name: string; image: string | null } }
+
+function CommentPanel({ taskId, taskTitle, projectId, onClose, onCommentAdded }: {
+  taskId:         string
+  taskTitle:      string
+  projectId:      string
+  onClose:        () => void
+  onCommentAdded: () => void
+}) {
+  const [comments, setComments] = useState<CmtItem[]>([])
+  const [loading,  setLoading]  = useState(true)
+  const [text,     setText]     = useState("")
+  const [sending,  setSending]  = useState(false)
+  const bottomRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    getTaskDetail(taskId).then(d => {
+      setComments((d?.comments ?? []) as CmtItem[])
+      setLoading(false)
+    }).catch(() => setLoading(false))
+  }, [taskId])
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [comments])
+
+  async function handleSend() {
+    const content = text.trim()
+    if (!content) return
+    setSending(true)
+    try {
+      const c = await addTaskComment(taskId, projectId, content)
+      setComments(prev => [...prev, c as CmtItem])
+      setText("")
+      onCommentAdded()
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[1px]" onClick={onClose} />
+      <div className="fixed inset-y-0 right-0 z-50 flex flex-col bg-white shadow-2xl" style={{ width: 440, borderLeft: "1px solid #E2E8F0" }}>
+
+        {/* Header */}
+        <div className="shrink-0 px-5 py-4 border-b border-slate-100" style={{ background: "linear-gradient(135deg,rgba(36,99,255,0.03),rgba(139,47,255,0.04))" }}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Histórico de comentários</p>
+              <h3 className="text-sm font-bold text-[#0F172A] leading-snug line-clamp-2">{taskTitle}</h3>
+            </div>
+            <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all shrink-0 mt-0.5">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Comment list */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+          {loading ? (
+            <div className="flex justify-center items-center h-32">
+              <Loader2 className="w-5 h-5 animate-spin text-slate-300" />
+            </div>
+          ) : comments.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-32 gap-2">
+              <MessageSquare className="w-8 h-8 text-slate-200" />
+              <p className="text-sm text-slate-400">Nenhum comentário ainda</p>
+              <p className="text-xs text-slate-300">Adicione o primeiro comentário abaixo</p>
+            </div>
+          ) : (
+            comments.map((c) => {
+              const isCP  = c.content.startsWith("[Checkpoint")
+              const badge = isCP ? (c.content.match(/^\[Checkpoint ([^\]]+)\]/) ?? [])[1] ?? "" : ""
+              const body  = isCP ? c.content.replace(/^\[Checkpoint [^\]]+\]\s*/, "") : c.content
+              return (
+                <div key={c.id} className="rounded-xl p-3" style={{ background: isCP ? "rgba(36,99,255,0.04)" : "#F8FAFC", border: isCP ? "1px solid rgba(36,99,255,0.14)" : "1px solid #E2E8F0" }}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <UserAvatar name={c.user.name} image={c.user.image} size={22} />
+                    <span className="text-xs font-bold text-slate-700">{c.user.name.split(" ")[0]}</span>
+                    {isCP && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style={{ background: "#EFF6FF", color: "#2463FF" }}>
+                        Checkpoint {badge}
+                      </span>
+                    )}
+                    <span className="text-[9px] text-slate-400 ml-auto shrink-0">
+                      {format(new Date(c.createdAt), "dd/MM HH:mm", { locale: ptBR })}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 whitespace-pre-wrap leading-relaxed">{body}</p>
+                </div>
+              )
+            })
+          )}
+          <div ref={bottomRef} />
+        </div>
+
+        {/* New comment input */}
+        <div className="shrink-0 px-5 py-4 border-t border-slate-100" style={{ background: "#FAFAFA" }}>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleSend() } }}
+            placeholder="Escreva um comentário... (Ctrl+Enter para enviar)"
+            rows={3}
+            className="w-full text-xs border border-slate-200 rounded-xl px-3 py-2.5 resize-none outline-none placeholder:text-slate-300 transition-all"
+            style={{ lineHeight: "1.5" }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = "#7B2FBE"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(123,47,190,0.08)" }}
+            onBlur={(e)  => { e.currentTarget.style.borderColor = "#E2E8F0"; e.currentTarget.style.boxShadow = "none" }}
+          />
+          <div className="flex justify-between items-center mt-2">
+            <span className="text-[9px] text-slate-300">Ctrl+Enter para enviar</span>
+            <button
+              onClick={handleSend}
+              disabled={!text.trim() || sending}
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ background: "#7B2FBE", color: "#fff" }}
+            >
+              {sending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+              Enviar
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </>
+  )
+}
+
 function AreaForm({ projectId, onSave, onClose }: { projectId: string; onSave: (a: Area) => void; onClose: () => void }) {
   const [name, setName] = useState("")
   const [color, setColor] = useState(AREA_PALETTE[0])
@@ -1278,6 +1428,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
   const [panel, setPanel]         = useState<{ mode: "add" | "edit"; task: Partial<Task> & { projectId: string } } | null>(null)
   const [evidencePanel, setEvidencePanel] = useState<{ taskId: string; title: string } | null>(null)
   const [timePanel, setTimePanel] = useState<{ taskId: string; title: string; estimatedEffort: number | null } | null>(null)
+  const [commentPanel, setCommentPanel] = useState<{ taskId: string; title: string } | null>(null)
   const [pending, start]          = useTransition()
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
@@ -1285,8 +1436,6 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
   const [editNum,   setEditNum]   = useState<{ id: string; field: "estimatedEffort" | "actualEffort" | "progress" | "budgetedCost" | "actualCost"; val: string } | null>(null)
   const [sortBy,    setSortBy]    = useState<"startDate" | "endDate" | null>(null)
   const [editPred,  setEditPred]  = useState<{ id: string; val: string } | null>(null)
-  const [inlineAdd, setInlineAdd] = useState<{ taskId: string; val: string } | null>(null)
-
   // ── Template modal state ─────────────────────────────────────────────────
   const [tplModalOpen,    setTplModalOpen]    = useState(false)
   const [tplLoading,      setTplLoading]      = useState(false)
@@ -1337,11 +1486,55 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
     return (
       <div
         onMouseDown={(e) => startColResize(col, e)}
+        onDragStart={(e) => e.stopPropagation()}
+        draggable={false}
         title="Arrastar para redimensionar"
         style={{ position: "absolute", right: -3, top: 0, bottom: 0, width: 7, cursor: "col-resize", zIndex: 20, borderRight: "2px solid transparent" }}
         className="hover:border-r-white/40 transition-colors"
       />
     )
+  }
+
+  // ── Column order ─────────────────────────────────────────────────────────
+  const [colOrder, setColOrderState] = useState<ColKey[]>(() => {
+    try {
+      const s = typeof window !== "undefined" ? localStorage.getItem(`kronex-col-order-${project.id}`) : null
+      if (s) {
+        const parsed = JSON.parse(s) as ColKey[]
+        if (parsed.length === DEFAULT_COL_ORDER.length && DEFAULT_COL_ORDER.every(k => parsed.includes(k))) return parsed
+      }
+    } catch {}
+    return [...DEFAULT_COL_ORDER]
+  })
+  const [dragColFrom, setDragColFrom] = useState<ColKey | null>(null)
+  const [dragColOver, setDragColOver] = useState<ColKey | null>(null)
+
+  function saveColOrder(order: ColKey[]) {
+    setColOrderState(order)
+    try { localStorage.setItem(`kronex-col-order-${project.id}`, JSON.stringify(order)) } catch {}
+  }
+  function handleColDragStart(col: ColKey, e: React.DragEvent) {
+    const rect = e.currentTarget.getBoundingClientRect()
+    if (e.clientX > rect.right - 12) { e.preventDefault(); return }
+    setDragColFrom(col)
+    e.dataTransfer.effectAllowed = "move"
+  }
+  function handleColDragOver(col: ColKey, e: React.DragEvent) {
+    if (!dragColFrom || dragColFrom === col) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "move"
+    if (dragColOver !== col) setDragColOver(col)
+  }
+  function handleColDrop(col: ColKey, e: React.DragEvent) {
+    e.preventDefault()
+    if (!dragColFrom || dragColFrom === col) { setDragColFrom(null); setDragColOver(null); return }
+    const from = colOrder.indexOf(dragColFrom)
+    const to   = colOrder.indexOf(col)
+    if (from === -1 || to === -1) { setDragColFrom(null); setDragColOver(null); return }
+    const next = [...colOrder]; next.splice(from, 1); next.splice(to, 0, dragColFrom)
+    saveColOrder(next)
+    setDragColFrom(null)
+    setDragColOver(null)
   }
 
   // ── Curva S view state ───────────────────────────────────────────────────
@@ -1426,8 +1619,8 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name:        baselineName  || undefined,
-          description: baselineDesc || undefined,
+          name:   baselineName || undefined,
+          reason: baselineDesc || undefined,
         }),
       })
       const json = await res.json()
@@ -1599,8 +1792,8 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
   }, [tasks, filterResponsible])
 
   const listRows   = useMemo(
-    () => buildListRows(areas, sortedForList, expandedAreas, expandedTasks, search, hideDone, filterVisibleIds),
-    [areas, sortedForList, expandedAreas, expandedTasks, search, hideDone, filterVisibleIds],
+    () => buildListRows(areas, sortedForList, expandedAreas, expandedTasks, search, hideDone, filterVisibleIds, !!sortBy),
+    [areas, sortedForList, expandedAreas, expandedTasks, search, hideDone, filterVisibleIds, sortBy],
   )
 
   // Gantt rows — area-grouped, uses its own expand sets
@@ -2022,21 +2215,35 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
             <div className="flex items-center border-b border-slate-100 bg-[#0F172A]" style={{ height: 44, minWidth: listMinW }}>
               <div style={{ width: 24, flexShrink: 0 }} />
               <div style={{ width: 84, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Ações</div>
-              <div style={{ width: colW.eap, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">EAP{rh("eap")}</div>
-              <div style={{ width: colW.name, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-white/40 uppercase tracking-widest px-2">Nome da Atividade{rh("name")}</div>
-              <div style={{ width: colW.status, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Status{rh("status")}</div>
-              <div style={{ width: colW.responsible, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-white/40 uppercase tracking-widest px-3">Responsável{rh("responsible")}</div>
-              <div style={{ width: colW.startDate, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Início Plan.{rh("startDate")}</div>
-              <div style={{ width: colW.endDate, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Fim Plan.{rh("endDate")}</div>
-              <div style={{ width: colW.actualStart, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-emerald-400/60 uppercase tracking-widest text-center">Início Real{rh("actualStart")}</div>
-              <div style={{ width: colW.actualEnd, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-emerald-400/60 uppercase tracking-widest text-center">Fim Real{rh("actualEnd")}</div>
-              <div style={{ width: colW.estH, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-violet-400/70 uppercase tracking-widest text-center">Est.h{rh("estH")}</div>
-              <div style={{ width: colW.realH, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-violet-400/70 uppercase tracking-widest text-center">Real h{rh("realH")}</div>
-              <div style={{ width: colW.pctEst, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-amber-400/70 uppercase tracking-widest text-center">% Est.{rh("pctEst")}</div>
-              <div style={{ width: colW.pctReal, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">% Real{rh("pctReal")}</div>
-              <div style={{ width: colW.predecessors, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-indigo-400/70 uppercase tracking-widest text-center">Predecessoras{rh("predecessors")}</div>
-              <div style={{ width: colW.budgeted, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-emerald-400/80 uppercase tracking-widest text-center">R$ Orç.{rh("budgeted")}</div>
-              <div style={{ width: colW.actual, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-orange-400/80 uppercase tracking-widest text-center">R$ Real{rh("actual")}</div>
+              {colOrder.map(col => {
+                const { label, cls } = COL_HEADER_META[col]
+                const isOver = dragColOver === col && dragColFrom !== null
+                const isDrag = dragColFrom === col
+                return (
+                  <div
+                    key={col}
+                    draggable
+                    onDragStart={(e) => handleColDragStart(col, e)}
+                    onDragOver={(e) => handleColDragOver(col, e)}
+                    onDrop={(e) => handleColDrop(col, e)}
+                    onDragEnd={() => { setDragColFrom(null); setDragColOver(null) }}
+                    style={{
+                      width: colW[col],
+                      flexShrink: 0,
+                      position: "relative",
+                      opacity: isDrag ? 0.4 : 1,
+                      background: isOver ? "rgba(36,99,255,0.22)" : undefined,
+                      borderLeft: isOver ? "2px solid #2463FF" : undefined,
+                      cursor: "grab",
+                      userSelect: "none",
+                      transition: "background 0.1s",
+                    }}
+                    className={`text-[10px] font-black uppercase tracking-widest ${cls}`}
+                  >
+                    {label}{rh(col)}
+                  </div>
+                )
+              })}
             </div>
           </div>
 
@@ -2107,63 +2314,50 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                         )}
                       </div>
 
-                      {/* EAP — area */}
-                      <div style={{ width: colW.eap, flexShrink: 0 }} className="flex items-center justify-center">
-                        <span className="text-[10px] font-bold text-slate-400 font-mono">{row.eap}</span>
-                      </div>
-
-                      {/* Area name — clickable to expand */}
-                      <div
-                        style={{ width: colW.name, flexShrink: 0 }}
-                        className="flex items-center gap-2.5 px-2 cursor-pointer overflow-hidden"
-                        onClick={() => toggleArea(row.id)}
-                      >
-                        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: row.color ?? "#CBD5E1" }} />
-                        <span className="font-black text-[#0F172A] text-sm truncate">{row.name}</span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0" style={{ background: "#EDE9FE", color: "#7C3AED" }}>Módulo</span>
-                      </div>
-                      <div style={{ width: colW.status, flexShrink: 0 }} className="flex justify-center">
-                        <span className="text-[10px] text-slate-400 font-medium">{row.doneCount}/{row.taskCount}</span>
-                      </div>
-                      <div style={{ width: colW.responsible, flexShrink: 0 }} />
-                      <div style={{ width: colW.startDate, flexShrink: 0 }} />
-                      <div style={{ width: colW.endDate, flexShrink: 0 }} />
-                      <div style={{ width: colW.actualStart, flexShrink: 0 }} />
-                      <div style={{ width: colW.actualEnd, flexShrink: 0 }} />
-                      <div style={{ width: colW.estH, flexShrink: 0 }} />
-                      <div style={{ width: colW.realH, flexShrink: 0 }} />
-                      <div style={{ width: colW.pctEst, flexShrink: 0 }} />
-                      <div style={{ width: colW.pctReal, flexShrink: 0 }} className="px-3">
-                        {row.taskCount > 0 && (
-                          <div className="flex flex-col gap-1">
-                            <span className="text-[9px] font-bold text-slate-500 text-center">{progress}%</span>
-                            <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden">
-                              <div style={{ width: `${progress}%`, height: "100%", background: row.color ?? "#CBD5E1", borderRadius: "inherit", transition: "width 0.3s" }} />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      <div style={{ width: colW.predecessors, flexShrink: 0 }} />
-                      {/* Cost totals for the area */}
+                      {/* Reorderable columns — area row */}
                       {(() => {
-                        const areaTasks = tasks.filter(t => t.wbsAreaId === row.id)
-                        const totalOrc  = areaTasks.reduce((s, t) => s + (t.budgetedCost ?? 0), 0)
-                        const totalReal = areaTasks.reduce((s, t) => s + (t.actualCost   ?? 0), 0)
-                        const fmtK = (v: number) => v === 0 ? "—" : v >= 1000 ? `${(v/1000).toFixed(0)}k` : v.toFixed(0)
-                        return (
-                          <>
-                            <div style={{ width: colW.budgeted, flexShrink: 0 }} className="text-center px-1">
-                              {totalOrc > 0 && <span className="text-[9px] font-bold text-emerald-600">R$ {fmtK(totalOrc)}</span>}
-                            </div>
-                            <div style={{ width: colW.actual, flexShrink: 0 }} className="text-center px-1">
-                              {totalReal > 0 && (
-                                <span className="text-[9px] font-bold" style={{ color: totalReal > totalOrc && totalOrc > 0 ? "#EF4444" : "#F59E0B" }}>
-                                  R$ {fmtK(totalReal)}
-                                </span>
-                              )}
-                            </div>
-                          </>
-                        )
+                        const areaCells: Record<ColKey, React.ReactNode> = {
+                          eap: <div style={{ width: colW.eap, flexShrink: 0 }} className="flex items-center justify-center"><span className="text-[10px] font-bold text-slate-400 font-mono">{row.eap}</span></div>,
+                          name: <div style={{ width: colW.name, flexShrink: 0 }} className="flex items-center gap-2.5 px-2 cursor-pointer overflow-hidden" onClick={() => toggleArea(row.id)}><div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: row.color ?? "#CBD5E1" }} /><span className="font-black text-[#0F172A] text-sm truncate">{row.name}</span><span className="text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0" style={{ background: "#EDE9FE", color: "#7C3AED" }}>Módulo</span></div>,
+                          status: <div style={{ width: colW.status, flexShrink: 0 }} className="flex justify-center"><span className="text-[10px] text-slate-400 font-medium">{row.doneCount}/{row.taskCount}</span></div>,
+                          responsible: <div style={{ width: colW.responsible, flexShrink: 0 }} />,
+                          startDate:   <div style={{ width: colW.startDate,   flexShrink: 0 }} />,
+                          endDate:     <div style={{ width: colW.endDate,     flexShrink: 0 }} />,
+                          actualStart: <div style={{ width: colW.actualStart, flexShrink: 0 }} />,
+                          actualEnd:   <div style={{ width: colW.actualEnd,   flexShrink: 0 }} />,
+                          estH:        <div style={{ width: colW.estH,        flexShrink: 0 }} />,
+                          realH:       <div style={{ width: colW.realH,       flexShrink: 0 }} />,
+                          pctEst:      <div style={{ width: colW.pctEst,      flexShrink: 0 }} />,
+                          pctReal: <div style={{ width: colW.pctReal, flexShrink: 0 }} className="px-3">
+                            {row.taskCount > 0 && (
+                              <div className="flex flex-col gap-1">
+                                <span className="text-[9px] font-bold text-slate-500 text-center">{progress}%</span>
+                                <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                                  <div style={{ width: `${progress}%`, height: "100%", background: row.color ?? "#CBD5E1", borderRadius: "inherit", transition: "width 0.3s" }} />
+                                </div>
+                              </div>
+                            )}
+                          </div>,
+                          predecessors: <div style={{ width: colW.predecessors, flexShrink: 0 }} />,
+                          budgeted: <div style={{ width: colW.budgeted, flexShrink: 0 }} className="text-center px-1">
+                            {(() => {
+                              const areaTasks = tasks.filter(t => t.wbsAreaId === row.id)
+                              const totalOrc  = areaTasks.reduce((s, t) => s + (t.budgetedCost ?? 0), 0)
+                              const fmtK = (v: number) => v === 0 ? "—" : v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })
+                              return totalOrc > 0 ? <span className="text-[9px] font-bold text-emerald-600">R$ {fmtK(totalOrc)}</span> : null
+                            })()}
+                          </div>,
+                          actual: <div style={{ width: colW.actual, flexShrink: 0 }} className="text-center px-1">
+                            {(() => {
+                              const areaTasks = tasks.filter(t => t.wbsAreaId === row.id)
+                              const totalOrc  = areaTasks.reduce((s, t) => s + (t.budgetedCost ?? 0), 0)
+                              const totalReal = areaTasks.reduce((s, t) => s + (t.actualCost   ?? 0), 0)
+                              const fmtK = (v: number) => v === 0 ? "—" : v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })
+                              return totalReal > 0 ? <span className="text-[9px] font-bold" style={{ color: totalReal > totalOrc && totalOrc > 0 ? "#EF4444" : "#F59E0B" }}>R$ {fmtK(totalReal)}</span> : null
+                            })()}
+                          </div>,
+                        }
+                        return colOrder.map(col => <Fragment key={col}>{areaCells[col]}</Fragment>)
                       })()}
                     </div>
                   )
@@ -2244,6 +2438,18 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                         <Pencil className="w-3 h-3" />
                       </button>
                       <button
+                        onClick={() => setCommentPanel({ taskId: t.id, title: t.title })}
+                        title="Comentários"
+                        className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
+                        style={
+                          t._count.comments > 0
+                            ? { background: "#EFF6FF", color: "#2463FF" }
+                            : { background: "#F1F5F9", color: "#94A3B8" }
+                        }
+                      >
+                        <MessageSquare className="w-3 h-3" />
+                      </button>
+                      <button
                         onClick={() => setEvidencePanel({ taskId: t.id, title: t.title })}
                         title="Evidências da conclusão"
                         className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
@@ -2277,464 +2483,264 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                       </button>
                     </div>
 
-                    {/* EAP */}
-                    <div style={{ width: colW.eap, flexShrink: 0 }} className="flex items-center justify-center">
-                      <span className="text-[10px] font-bold text-slate-400 font-mono select-all cursor-text">{eap}</span>
-                    </div>
-
-                    {/* Name */}
-                    <div style={{ width: colW.name, flexShrink: 0 }} className="flex items-center gap-1.5 px-1 py-1 overflow-hidden">
-                      {/* Tree indent spacer for subtasks */}
-                      {isTarefa && (
-                        <div style={{ width: depth * 20, flexShrink: 0, position: "relative", alignSelf: "stretch", display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
-                          <div style={{ position: "absolute", right: 0, top: 0, bottom: "50%", width: 10, borderBottom: "1.5px solid #DDD6FE", borderLeft: "1.5px solid #DDD6FE", borderBottomLeftRadius: 4 }} />
-                        </div>
-                      )}
-                      {/* Expand / leaf dot */}
-                      <div className="w-5 shrink-0 flex items-center justify-center">
-                        {hasChildren ? (
-                          <button onClick={(e) => { e.stopPropagation(); toggleListTask(t.id) }}
-                            className="text-slate-400 hover:text-slate-700 transition-colors">
-                            {expandedTasks.has(t.id)
-                              ? <ChevronDown className="w-3.5 h-3.5" />
-                              : <ChevronRight className="w-3.5 h-3.5" />}
-                          </button>
-                        ) : (
-                          <div className="w-1.5 h-1.5 rounded-full shrink-0"
-                            style={{ background: isTarefa ? "#A78BFA" : (areaColor ?? color) }} />
-                        )}
-                      </div>
-                      {isLate    && <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />}
-                      {isBlocked && !isLate && <Lock className="w-3 h-3 text-slate-300 shrink-0" />}
-                      {editTitle?.id === t.id ? (
-                        <input
-                          autoFocus
-                          value={editTitle.val}
-                          onChange={(e) => setEditTitle({ id: t.id, val: e.target.value })}
-                          onBlur={() => {
-                            const val = editTitle.val.trim()
-                            setEditTitle(null)
-                            if (val && val !== t.title) saveTaskField(t.id, { title: val })
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur() }
-                            if (e.key === "Escape") setEditTitle(null)
-                            e.stopPropagation()
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                          className="flex-1 min-w-0 text-xs font-semibold text-[#0F172A] bg-white rounded-lg px-2 py-0.5 outline-none"
-                          style={{ border: "1.5px solid #7B2FBE" }}
-                        />
-                      ) : (
-                        <span
-                          className={`flex-1 text-xs truncate cursor-text ${
-                            isDone     ? "line-through text-slate-400"
-                            : isTarefa ? "text-slate-500 font-medium"
-                            : "text-[#0F172A] font-semibold"
-                          }`}
-                          onClick={() => setEditTitle({ id: t.id, val: t.title })}
-                          title="Clique para renomear"
-                        >
-                          {t.title}
-                        </span>
-                      )}
-                      {/* Type badge */}
-                      <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full font-bold" style={
-                        isTarefa
-                          ? { background: "#EDE9FE", color: "#7C3AED" }
-                          : { background: "#DBEAFE", color: "#1D4ED8" }
-                      }>
-                        {isTarefa ? "Tarefa" : "Atividade"}
-                      </span>
-                      {/* Dependency chip */}
-                      {t.dependencies.length > 0 && (
-                        <span
-                          className="shrink-0 flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                          title={t.dependencies.map(d => `${eapById.get(d) ?? "?"} — ${tasks.find(x => x.id === d)?.title ?? d}`).join("\n")}
-                          style={depViolation
-                            ? { background: "#FEF3C7", color: "#B45309", border: "1px solid #FCD34D" }
-                            : { background: "#EEF2FF", color: "#4338CA", border: "1px solid #C7D2FE" }
-                          }
-                        >
-                          <Link2 className="w-2.5 h-2.5" />
-                          {t.dependencies.map(d => eapById.get(d) ?? "?").join(", ")}
-                        </span>
-                      )}
-                      {t._count.comments > 0 && (
-                        <span
-                          className="flex items-center gap-0.5 shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                          style={{ background: "rgba(36,99,255,0.08)", color: "#2463FF" }}
-                          title={`${t._count.comments} comentário${t._count.comments !== 1 ? "s" : ""}`}
-                        >
-                          <MessageSquare className="w-2.5 h-2.5" />
-                          {t._count.comments}
-                        </span>
-                      )}
-                      {t._count.attachments > 0 && (
-                        <span
-                          className="flex items-center gap-0.5 shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                          style={{ background: "rgba(100,116,139,0.08)", color: "#475569" }}
-                          title={`${t._count.attachments} anexo${t._count.attachments !== 1 ? "s" : ""}`}
-                        >
-                          <Paperclip className="w-2.5 h-2.5" />
-                          {t._count.attachments}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Status — dropdown */}
-                    <div style={{ width: colW.status, flexShrink: 0 }} className="flex justify-center px-1">
-                      <select
-                        value={t.status}
-                        onChange={(e) => saveTaskField(t.id, { status: e.target.value })}
-                        style={{
-                          background: cfg?.bg ?? "#F8FAFC",
-                          color: isLate && t.status !== "DELAYED" ? "#EF4444" : cfg?.color ?? "#64748B",
-                          border: `1.5px solid ${isLate && t.status !== "DELAYED" ? "#EF4444" : cfg?.color ?? "#CBD5E1"}50`,
-                          fontSize: 10, fontWeight: 700,
-                          padding: "3px 6px", borderRadius: 20,
-                          cursor: "pointer", outline: "none",
-                          appearance: "none", textAlignLast: "center",
-                          width: "100%", maxWidth: 118,
-                        }}
-                      >
-                        {STATUS_CYCLE.map(s => (
-                          <option key={s} value={s}>{STATUS_CFG[s]?.label ?? s}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Responsible */}
-                    <div style={{ width: colW.responsible, flexShrink: 0 }} className="px-1">
-                      <div className="flex items-center gap-1.5">
-                        {t.responsible && inlineAdd?.taskId !== t.id && (
-                          <UserAvatar name={t.responsible.name} image={t.responsible.image} size={20} />
-                        )}
-                        {inlineAdd?.taskId === t.id ? (
-                          <input
-                            autoFocus
-                            value={inlineAdd.val}
-                            placeholder="Nome do responsável…"
-                            onChange={(e) => setInlineAdd({ taskId: t.id, val: e.target.value })}
-                            onKeyDown={async (e) => {
-                              if (e.key === "Escape") { setInlineAdd(null); return }
-                              if (e.key === "Enter") {
-                                e.preventDefault()
-                                const name = inlineAdd.val.trim()
-                                if (!name) { setInlineAdd(null); return }
-                                setInlineAdd(null)
-                                try {
-                                  const m = await addExternalMember(project.id, name)
-                                  setMembers((prev) => prev.some((x) => x.id === m.id) ? prev : [...prev, m])
-                                  await saveTaskField(t.id, { responsibleId: m.id })
-                                } catch {}
-                              }
-                            }}
-                            onBlur={async () => {
-                              const name = inlineAdd?.val.trim() ?? ""
-                              setInlineAdd(null)
-                              if (!name) return
-                              try {
-                                const m = await addExternalMember(project.id, name)
-                                setMembers((prev) => prev.some((x) => x.id === m.id) ? prev : [...prev, m])
-                                await saveTaskField(t.id, { responsibleId: m.id })
-                              } catch {}
-                            }}
-                            className="flex-1 min-w-0 text-[10px] text-[#0F172A] rounded-md px-1.5 py-0.5 outline-none"
-                            style={{ border: "1.5px solid #7B2FBE", background: "#F5F3FF" }}
-                          />
-                        ) : (
-                          <div className="relative flex-1 min-w-0">
-                          <select
-                            value={t.responsibleId ?? ""}
-                            onChange={(e) => {
-                              if (e.target.value === "__other__") {
-                                setInlineAdd({ taskId: t.id, val: "" })
-                              } else {
-                                saveTaskField(t.id, { responsibleId: e.target.value || null })
-                              }
-                            }}
-                            className="w-full text-[10px] text-slate-600 bg-transparent border-0 outline-none cursor-pointer appearance-none pr-4"
-                            title={t.responsible?.name ?? "Sem responsável"}
-                          >
-                            <option value="">— Sem responsável</option>
-                            {members.map((m) => (
-                              <option key={m.id} value={m.id}>{m.name}</option>
-                            ))}
-                            <option value="__other__">+ Outro (cadastrar)…</option>
-                          </select>
-                          <ChevronDown className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none shrink-0" />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Início Planejado */}
-                    <div style={{ width: colW.startDate, flexShrink: 0 }} className="px-1">
-                      <WorkingDayPicker
-                        compact
-                        value={t.startDate?.slice(0, 10) ?? ""}
-                        onChange={(v) => saveDateField(t.id, "startDate", v || null)}
-                        placeholder="—"
-                      />
-                    </div>
-
-                    {/* Término Planejado */}
-                    <div style={{ width: colW.endDate, flexShrink: 0 }} className="px-1">
-                      <WorkingDayPicker
-                        compact
-                        value={t.endDate?.slice(0, 10) ?? ""}
-                        onChange={(v) => saveDateField(t.id, "endDate", v || null)}
-                        placeholder="—"
-                      />
-                    </div>
-
-                    {/* Início Real */}
-                    <div style={{ width: colW.actualStart, flexShrink: 0 }} className="px-1">
-                      <WorkingDayPicker
-                        compact
-                        value={t.actualStart?.slice(0, 10) ?? ""}
-                        onChange={(v) => saveTaskField(t.id, { actualStart: v || null })}
-                        placeholder="—"
-                      />
-                    </div>
-
-                    {/* Término Real */}
-                    <div style={{ width: colW.actualEnd, flexShrink: 0 }} className="px-1">
-                      <WorkingDayPicker
-                        compact
-                        value={t.actualEnd?.slice(0, 10) ?? ""}
-                        onChange={(v) => saveTaskField(t.id, { actualEnd: v || null })}
-                        placeholder="—"
-                      />
-                    </div>
-
-                    {/* Esforço Estimado */}
-                    <div style={{ width: colW.estH, flexShrink: 0 }} className="text-center px-1">
-                      {editNum?.id === t.id && editNum.field === "estimatedEffort" ? (
-                        <input
-                          type="number" min={0} step={0.5} autoFocus
-                          value={editNum.val}
-                          onChange={(e) => setEditNum({ id: t.id, field: "estimatedEffort", val: e.target.value })}
-                          onBlur={() => {
-                            const val = editNum.val === "" ? null : Number(editNum.val)
-                            setEditNum(null)
-                            saveTaskField(t.id, { estimatedEffort: val })
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") e.currentTarget.blur()
-                            if (e.key === "Escape") setEditNum(null)
-                          }}
-                          className="w-full text-[10px] text-center font-mono text-violet-600 rounded outline-none bg-white"
-                          style={{ border: "1.5px solid #7B2FBE" }}
-                        />
-                      ) : (
-                        <span
-                          className="text-[10px] font-mono text-violet-600 cursor-text block"
-                          onClick={() => setEditNum({ id: t.id, field: "estimatedEffort", val: String(t.estimatedEffort ?? "") })}
-                          title="Clique para editar"
-                        >
-                          {t.estimatedEffort != null ? `${t.estimatedEffort}h` : "—"}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Esforço Real */}
-                    <div style={{ width: colW.realH, flexShrink: 0 }} className="text-center px-1">
-                      {editNum?.id === t.id && editNum.field === "actualEffort" ? (
-                        <input
-                          type="number" min={0} step={0.5} autoFocus
-                          value={editNum.val}
-                          onChange={(e) => setEditNum({ id: t.id, field: "actualEffort", val: e.target.value })}
-                          onBlur={() => {
-                            const val = editNum.val === "" ? null : Number(editNum.val)
-                            setEditNum(null)
-                            saveTaskField(t.id, { actualEffort: val })
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") e.currentTarget.blur()
-                            if (e.key === "Escape") setEditNum(null)
-                          }}
-                          className="w-full text-[10px] text-center font-mono text-violet-600 rounded outline-none bg-white"
-                          style={{ border: "1.5px solid #7B2FBE" }}
-                        />
-                      ) : (
-                        (() => {
-                          const over = t.estimatedEffort != null && t.actualEffort != null && t.actualEffort > t.estimatedEffort
-                          return (
-                            <span
-                              className={`text-[10px] font-mono font-bold cursor-text block ${over ? "text-red-500" : t.actualEffort != null ? "text-violet-600" : "text-slate-300"}`}
-                              onClick={() => setEditNum({ id: t.id, field: "actualEffort", val: String(t.actualEffort ?? "") })}
-                              title="Clique para editar"
-                            >
-                              {t.actualEffort != null ? `${t.actualEffort}h` : "—"}
-                            </span>
-                          )
-                        })()
-                      )}
-                    </div>
-
-                    {/* % Completo Estimado */}
+                    {/* Reorderable columns — task row */}
                     {(() => {
                       const ep = calcEstimatedProgress(t.startDate, t.endDate)
-                      const delta = ep !== null ? ep - t.progress : null
-                      return (
-                        <div style={{ width: colW.pctEst, flexShrink: 0 }} className="text-center">
-                          {ep !== null ? (
-                            <div className="flex flex-col items-center gap-0.5">
-                              <span className="text-[9px] font-bold text-amber-600">{ep}%</span>
-                              {delta !== null && Math.abs(delta) >= 5 && (
-                                <span className={`text-[8px] font-bold ${delta > 0 ? "text-red-400" : "text-emerald-500"}`}>
-                                  {delta > 0 ? `+${delta}` : delta}
-                                </span>
+                      const epDelta = ep !== null ? ep - t.progress : null
+                      const taskCells: Record<ColKey, React.ReactNode> = {
+                        eap: (
+                          <div style={{ width: colW.eap, flexShrink: 0 }} className="flex items-center justify-center">
+                            <span className="text-[10px] font-bold text-slate-400 font-mono select-all cursor-text">{eap}</span>
+                          </div>
+                        ),
+                        name: (
+                          <div style={{ width: colW.name, flexShrink: 0 }} className="flex items-center gap-1.5 px-1 py-1 overflow-hidden">
+                            {isTarefa && (
+                              <div style={{ width: depth * 20, flexShrink: 0, position: "relative", alignSelf: "stretch", display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+                                <div style={{ position: "absolute", right: 0, top: 0, bottom: "50%", width: 10, borderBottom: "1.5px solid #DDD6FE", borderLeft: "1.5px solid #DDD6FE", borderBottomLeftRadius: 4 }} />
+                              </div>
+                            )}
+                            <div className="w-5 shrink-0 flex items-center justify-center">
+                              {hasChildren ? (
+                                <button onClick={(e) => { e.stopPropagation(); toggleListTask(t.id) }} className="text-slate-400 hover:text-slate-700 transition-colors">
+                                  {expandedTasks.has(t.id) ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                                </button>
+                              ) : (
+                                <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: isTarefa ? "#A78BFA" : (areaColor ?? color) }} />
                               )}
                             </div>
-                          ) : <span className="text-[10px] text-slate-300">—</span>}
-                        </div>
-                      )
-                    })()}
-
-                    {/* % Completo Real */}
-                    <div style={{ width: colW.pctReal, flexShrink: 0 }} className="px-2">
-                      {editNum?.id === t.id && editNum.field === "progress" ? (
-                        <input
-                          type="number" min={0} max={100} autoFocus
-                          value={editNum.val}
-                          onChange={(e) => setEditNum({ id: t.id, field: "progress", val: e.target.value })}
-                          onBlur={() => {
-                            const val = Math.min(100, Math.max(0, Number(editNum.val) || 0))
-                            setEditNum(null)
-                            saveTaskField(t.id, { progress: val })
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") e.currentTarget.blur()
-                            if (e.key === "Escape") setEditNum(null)
-                          }}
-                          className="w-full text-[10px] text-center font-bold rounded outline-none bg-white"
-                          style={{ color, border: "1.5px solid #7B2FBE" }}
-                        />
-                      ) : (
-                        <div
-                          className="flex flex-col gap-0.5 cursor-text"
-                          onClick={() => setEditNum({ id: t.id, field: "progress", val: String(t.progress) })}
-                          title="Clique para editar"
-                        >
-                          <span className="text-[9px] font-bold text-center" style={{ color }}>{t.progress}%</span>
-                          <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                            <div style={{ width: `${t.progress}%`, height: "100%", background: color, borderRadius: "inherit", transition: "width 0.3s" }} />
+                            {isLate    && <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />}
+                            {isBlocked && !isLate && <Lock className="w-3 h-3 text-slate-300 shrink-0" />}
+                            {editTitle?.id === t.id ? (
+                              <input
+                                autoFocus
+                                value={editTitle.val}
+                                onChange={(e) => setEditTitle({ id: t.id, val: e.target.value })}
+                                onBlur={() => {
+                                  const val = editTitle.val.trim()
+                                  setEditTitle(null)
+                                  if (val && val !== t.title) saveTaskField(t.id, { title: val })
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur() }
+                                  if (e.key === "Escape") setEditTitle(null)
+                                  e.stopPropagation()
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                className="flex-1 min-w-0 text-xs font-semibold text-[#0F172A] bg-white rounded-lg px-2 py-0.5 outline-none"
+                                style={{ border: "1.5px solid #7B2FBE" }}
+                              />
+                            ) : (
+                              <span
+                                className={`flex-1 text-xs truncate cursor-text ${isDone ? "line-through text-slate-400" : isTarefa ? "text-slate-500 font-medium" : "text-[#0F172A] font-semibold"}`}
+                                onClick={() => setEditTitle({ id: t.id, val: t.title })}
+                                title="Clique para renomear"
+                              >
+                                {t.title}
+                              </span>
+                            )}
+                            <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full font-bold" style={isTarefa ? { background: "#EDE9FE", color: "#7C3AED" } : { background: "#DBEAFE", color: "#1D4ED8" }}>
+                              {isTarefa ? "Tarefa" : "Atividade"}
+                            </span>
+                            {t.dependencies.length > 0 && (
+                              <span className="shrink-0 flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                                title={t.dependencies.map(d => `${eapById.get(d) ?? "?"} — ${tasks.find(x => x.id === d)?.title ?? d}`).join("\n")}
+                                style={depViolation ? { background: "#FEF3C7", color: "#B45309", border: "1px solid #FCD34D" } : { background: "#EEF2FF", color: "#4338CA", border: "1px solid #C7D2FE" }}>
+                                <Link2 className="w-2.5 h-2.5" />
+                                {t.dependencies.map(d => eapById.get(d) ?? "?").join(", ")}
+                              </span>
+                            )}
+                            {t._count.comments > 0 && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setCommentPanel({ taskId: t.id, title: t.title }) }}
+                                className="flex items-center gap-0.5 shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full transition-colors hover:bg-blue-100"
+                                style={{ background: "rgba(36,99,255,0.08)", color: "#2463FF" }}
+                                title={`${t._count.comments} comentário${t._count.comments !== 1 ? "s" : ""} — clique para ver`}
+                              >
+                                <MessageSquare className="w-2.5 h-2.5" />{t._count.comments}
+                              </button>
+                            )}
+                            {t._count.attachments > 0 && (
+                              <span className="flex items-center gap-0.5 shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(100,116,139,0.08)", color: "#475569" }} title={`${t._count.attachments} anexo${t._count.attachments !== 1 ? "s" : ""}`}>
+                                <Paperclip className="w-2.5 h-2.5" />{t._count.attachments}
+                              </span>
+                            )}
                           </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Predecessoras — editável por EAP */}
-                    <div style={{ width: colW.predecessors, flexShrink: 0 }} className="flex items-center justify-center px-1">
-                      {editPred?.id === t.id ? (
-                        <input
-                          autoFocus
-                          value={editPred.val}
-                          placeholder="1.1, 1.2..."
-                          onChange={(e) => setEditPred({ id: t.id, val: e.target.value })}
-                          onBlur={() => {
-                            const raw = editPred.val
-                            setEditPred(null)
-                            const eaps = raw.split(/[,;\s]+/).map(s => s.trim()).filter(Boolean)
-                            const ids  = eaps.map(e => idByEap.get(e)).filter((id): id is string => Boolean(id))
-                            saveTaskField(t.id, { dependencies: ids })
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") e.currentTarget.blur()
-                            if (e.key === "Escape") setEditPred(null)
-                          }}
-                          className="w-full text-[9px] text-center px-1.5 py-0.5 rounded-lg outline-none bg-white font-mono"
-                          style={{ border: "1.5px solid #4338CA" }}
-                        />
-                      ) : (
-                        <span
-                          className="text-[9px] font-bold px-1.5 py-0.5 rounded-full cursor-text truncate max-w-full"
-                          style={t.dependencies.length > 0
-                            ? depViolation
-                              ? { background: "#FEF3C7", color: "#B45309" }
-                              : { background: "#EEF2FF", color: "#4338CA" }
-                            : { color: "#CBD5E1" }
-                          }
-                          title={t.dependencies.length > 0
-                            ? t.dependencies.map(d => {
-                                const eap = eapById.get(d)
-                                const dep = tasks.find(x => x.id === d)
-                                return eap ? `${eap} — ${dep?.title ?? d}` : (dep?.title ?? d)
-                              }).join("\n")
-                            : "Clique para definir predecessoras"
-                          }
-                          onClick={() => setEditPred({
-                            id: t.id,
-                            val: t.dependencies.map(d => eapById.get(d) ?? "").filter(Boolean).join(", "),
-                          })}
-                        >
-                          {t.dependencies.length > 0
-                            ? t.dependencies.map(d => eapById.get(d) ?? "?").join(", ")
-                            : "—"}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* R$ Orçado */}
-                    <div style={{ width: colW.budgeted, flexShrink: 0 }} className="text-center px-1">
-                      {editNum?.id === t.id && editNum.field === "budgetedCost" ? (
-                        <input
-                          autoFocus
-                          type="number" min={0} step={100}
-                          value={editNum.val}
-                          onChange={(e) => setEditNum({ id: t.id, field: "budgetedCost", val: e.target.value })}
-                          onBlur={() => {
-                            const v = editNum.val === "" ? null : Number(editNum.val)
-                            setEditNum(null)
-                            saveTaskField(t.id, { budgetedCost: v })
-                          }}
-                          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") setEditNum(null) }}
-                          className="w-full text-[9px] text-center px-1 py-0.5 rounded-lg outline-none font-mono"
-                          style={{ border: "1.5px solid #10B981", background: "#ECFDF5" }}
-                        />
-                      ) : (
-                        <span
-                          className="text-[9px] font-bold cursor-text"
-                          style={{ color: t.budgetedCost ? "#059669" : "#CBD5E1" }}
-                          onClick={() => setEditNum({ id: t.id, field: "budgetedCost", val: t.budgetedCost?.toString() ?? "" })}
-                          title="Clique para editar valor orçado"
-                        >
-                          {t.budgetedCost != null ? `R$${t.budgetedCost >= 1000 ? `${(t.budgetedCost/1000).toFixed(0)}k` : t.budgetedCost.toFixed(0)}` : "—"}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* R$ Real */}
-                    <div style={{ width: colW.actual, flexShrink: 0 }} className="text-center px-1">
-                      {editNum?.id === t.id && editNum.field === "actualCost" ? (
-                        <input
-                          autoFocus
-                          type="number" min={0} step={100}
-                          value={editNum.val}
-                          onChange={(e) => setEditNum({ id: t.id, field: "actualCost", val: e.target.value })}
-                          onBlur={() => {
-                            const v = editNum.val === "" ? null : Number(editNum.val)
-                            setEditNum(null)
-                            saveTaskField(t.id, { actualCost: v })
-                          }}
-                          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") setEditNum(null) }}
-                          className="w-full text-[9px] text-center px-1 py-0.5 rounded-lg outline-none font-mono"
-                          style={{ border: "1.5px solid #F59E0B", background: "#FFFBEB" }}
-                        />
-                      ) : (
-                        <span
-                          className="text-[9px] font-bold cursor-text"
-                          style={{ color: t.actualCost == null ? "#CBD5E1" : t.actualCost > (t.budgetedCost ?? Infinity) ? "#EF4444" : "#D97706" }}
-                          onClick={() => setEditNum({ id: t.id, field: "actualCost", val: t.actualCost?.toString() ?? "" })}
-                          title="Clique para editar custo real"
-                        >
-                          {t.actualCost != null ? `R$${t.actualCost >= 1000 ? `${(t.actualCost/1000).toFixed(0)}k` : t.actualCost.toFixed(0)}` : "—"}
-                        </span>
-                      )}
-                    </div>
+                        ),
+                        status: (
+                          <div style={{ width: colW.status, flexShrink: 0 }} className="flex justify-center px-1">
+                            <select value={t.status} onChange={(e) => saveTaskField(t.id, { status: e.target.value })}
+                              style={{ background: cfg?.bg ?? "#F8FAFC", color: isLate && t.status !== "DELAYED" ? "#EF4444" : cfg?.color ?? "#64748B", border: `1.5px solid ${isLate && t.status !== "DELAYED" ? "#EF4444" : cfg?.color ?? "#CBD5E1"}50`, fontSize: 10, fontWeight: 700, padding: "3px 6px", borderRadius: 20, cursor: "pointer", outline: "none", appearance: "none", textAlignLast: "center", width: "100%", maxWidth: 118 }}>
+                              {STATUS_CYCLE.map(s => <option key={s} value={s}>{STATUS_CFG[s]?.label ?? s}</option>)}
+                            </select>
+                          </div>
+                        ),
+                        responsible: (
+                          <div style={{ width: colW.responsible, flexShrink: 0 }} className="px-1">
+                            <div className="flex items-center gap-1.5">
+                              {t.responsible && (
+                                <UserAvatar name={t.responsible.name} image={t.responsible.image} size={20} />
+                              )}
+                              <div className="relative flex-1 min-w-0">
+                                <select
+                                  value={t.responsibleId ?? ""}
+                                  onChange={(e) => saveTaskField(t.id, { responsibleId: e.target.value || null })}
+                                  className="w-full text-[10px] text-slate-600 bg-transparent border-0 outline-none cursor-pointer appearance-none pr-4"
+                                  title={t.responsible?.name ?? "Sem responsável"}
+                                >
+                                  <option value="">— Sem responsável</option>
+                                  {members.map((m) => (
+                                    <option key={m.id} value={m.id}>{m.name}</option>
+                                  ))}
+                                </select>
+                                <ChevronDown className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none shrink-0" />
+                              </div>
+                            </div>
+                          </div>
+                        ),
+                        startDate: (
+                          <div style={{ width: colW.startDate, flexShrink: 0 }} className="px-1">
+                            <WorkingDayPicker compact value={t.startDate?.slice(0, 10) ?? ""} onChange={(v) => saveDateField(t.id, "startDate", v || null)} placeholder="—" />
+                          </div>
+                        ),
+                        endDate: (
+                          <div style={{ width: colW.endDate, flexShrink: 0 }} className="px-1">
+                            <WorkingDayPicker compact value={t.endDate?.slice(0, 10) ?? ""} onChange={(v) => saveDateField(t.id, "endDate", v || null)} placeholder="—" />
+                          </div>
+                        ),
+                        actualStart: (
+                          <div style={{ width: colW.actualStart, flexShrink: 0 }} className="px-1">
+                            <WorkingDayPicker compact value={t.actualStart?.slice(0, 10) ?? ""} onChange={(v) => saveTaskField(t.id, { actualStart: v || null })} placeholder="—" />
+                          </div>
+                        ),
+                        actualEnd: (
+                          <div style={{ width: colW.actualEnd, flexShrink: 0 }} className="px-1">
+                            <WorkingDayPicker compact value={t.actualEnd?.slice(0, 10) ?? ""} onChange={(v) => saveTaskField(t.id, { actualEnd: v || null })} placeholder="—" />
+                          </div>
+                        ),
+                        estH: (
+                          <div style={{ width: colW.estH, flexShrink: 0 }} className="text-center px-1">
+                            {editNum?.id === t.id && editNum.field === "estimatedEffort" ? (
+                              <input type="number" min={0} step={0.5} autoFocus value={editNum.val}
+                                onChange={(e) => setEditNum({ id: t.id, field: "estimatedEffort", val: e.target.value })}
+                                onBlur={() => { const val = editNum.val === "" ? null : Number(editNum.val); setEditNum(null); saveTaskField(t.id, { estimatedEffort: val }) }}
+                                onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") setEditNum(null) }}
+                                className="w-full text-[10px] text-center font-mono text-violet-600 rounded outline-none bg-white" style={{ border: "1.5px solid #7B2FBE" }} />
+                            ) : (
+                              <span className="text-[10px] font-mono text-violet-600 cursor-text block"
+                                onClick={() => setEditNum({ id: t.id, field: "estimatedEffort", val: String(t.estimatedEffort ?? "") })} title="Clique para editar">
+                                {t.estimatedEffort != null ? `${t.estimatedEffort}h` : "—"}
+                              </span>
+                            )}
+                          </div>
+                        ),
+                        realH: (
+                          <div style={{ width: colW.realH, flexShrink: 0 }} className="text-center px-1">
+                            {editNum?.id === t.id && editNum.field === "actualEffort" ? (
+                              <input type="number" min={0} step={0.5} autoFocus value={editNum.val}
+                                onChange={(e) => setEditNum({ id: t.id, field: "actualEffort", val: e.target.value })}
+                                onBlur={() => { const val = editNum.val === "" ? null : Number(editNum.val); setEditNum(null); saveTaskField(t.id, { actualEffort: val }) }}
+                                onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") setEditNum(null) }}
+                                className="w-full text-[10px] text-center font-mono text-violet-600 rounded outline-none bg-white" style={{ border: "1.5px solid #7B2FBE" }} />
+                            ) : (
+                              (() => {
+                                const over = t.estimatedEffort != null && t.actualEffort != null && t.actualEffort > t.estimatedEffort
+                                return (
+                                  <span className={`text-[10px] font-mono font-bold cursor-text block ${over ? "text-red-500" : t.actualEffort != null ? "text-violet-600" : "text-slate-300"}`}
+                                    onClick={() => setEditNum({ id: t.id, field: "actualEffort", val: String(t.actualEffort ?? "") })} title="Clique para editar">
+                                    {t.actualEffort != null ? `${t.actualEffort}h` : "—"}
+                                  </span>
+                                )
+                              })()
+                            )}
+                          </div>
+                        ),
+                        pctEst: (
+                          <div style={{ width: colW.pctEst, flexShrink: 0 }} className="text-center">
+                            {ep !== null ? (
+                              <div className="flex flex-col items-center gap-0.5">
+                                <span className="text-[9px] font-bold text-amber-600">{ep}%</span>
+                                {epDelta !== null && Math.abs(epDelta) >= 5 && (
+                                  <span className={`text-[8px] font-bold ${epDelta > 0 ? "text-red-400" : "text-emerald-500"}`}>
+                                    {epDelta > 0 ? `+${epDelta}` : epDelta}
+                                  </span>
+                                )}
+                              </div>
+                            ) : <span className="text-[10px] text-slate-300">—</span>}
+                          </div>
+                        ),
+                        pctReal: (
+                          <div style={{ width: colW.pctReal, flexShrink: 0 }} className="px-2">
+                            {editNum?.id === t.id && editNum.field === "progress" ? (
+                              <input type="number" min={0} max={100} autoFocus value={editNum.val}
+                                onChange={(e) => setEditNum({ id: t.id, field: "progress", val: e.target.value })}
+                                onBlur={() => { const val = Math.min(100, Math.max(0, Number(editNum.val) || 0)); setEditNum(null); saveTaskField(t.id, { progress: val }) }}
+                                onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") setEditNum(null) }}
+                                className="w-full text-[10px] text-center font-bold rounded outline-none bg-white" style={{ color, border: "1.5px solid #7B2FBE" }} />
+                            ) : (
+                              <div className="flex flex-col gap-0.5 cursor-text" onClick={() => setEditNum({ id: t.id, field: "progress", val: String(t.progress) })} title="Clique para editar">
+                                <span className="text-[9px] font-bold text-center" style={{ color }}>{t.progress}%</span>
+                                <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                                  <div style={{ width: `${t.progress}%`, height: "100%", background: color, borderRadius: "inherit", transition: "width 0.3s" }} />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ),
+                        predecessors: (
+                          <div style={{ width: colW.predecessors, flexShrink: 0 }} className="flex items-center justify-center px-1">
+                            {editPred?.id === t.id ? (
+                              <input autoFocus value={editPred.val} placeholder="1.1, 1.2..."
+                                onChange={(e) => setEditPred({ id: t.id, val: e.target.value })}
+                                onBlur={() => { const raw = editPred.val; setEditPred(null); const eaps = raw.split(/[,;\s]+/).map(s => s.trim()).filter(Boolean); const ids = eaps.map(e => idByEap.get(e)).filter((id): id is string => Boolean(id)); saveTaskField(t.id, { dependencies: ids }) }}
+                                onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") setEditPred(null) }}
+                                className="w-full text-[9px] text-center px-1.5 py-0.5 rounded-lg outline-none bg-white font-mono" style={{ border: "1.5px solid #4338CA" }} />
+                            ) : (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full cursor-text truncate max-w-full"
+                                style={t.dependencies.length > 0 ? depViolation ? { background: "#FEF3C7", color: "#B45309" } : { background: "#EEF2FF", color: "#4338CA" } : { color: "#CBD5E1" }}
+                                title={t.dependencies.length > 0 ? t.dependencies.map(d => { const eapStr = eapById.get(d); const dep = tasks.find(x => x.id === d); return eapStr ? `${eapStr} — ${dep?.title ?? d}` : (dep?.title ?? d) }).join("\n") : "Clique para definir predecessoras"}
+                                onClick={() => setEditPred({ id: t.id, val: t.dependencies.map(d => eapById.get(d) ?? "").filter(Boolean).join(", ") })}>
+                                {t.dependencies.length > 0 ? t.dependencies.map(d => eapById.get(d) ?? "?").join(", ") : "—"}
+                              </span>
+                            )}
+                          </div>
+                        ),
+                        budgeted: (
+                          <div style={{ width: colW.budgeted, flexShrink: 0 }} className="text-center px-1">
+                            {editNum?.id === t.id && editNum.field === "budgetedCost" ? (
+                              <input autoFocus type="number" min={0} step={100} value={editNum.val}
+                                onChange={(e) => setEditNum({ id: t.id, field: "budgetedCost", val: e.target.value })}
+                                onBlur={() => { const v = editNum.val === "" ? null : Number(editNum.val); setEditNum(null); saveTaskField(t.id, { budgetedCost: v }) }}
+                                onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") setEditNum(null) }}
+                                className="w-full text-[9px] text-center px-1 py-0.5 rounded-lg outline-none font-mono" style={{ border: "1.5px solid #10B981", background: "#ECFDF5" }} />
+                            ) : (
+                              <span className="text-[9px] font-bold cursor-text" style={{ color: t.budgetedCost ? "#059669" : "#CBD5E1" }}
+                                onClick={() => setEditNum({ id: t.id, field: "budgetedCost", val: t.budgetedCost?.toString() ?? "" })} title="Clique para editar valor orçado">
+                                {t.budgetedCost != null ? `R$ ${t.budgetedCost.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}` : "—"}
+                              </span>
+                            )}
+                          </div>
+                        ),
+                        actual: (
+                          <div style={{ width: colW.actual, flexShrink: 0 }} className="text-center px-1">
+                            {editNum?.id === t.id && editNum.field === "actualCost" ? (
+                              <input autoFocus type="number" min={0} step={100} value={editNum.val}
+                                onChange={(e) => setEditNum({ id: t.id, field: "actualCost", val: e.target.value })}
+                                onBlur={() => { const v = editNum.val === "" ? null : Number(editNum.val); setEditNum(null); saveTaskField(t.id, { actualCost: v }) }}
+                                onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") setEditNum(null) }}
+                                className="w-full text-[9px] text-center px-1 py-0.5 rounded-lg outline-none font-mono" style={{ border: "1.5px solid #F59E0B", background: "#FFFBEB" }} />
+                            ) : (
+                              <span className="text-[9px] font-bold cursor-text"
+                                style={{ color: t.actualCost == null ? "#CBD5E1" : t.actualCost > (t.budgetedCost ?? Infinity) ? "#EF4444" : "#D97706" }}
+                                onClick={() => setEditNum({ id: t.id, field: "actualCost", val: t.actualCost?.toString() ?? "" })} title="Clique para editar custo real">
+                                {t.actualCost != null ? `R$ ${t.actualCost.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}` : "—"}
+                              </span>
+                            )}
+                          </div>
+                        ),
+                      }
+                      return colOrder.map(col => <Fragment key={col}>{taskCells[col]}</Fragment>)
+                    })()}
 
                   </div>
                 )
@@ -2938,14 +2944,15 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                             </span>
                           )}
                           {!isEditing && t._count.comments > 0 && (
-                            <span
-                              className="flex items-center gap-0.5 shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setCommentPanel({ taskId: t.id, title: t.title }) }}
+                              className="flex items-center gap-0.5 shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full transition-colors hover:bg-blue-100"
                               style={{ background: "rgba(36,99,255,0.08)", color: "#2463FF" }}
-                              title={`${t._count.comments} comentário${t._count.comments !== 1 ? "s" : ""}`}
+                              title={`${t._count.comments} comentário${t._count.comments !== 1 ? "s" : ""} — clique para ver`}
                             >
                               <MessageSquare className="w-2.5 h-2.5" />
                               {t._count.comments}
-                            </span>
+                            </button>
                           )}
                           {!isEditing && t._count.attachments > 0 && (
                             <span
@@ -3226,6 +3233,22 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
             }}
           />
         </>
+      )}
+
+      {commentPanel && (
+        <CommentPanel
+          taskId={commentPanel.taskId}
+          taskTitle={commentPanel.title}
+          projectId={project.id}
+          onClose={() => setCommentPanel(null)}
+          onCommentAdded={() => {
+            setTasks((prev) => prev.map((t) =>
+              t.id === commentPanel.taskId
+                ? { ...t, _count: { ...t._count, comments: t._count.comments + 1 } }
+                : t
+            ))
+          }}
+        />
       )}
 
       {/* ── Area form modal ──────────────────────────────────────────────── */}

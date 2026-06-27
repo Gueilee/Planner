@@ -75,6 +75,7 @@ enum DocumentType {
   TECHNICAL_PRESENTATION
   KICKOFF
   MEETING_ATA
+  KICKOFF_PRESENTATION
 }
 
 enum LessonType {
@@ -191,6 +192,7 @@ model User {
   createdBenefits         ProjectBenefit[]
   createdMeasurements     BenefitMeasurement[]
   timeEntries             TimeEntry[]
+  baselines               ProjectBaseline[]
 }
 
 // ─────────────────────────────────────────────
@@ -702,20 +704,25 @@ model ProjectBaseline {
   number      Int      // 0 = original, 1 = 1º replanejamento, etc.
   name        String
   description String?
+  reason      String?  // motivo do replanejamento
+  createdById String?
   createdAt   DateTime @default(now())
 
   project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User?          @relation(fields: [createdById], references: [id])
   snaps     BaselineSnap[]
 
   @@unique([projectId, number])
 }
 
 model BaselineSnap {
-  id         String   @id @default(cuid())
-  baselineId String
-  taskId     String
-  taskTitle  String
-  plannedEnd DateTime
+  id           String    @id @default(cuid())
+  baselineId   String
+  taskId       String
+  taskTitle    String
+  plannedStart DateTime?
+  plannedEnd   DateTime
+  budgetedCost Float?
 
   baseline ProjectBaseline @relation(fields: [baselineId], references: [id], onDelete: Cascade)
 }

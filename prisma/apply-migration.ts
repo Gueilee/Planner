@@ -145,12 +145,17 @@ async function main() {
 
   // ALTER TABLE — idempotent via try/catch (SQLite ignores ADD COLUMN IF NOT EXISTS)
   const alters = [
-    `ALTER TABLE "Attachment" ADD COLUMN "benefitId" TEXT REFERENCES "ProjectBenefit"("id") ON DELETE CASCADE`,
-    `ALTER TABLE "Project"    ADD COLUMN "investment" REAL NOT NULL DEFAULT 0`,
-    `ALTER TABLE "Project"    ADD COLUMN "reportStatusManual" INTEGER NOT NULL DEFAULT 0`,
-    `ALTER TABLE "Project"    ADD COLUMN "requestNumber" INTEGER`,
-    `ALTER TABLE "Project"    ADD COLUMN "proposalNumber" TEXT`,
-    `ALTER TABLE "Project"    ADD COLUMN "contractNumber" TEXT`,
+    `ALTER TABLE "Attachment"       ADD COLUMN "benefitId"    TEXT REFERENCES "ProjectBenefit"("id") ON DELETE CASCADE`,
+    `ALTER TABLE "Project"          ADD COLUMN "investment"         REAL    NOT NULL DEFAULT 0`,
+    `ALTER TABLE "Project"          ADD COLUMN "reportStatusManual" INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE "Project"          ADD COLUMN "requestNumber"      INTEGER`,
+    `ALTER TABLE "Project"          ADD COLUMN "proposalNumber"     TEXT`,
+    `ALTER TABLE "Project"          ADD COLUMN "contractNumber"     TEXT`,
+    // ── Enhance S-Curve Baselines (migration 20260627000001) ──────────────────
+    `ALTER TABLE "ProjectBaseline"  ADD COLUMN "reason"       TEXT`,
+    `ALTER TABLE "ProjectBaseline"  ADD COLUMN "createdById"  TEXT REFERENCES "User"("id")`,
+    `ALTER TABLE "BaselineSnap"     ADD COLUMN "plannedStart" DATETIME`,
+    `ALTER TABLE "BaselineSnap"     ADD COLUMN "budgetedCost" REAL`,
   ]
   for (const sql of alters) {
     try {

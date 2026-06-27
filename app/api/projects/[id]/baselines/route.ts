@@ -16,12 +16,15 @@ export async function GET(
   const baselines = await db.projectBaseline.findMany({
     where: { projectId: id },
     orderBy: { number: "asc" },
-    include: { snaps: true },
+    include: {
+      snaps: true,
+      createdBy: { select: { name: true } },
+    },
   })
   return NextResponse.json(baselines)
 }
 
-// POST /api/projects/[id]/baselines — create baseline from current task endDates
+// POST /api/projects/[id]/baselines — create baseline from current task data
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -31,41 +34,57 @@ export async function POST(
 
   const { id } = await params
   const body = await req.json()
-  const { name, description } = body as { name?: string; description?: string }
+  const { name, description, reason } = body as {
+    name?: string
+    description?: string
+    reason?: string
+  }
 
-  // Snapshot all tasks that have an endDate
+  // Only snapshot leaf tasks (no subtasks) with an endDate
   const tasks = await db.scheduleTask.findMany({
-    where: { projectId: id, endDate: { not: null } },
-    select: { id: true, title: true, endDate: true },
+    where:  { projectId: id, endDate: { not: null } },
+    select: {
+      id: true, title: true,
+      startDate: true, endDate: true, budgetedCost: true,
+      _count: { select: { subtasks: true } },
+    },
   })
 
-  if (tasks.length === 0) {
+  const leafTasks = tasks.filter((t) => t._count.subtasks === 0)
+
+  if (leafTasks.length === 0) {
     return NextResponse.json(
-      { error: "O projeto não possui atividades com data de término definida." },
+      { error: "O projeto não possui atividades folha com data de término definida." },
       { status: 400 }
     )
   }
 
   // Find next baseline number
   const last = await db.projectBaseline.findFirst({
-    where: { projectId: id },
+    where:   { projectId: id },
     orderBy: { number: "desc" },
-    select: { number: true },
+    select:  { number: true },
   })
   const nextNumber = (last?.number ?? -1) + 1
-  const autoName = name || (nextNumber === 0 ? "Baseline Original" : `Replanejamento ${nextNumber}`)
+  const autoName   = name || (nextNumber === 0 ? "Baseline Original" : `Replanejamento ${nextNumber}`)
+
+  const userId = (session.user as { id?: string }).id
 
   const baseline = await db.projectBaseline.create({
     data: {
-      projectId: id,
-      number: nextNumber,
-      name: autoName,
+      projectId:   id,
+      number:      nextNumber,
+      name:        autoName,
       description: description ?? null,
+      reason:      reason ?? null,
+      createdById: userId ?? null,
       snaps: {
-        create: tasks.map((t) => ({
-          taskId: t.id,
-          taskTitle: t.title,
-          plannedEnd: t.endDate!,
+        create: leafTasks.map((t) => ({
+          taskId:       t.id,
+          taskTitle:    t.title,
+          plannedStart: t.startDate ?? null,
+          plannedEnd:   t.endDate!,
+          budgetedCost: t.budgetedCost ?? null,
         })),
       },
     },

@@ -23,6 +23,12 @@ import { MeetingAtaModal } from "@/components/meeting-ata-modal"
 
 type Area   = { id: string; name: string; color: string | null }
 type Member = { id: string; name: string; department: string | null }
+type TaskComment = {
+  id:        string
+  content:   string
+  createdAt: string
+  user:      { name: string }
+}
 type Task   = {
   id:           string
   title:        string
@@ -37,6 +43,7 @@ type Task   = {
   parentTitle:  string | null
   budgetedCost: number | null
   actualCost:   number | null
+  comments:     TaskComment[]
 }
 type HistoryItem = {
   id:       string
@@ -324,22 +331,58 @@ function TaskCard({
 
           {/* Comment area */}
           {state.commentOpen && (
-            <div className="mt-1 relative">
-              <textarea
-                value={state.comment}
-                onChange={(e) => onUpdate(task.id, { comment: e.target.value })}
-                placeholder="Observação sobre esta tarefa neste checkpoint..."
-                rows={2}
-                className="w-full text-xs border border-slate-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-50 placeholder:text-slate-300"
-              />
-              {state.comment && (
-                <button
-                  onClick={() => onUpdate(task.id, { comment: "" })}
-                  className="absolute top-2 right-2 text-slate-300 hover:text-slate-500"
-                >
-                  <X className="w-3 h-3" />
-                </button>
+            <div className="mt-1">
+              {/* Comment history */}
+              {task.comments.length > 0 && (
+                <div className="mb-3 rounded-xl overflow-hidden" style={{ border: "1px solid #E2E8F0" }}>
+                  <div className="px-3 py-1.5 border-b" style={{ background: "#F8FAFC", borderColor: "#E2E8F0" }}>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                      Histórico · {task.comments.length} comentário{task.comments.length !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  <div className="divide-y divide-slate-50 max-h-52 overflow-y-auto">
+                    {task.comments.map((c) => {
+                      const isCP  = c.content.startsWith("[Checkpoint")
+                      const badge = isCP ? (c.content.match(/^\[Checkpoint ([^\]]+)\]/) ?? [])[1] ?? "" : ""
+                      const body  = isCP ? c.content.replace(/^\[Checkpoint [^\]]+\]\s*/, "") : c.content
+                      return (
+                        <div key={c.id} className="px-3 py-2.5" style={{ background: isCP ? "rgba(36,99,255,0.02)" : "#fff" }}>
+                          <div className="flex items-center gap-2 mb-1">
+                            {isCP && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style={{ background: "#EFF6FF", color: "#2463FF" }}>
+                                Checkpoint {badge}
+                              </span>
+                            )}
+                            <span className="text-[10px] font-bold text-slate-600">{c.user.name.split(" ")[0]}</span>
+                            <span className="text-[9px] text-slate-400 ml-auto">
+                              {format(parseISO(c.createdAt), "dd/MM HH:mm", { locale: ptBR })}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-600 whitespace-pre-wrap leading-relaxed">{body}</p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
               )}
+              {/* New comment input */}
+              <div className="relative">
+                <textarea
+                  value={state.comment}
+                  onChange={(e) => onUpdate(task.id, { comment: e.target.value })}
+                  placeholder={task.comments.length > 0 ? "Adicionar novo comentário neste checkpoint..." : "Observação sobre esta tarefa neste checkpoint..."}
+                  rows={2}
+                  className="w-full text-xs border border-slate-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-50 placeholder:text-slate-300"
+                />
+                {state.comment && (
+                  <button
+                    onClick={() => onUpdate(task.id, { comment: "" })}
+                    className="absolute top-2 right-2 text-slate-300 hover:text-slate-500"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
             </div>
           )}
 

@@ -27,6 +27,13 @@ export default async function CheckpointPage({ params }: { params: Promise<{ id:
       include: {
         responsible: { select: { id: true, name: true } },
         wbsArea: { select: { id: true, name: true, color: true } },
+        comments: {
+          orderBy: { createdAt: "asc" },
+          select: {
+            id: true, content: true, createdAt: true,
+            user: { select: { name: true } },
+          },
+        },
       },
       orderBy: { order: "asc" },
     }),
@@ -57,6 +64,12 @@ export default async function CheckpointPage({ params }: { params: Promise<{ id:
         parentTitle:  t.parentId ? (taskTitleMap.get(t.parentId) ?? null) : null,
         budgetedCost: t.budgetedCost ?? null,
         actualCost:   t.actualCost   ?? null,
+        comments:     t.comments.map(c => ({
+          id:        c.id,
+          content:   c.content,
+          createdAt: c.createdAt.toISOString(),
+          user:      { name: c.user.name },
+        })),
       }))}
       projectParticipants={projectParticipants}
       allUsers={allUsers}

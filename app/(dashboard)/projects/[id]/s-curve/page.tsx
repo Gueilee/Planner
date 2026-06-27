@@ -1,112 +1,42 @@
-import { db } from "@/lib/db"
 import { auth } from "@/auth"
 import { notFound } from "next/navigation"
+import { getSCurveData } from "@/lib/actions/s-curve"
 import { SCurveClient } from "./s-curve-client"
-import { eachWeekOfInterval, startOfWeek, addWeeks, isAfter, isBefore } from "date-fns"
+import { db } from "@/lib/db"
+import Link from "next/link"
+import { ArrowLeft, BarChart3 } from "lucide-react"
 
 export const dynamic = "force-dynamic"
-
-function pct(count: number, total: number) {
-  if (total === 0) return 0
-  return Math.round((count / total) * 100)
-}
 
 export default async function SCurvePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const session = await auth()
   if (!session) notFound()
 
-  const [project, baselines] = await Promise.all([
-    db.project.findUnique({
-      where: { id },
-      select: {
-        actualStart: true,
-        expectedStart: true,
-        actualEnd: true,
-        expectedEnd: true,
-        tasks: {
-          select: {
-            id: true, endDate: true, completedAt: true, actualEnd: true, status: true,
-            _count: { select: { subtasks: true } },
-          },
-          where: { endDate: { not: null } },
-        },
-      },
-    }),
-    db.projectBaseline.findMany({
-      where: { projectId: id },
-      orderBy: { number: "asc" },
-      include: { snaps: true },
-    }),
+  const [data, project] = await Promise.all([
+    getSCurveData(id),
+    db.project.findUnique({ where: { id }, select: { id: true, title: true } }),
   ])
 
   if (!project) notFound()
 
-  // Usar apenas tarefas FOLHA — tarefas-pai têm endDate inflado cobrindo todos os filhos
-  const tasks = project.tasks.filter((t) => t._count.subtasks === 0)
-  const totalTasks = tasks.length
-
-  if (totalTasks === 0) {
-    return (
-      <SCurveClient
-        projectId={id}
-        initialData={{ series: [], baselines: [], totalTasks: 0 }}
-      />
-    )
-  }
-
-  // Range: apenas datas planejadas — completedAt não deve estender o eixo X
-  const plannedDates = [
-    project.actualStart,
-    project.expectedStart,
-    ...tasks.map((t) => t.endDate),
-  ].filter(Boolean) as Date[]
-
-  const rangeStart = startOfWeek(
-    plannedDates.reduce((min, d) => isBefore(d, min) ? d : min, plannedDates[0]),
-    { weekStartsOn: 1 }
-  )
-  const rangeEnd = addWeeks(
-    plannedDates.reduce((max, d) => isAfter(d, max) ? d : max, plannedDates[0]),
-    1
-  )
-
-  const weeks = eachWeekOfInterval({ start: rangeStart, end: rangeEnd }, { weekStartsOn: 1 })
-
-  const series = weeks.map((weekStart) => {
-    const planned = pct(tasks.filter((t) => t.endDate && !isAfter(t.endDate, weekStart)).length, totalTasks)
-    const realized = pct(
-      tasks.filter((t) => {
-        const cd = t.completedAt ?? t.actualEnd
-        if (cd && !isAfter(cd, weekStart)) return true
-        if (t.status === "COMPLETED" && t.endDate && !isAfter(t.endDate, weekStart)) return true
-        return false
-      }).length,
-      totalTasks
-    )
-
-    const baselinePcts: Record<string, number> = {}
-    for (const bl of baselines) {
-      if (bl.snaps.length === 0) continue
-      baselinePcts[`b_${bl.id}`] = pct(bl.snaps.filter((s) => !isAfter(s.plannedEnd, weekStart)).length, bl.snaps.length)
-    }
-
-    return { date: weekStart.toISOString(), planned, realized, ...baselinePcts }
-  })
-
-  const blMeta = baselines.map((b) => ({
-    id: b.id,
-    number: b.number,
-    name: b.name,
-    description: b.description,
-    createdAt: b.createdAt.toISOString(),
-    snapCount: b.snaps.length,
-  }))
-
   return (
-    <SCurveClient
-      projectId={id}
-      initialData={{ series, baselines: blMeta, totalTasks }}
-    />
+    <div className="flex flex-col min-h-screen bg-[#0F172A]">
+      {/* Topbar */}
+      <div className="flex items-center gap-3 px-5 py-3 border-b border-[#334155] bg-[#0F172A]/95 sticky top-0 z-20 backdrop-blur">
+        <Link href={`/projects/${id}`}
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-400 hover:text-white transition-colors">
+          <ArrowLeft className="w-4 h-4" /> Voltar
+        </Link>
+        <div className="w-px h-5 bg-[#334155]" />
+        <BarChart3 className="w-4 h-4 text-violet-400 shrink-0" />
+        <span className="text-sm font-black text-white truncate">{project.title}</span>
+        <span className="text-xs text-slate-500 shrink-0">— Curva S</span>
+      </div>
+      {/* Full chart */}
+      <div className="flex-1">
+        <SCurveClient projectId={id} initialData={data} />
+      </div>
+    </div>
   )
 }

@@ -353,6 +353,14 @@ export default async function ProjectDetailPage({
                         Cronograma
                       </Link>
                       <Link
+                        href={`/projects/${id}/indicators`}
+                        className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.98]"
+                        style={{ background: "linear-gradient(135deg, #7B2FBE, #2463FF)", boxShadow: "0 4px 20px rgba(123,47,190,0.30)" }}
+                      >
+                        <BarChart3 className="w-3.5 h-3.5" />
+                        Indicadores
+                      </Link>
+                      <Link
                         href={`/projects/${id}/kickoff`}
                         className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.98]"
                         style={{ background: "linear-gradient(135deg, #10B981, #059669)", boxShadow: "0 4px 20px rgba(16,185,129,0.30)" }}
@@ -401,6 +409,14 @@ export default async function ProjectDetailPage({
                         Cronograma
                       </Link>
                       <Link
+                        href={`/projects/${id}/indicators`}
+                        className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.98]"
+                        style={{ background: "linear-gradient(135deg, #7B2FBE, #2463FF)", boxShadow: "0 4px 20px rgba(123,47,190,0.30)" }}
+                      >
+                        <BarChart3 className="w-3.5 h-3.5" />
+                        Indicadores
+                      </Link>
+                      <Link
                         href={`/projects/${id}/kickoff`}
                         className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.98]"
                         style={{ background: "linear-gradient(135deg, #10B981, #059669)", boxShadow: "0 4px 20px rgba(16,185,129,0.30)" }}
@@ -438,6 +454,14 @@ export default async function ProjectDetailPage({
                       >
                         <CalendarDays className="w-3.5 h-3.5" />
                         Cronograma
+                      </Link>
+                      <Link
+                        href={`/projects/${id}/indicators`}
+                        className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.98]"
+                        style={{ background: "linear-gradient(135deg, #7B2FBE, #2463FF)", boxShadow: "0 4px 20px rgba(123,47,190,0.30)" }}
+                      >
+                        <BarChart3 className="w-3.5 h-3.5" />
+                        Indicadores
                       </Link>
                       {/* GO LIVE — disponível a partir do RAMP_UP; cerimônia registra datas e muda o status */}
                       {project.status === "RAMP_UP" && (
@@ -503,6 +527,14 @@ export default async function ProjectDetailPage({
                       >
                         <Timer className="w-3.5 h-3.5" />
                         Kick-Off
+                      </Link>
+                      <Link
+                        href={`/projects/${id}/indicators`}
+                        className="inline-flex items-center gap-2 px-3 h-9 text-sm font-semibold rounded-xl border transition-all hover:bg-violet-50 active:scale-[0.98]"
+                        style={{ borderColor: "#C4B5FD", color: "#7B2FBE", background: "transparent" }}
+                      >
+                        <BarChart3 className="w-3.5 h-3.5" />
+                        Indicadores
                       </Link>
                       <Link
                         href={`/projects/${id}/meetings`}

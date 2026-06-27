@@ -9,7 +9,7 @@ import {
   ArrowLeft, Save, Rocket, Plus, Trash2, Upload, X, Loader2,
   Calendar, MapPin, Target, Users, Paperclip, ChevronRight,
   CheckCircle2, Circle, GripVertical, FileText, ImageIcon, FileSpreadsheet,
-  Pen, Check,
+  Pen, Check, Presentation,
 } from "lucide-react"
 import { saveKickOff, registerKickOff } from "@/lib/actions/kickoff"
 import type { KickOffData, EAPArea, EAPTask, Milestone, KickOffAttachment, ExternalAttendee } from "@/lib/types/kickoff"
@@ -588,7 +588,6 @@ export function KickOffClient({ project, existing, projectParticipants, allUsers
     startTransition(async () => {
       await registerKickOff(buildData())
       setShowSuccess(true)
-      setTimeout(() => router.push(`/projects/${project.id}`), 3000)
     })
   }
 
@@ -631,7 +630,7 @@ export function KickOffClient({ project, existing, projectParticipants, allUsers
   if (showSuccess) {
     return (
       <div className="fixed inset-0 flex items-center justify-center z-50" style={{ background: "linear-gradient(135deg, #0F172A, #1E1B4B)" }}>
-        <div className="text-center space-y-6 px-8">
+        <div className="text-center space-y-8 px-8 max-w-md">
           <div className="relative mx-auto w-24 h-24">
             <div className="absolute inset-0 rounded-full animate-ping" style={{ background: "rgba(16,185,129,0.15)" }} />
             <div className="relative w-24 h-24 rounded-full flex items-center justify-center" style={{ background: "linear-gradient(135deg, #10B981, #059669)", boxShadow: "0 0 60px rgba(16,185,129,0.4)" }}>
@@ -643,7 +642,23 @@ export function KickOffClient({ project, existing, projectParticipants, allUsers
             <p className="text-white/60 mt-2">O Kick-Off foi registrado com sucesso.</p>
             <p className="text-emerald-400 font-bold mt-1">Status → Em Andamento</p>
           </div>
-          <p className="text-white/30 text-sm">Redirecionando...</p>
+          <div className="flex flex-col gap-3">
+            <Link
+              href={`/projects/${project.id}/kickoff-presentation`}
+              className="inline-flex items-center justify-center gap-2.5 px-6 py-3 rounded-2xl text-sm font-black text-white transition-all hover:opacity-90"
+              style={{ background: "linear-gradient(135deg, #7B2FBE, #2463FF)", boxShadow: "0 8px 32px rgba(123,47,190,0.4)" }}
+            >
+              <Presentation className="w-5 h-5" />
+              Gerar Apresentação de Kick-Off
+            </Link>
+            <Link
+              href={`/projects/${project.id}`}
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl text-sm font-semibold text-white/60 hover:text-white transition-colors border border-white/10 hover:border-white/30"
+            >
+              Ir para o Projeto
+              <ChevronRight className="w-4 h-4" />
+            </Link>
+          </div>
         </div>
       </div>
     )
@@ -672,6 +687,15 @@ export function KickOffClient({ project, existing, projectParticipants, allUsers
           <span className="inline-flex items-center gap-1.5 px-3 h-8 text-xs font-bold rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
             <CheckCircle2 className="w-3.5 h-3.5" /> Kick-Off Realizado
           </span>
+        )}
+        {isRegistered && (
+          <Link
+            href={`/projects/${project.id}/kickoff-presentation`}
+            className="inline-flex items-center gap-1.5 px-3.5 h-8 text-xs font-bold rounded-xl text-white transition-all hover:opacity-90"
+            style={{ background: "linear-gradient(135deg, #7B2FBE, #2463FF)", boxShadow: "0 4px 16px rgba(123,47,190,0.3)" }}
+          >
+            <Presentation className="w-3.5 h-3.5" /> Apresentação
+          </Link>
         )}
         <button
           onClick={handleSave}

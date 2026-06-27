@@ -3,7 +3,7 @@
 import { useState, useTransition, useEffect, useCallback } from "react"
 import {
   Pencil, X, Save, Loader2, Calendar, DollarSign, FileText,
-  Info, Users, AlertTriangle, Plus, Trash2, ChevronDown, Gem, ChevronUp,
+  Info, Users, AlertTriangle, Plus, Trash2, ChevronDown, Gem, ChevronUp, UserPlus,
 } from "lucide-react"
 import {
   updateProjectDetails, addProjectMember, removeProjectMember,
@@ -659,50 +659,73 @@ function TeamSection({
       )}
 
       {/* Add member */}
-      {available.length > 0 && (
-        <div
-          className="rounded-xl p-4 space-y-3"
-          style={{ border: "1px solid #E2E8F0", background: "white" }}
-        >
+      <div
+        className="rounded-xl p-4 space-y-3"
+        style={{ border: "1px solid #E2E8F0", background: "white" }}
+      >
+        <div className="flex items-center justify-between">
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Adicionar Membro</p>
-          <div className="grid grid-cols-[1fr_auto] gap-2">
-            <div className="relative">
-              <select
-                className="lp-inp pr-8 appearance-none"
-                value={selectedUserId}
-                onChange={e => setSelectedUserId(e.target.value)}
-              >
-                <option value="">Selecionar pessoa...</option>
-                {available.map(u => (
-                  <option key={u.id} value={u.id}>
-                    {u.name}{u.department ? ` — ${u.department}` : ""}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-            </div>
-          </div>
-          <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
-            <Field label="Função / Papel">
-              <input
-                className="lp-inp"
-                value={newRole}
-                onChange={e => setNewRole(e.target.value)}
-                placeholder="Ex: Tech Lead, Analista..."
-              />
-            </Field>
-            <button
-              onClick={handleAdd}
-              disabled={!selectedUserId || isPending}
-              className="h-[42px] px-4 rounded-xl text-sm font-bold text-white flex items-center gap-1.5 disabled:opacity-40 transition-opacity shrink-0"
-              style={{ background: "linear-gradient(135deg, #2463FF, #8B2FFF)" }}
-            >
-              {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-              Adicionar
-            </button>
-          </div>
+          <a
+            href="/users"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 text-[11px] font-semibold transition-opacity hover:opacity-75"
+            style={{ color: "#7B2FBE" }}
+          >
+            <UserPlus className="w-3 h-3" />
+            Cadastrar novo usuário
+          </a>
         </div>
-      )}
+
+        {available.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-2">
+            Todos os usuários cadastrados já participam do projeto.{" "}
+            <a href="/users" target="_blank" rel="noopener noreferrer" className="underline" style={{ color: "#7B2FBE" }}>
+              Cadastre um novo usuário
+            </a>{" "}
+            para adicioná-lo aqui.
+          </p>
+        ) : (
+          <>
+            <div className="grid grid-cols-[1fr_auto] gap-2">
+              <div className="relative">
+                <select
+                  className="lp-inp pr-8 appearance-none"
+                  value={selectedUserId}
+                  onChange={e => setSelectedUserId(e.target.value)}
+                >
+                  <option value="">Selecionar pessoa...</option>
+                  {available.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}{u.department ? ` — ${u.department}` : ""}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+              </div>
+            </div>
+            <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+              <Field label="Função / Papel">
+                <input
+                  className="lp-inp"
+                  value={newRole}
+                  onChange={e => setNewRole(e.target.value)}
+                  placeholder="Ex: Tech Lead, Analista..."
+                />
+              </Field>
+              <button
+                onClick={handleAdd}
+                disabled={!selectedUserId || isPending}
+                className="h-[42px] px-4 rounded-xl text-sm font-bold text-white flex items-center gap-1.5 disabled:opacity-40 transition-opacity shrink-0"
+                style={{ background: "linear-gradient(135deg, #2463FF, #8B2FFF)" }}
+              >
+                {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                Adicionar
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   )
 }
