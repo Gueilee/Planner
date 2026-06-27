@@ -34,6 +34,7 @@ export default async function CheckpointPage({ params }: { params: Promise<{ id:
             user: { select: { name: true } },
           },
         },
+        _count: { select: { attachments: true } },
       },
       orderBy: { order: "asc" },
     }),
@@ -62,9 +63,10 @@ export default async function CheckpointPage({ params }: { params: Promise<{ id:
         responsible: t.responsible,
         parentId:     t.parentId ?? null,
         parentTitle:  t.parentId ? (taskTitleMap.get(t.parentId) ?? null) : null,
-        budgetedCost: t.budgetedCost ?? null,
-        actualCost:   t.actualCost   ?? null,
-        comments:     t.comments.map(c => ({
+        budgetedCost:    t.budgetedCost ?? null,
+        actualCost:      t.actualCost   ?? null,
+        attachmentCount: t._count.attachments,
+        comments:        t.comments.map(c => ({
           id:        c.id,
           content:   c.content,
           createdAt: c.createdAt.toISOString(),

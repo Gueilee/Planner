@@ -30,20 +30,21 @@ type TaskComment = {
   user:      { name: string }
 }
 type Task   = {
-  id:           string
-  title:        string
-  status:       string
-  progress:     number
-  startDate:    string | null
-  endDate:      string | null
-  wbsAreaId:    string | null
-  wbsArea:      { id: string; name: string; color: string | null } | null
-  responsible:  { id: string; name: string } | null
-  parentId:     string | null
-  parentTitle:  string | null
-  budgetedCost: number | null
-  actualCost:   number | null
-  comments:     TaskComment[]
+  id:              string
+  title:           string
+  status:          string
+  progress:        number
+  startDate:       string | null
+  endDate:         string | null
+  wbsAreaId:       string | null
+  wbsArea:         { id: string; name: string; color: string | null } | null
+  responsible:     { id: string; name: string } | null
+  parentId:        string | null
+  parentTitle:     string | null
+  budgetedCost:    number | null
+  actualCost:      number | null
+  attachmentCount: number
+  comments:        TaskComment[]
 }
 type HistoryItem = {
   id:       string
@@ -302,30 +303,58 @@ function TaskCard({
             </span>
 
             {/* Action buttons */}
-            <button
-              onClick={() => onUpdate(task.id, { commentOpen: !state.commentOpen })}
-              className="flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-lg transition-colors shrink-0"
-              style={state.commentOpen || state.comment.trim()
-                ? { background: "#EFF6FF", color: "#2463FF", border: "1px solid #BFDBFE" }
-                : { background: "#F8FAFC", color: "#94A3B8", border: "1px solid #E2E8F0" }
-              }
-            >
-              {state.comment.trim() ? <Check className="w-3 h-3" /> : <MessageSquare className="w-3 h-3" />}
-              Nota
-            </button>
+            {(() => {
+              const existingComments  = task.comments.length
+              const hasNewComment     = state.comment.trim().length > 0
+              const notaActive        = existingComments > 0 || state.commentOpen || hasNewComment
+              const totalAttachments  = task.attachmentCount + state.attachments.length
+              return (
+                <>
+                  <button
+                    onClick={() => onUpdate(task.id, { commentOpen: !state.commentOpen })}
+                    className="relative flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-lg transition-colors shrink-0"
+                    style={notaActive
+                      ? { background: "#EFF6FF", color: "#2463FF", border: "1px solid #BFDBFE" }
+                      : { background: "#F8FAFC", color: "#94A3B8", border: "1px solid #E2E8F0" }
+                    }
+                    title={existingComments > 0 ? `${existingComments} comentário${existingComments !== 1 ? "s" : ""} registrado${existingComments !== 1 ? "s" : ""}` : "Adicionar nota"}
+                  >
+                    {hasNewComment ? <Check className="w-3 h-3" /> : <MessageSquare className="w-3 h-3" />}
+                    {existingComments > 0 && !hasNewComment ? `Nota (${existingComments})` : "Nota"}
+                    {existingComments > 0 && (
+                      <span
+                        className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-black text-white"
+                        style={{ background: hasNewComment ? "#059669" : "#2463FF", lineHeight: 1 }}
+                      >
+                        {existingComments}
+                      </span>
+                    )}
+                  </button>
 
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={state.uploading}
-              className="flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-lg transition-colors shrink-0 disabled:opacity-50"
-              style={state.attachments.length > 0
-                ? { background: "#F0FDF4", color: "#059669", border: "1px solid #BBF7D0" }
-                : { background: "#F8FAFC", color: "#94A3B8", border: "1px solid #E2E8F0" }
-              }
-            >
-              {state.uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Paperclip className="w-3 h-3" />}
-              {state.attachments.length > 0 ? `Anexo (${state.attachments.length})` : "Anexo"}
-            </button>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={state.uploading}
+                    className="relative flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-lg transition-colors shrink-0 disabled:opacity-50"
+                    style={totalAttachments > 0
+                      ? { background: "#F0FDF4", color: "#059669", border: "1px solid #BBF7D0" }
+                      : { background: "#F8FAFC", color: "#94A3B8", border: "1px solid #E2E8F0" }
+                    }
+                    title={task.attachmentCount > 0 ? `${task.attachmentCount} anexo${task.attachmentCount !== 1 ? "s" : ""} registrado${task.attachmentCount !== 1 ? "s" : ""}` : "Adicionar anexo"}
+                  >
+                    {state.uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Paperclip className="w-3 h-3" />}
+                    {totalAttachments > 0 ? `Anexo (${totalAttachments})` : "Anexo"}
+                    {task.attachmentCount > 0 && (
+                      <span
+                        className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-black text-white"
+                        style={{ background: "#059669", lineHeight: 1 }}
+                      >
+                        {task.attachmentCount}
+                      </span>
+                    )}
+                  </button>
+                </>
+              )
+            })()}
             <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFiles} />
           </div>
 

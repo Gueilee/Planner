@@ -152,6 +152,7 @@ export async function saveCheckpoint(data: CheckpointInput) {
 
   revalidatePath(`/projects/${data.projectId}`)
   revalidatePath(`/projects/${data.projectId}/schedule`)
+  revalidatePath(`/projects/${data.projectId}/kanban`)
 
   // Generate rich ATA using the direct data from this session
   let ataContent: string | null = null
