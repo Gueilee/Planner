@@ -39,11 +39,20 @@ import { UserAvatar } from "@/components/ui/user-avatar"
 const ROW_H   = 40
 const HDR_H   = 64
 const LEFT_W  = 600
-// List view: fixed column widths so header and rows always share the same total width
-const COL_NAME  = 280
-const COL_EAP   = 56
-// 24+84+COL_EAP+COL_NAME+130+160+88+88+88+88+64+64+68+68+100+84+84
-const LIST_MIN_W = 1690
+// List view — resizable column system
+type ColKey = 'eap' | 'name' | 'status' | 'responsible' | 'startDate' | 'endDate' | 'actualStart' | 'actualEnd' | 'estH' | 'realH' | 'pctEst' | 'pctReal' | 'predecessors' | 'budgeted' | 'actual'
+const COL_DEFAULTS: Record<ColKey, number> = {
+  eap: 56, name: 280, status: 130, responsible: 160,
+  startDate: 88, endDate: 88, actualStart: 88, actualEnd: 88,
+  estH: 64, realH: 64, pctEst: 68, pctReal: 68,
+  predecessors: 100, budgeted: 84, actual: 84,
+}
+const COL_MIN: Record<ColKey, number> = {
+  eap: 40, name: 140, status: 90, responsible: 110,
+  startDate: 64, endDate: 64, actualStart: 64, actualEnd: 64,
+  estH: 40, realH: 40, pctEst: 40, pctReal: 40,
+  predecessors: 72, budgeted: 56, actual: 56,
+}
 const BAR_H   = 24
 const BAR_PAD = 8
 
@@ -1287,6 +1296,54 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
   const [tplApplying,     setTplApplying]     = useState(false)
   const [cascadeInfo, setCascadeInfo] = useState<{ count: number; delta: number } | null>(null)
 
+  // ── Resizable columns ────────────────────────────────────────────────────
+  const [colW, setColWState] = useState<Record<ColKey, number>>(() => {
+    try {
+      const s = typeof window !== "undefined" ? localStorage.getItem(`kronex-col-widths-${project.id}`) : null
+      if (s) return { ...COL_DEFAULTS, ...JSON.parse(s) }
+    } catch {}
+    return { ...COL_DEFAULTS }
+  })
+  const colWRef = useRef(colW)
+  const listMinW = 24 + 84 + (Object.keys(COL_DEFAULTS) as ColKey[]).reduce((s, k) => s + colW[k], 0)
+
+  function startColResize(col: ColKey, e: React.MouseEvent) {
+    e.preventDefault()
+    const startX = e.clientX
+    const startW = colWRef.current[col]
+    let raf = 0
+    function onMove(ev: MouseEvent) {
+      const nw = Math.max(COL_MIN[col], startW + ev.clientX - startX)
+      colWRef.current = { ...colWRef.current, [col]: nw }
+      if (raf) return
+      raf = requestAnimationFrame(() => {
+        setColWState({ ...colWRef.current })
+        raf = 0
+      })
+    }
+    function onUp() {
+      if (raf) cancelAnimationFrame(raf)
+      document.removeEventListener("mousemove", onMove)
+      document.removeEventListener("mouseup", onUp)
+      setColWState({ ...colWRef.current })
+      try { localStorage.setItem(`kronex-col-widths-${project.id}`, JSON.stringify(colWRef.current)) } catch {}
+    }
+    document.addEventListener("mousemove", onMove)
+    document.addEventListener("mouseup", onUp)
+  }
+
+  // Resize handle rendered inside each resizable header cell
+  function rh(col: ColKey) {
+    return (
+      <div
+        onMouseDown={(e) => startColResize(col, e)}
+        title="Arrastar para redimensionar"
+        style={{ position: "absolute", right: -3, top: 0, bottom: 0, width: 7, cursor: "col-resize", zIndex: 20, borderRight: "2px solid transparent" }}
+        className="hover:border-r-white/40 transition-colors"
+      />
+    )
+  }
+
   // ── Curva S view state ───────────────────────────────────────────────────
   const [sCurveData, setSCurveData]     = useState<SCurveData | null>(null)
   const [sCurveLoading, setSCurveLoading] = useState(false)
@@ -1962,30 +2019,30 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
 
           {/* Header — overflow hidden, synced via JS to body scrollLeft */}
           <div ref={listHeaderRef} style={{ overflowX: "hidden", overflowY: "visible", flexShrink: 0 }}>
-            <div className="flex items-center border-b border-slate-100 bg-[#0F172A]" style={{ height: 44, minWidth: LIST_MIN_W }}>
+            <div className="flex items-center border-b border-slate-100 bg-[#0F172A]" style={{ height: 44, minWidth: listMinW }}>
               <div style={{ width: 24, flexShrink: 0 }} />
               <div style={{ width: 84, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Ações</div>
-              <div style={{ width: COL_EAP, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">EAP</div>
-              <div style={{ width: COL_NAME, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest px-2">Nome da Atividade</div>
-              <div style={{ width: 130, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Status</div>
-              <div style={{ width: 160, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest px-3">Responsável</div>
-              <div style={{ width: 88, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Início Plan.</div>
-              <div style={{ width: 88, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Fim Plan.</div>
-              <div style={{ width: 88, flexShrink: 0 }} className="text-[10px] font-black text-emerald-400/60 uppercase tracking-widest text-center">Início Real</div>
-              <div style={{ width: 88, flexShrink: 0 }} className="text-[10px] font-black text-emerald-400/60 uppercase tracking-widest text-center">Fim Real</div>
-              <div style={{ width: 64, flexShrink: 0 }} className="text-[10px] font-black text-violet-400/70 uppercase tracking-widest text-center">Est.h</div>
-              <div style={{ width: 64, flexShrink: 0 }} className="text-[10px] font-black text-violet-400/70 uppercase tracking-widest text-center">Real h</div>
-              <div style={{ width: 68, flexShrink: 0 }} className="text-[10px] font-black text-amber-400/70 uppercase tracking-widest text-center">% Est.</div>
-              <div style={{ width: 68, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">% Real</div>
-              <div style={{ width: 100, flexShrink: 0 }} className="text-[10px] font-black text-indigo-400/70 uppercase tracking-widest text-center">Predecessoras</div>
-              <div style={{ width: 84, flexShrink: 0 }} className="text-[10px] font-black text-emerald-400/80 uppercase tracking-widest text-center">R$ Orç.</div>
-              <div style={{ width: 84, flexShrink: 0 }} className="text-[10px] font-black text-orange-400/80 uppercase tracking-widest text-center">R$ Real</div>
+              <div style={{ width: colW.eap, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">EAP{rh("eap")}</div>
+              <div style={{ width: colW.name, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-white/40 uppercase tracking-widest px-2">Nome da Atividade{rh("name")}</div>
+              <div style={{ width: colW.status, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Status{rh("status")}</div>
+              <div style={{ width: colW.responsible, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-white/40 uppercase tracking-widest px-3">Responsável{rh("responsible")}</div>
+              <div style={{ width: colW.startDate, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Início Plan.{rh("startDate")}</div>
+              <div style={{ width: colW.endDate, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Fim Plan.{rh("endDate")}</div>
+              <div style={{ width: colW.actualStart, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-emerald-400/60 uppercase tracking-widest text-center">Início Real{rh("actualStart")}</div>
+              <div style={{ width: colW.actualEnd, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-emerald-400/60 uppercase tracking-widest text-center">Fim Real{rh("actualEnd")}</div>
+              <div style={{ width: colW.estH, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-violet-400/70 uppercase tracking-widest text-center">Est.h{rh("estH")}</div>
+              <div style={{ width: colW.realH, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-violet-400/70 uppercase tracking-widest text-center">Real h{rh("realH")}</div>
+              <div style={{ width: colW.pctEst, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-amber-400/70 uppercase tracking-widest text-center">% Est.{rh("pctEst")}</div>
+              <div style={{ width: colW.pctReal, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">% Real{rh("pctReal")}</div>
+              <div style={{ width: colW.predecessors, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-indigo-400/70 uppercase tracking-widest text-center">Predecessoras{rh("predecessors")}</div>
+              <div style={{ width: colW.budgeted, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-emerald-400/80 uppercase tracking-widest text-center">R$ Orç.{rh("budgeted")}</div>
+              <div style={{ width: colW.actual, flexShrink: 0, position: "relative" }} className="text-[10px] font-black text-orange-400/80 uppercase tracking-widest text-center">R$ Real{rh("actual")}</div>
             </div>
           </div>
 
           {/* Scrollable body — drives header scrollLeft via onListBodyScroll */}
           <div ref={listBodyRef} className="flex-1 min-h-0 overflow-auto" onScroll={onListBodyScroll}>
-          <div style={{ minWidth: LIST_MIN_W }}>
+          <div style={{ minWidth: listMinW }}>
             {listRows.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 gap-3 text-slate-300">
                 <Layers className="w-10 h-10" />
@@ -2051,13 +2108,13 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                       </div>
 
                       {/* EAP — area */}
-                      <div style={{ width: COL_EAP, flexShrink: 0 }} className="flex items-center justify-center">
+                      <div style={{ width: colW.eap, flexShrink: 0 }} className="flex items-center justify-center">
                         <span className="text-[10px] font-bold text-slate-400 font-mono">{row.eap}</span>
                       </div>
 
                       {/* Area name — clickable to expand */}
                       <div
-                        style={{ width: COL_NAME, flexShrink: 0 }}
+                        style={{ width: colW.name, flexShrink: 0 }}
                         className="flex items-center gap-2.5 px-2 cursor-pointer overflow-hidden"
                         onClick={() => toggleArea(row.id)}
                       >
@@ -2065,18 +2122,18 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                         <span className="font-black text-[#0F172A] text-sm truncate">{row.name}</span>
                         <span className="text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0" style={{ background: "#EDE9FE", color: "#7C3AED" }}>Módulo</span>
                       </div>
-                      <div style={{ width: 130, flexShrink: 0 }} className="flex justify-center">
+                      <div style={{ width: colW.status, flexShrink: 0 }} className="flex justify-center">
                         <span className="text-[10px] text-slate-400 font-medium">{row.doneCount}/{row.taskCount}</span>
                       </div>
-                      <div style={{ width: 160, flexShrink: 0 }} />
-                      <div style={{ width: 88, flexShrink: 0 }} />
-                      <div style={{ width: 88, flexShrink: 0 }} />
-                      <div style={{ width: 88, flexShrink: 0 }} />
-                      <div style={{ width: 88, flexShrink: 0 }} />
-                      <div style={{ width: 64, flexShrink: 0 }} />
-                      <div style={{ width: 64, flexShrink: 0 }} />
-                      <div style={{ width: 68, flexShrink: 0 }} />
-                      <div style={{ width: 68, flexShrink: 0 }} className="px-3">
+                      <div style={{ width: colW.responsible, flexShrink: 0 }} />
+                      <div style={{ width: colW.startDate, flexShrink: 0 }} />
+                      <div style={{ width: colW.endDate, flexShrink: 0 }} />
+                      <div style={{ width: colW.actualStart, flexShrink: 0 }} />
+                      <div style={{ width: colW.actualEnd, flexShrink: 0 }} />
+                      <div style={{ width: colW.estH, flexShrink: 0 }} />
+                      <div style={{ width: colW.realH, flexShrink: 0 }} />
+                      <div style={{ width: colW.pctEst, flexShrink: 0 }} />
+                      <div style={{ width: colW.pctReal, flexShrink: 0 }} className="px-3">
                         {row.taskCount > 0 && (
                           <div className="flex flex-col gap-1">
                             <span className="text-[9px] font-bold text-slate-500 text-center">{progress}%</span>
@@ -2086,7 +2143,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                           </div>
                         )}
                       </div>
-                      <div style={{ width: 100, flexShrink: 0 }} />
+                      <div style={{ width: colW.predecessors, flexShrink: 0 }} />
                       {/* Cost totals for the area */}
                       {(() => {
                         const areaTasks = tasks.filter(t => t.wbsAreaId === row.id)
@@ -2095,10 +2152,10 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                         const fmtK = (v: number) => v === 0 ? "—" : v >= 1000 ? `${(v/1000).toFixed(0)}k` : v.toFixed(0)
                         return (
                           <>
-                            <div style={{ width: 84, flexShrink: 0 }} className="text-center px-1">
+                            <div style={{ width: colW.budgeted, flexShrink: 0 }} className="text-center px-1">
                               {totalOrc > 0 && <span className="text-[9px] font-bold text-emerald-600">R$ {fmtK(totalOrc)}</span>}
                             </div>
-                            <div style={{ width: 84, flexShrink: 0 }} className="text-center px-1">
+                            <div style={{ width: colW.actual, flexShrink: 0 }} className="text-center px-1">
                               {totalReal > 0 && (
                                 <span className="text-[9px] font-bold" style={{ color: totalReal > totalOrc && totalOrc > 0 ? "#EF4444" : "#F59E0B" }}>
                                   R$ {fmtK(totalReal)}
@@ -2221,12 +2278,12 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                     </div>
 
                     {/* EAP */}
-                    <div style={{ width: COL_EAP, flexShrink: 0 }} className="flex items-center justify-center">
+                    <div style={{ width: colW.eap, flexShrink: 0 }} className="flex items-center justify-center">
                       <span className="text-[10px] font-bold text-slate-400 font-mono select-all cursor-text">{eap}</span>
                     </div>
 
                     {/* Name */}
-                    <div style={{ width: COL_NAME, flexShrink: 0 }} className="flex items-center gap-1.5 px-1 py-1 overflow-hidden">
+                    <div style={{ width: colW.name, flexShrink: 0 }} className="flex items-center gap-1.5 px-1 py-1 overflow-hidden">
                       {/* Tree indent spacer for subtasks */}
                       {isTarefa && (
                         <div style={{ width: depth * 20, flexShrink: 0, position: "relative", alignSelf: "stretch", display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
@@ -2326,7 +2383,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                     </div>
 
                     {/* Status — dropdown */}
-                    <div style={{ width: 130, flexShrink: 0 }} className="flex justify-center px-1">
+                    <div style={{ width: colW.status, flexShrink: 0 }} className="flex justify-center px-1">
                       <select
                         value={t.status}
                         onChange={(e) => saveTaskField(t.id, { status: e.target.value })}
@@ -2348,7 +2405,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                     </div>
 
                     {/* Responsible */}
-                    <div style={{ width: 160, flexShrink: 0 }} className="px-1">
+                    <div style={{ width: colW.responsible, flexShrink: 0 }} className="px-1">
                       <div className="flex items-center gap-1.5">
                         {t.responsible && inlineAdd?.taskId !== t.id && (
                           <UserAvatar name={t.responsible.name} image={t.responsible.image} size={20} />
@@ -2413,7 +2470,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                     </div>
 
                     {/* Início Planejado */}
-                    <div style={{ width: 88, flexShrink: 0 }} className="px-1">
+                    <div style={{ width: colW.startDate, flexShrink: 0 }} className="px-1">
                       <WorkingDayPicker
                         compact
                         value={t.startDate?.slice(0, 10) ?? ""}
@@ -2423,7 +2480,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                     </div>
 
                     {/* Término Planejado */}
-                    <div style={{ width: 88, flexShrink: 0 }} className="px-1">
+                    <div style={{ width: colW.endDate, flexShrink: 0 }} className="px-1">
                       <WorkingDayPicker
                         compact
                         value={t.endDate?.slice(0, 10) ?? ""}
@@ -2433,7 +2490,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                     </div>
 
                     {/* Início Real */}
-                    <div style={{ width: 88, flexShrink: 0 }} className="px-1">
+                    <div style={{ width: colW.actualStart, flexShrink: 0 }} className="px-1">
                       <WorkingDayPicker
                         compact
                         value={t.actualStart?.slice(0, 10) ?? ""}
@@ -2443,7 +2500,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                     </div>
 
                     {/* Término Real */}
-                    <div style={{ width: 88, flexShrink: 0 }} className="px-1">
+                    <div style={{ width: colW.actualEnd, flexShrink: 0 }} className="px-1">
                       <WorkingDayPicker
                         compact
                         value={t.actualEnd?.slice(0, 10) ?? ""}
@@ -2453,7 +2510,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                     </div>
 
                     {/* Esforço Estimado */}
-                    <div style={{ width: 64, flexShrink: 0 }} className="text-center px-1">
+                    <div style={{ width: colW.estH, flexShrink: 0 }} className="text-center px-1">
                       {editNum?.id === t.id && editNum.field === "estimatedEffort" ? (
                         <input
                           type="number" min={0} step={0.5} autoFocus
@@ -2483,7 +2540,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                     </div>
 
                     {/* Esforço Real */}
-                    <div style={{ width: 64, flexShrink: 0 }} className="text-center px-1">
+                    <div style={{ width: colW.realH, flexShrink: 0 }} className="text-center px-1">
                       {editNum?.id === t.id && editNum.field === "actualEffort" ? (
                         <input
                           type="number" min={0} step={0.5} autoFocus
@@ -2522,7 +2579,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                       const ep = calcEstimatedProgress(t.startDate, t.endDate)
                       const delta = ep !== null ? ep - t.progress : null
                       return (
-                        <div style={{ width: 68, flexShrink: 0 }} className="text-center">
+                        <div style={{ width: colW.pctEst, flexShrink: 0 }} className="text-center">
                           {ep !== null ? (
                             <div className="flex flex-col items-center gap-0.5">
                               <span className="text-[9px] font-bold text-amber-600">{ep}%</span>
@@ -2538,7 +2595,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                     })()}
 
                     {/* % Completo Real */}
-                    <div style={{ width: 68, flexShrink: 0 }} className="px-2">
+                    <div style={{ width: colW.pctReal, flexShrink: 0 }} className="px-2">
                       {editNum?.id === t.id && editNum.field === "progress" ? (
                         <input
                           type="number" min={0} max={100} autoFocus
@@ -2571,7 +2628,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                     </div>
 
                     {/* Predecessoras — editável por EAP */}
-                    <div style={{ width: 100, flexShrink: 0 }} className="flex items-center justify-center px-1">
+                    <div style={{ width: colW.predecessors, flexShrink: 0 }} className="flex items-center justify-center px-1">
                       {editPred?.id === t.id ? (
                         <input
                           autoFocus
@@ -2622,7 +2679,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                     </div>
 
                     {/* R$ Orçado */}
-                    <div style={{ width: 84, flexShrink: 0 }} className="text-center px-1">
+                    <div style={{ width: colW.budgeted, flexShrink: 0 }} className="text-center px-1">
                       {editNum?.id === t.id && editNum.field === "budgetedCost" ? (
                         <input
                           autoFocus
@@ -2651,7 +2708,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                     </div>
 
                     {/* R$ Real */}
-                    <div style={{ width: 84, flexShrink: 0 }} className="text-center px-1">
+                    <div style={{ width: colW.actual, flexShrink: 0 }} className="text-center px-1">
                       {editNum?.id === t.id && editNum.field === "actualCost" ? (
                         <input
                           autoFocus
