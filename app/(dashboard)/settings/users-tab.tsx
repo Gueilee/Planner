@@ -538,13 +538,13 @@ export function UsersTab({ initialUsers, currentUserId }: { initialUsers: User[]
   async function handleDelete(user: User) {
     setDeleteError(null)
     start(async () => {
-      try {
-        await deleteUser(user.id)
-        setUsers((prev) => prev.filter((u) => u.id !== user.id))
-        setDeleteTarget(null)
-      } catch (err: unknown) {
-        setDeleteError(err instanceof Error ? err.message : "Erro ao excluir usuário.")
+      const result = await deleteUser(user.id)
+      if ("error" in result) {
+        setDeleteError(result.error)
+        return
       }
+      setUsers((prev) => prev.filter((u) => u.id !== user.id))
+      setDeleteTarget(null)
     })
   }
 

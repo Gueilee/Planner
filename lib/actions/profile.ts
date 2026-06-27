@@ -155,27 +155,26 @@ export async function toggleUserActive(userId: string, active: boolean) {
 
 // ─── Admin: delete user ───────────────────────────────────────────────────────
 
-export async function deleteUser(userId: string) {
+export async function deleteUser(userId: string): Promise<{ success: true } | { error: string }> {
   const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
-  if (session.user.role !== "ADMIN") throw new Error("Acesso restrito a administradores")
-  if (userId === session.user.id) throw new Error("Você não pode excluir sua própria conta")
+  if (!session?.user)                    return { error: "Não autorizado" }
+  if (session.user.role !== "ADMIN")     return { error: "Acesso restrito a administradores" }
+  if (userId === session.user.id)        return { error: "Você não pode excluir sua própria conta" }
 
   try {
     await db.user.delete({ where: { id: userId } })
+    return { success: true }
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : ""
+    const msg = err instanceof Error ? err.message : String(err)
     if (
       msg.includes("P2003") ||
-      msg.includes("Foreign key constraint") ||
-      msg.includes("FOREIGN KEY constraint")
+      msg.toLowerCase().includes("foreign key") ||
+      msg.toLowerCase().includes("constraint")
     ) {
-      throw new Error("FK_CONSTRAINT: Este usuário possui projetos ou tarefas vinculadas. Desative-o em vez de excluir.")
+      return { error: "FK_CONSTRAINT: Este usuário possui projetos ou tarefas vinculadas. Desative-o em vez de excluir." }
     }
-    throw new Error("Erro ao excluir usuário. Tente novamente.")
+    return { error: "Erro ao excluir usuário. Tente novamente." }
   }
-
-  return { success: true }
 }
 
 // ─── Change password ──────────────────────────────────────────────────────────
