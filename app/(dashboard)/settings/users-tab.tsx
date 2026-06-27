@@ -434,9 +434,17 @@ function PasswordModal({ userId, userName, onClose }: { userId: string; userName
 
 // ─── Delete confirm modal ─────────────────────────────────────────────────────
 
-function DeleteModal({ user, onConfirm, onClose, isPending }: {
-  user: User; onConfirm: () => void; onClose: () => void; isPending: boolean
+function DeleteModal({ user, onConfirm, onClose, onDeactivate, isPending, error }: {
+  user: User
+  onConfirm: () => void
+  onClose: () => void
+  onDeactivate: () => void
+  isPending: boolean
+  error: string | null
 }) {
+  const isFkError = error?.startsWith("FK_CONSTRAINT:")
+  const errorMsg  = error?.replace("FK_CONSTRAINT: ", "") ?? null
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.4)" }} onClick={onClose}>
       <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -449,17 +457,33 @@ function DeleteModal({ user, onConfirm, onClose, isPending }: {
             <p className="text-[11px] text-red-500 mt-0.5">Esta ação não pode ser desfeita</p>
           </div>
         </div>
-        <p className="text-sm text-slate-600 mb-5">
+        <p className="text-sm text-slate-600 mb-4">
           Tem certeza que deseja excluir <span className="font-bold text-[#0F172A]">{user.name}</span>?<br />
           Todos os dados vinculados a este usuário serão removidos.
         </p>
-        <div className="flex gap-2">
-          <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl text-xs font-semibold text-slate-500 bg-slate-50 border border-slate-200 hover:bg-slate-100">Cancelar</button>
-          <button type="button" onClick={onConfirm} disabled={isPending} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition-colors disabled:opacity-50">
-            {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-            Excluir
-          </button>
-        </div>
+        {errorMsg && (
+          <div className="mb-4 flex items-start gap-2 px-3 py-2.5 rounded-xl bg-red-50 border border-red-100 text-xs text-red-600 font-medium">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
+        {isFkError ? (
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl text-xs font-semibold text-slate-500 bg-slate-50 border border-slate-200 hover:bg-slate-100">Fechar</button>
+            <button type="button" onClick={onDeactivate} disabled={isPending} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold text-white bg-amber-500 hover:bg-amber-600 transition-colors disabled:opacity-50">
+              {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Power className="w-3.5 h-3.5" />}
+              Desativar
+            </button>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl text-xs font-semibold text-slate-500 bg-slate-50 border border-slate-200 hover:bg-slate-100">Cancelar</button>
+            <button type="button" onClick={onConfirm} disabled={isPending} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition-colors disabled:opacity-50">
+              {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+              Excluir
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -475,6 +499,7 @@ export function UsersTab({ initialUsers, currentUserId }: { initialUsers: User[]
   const [editUser,   setEditUser]  = useState<User | null>(null)
   const [passwordUser, setPasswordUser] = useState<User | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null)
+  const [deleteError,  setDeleteError]  = useState<string | null>(null)
   const [isPending,  start]        = useTransition()
 
   // Derived stats
@@ -511,12 +536,28 @@ export function UsersTab({ initialUsers, currentUserId }: { initialUsers: User[]
   }
 
   async function handleDelete(user: User) {
+    setDeleteError(null)
     start(async () => {
       try {
         await deleteUser(user.id)
         setUsers((prev) => prev.filter((u) => u.id !== user.id))
         setDeleteTarget(null)
-      } catch { /* ignore */ }
+      } catch (err: unknown) {
+        setDeleteError(err instanceof Error ? err.message : "Erro ao excluir usuário.")
+      }
+    })
+  }
+
+  async function handleDeactivateInstead(user: User) {
+    setDeleteError(null)
+    start(async () => {
+      try {
+        await toggleUserActive(user.id, false)
+        setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, active: false } : u))
+        setDeleteTarget(null)
+      } catch (err: unknown) {
+        setDeleteError(err instanceof Error ? err.message : "Erro ao desativar usuário.")
+      }
     })
   }
 
@@ -675,7 +716,14 @@ export function UsersTab({ initialUsers, currentUserId }: { initialUsers: User[]
         <PasswordModal userId={passwordUser.id} userName={passwordUser.name} onClose={() => setPasswordUser(null)} />
       )}
       {deleteTarget && (
-        <DeleteModal user={deleteTarget} onConfirm={() => handleDelete(deleteTarget)} onClose={() => setDeleteTarget(null)} isPending={isPending} />
+        <DeleteModal
+          user={deleteTarget}
+          onConfirm={() => handleDelete(deleteTarget)}
+          onClose={() => { setDeleteTarget(null); setDeleteError(null) }}
+          onDeactivate={() => handleDeactivateInstead(deleteTarget)}
+          isPending={isPending}
+          error={deleteError}
+        />
       )}
     </div>
   )

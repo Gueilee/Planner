@@ -161,8 +161,21 @@ export async function deleteUser(userId: string) {
   if (session.user.role !== "ADMIN") throw new Error("Acesso restrito a administradores")
   if (userId === session.user.id) throw new Error("Você não pode excluir sua própria conta")
 
-  await db.user.delete({ where: { id: userId } })
-  revalidatePath("/settings")
+  try {
+    await db.user.delete({ where: { id: userId } })
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : ""
+    if (
+      msg.includes("P2003") ||
+      msg.includes("Foreign key constraint") ||
+      msg.includes("FOREIGN KEY constraint")
+    ) {
+      throw new Error("FK_CONSTRAINT: Este usuário possui projetos ou tarefas vinculadas. Desative-o em vez de excluir.")
+    }
+    throw new Error("Erro ao excluir usuário. Tente novamente.")
+  }
+
+  try { revalidatePath("/settings") } catch { /* render errors don't affect the delete */ }
   return { success: true }
 }
 
