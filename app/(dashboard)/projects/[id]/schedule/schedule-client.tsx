@@ -283,11 +283,6 @@ function TaskForm({ mode, initial, areas, members, allTasks, onSave, onDelete, o
     dependencies:    initial.dependencies    ?? [] as string[],
   })
 
-  // ─────────────────────────────────────────────────────────────────────────
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-
   const [depSearch, setDepSearch] = useState("")
 
   const upd = <K extends keyof typeof form>(k: K, v: typeof form[K]) =>
