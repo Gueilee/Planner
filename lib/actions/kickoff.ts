@@ -134,26 +134,7 @@ export async function registerKickOff(data: KickOffData) {
       })
     }
 
-    // 2. Create WBS areas + tasks from EAP (only if project has none yet)
-    const existingAreas = await tx.wbsArea.count({ where: { projectId: data.projectId } })
-    if (existingAreas === 0) {
-      for (let i = 0; i < data.eapAreas.length; i++) {
-        const area = data.eapAreas[i]
-        const wbs = await tx.wbsArea.create({
-          data: { projectId: data.projectId, name: area.name, color: area.color, order: i },
-        })
-        for (let j = 0; j < area.tasks.length; j++) {
-          const t = area.tasks[j]
-          if (t.text.trim()) {
-            await tx.scheduleTask.create({
-              data: { projectId: data.projectId, wbsAreaId: wbs.id, title: t.text, status: "PLANNING", order: j },
-            })
-          }
-        }
-      }
-    }
-
-    // 3. Create Meeting record
+    // 2. Create Meeting record
     const meeting = await tx.meeting.create({
       data: {
         projectId: data.projectId,
