@@ -71,7 +71,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user, trigger }) {
+    async jwt({ token, user, trigger, session: updateData }) {
       // First login: persist all fields
       if (user) {
         token.id             = user.id ?? token.sub ?? ""
@@ -81,24 +81,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.name           = user.name ?? null
         token.organizationId = (user as { organizationId?: string }).organizationId ?? "org_vendemmia"
       }
-      // Session update triggered (e.g. after profile save): refresh from DB
       if (trigger === "update" && token.id) {
-        try {
-          const turso = getTursoClient()
-          const res = await turso.execute({
-            sql:  `SELECT name, image, department FROM "User" WHERE id = ? LIMIT 1`,
-            args: [token.id],
-          })
-          await turso.close()
-          if (res.rows.length > 0) {
-            const row = res.rows[0]
-            token.name       = (row.name       as string | null) ?? token.name
-            token.department = (row.department as string | null) ?? null
-            // Sempre armazena o path do endpoint, não o base64, para não inflar o JWT
-            const rawImg = row.image as string | null
-            token.image  = rawImg ? `/api/avatar/${token.id}` : null
-          }
-        } catch { /* best effort */ }
+        const payload = updateData as Record<string, unknown> | null
+        // Root-admin org switch — update organizationId without DB round-trip
+        if (payload?.switchToOrgId && token.email === "gppereira@vendemmia.com.br") {
+          token.organizationId = payload.switchToOrgId as string
+        } else {
+          // Regular profile refresh from DB (e.g. after avatar/name save)
+          try {
+            const turso = getTursoClient()
+            const res = await turso.execute({
+              sql:  `SELECT name, image, department FROM "User" WHERE id = ? LIMIT 1`,
+              args: [token.id],
+            })
+            await turso.close()
+            if (res.rows.length > 0) {
+              const row = res.rows[0]
+              token.name       = (row.name       as string | null) ?? token.name
+              token.department = (row.department as string | null) ?? null
+              const rawImg = row.image as string | null
+              token.image  = rawImg ? `/api/avatar/${token.id}` : null
+            }
+          } catch { /* best effort */ }
+        }
       }
       return token
     },

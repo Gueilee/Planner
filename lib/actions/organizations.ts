@@ -164,6 +164,20 @@ export async function toggleUserActiveInOrg(userId: string): Promise<{ active: b
   return { active }
 }
 
+// ─── Org switcher (root admin only) ──────────────────────────────────────────
+
+export type OrgSwitchItem = { id: string; name: string; slug: string; active: boolean }
+
+export async function getOrgsForSwitch(): Promise<OrgSwitchItem[]> {
+  const session = await auth()
+  if (session?.user?.email !== "gppereira@vendemmia.com.br") throw new Error("Acesso restrito")
+
+  return db.organization.findMany({
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, slug: true, active: true },
+  })
+}
+
 export async function createUserInOrganization(data: {
   organizationId: string
   name: string
