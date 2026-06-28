@@ -1386,8 +1386,8 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
         onDragStart={(e) => e.stopPropagation()}
         draggable={false}
         title="Arrastar para redimensionar"
-        style={{ position: "absolute", right: -3, top: 0, bottom: 0, width: 7, cursor: "col-resize", zIndex: 20, borderRight: "2px solid transparent" }}
-        className="hover:border-r-white/40 transition-colors"
+        style={{ position: "absolute", right: -4, top: "20%", bottom: "20%", width: 9, cursor: "col-resize", zIndex: 20, borderRight: "2px solid rgba(255,255,255,0.18)", borderRadius: 2 }}
+        className="hover:border-r-white/70 transition-colors"
       />
     )
   }
@@ -2123,9 +2123,9 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
 
           {/* Header — overflow hidden, synced via JS to body scrollLeft */}
           <div ref={listHeaderRef} style={{ overflowX: "hidden", overflowY: "visible", flexShrink: 0 }}>
-            <div className="flex items-center border-b border-slate-100 bg-[#0F172A]" style={{ height: 44, minWidth: listMinW }}>
+            <div className="flex items-center border-b border-white/10 bg-[#0F172A]" style={{ height: 44, minWidth: listMinW }}>
               <div style={{ width: 24, flexShrink: 0 }} />
-              <div style={{ width: 84, flexShrink: 0 }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Ações</div>
+              <div style={{ width: 84, flexShrink: 0, borderRight: "1px solid rgba(255,255,255,0.10)" }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center h-full flex items-center justify-center">Ações</div>
               {colOrder.map(col => {
                 const { label, cls } = COL_HEADER_META[col]
                 const isOver = dragColOver === col && dragColFrom !== null
@@ -2144,7 +2144,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                       position: "relative",
                       opacity: isDrag ? 0.4 : 1,
                       background: isOver ? "rgba(36,99,255,0.22)" : undefined,
-                      borderLeft: isOver ? "2px solid #2463FF" : undefined,
+                      borderLeft: isOver ? "2px solid #2463FF" : "1px solid rgba(255,255,255,0.08)",
                       cursor: "grab",
                       userSelect: "none",
                       transition: "background 0.1s",
