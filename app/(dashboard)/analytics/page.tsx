@@ -2,6 +2,7 @@ import { auth } from "@/auth"
 import { db } from "@/lib/db"
 import { redirect } from "next/navigation"
 import { differenceInDays } from "date-fns"
+import { computeProjectProgress } from "@/lib/utils/project-progress"
 import { ProjectStatus } from "@/lib/generated/prisma/enums"
 import { AnalyticsClient } from "./analytics-client"
 
@@ -64,13 +65,14 @@ export default async function AnalyticsPage() {
         sponsor: { select: { name: true } },
         tasks: {
           select: {
-            status: true, progress: true,
+            status: true, progress: true, wbsAreaId: true,
             startDate: true, endDate: true,
             budgetedCost: true, actualCost: true,
             responsible: { select: { name: true } },
           },
         },
-        risks: { select: { status: true } },
+        risks:    { select: { status: true } },
+        wbsAreas: { select: { id: true, weight: true }, orderBy: { order: "asc" } },
       },
     }),
     db.user.findMany({
@@ -84,11 +86,9 @@ export default async function AnalyticsPage() {
     const tasks   = p.tasks
     const skipKpi = SKIP_KPI_STATUSES.has(p.status)
 
-    // ── Progresso real: média do progresso de todas as tarefas ────────────────
-    // Tarefas concluídas contam como 100%, pendentes como seu % atual
     const progress =
       tasks.length > 0
-        ? Math.round(tasks.reduce((s, t) => s + t.progress, 0) / tasks.length)
+        ? computeProjectProgress(tasks, p.wbsAreas)
         : p.status === "COMPLETED" ? 100 : 0
 
     // ── Desvio de prazo ───────────────────────────────────────────────────────

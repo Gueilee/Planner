@@ -2,6 +2,7 @@ import { auth } from "@/auth"
 import { db } from "@/lib/db"
 import { redirect } from "next/navigation"
 import { differenceInDays, startOfWeek, eachWeekOfInterval, isAfter, isBefore, addWeeks } from "date-fns"
+import { computeProjectProgress } from "@/lib/utils/project-progress"
 import { ProjectStatus } from "@/lib/generated/prisma/enums"
 import { ReportClient, type ProjectSlideData } from "./report-client"
 
@@ -30,7 +31,7 @@ export default async function StatusReportPage() {
           title: true, status: true, progress: true,
           startDate: true, endDate: true,
           budgetedCost: true, actualCost: true,
-          completedAt: true,
+          completedAt: true, wbsAreaId: true,
           responsible: { select: { name: true, image: true } },
           _count: { select: { subtasks: true } },
         },
@@ -73,8 +74,8 @@ export default async function StatusReportPage() {
       (t.status === "IN_PROGRESS" && t.endDate && new Date(t.endDate) < today)
     )
     const planning   = leafTasks.filter((t) => t.status === "PLANNING")
-    const avgProgress = total > 0
-      ? Math.round(leafTasks.reduce((s, t) => s + t.progress, 0) / total)
+    const avgProgress = tasks.length > 0
+      ? computeProjectProgress(tasks, p.wbsAreas)
       : (p.status === "COMPLETED" ? 100 : 0)
 
     // IDC

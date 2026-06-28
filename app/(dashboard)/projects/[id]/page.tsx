@@ -21,6 +21,7 @@ import Link from "next/link"
 import { format, differenceInDays } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { computeReportStatus } from "@/lib/utils/report-status"
+import { computeProjectProgress } from "@/lib/utils/project-progress"
 import { SCurveTab } from "./s-curve/s-curve-tab"
 
 const RISK_COLORS: Record<string, string> = {
@@ -161,7 +162,7 @@ export default async function ProjectDetailPage({
   const userRole   = session?.user?.role ?? ""
   const tasksDone  = project.tasks.filter((t) => t.status === "COMPLETED").length
   const tasksTotal = project.tasks.length
-  const progress   = tasksTotal > 0 ? avg(project.tasks.map((t) => t.progress)) : (project.status === "COMPLETED" ? 100 : 0)
+  const progress   = tasksTotal > 0 ? computeProjectProgress(project.tasks, project.wbsAreas) : (project.status === "COMPLETED" ? 100 : 0)
   const highRisks  = project.risks.filter((r) => ["HIGH", "CRITICAL"].includes(r.status)).length
   const daysLeft   = project.expectedEnd
     ? differenceInDays(project.expectedEnd, new Date())
