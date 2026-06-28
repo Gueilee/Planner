@@ -120,6 +120,7 @@ enum BenefitCategory {
   FINANCIAL
   OPERATIONAL
   STRATEGIC
+  COMPLIANCE
 }
 
 enum BenefitType {
@@ -129,19 +130,46 @@ enum BenefitType {
   OPEX_REDUCTION
   ANNUAL_SAVINGS
   MONTHLY_SAVINGS
+  WORKING_CAPITAL
+  MARGIN_INCREASE
+  CAPEX_AVOIDANCE
+  INVENTORY_REDUCTION
+  FINE_REDUCTION
+  LOSS_REDUCTION
   // Operational
   HOURS_SAVED
   PRODUCTIVITY_GAIN
   PROCESS_AUTOMATION
   REWORK_REDUCTION
   TIME_REDUCTION
+  LEAD_TIME_REDUCTION
+  MANUAL_REDUCTION
+  SPREADSHEET_ELIMINATION
+  ERROR_REDUCTION
+  SLA_IMPROVEMENT
+  CAPACITY_INCREASE
+  TICKET_REDUCTION
+  INCIDENT_REDUCTION
+  PROCESS_STANDARDIZATION
   // Strategic
   CUSTOMER_EXPERIENCE
   RISK_REDUCTION
-  COMPLIANCE
   QUALITY
   GOVERNANCE
   USER_SATISFACTION
+  NEW_SERVICE
+  NEW_PRODUCT
+  MARKET_EXPANSION
+  DIGITAL_TRANSFORMATION
+  INNOVATION
+  BRAND_IMAGE
+  COMPETITIVENESS
+  SUSTAINABILITY
+  // Compliance
+  COMPLIANCE
+  LGPD
+  SECURITY
+  REGULATORY
   // Other
   OTHER
 }
@@ -152,11 +180,20 @@ enum BenefitFrequency {
   ANNUAL
 }
 
+enum BenefitPeriodicity {
+  MONTHLY
+  QUARTERLY
+  SEMIANNUAL
+  ANNUAL
+}
+
 enum BenefitStatus {
   PLANNED
   IN_PROGRESS
   REALIZED
+  PARTIAL
   NOT_REALIZED
+  CANCELLED
 }
 
 // ─────────────────────────────────────────────
@@ -189,7 +226,9 @@ model User {
   notificationPreference  NotificationPreference?
   lessonsLearned          LessonLearned[]
   scheduleTemplates       ScheduleTemplate[]
-  createdBenefits         ProjectBenefit[]
+  createdBenefits         ProjectBenefit[]        @relation("BenefitCreator")
+  responsibleBenefits     ProjectBenefit[]        @relation("BenefitResponsible")
+  benefitAuditLogs        BenefitAuditLog[]
   createdMeasurements     BenefitMeasurement[]
   timeEntries             TimeEntry[]
   baselines               ProjectBaseline[]
@@ -658,27 +697,44 @@ model ScheduleTemplateTask {
 // ─────────────────────────────────────────────
 
 model ProjectBenefit {
-  id              String           @id @default(cuid())
+  id              String             @id @default(cuid())
   projectId       String
   category        BenefitCategory
   type            BenefitType
+  name            String             @default("")
   description     String
-  unit            String           @default("R$")
-  plannedValue    Float            @default(0)
-  realizedValue   Float            @default(0)
-  frequency       BenefitFrequency @default(ONCE)
+  indicator       String?
+  formula         String?
+  unit            String             @default("R$")
+  plannedValue    Float              @default(0)
+  realizedValue   Float              @default(0)
+  frequency       BenefitFrequency   @default(ONCE)
+  periodicity     BenefitPeriodicity @default(MONTHLY)
+  monitoringMonths Int               @default(12)
   baselineDate    DateTime?
+  targetDate      DateTime?
   realizationDate DateTime?
   evidence        String?
-  status          BenefitStatus    @default(PLANNED)
+  notes           String?
+  status          BenefitStatus      @default(PLANNED)
   customTypeName  String?
+  responsibleId   String?
+  // Operational time calculation helpers
+  timeBeforeMinutes  Float?
+  timeAfterMinutes   Float?
+  executionsPerMonth Float?
+  hourlyRate         Float?
+  // Strategic weight (0–100) for IVG scoring
+  strategicWeight Float              @default(0)
   createdById     String
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
 
   project      Project              @relation(fields: [projectId],   references: [id], onDelete: Cascade)
-  createdBy    User                 @relation(fields: [createdById], references: [id])
+  createdBy    User                 @relation("BenefitCreator",      fields: [createdById],   references: [id])
+  responsible  User?                @relation("BenefitResponsible",  fields: [responsibleId], references: [id])
   measurements BenefitMeasurement[]
+  auditLogs    BenefitAuditLog[]
   attachments  Attachment[]
 }
 
@@ -693,6 +749,22 @@ model BenefitMeasurement {
 
   benefit   ProjectBenefit @relation(fields: [benefitId],   references: [id], onDelete: Cascade)
   createdBy User           @relation(fields: [createdById], references: [id])
+}
+
+model BenefitAuditLog {
+  id          String   @id @default(cuid())
+  benefitId   String
+  userId      String
+  action      String
+  fieldName   String?
+  oldValue    String?
+  newValue    String?
+  reason      String?
+  comment     String?
+  createdAt   DateTime @default(now())
+
+  benefit ProjectBenefit @relation(fields: [benefitId], references: [id], onDelete: Cascade)
+  user    User           @relation(fields: [userId],    references: [id])
 }
 
 // ─────────────────────────────────────────────
