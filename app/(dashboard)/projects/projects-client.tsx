@@ -17,7 +17,8 @@ export type ProjectRow = {
   projectArea: string
   requestNumber: number | null
   members: { id: string; user: { name: string; image: string | null } }[]
-  tasks: { status: string; progress: number }[]
+  tasks: { status: string; progress: number; wbsAreaId: string | null }[]
+  wbsAreas: { id: string; weight: number | null }[]
   _count: { tasks: number; risks: number }
 }
 
@@ -74,10 +75,23 @@ function avg(arr: number[]) {
 }
 
 function projectProgress(p: ProjectRow): number {
-  if (p.tasks.length > 0) return avg(p.tasks.map((t) => t.progress))
-  if (p.status === "COMPLETED") return 100
-  if (p.status === "PLANNING")  return 0
-  return -1
+  if (p.tasks.length === 0) {
+    if (p.status === "COMPLETED") return 100
+    if (p.status === "PLANNING")  return 0
+    return -1
+  }
+  const hasWeights = p.wbsAreas.some((a) => a.weight !== null && a.weight > 0)
+  if (!hasWeights) return avg(p.tasks.map((t) => t.progress))
+  const equalW = 100 / p.wbsAreas.length
+  let weighted = 0; let total = 0
+  for (const area of p.wbsAreas) {
+    const areaTasks = p.tasks.filter((t) => t.wbsAreaId === area.id)
+    if (areaTasks.length === 0) continue
+    const areaProgress = avg(areaTasks.map((t) => t.progress))
+    const w = area.weight ?? equalW
+    weighted += (w / 100) * areaProgress; total += w
+  }
+  return total > 0 ? Math.round(Math.min(100, (weighted / total) * 100)) : 0
 }
 
 // ─── Area config ─────────────────────────────────────────────────────────────

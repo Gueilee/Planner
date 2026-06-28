@@ -21,7 +21,7 @@ import {
 } from "lucide-react"
 import { SCurveClient, type SCurveData } from "../s-curve/s-curve-client"
 import {
-  createTask, updateTask, deleteTask, createArea, deleteArea, renameArea, convertUngroupedToArea,
+  createTask, updateTask, deleteTask, createArea, deleteArea, renameArea, convertUngroupedToArea, updateAreaWeight,
   reorderAreas, reorderTasks,
   getTaskAttachments, addTaskAttachments,
   type AttachmentUpload,
@@ -110,10 +110,10 @@ type Task = {
   _count: { comments: number; attachments: number }
 }
 type FlatTask = Task & { depth: number; hasChildren: boolean }
-type Area   = { id: string; name: string; color: string | null }
+type Area   = { id: string; name: string; color: string | null; weight: number | null }
 type Member = { id: string; name: string; department: string | null }
 
-type ARow = { kind: "area"; id: string; name: string; color: string | null; eap: string; taskCount: number; doneCount: number }
+type ARow = { kind: "area"; id: string; name: string; color: string | null; eap: string; taskCount: number; doneCount: number; weight: number | null }
 type TRow = { kind: "task"; task: Task; eap: string; depth: number; hasChildren: boolean; areaColor: string | null }
 type Row = ARow | TRow
 
@@ -222,7 +222,7 @@ function buildListRows(
     const eapArea = `${aIdx + 1}`
     const areaTasks = tasks.filter((t) => t.wbsAreaId === area.id)
     const doneCount = areaTasks.filter((t) => t.status === "COMPLETED").length
-    result.push({ kind: "area", id: area.id, name: area.name, color: area.color, eap: eapArea, taskCount: areaTasks.length, doneCount })
+    result.push({ kind: "area", id: area.id, name: area.name, color: area.color, eap: eapArea, taskCount: areaTasks.length, doneCount, weight: area.weight ?? null })
     // Quando filtrando: auto-expande área que contenha tarefas visíveis
     const isExpanded = visibleIds !== null
       ? areaTasks.some((t) => visibleIds.has(t.id))
@@ -237,7 +237,7 @@ function buildListRows(
   if (ungrouped.length > 0) {
     const ugId = "__ungrouped__"
     const ugEap = `${areas.length + 1}`
-    result.push({ kind: "area", id: ugId, name: "Sem Área", color: null, eap: ugEap, taskCount: ungrouped.length, doneCount: ungrouped.filter((t) => t.status === "COMPLETED").length })
+    result.push({ kind: "area", id: ugId, name: "Sem Área", color: null, eap: ugEap, taskCount: ungrouped.length, doneCount: ungrouped.filter((t) => t.status === "COMPLETED").length, weight: null })
     const ugExpanded = visibleIds !== null
       ? ungrouped.some((t) => visibleIds.has(t.id))
       : expandedAreas.has(ugId)
@@ -1307,8 +1307,10 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
 
   // List view state
   const [expandedAreas, setExpandedAreas] = useState<Set<string>>(() => new Set(initialAreas.map((a) => a.id)))
-  const [editingAreaId, setEditingAreaId]     = useState<string | null>(null)
+  const [editingAreaId, setEditingAreaId]       = useState<string | null>(null)
   const [editingAreaValue, setEditingAreaValue] = useState("")
+  const [editingWeightId, setEditingWeightId]   = useState<string | null>(null)
+  const [editingWeightValue, setEditingWeightValue] = useState<string>("")
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(() => {
     const parentIds = new Set(initialTasks.filter((t) => t.parentId).map((t) => t.parentId!))
     return new Set(initialTasks.filter((t) => parentIds.has(t.id)).map((t) => t.id))
@@ -1804,7 +1806,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
       start(async () => {
         const result = await convertUngroupedToArea(trimmed, project.id)
         if (result) {
-          setAreas((prev) => [...prev, { id: result.id, name: result.name, color: result.color }])
+          setAreas((prev) => [...prev, { id: result.id, name: result.name, color: result.color, weight: null }])
           setTasks((prev) => prev.map((t) => t.wbsAreaId === null ? { ...t, wbsAreaId: result.id } : t))
         }
       })
@@ -1815,6 +1817,14 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
     if (!current || trimmed === current.name) return
     setAreas((prev) => prev.map((a) => a.id === areaId ? { ...a, name: trimmed } : a))
     start(async () => { await renameArea(areaId, trimmed, project.id) })
+  }
+
+  function handleUpdateWeight(areaId: string, rawValue: string) {
+    setEditingWeightId(null)
+    const num = parseFloat(rawValue.replace(",", "."))
+    const weight = isNaN(num) ? null : Math.round(Math.min(100, Math.max(0, num)) * 10) / 10
+    setAreas((prev) => prev.map((a) => a.id === areaId ? { ...a, weight } : a))
+    start(async () => { await updateAreaWeight(areaId, weight, project.id) })
   }
 
   function saveTaskField(taskId: string, data: Record<string, unknown>) {
@@ -1953,6 +1963,25 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
 
   const completedCount = tasks.filter((t) => t.status === "COMPLETED").length
 
+  // ── Weighted project progress ──────────────────────────────────────────────
+  const { weightedProgress, totalWeight, hasCustomWeights } = useMemo(() => {
+    if (areas.length === 0) return { weightedProgress: 0, totalWeight: 0, hasCustomWeights: false }
+    const hasCustom = areas.some((a) => a.weight !== null && a.weight > 0)
+    const equalW    = 100 / areas.length
+    let weighted = 0
+    let total    = 0
+    for (const area of areas) {
+      const areaTasks = tasks.filter((t) => t.wbsAreaId === area.id)
+      if (areaTasks.length === 0) continue
+      const areaProgress = areaTasks.reduce((s, t) => s + (t.progress ?? 0), 0) / areaTasks.length
+      const w = hasCustom ? (area.weight ?? 0) : equalW
+      weighted += (w / 100) * areaProgress
+      total    += w
+    }
+    const normalized = total > 0 ? Math.round(Math.min(100, (weighted / total) * 100)) : 0
+    return { weightedProgress: normalized, totalWeight: Math.round(total * 10) / 10, hasCustomWeights: hasCustom }
+  }, [areas, tasks])
+
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full" style={{ background: "#F8FAFC" }}>
@@ -2011,6 +2040,16 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
             <span>{tasks.length} atividades</span>
             <span className="text-slate-200">·</span>
             <span>{completedCount} concluídas</span>
+            <span className="text-slate-200">·</span>
+            <div className="flex items-center gap-1.5">
+              <div className="w-24 h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                <div style={{ width: `${weightedProgress}%`, height: "100%", background: "linear-gradient(90deg,#7B2FBE,#2463FF)", transition: "width 0.4s" }} />
+              </div>
+              <span className="font-bold" style={{ color: "#7B2FBE" }}>{weightedProgress}%</span>
+              {hasCustomWeights && Math.abs(totalWeight - 100) > 1 && (
+                <span className="text-[10px] text-amber-500 font-semibold" title="A soma dos pesos não é 100%">⚠ {totalWeight}%</span>
+              )}
+            </div>
             {filterResponsible && filterVisibleIds !== null && (
               <>
                 <span className="text-slate-200">·</span>
@@ -2294,6 +2333,33 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                                 <span className="font-black text-[#0F172A] text-sm truncate">{row.name}</span>
                               )}
                               <span className="text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0" style={{ background: "#EDE9FE", color: "#7C3AED" }}>Módulo</span>
+                              {/* Weight badge — inline editable */}
+                              {row.id !== "__ungrouped__" && (
+                                editingWeightId === row.id ? (
+                                  <input
+                                    autoFocus type="number" min="0" max="100" step="1"
+                                    value={editingWeightValue}
+                                    onChange={(e) => setEditingWeightValue(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") { e.preventDefault(); handleUpdateWeight(row.id, editingWeightValue) }
+                                      if (e.key === "Escape") setEditingWeightId(null)
+                                    }}
+                                    onBlur={() => handleUpdateWeight(row.id, editingWeightValue)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="w-12 text-[10px] text-center font-bold bg-amber-50 border-b-2 border-amber-400 outline-none shrink-0 rounded"
+                                    style={{ color: "#D97706" }}
+                                  />
+                                ) : (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setEditingWeightId(row.id); setEditingWeightValue(row.weight !== null ? String(row.weight) : "") }}
+                                    title={`Peso do módulo: ${row.weight !== null ? row.weight + "%" : "clique para definir"}`}
+                                    className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full font-bold shrink-0 transition-all hover:scale-105"
+                                    style={{ background: row.weight !== null ? "#FEF3C7" : "#F1F5F9", color: row.weight !== null ? "#D97706" : "#94A3B8" }}
+                                  >
+                                    {row.weight !== null ? `${row.weight}%` : "—%"}
+                                  </button>
+                                )
+                              )}
                             </div>
                           ),
                           status: <div style={{ width: colW.status, flexShrink: 0 }} className="flex justify-center"><span className="text-[10px] text-slate-400 font-medium">{row.doneCount}/{row.taskCount}</span></div>,
@@ -2819,6 +2885,18 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                               style={{ background: areaColor ? `${areaColor}20` : "#EDE9FE", color: areaColor ?? "#7C3AED" }}>
                               {row.doneCount}/{row.taskCount} · {progress}%
                             </span>
+                            {areaId !== "__ungrouped__" && (() => {
+                              const areaObj = areas.find((a) => a.id === areaId)
+                              return areaObj ? (
+                                <span
+                                  className="text-[9px] px-1.5 py-0.5 rounded-full font-bold shrink-0"
+                                  style={{ background: areaObj.weight !== null ? "#FEF3C7" : "#F1F5F9", color: areaObj.weight !== null ? "#D97706" : "#94A3B8" }}
+                                  title="Peso do módulo"
+                                >
+                                  {areaObj.weight !== null ? `${areaObj.weight}%` : "—%"}
+                                </span>
+                              ) : null
+                            })()}
                           </div>
 
                           {/* Placeholder columns */}

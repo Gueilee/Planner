@@ -406,6 +406,13 @@ export async function renameArea(areaId: string, name: string, projectId: string
   revalidatePath(`/projects/${projectId}/schedule`)
 }
 
+export async function updateAreaWeight(areaId: string, weight: number | null, projectId: string) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+  await db.wbsArea.update({ where: { id: areaId }, data: { weight } })
+  revalidatePath(`/projects/${projectId}/schedule`)
+}
+
 export async function convertUngroupedToArea(name: string, projectId: string) {
   const session = await auth()
   if (!session?.user) throw new Error("Não autorizado")

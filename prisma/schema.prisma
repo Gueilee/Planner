@@ -305,6 +305,7 @@ model WbsArea {
   description String?
   color       String?
   order       Int     @default(0)
+  weight      Float?  // 0-100 — peso do módulo no progresso ponderado do projeto
 
   project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   tasks   ScheduleTask[]

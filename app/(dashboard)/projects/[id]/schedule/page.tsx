@@ -46,7 +46,7 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
   return (
     <ScheduleClient
       project={{ id: project.id, title: project.title, status: project.status }}
-      initialAreas={areas.map((a) => ({ id: a.id, name: a.name, color: a.color }))}
+      initialAreas={areas.map((a) => ({ id: a.id, name: a.name, color: a.color, weight: a.weight ?? null }))}
       initialTasks={serializedTasks}
       members={allUsers}
     />

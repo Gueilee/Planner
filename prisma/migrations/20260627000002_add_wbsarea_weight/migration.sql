@@ -1,0 +1,1 @@
+ALTER TABLE "WbsArea" ADD COLUMN "weight" REAL;
