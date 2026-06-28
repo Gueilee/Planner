@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useTransition } from "react"
-import { ChevronDown, ChevronRight, Pencil, KeyRound, UserX, UserCheck, X, Check } from "lucide-react"
+import { useState, useTransition, useRef } from "react"
+import { ChevronDown, ChevronRight, Pencil, KeyRound, UserX, UserCheck, X, Check, Camera } from "lucide-react"
 import {
   createOrganization,
   updateOrganization,
@@ -9,11 +9,34 @@ import {
   createUserInOrganization,
   getUsersByOrg,
   updateUserInOrg,
+  updateUserAvatarInOrg,
   resetUserPassword,
   toggleUserActiveInOrg,
   type OrgRow,
   type OrgUserRow,
 } from "@/lib/actions/organizations"
+
+function imageToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const objectUrl = URL.createObjectURL(file)
+    img.onload = () => {
+      const MAX = 80
+      const ratio = Math.min(MAX / img.width, MAX / img.height, 1)
+      const w = Math.max(1, Math.round(img.width  * ratio))
+      const h = Math.max(1, Math.round(img.height * ratio))
+      const canvas = document.createElement("canvas")
+      canvas.width = w; canvas.height = h
+      const ctx = canvas.getContext("2d")
+      if (!ctx) { reject(new Error("Canvas não suportado")); return }
+      ctx.drawImage(img, 0, 0, w, h)
+      URL.revokeObjectURL(objectUrl)
+      resolve(canvas.toDataURL("image/jpeg", 0.78))
+    }
+    img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error("Falha ao ler imagem")) }
+    img.src = objectUrl
+  })
+}
 
 const ROLES = ["ADMIN", "PROJECT_MANAGER", "PROJECT_MEMBER", "DIRECTOR", "SPONSOR", "CLIENT"]
 
@@ -56,6 +79,11 @@ export function OrganizationsClient({ initialOrgs, currentOrgId }: Props) {
   // Reset password state
   const [resetPwdUserId, setResetPwdUserId] = useState<string | null>(null)
   const [resetPwdValue, setResetPwdValue] = useState("")
+
+  // Avatar upload state
+  const [uploadingAvatarUserId, setUploadingAvatarUserId] = useState<string | null>(null)
+  const avatarInputRef = useRef<HTMLInputElement>(null)
+  const avatarTargetRef = useRef<{ userId: string; orgId: string } | null>(null)
 
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -180,6 +208,33 @@ export function OrganizationsClient({ initialOrgs, currentOrgId }: Props) {
     })
   }
 
+  async function handleAvatarFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ""
+    if (!file || !avatarTargetRef.current) return
+    const { userId, orgId } = avatarTargetRef.current
+    setUploadingAvatarUserId(userId)
+    try {
+      const base64 = await imageToBase64(file)
+      await updateUserAvatarInOrg(userId, base64)
+      setOrgUsers((prev) => ({
+        ...prev,
+        [orgId]: (prev[orgId] ?? []).map((u) => u.id === userId ? { ...u, image: base64 } : u),
+      }))
+      flash("Foto atualizada")
+    } catch (e: unknown) {
+      flash(e instanceof Error ? e.message : "Erro ao enviar foto", true)
+    } finally {
+      setUploadingAvatarUserId(null)
+      avatarTargetRef.current = null
+    }
+  }
+
+  function triggerAvatarUpload(userId: string, orgId: string) {
+    avatarTargetRef.current = { userId, orgId }
+    avatarInputRef.current?.click()
+  }
+
   function handleToggleUserActive(userId: string, orgId: string) {
     startTransition(async () => {
       try {
@@ -196,6 +251,14 @@ export function OrganizationsClient({ initialOrgs, currentOrgId }: Props) {
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
+      {/* Hidden file input for avatar upload */}
+      <input
+        ref={avatarInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={handleAvatarFileChange}
+      />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -379,9 +442,26 @@ export function OrganizationsClient({ initialOrgs, currentOrgId }: Props) {
                             /* Normal user row */
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 text-xs font-semibold flex-shrink-0">
-                                  {user.name.charAt(0).toUpperCase()}
-                                </div>
+                                <button
+                                  onClick={() => triggerAvatarUpload(user.id, org.id)}
+                                  title="Alterar foto"
+                                  className="relative group w-8 h-8 rounded-full flex-shrink-0 overflow-hidden"
+                                >
+                                  {user.image ? (
+                                    <img src={user.image} alt={user.name} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-600 text-xs font-semibold"
+                                      style={{ background: "linear-gradient(135deg, #7B2FBE22, #2463FF22)" }}>
+                                      {user.name.charAt(0).toUpperCase()}
+                                    </div>
+                                  )}
+                                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
+                                    {uploadingAvatarUserId === user.id
+                                      ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                      : <Camera size={11} className="text-white" />
+                                    }
+                                  </div>
+                                </button>
                                 <div>
                                   <div className="flex items-center gap-2">
                                     <span className="text-sm font-medium text-gray-800">{user.name}</span>

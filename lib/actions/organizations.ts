@@ -87,6 +87,7 @@ export type OrgUserRow = {
   role: string
   department: string | null
   phone: string | null
+  image: string | null
   active: boolean
   createdAt: string
 }
@@ -97,11 +98,19 @@ export async function getUsersByOrg(orgId: string): Promise<OrgUserRow[]> {
 
   const users = await db.user.findMany({
     where: { organizationId: orgId },
-    select: { id: true, name: true, email: true, role: true, department: true, phone: true, active: true, createdAt: true },
+    select: { id: true, name: true, email: true, role: true, department: true, phone: true, image: true, active: true, createdAt: true },
     orderBy: { name: "asc" },
   })
 
   return users.map((u) => ({ ...u, role: u.role as string, createdAt: u.createdAt.toISOString() }))
+}
+
+export async function updateUserAvatarInOrg(userId: string, image: string | null): Promise<void> {
+  const session = await auth()
+  if (!session?.user || session.user.role !== "ADMIN") throw new Error("Não autorizado")
+
+  await db.user.update({ where: { id: userId }, data: { image } })
+  revalidatePath("/organizations")
 }
 
 export async function updateUserInOrg(
