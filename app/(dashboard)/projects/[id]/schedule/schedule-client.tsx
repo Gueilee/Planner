@@ -1,7 +1,7 @@
 "use client"
 
 import {
-  useState, useRef, useMemo, useTransition, useCallback, useEffect, useLayoutEffect, Fragment,
+  useState, useRef, useMemo, useTransition, useCallback, useEffect, useLayoutEffect, Fragment, cloneElement,
 } from "react"
 import Link from "next/link"
 import {
@@ -56,9 +56,9 @@ const COL_MIN: Record<ColKey, number> = {
 const DEFAULT_COL_ORDER: ColKey[] = ['eap', 'name', 'status', 'responsible', 'startDate', 'endDate', 'actualStart', 'actualEnd', 'estH', 'realH', 'pctEst', 'pctReal', 'predecessors', 'budgeted', 'actual']
 const COL_HEADER_META: Record<ColKey, { label: string; cls: string }> = {
   eap:          { label: "EAP",               cls: "text-white/40 text-center" },
-  name:         { label: "Nome da Atividade",  cls: "text-white/40 px-2" },
+  name:         { label: "Nome da Atividade",  cls: "text-white/40 text-center" },
   status:       { label: "Status",            cls: "text-white/40 text-center" },
-  responsible:  { label: "Responsável",       cls: "text-white/40 px-3" },
+  responsible:  { label: "Responsável",       cls: "text-white/40 text-center" },
   startDate:    { label: "Início Plan.",      cls: "text-white/40 text-center" },
   endDate:      { label: "Fim Plan.",         cls: "text-white/40 text-center" },
   actualStart:  { label: "Início Real",       cls: "text-emerald-400/60 text-center" },
@@ -2334,7 +2334,11 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                             })()}
                           </div>,
                         }
-                        return colOrder.map(col => <Fragment key={col}>{areaCells[col]}</Fragment>)
+                        return colOrder.map(col => {
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          const cell = areaCells[col] as any
+                          return cloneElement(cell, { key: col, style: { ...cell.props.style, borderLeft: "1px solid #E2E8F0" } })
+                        })
                       })()}
                     </div>
                   )
@@ -2716,7 +2720,11 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                           </div>
                         ),
                       }
-                      return colOrder.map(col => <Fragment key={col}>{taskCells[col]}</Fragment>)
+                      return colOrder.map(col => {
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        const cell = taskCells[col] as any
+                        return cloneElement(cell, { key: col, style: { ...cell.props.style, borderLeft: "1px solid #E2E8F0" } })
+                      })
                     })()}
 
                   </div>
