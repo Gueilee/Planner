@@ -90,7 +90,7 @@ export default async function ProjectDetailPage({
           id: true, category: true, type: true, name: true, description: true,
           unit: true, plannedValue: true, realizedValue: true,
           frequency: true, periodicity: true, monitoringMonths: true,
-          status: true, customTypeName: true,
+          status: true, customTypeName: true, impactLevel: true,
           indicator: true, notes: true,
           responsibleId: true, targetDate: true,
           responsible: { select: { name: true } },
@@ -336,6 +336,7 @@ export default async function ProjectDetailPage({
                       responsibleId:   b.responsibleId ?? null,
                       responsibleName: b.responsible?.name ?? null,
                       targetDate:      b.targetDate?.toISOString() ?? null,
+                      impactLevel:     (b.impactLevel ?? null) as "LOW" | "MEDIUM" | "HIGH" | "VERY_HIGH" | null,
                     }))}
                   />
 

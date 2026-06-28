@@ -15,12 +15,13 @@ import { createProjectRequest } from "@/lib/actions/project-request"
 // ── Types ─────────────────────────────────────────────────────────────────────
 type RiskItem    = { description: string; level: "LOW" | "MEDIUM" | "HIGH"; mitigation: string }
 type FileItem    = { name: string; url: string; size: number; localFile?: File }
+type ImpactLevel = "LOW" | "MEDIUM" | "HIGH" | "VERY_HIGH"
 type BenefitItem = {
   category: "FINANCIAL" | "OPERATIONAL" | "STRATEGIC"
   types: string[]
   customTypeName: string
   description: string
-  plannedValue: string
+  impactLevel: ImpactLevel | ""
   frequency: "ONCE" | "MONTHLY" | "ANNUAL"
 }
 type FormState = {
@@ -95,7 +96,7 @@ const FREQUENCIES = [
 ] as const
 
 const EMPTY_BENEFIT: BenefitItem = {
-  category: "FINANCIAL", types: ["COST_REDUCTION"], customTypeName: "", description: "", plannedValue: "", frequency: "MONTHLY",
+  category: "FINANCIAL", types: ["COST_REDUCTION"], customTypeName: "", description: "", impactLevel: "", frequency: "MONTHLY",
 }
 
 const AREAS = ["Tecnologia", "Projetos", "Qualidade", "Operações", "Financeiro", "Comercial",
@@ -118,6 +119,29 @@ const RISK_LEVELS = [
   { value: "MEDIUM", label: "Médio",  color: "#F59E0B", bg: "#FFFBEB" },
   { value: "HIGH",   label: "Alto",   color: "#EF4444", bg: "#FEF2F2" },
 ]
+
+const IMPACT_LEVELS: { value: ImpactLevel; label: string; color: string; bg: string }[] = [
+  { value: "LOW",       label: "Baixo",     color: "#64748B", bg: "rgba(100,116,139,0.12)" },
+  { value: "MEDIUM",    label: "Médio",     color: "#F59E0B", bg: "rgba(245,158,11,0.12)"  },
+  { value: "HIGH",      label: "Alto",      color: "#3B82F6", bg: "rgba(59,130,246,0.12)"  },
+  { value: "VERY_HIGH", label: "Muito Alto", color: "#10B981", bg: "rgba(16,185,129,0.12)" },
+]
+
+const IMPACT_HINTS: Record<ImpactLevel, Record<string, string>> = {
+  LOW:       { FINANCIAL: "até R$ 10k/ano",      OPERATIONAL: "impacto pontual e limitado",        STRATEGIC: "benefício indireto ou de suporte"      },
+  MEDIUM:    { FINANCIAL: "R$ 10k–50k/ano",       OPERATIONAL: "melhoria mensurável e consistente",  STRATEGIC: "melhoria relevante com evidências"     },
+  HIGH:      { FINANCIAL: "R$ 50k–200k/ano",      OPERATIONAL: "ganho significativo e sustentado",   STRATEGIC: "diferencial competitivo claro"          },
+  VERY_HIGH: { FINANCIAL: "R$ 200k+/ano",         OPERATIONAL: "transformação estrutural do processo", STRATEGIC: "mudança estratégica transformacional" },
+}
+
+const IMPACT_PLANNED: Record<ImpactLevel, Record<string, number>> = {
+  LOW:       { FINANCIAL: 10000,   OPERATIONAL: 200,  STRATEGIC: 25  },
+  MEDIUM:    { FINANCIAL: 50000,   OPERATIONAL: 500,  STRATEGIC: 50  },
+  HIGH:      { FINANCIAL: 200000,  OPERATIONAL: 1000, STRATEGIC: 75  },
+  VERY_HIGH: { FINANCIAL: 1000000, OPERATIONAL: 2000, STRATEGIC: 100 },
+}
+
+const IMPACT_WEIGHT: Record<ImpactLevel, number> = { LOW: 25, MEDIUM: 50, HIGH: 75, VERY_HIGH: 100 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmt(raw: string): string {
@@ -188,7 +212,7 @@ export function NewProjectForm({ users, currentUserId }: Props) {
       case 3: return !!(form.assumptions.trim() && form.restrictions.trim() && form.expectedStart && form.expectedEnd)
       case 4: return form.risks.length > 0 && form.risks.every(r => r.description.trim() && r.mitigation.trim())
       case 5: return form.benefits.length > 0 && form.benefits.every(b =>
-        b.description.trim() && b.plannedValue.trim() &&
+        b.description.trim() && !!b.impactLevel &&
         (!b.types.includes("OTHER") || b.customTypeName.trim())
       )
       default: return true
@@ -230,22 +254,23 @@ export function NewProjectForm({ users, currentUserId }: Props) {
         expectedEnd:    form.expectedEnd,
         risks:          form.risks.filter(r => r.description.trim()),
         benefits:       form.benefits
-          .filter(b => b.description.trim() && b.plannedValue.trim())
+          .filter(b => b.description.trim() && !!b.impactLevel)
           .flatMap(b => {
-            const raw = b.plannedValue
+            const impact = b.impactLevel as ImpactLevel
+            const plannedValue = IMPACT_PLANNED[impact][b.category] ?? 0
+            const strategicWeight = IMPACT_WEIGHT[impact]
             return b.types.map(t => {
               const meta = BENEFIT_META[t]
-              const val  = meta?.valueType === "currency"
-                ? (parseBRL(raw) ?? 0)
-                : (parseFloat(raw) || 0)
               return {
-                category:      b.category,
-                type:          t,
-                description:   b.description,
-                unit:          meta?.unit ?? "R$",
-                plannedValue:  val,
-                frequency:     b.frequency,
-                customTypeName: t === "OTHER" ? (b.customTypeName || null) : null,
+                category:        b.category,
+                type:            t,
+                description:     b.description,
+                unit:            meta?.unit ?? "R$",
+                plannedValue,
+                frequency:       b.frequency,
+                impactLevel:     impact,
+                strategicWeight,
+                customTypeName:  t === "OTHER" ? (b.customTypeName || null) : null,
               }
             })
           }),
@@ -661,7 +686,7 @@ export function NewProjectForm({ users, currentUserId }: Props) {
                           <div className="flex items-center gap-1.5">
                             {BENEFIT_CATEGORIES.map(c => (
                               <button key={c.value} type="button"
-                                onClick={() => updateBen({ category: c.value as BenefitItem["category"], types: [BENEFIT_TYPES_BY_CAT[c.value][0]], customTypeName: "", plannedValue: "" })}
+                                onClick={() => updateBen({ category: c.value as BenefitItem["category"], types: [BENEFIT_TYPES_BY_CAT[c.value][0]], customTypeName: "", impactLevel: "" })}
                                 className="px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all"
                                 style={ben.category === c.value
                                   ? { background: c.color, color: "#fff" }
@@ -699,7 +724,7 @@ export function NewProjectForm({ users, currentUserId }: Props) {
                                   onClick={() => {
                                     if (sel && ben.types.length === 1) return
                                     const newTypes = sel ? ben.types.filter(x => x !== t) : [...ben.types, t]
-                                    updateBen({ types: newTypes, plannedValue: "", ...(t === "OTHER" && !sel ? {} : { customTypeName: sel && t === "OTHER" ? "" : ben.customTypeName }) })
+                                    updateBen({ types: newTypes, ...(t === "OTHER" && !sel ? {} : { customTypeName: sel && t === "OTHER" ? "" : ben.customTypeName }) })
                                   }}
                                   className="px-3 py-1.5 rounded-full text-[11px] font-semibold border-2 transition-all"
                                   style={sel
@@ -745,55 +770,28 @@ export function NewProjectForm({ users, currentUserId }: Props) {
                               onChange={e => updateBen({ description: e.target.value })} />
                           </div>
 
-                          {/* Valor — contextual por tipo */}
+                          {/* Impacto do benefício */}
                           <div className="rounded-xl p-3 border" style={{ background: `${cat.color}05`, borderColor: `${cat.color}20` }}>
                             <p className="text-[10px] font-bold uppercase tracking-[0.08em] mb-2" style={{ color: cat.color }}>
-                              {meta?.valueLabel ?? "Resultado Esperado"}
+                              Nível de Impacto <span className="text-red-500">*</span>
                             </p>
-
-                            {meta?.valueType === "currency" ? (
-                              <div className="flex gap-3 items-end">
-                                <div className="flex-1">
-                                  <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-[#059669]">R$</span>
-                                    <input type="text" className={cn(inputCls, "pl-9")}
-                                      placeholder="0,00"
-                                      value={ben.plannedValue}
-                                      onChange={e => {
-                                        const raw = e.target.value.replace(/\D/g, "")
-                                        updateBen({ plannedValue: raw ? fmt(raw) : "" })
-                                      }} />
-                                  </div>
-                                </div>
-                                {showFreq && (
-                                  <div className="flex gap-1.5 shrink-0">
-                                    {FREQUENCIES.map(f => (
-                                      <button key={f.value} type="button"
-                                        onClick={() => updateBen({ frequency: f.value })}
-                                        className="h-[46px] px-3 rounded-xl text-xs font-bold border-2 transition-all"
-                                        style={ben.frequency === f.value
-                                          ? { borderColor: cat.color, background: cat.color, color: "#fff" }
-                                          : { borderColor: "rgba(0,0,0,0.09)", background: "#fff", color: "#9c99b0" }
-                                        }>
-                                        {f.label}
-                                      </button>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="relative">
-                                <input type="number" min={0}
-                                  className={cn(inputCls, "pr-24")}
-                                  placeholder={meta?.valuePlaceholder ?? "0"}
-                                  value={ben.plannedValue}
-                                  onChange={e => updateBen({ plannedValue: e.target.value })} />
-                                <span
-                                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold px-2 py-0.5 rounded-md"
-                                  style={{ background: `${cat.color}15`, color: cat.color }}>
-                                  {meta?.suffix ?? ""}
-                                </span>
-                              </div>
+                            <div className="grid grid-cols-4 gap-1.5">
+                              {IMPACT_LEVELS.map(il => (
+                                <button key={il.value} type="button"
+                                  onClick={() => updateBen({ impactLevel: il.value })}
+                                  className="flex flex-col items-center gap-0.5 py-2 px-1 rounded-xl text-[11px] font-bold border-2 transition-all"
+                                  style={ben.impactLevel === il.value
+                                    ? { borderColor: il.color, background: il.color, color: "#fff" }
+                                    : { borderColor: "rgba(0,0,0,0.09)", background: "#fff", color: "#6b6880" }
+                                  }>
+                                  {il.label}
+                                </button>
+                              ))}
+                            </div>
+                            {ben.impactLevel && (
+                              <p className="mt-2 text-[10px]" style={{ color: cat.color }}>
+                                {IMPACT_HINTS[ben.impactLevel as ImpactLevel]?.[ben.category] ?? ""}
+                              </p>
                             )}
                           </div>
                         </div>

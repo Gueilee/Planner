@@ -196,6 +196,13 @@ enum BenefitStatus {
   CANCELLED
 }
 
+enum ImpactLevel {
+  LOW
+  MEDIUM
+  HIGH
+  VERY_HIGH
+}
+
 // ─────────────────────────────────────────────
 // ORGANIZATIONS (multi-tenant)
 // ─────────────────────────────────────────────
@@ -748,6 +755,8 @@ model ProjectBenefit {
   hourlyRate         Float?
   // Strategic weight (0–100) for IVG scoring
   strategicWeight Float              @default(0)
+  // Impact level — drives plannedValue and strategicWeight derivation
+  impactLevel     ImpactLevel?
   createdById     String
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt

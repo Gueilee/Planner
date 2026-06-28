@@ -5,8 +5,9 @@ import { auth } from "@/auth"
 import { revalidatePath } from "next/cache"
 import type {
   BenefitFormData, MeasurementFormData, BenefitItem,
-  ProjectBenefitMetrics, PortfolioSummary, PortfolioChartData,
+  ProjectBenefitMetrics, PortfolioSummary, PortfolioChartData, ImpactLevel,
 } from "@/lib/types/benefits"
+import { IMPACT_PLANNED_VALUES, IMPACT_STRATEGIC_WEIGHT } from "@/lib/types/benefits"
 import {
   computeProjectMetrics, computeFinancialRealized, computeRevenueRealized,
   computeHoursSaved, computeTotalEffective, computeTotalPlanned,
@@ -29,6 +30,7 @@ function serializeBenefit(b: {
   timeBeforeMinutes: number | null; timeAfterMinutes: number | null
   executionsPerMonth: number | null; hourlyRate: number | null
   strategicWeight: number
+  impactLevel: string | null
   createdById: string; createdAt: Date; updatedAt: Date
   measurements: { id: string; measuredAt: Date; measuredValue: number; notes: string | null; createdBy: { name: string }; createdAt: Date }[]
   attachments: { id: string; fileName: string; fileUrl: string; fileType: string; fileSize: number | null; uploadedAt: Date }[]
@@ -62,6 +64,7 @@ function serializeBenefit(b: {
     executionsPerMonth: b.executionsPerMonth,
     hourlyRate:         b.hourlyRate,
     strategicWeight:    b.strategicWeight,
+    impactLevel:        (b.impactLevel as ImpactLevel | null) ?? null,
     createdById:     b.createdById,
     createdAt:       b.createdAt.toISOString(),
     updatedAt:       b.updatedAt.toISOString(),
@@ -237,6 +240,15 @@ export async function createBenefit(projectId: string, data: BenefitFormData) {
   if (!session?.user?.id) throw new Error("Unauthorized")
   if (!CAN_MANAGE.has(session.user.role ?? "")) throw new Error("Forbidden")
 
+  // Derive plannedValue and strategicWeight from impactLevel when provided
+  const impactLevel  = data.impactLevel ?? null
+  const plannedValue = impactLevel
+    ? IMPACT_PLANNED_VALUES[impactLevel][data.category]
+    : data.plannedValue
+  const strategicWeight = impactLevel
+    ? IMPACT_STRATEGIC_WEIGHT[impactLevel]
+    : (data.strategicWeight ?? 0)
+
   const benefit = await db.projectBenefit.create({
     data: {
       projectId,
@@ -248,7 +260,7 @@ export async function createBenefit(projectId: string, data: BenefitFormData) {
       indicator:          data.indicator ?? null,
       formula:            data.formula ?? null,
       unit:               data.unit,
-      plannedValue:       data.plannedValue,
+      plannedValue,
       realizedValue:      data.realizedValue,
       frequency:          data.frequency,
       periodicity:        data.periodicity,
@@ -265,7 +277,8 @@ export async function createBenefit(projectId: string, data: BenefitFormData) {
       timeAfterMinutes:   data.timeAfterMinutes ?? null,
       executionsPerMonth: data.executionsPerMonth ?? null,
       hourlyRate:         data.hourlyRate ?? null,
-      strategicWeight:    data.strategicWeight ?? 0,
+      strategicWeight,
+      impactLevel:        impactLevel as never,
     },
   })
 
@@ -290,14 +303,25 @@ export async function updateBenefit(benefitId: string, data: Partial<BenefitForm
 
   const existing = await db.projectBenefit.findUnique({
     where: { id: benefitId },
-    select: { projectId: true, plannedValue: true, realizedValue: true, status: true },
+    select: { projectId: true, plannedValue: true, realizedValue: true, status: true, category: true },
   })
   if (!existing) throw new Error("Not found")
+
+  // Derive plannedValue and strategicWeight from impactLevel when provided
+  const impactLevel = data.impactLevel ?? null
+  const derivedUpdates = impactLevel && existing
+    ? {
+        plannedValue:    IMPACT_PLANNED_VALUES[impactLevel][existing.category as BenefitItem["category"]],
+        strategicWeight: IMPACT_STRATEGIC_WEIGHT[impactLevel],
+      }
+    : {}
 
   await db.projectBenefit.update({
     where: { id: benefitId },
     data: {
       ...data,
+      ...derivedUpdates,
+      impactLevel:     impactLevel as never ?? undefined,
       baselineDate:    data.baselineDate    ? new Date(data.baselineDate)    : undefined,
       targetDate:      data.targetDate      ? new Date(data.targetDate)      : undefined,
       realizationDate: data.realizationDate ? new Date(data.realizationDate) : undefined,

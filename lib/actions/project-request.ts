@@ -26,6 +26,8 @@ export async function createProjectRequest(data: {
     category: string; type: string; description: string
     unit: string; plannedValue: number; frequency: string
     customTypeName?: string | null
+    impactLevel?: string | null
+    strategicWeight?: number
   }>
 }) {
   const session = await auth()
@@ -87,16 +89,18 @@ export async function createProjectRequest(data: {
       benefits: data.benefits.length > 0
         ? {
             create: data.benefits.map((b) => ({
-              category:      b.category as never,
-              type:          b.type     as never,
-              description:   b.description,
-              unit:          b.unit || "R$",
-              plannedValue:  b.plannedValue,
-              realizedValue: 0,
-              frequency:     b.frequency as never,
-              status:        "PLANNED"   as never,
+              category:       b.category as never,
+              type:           b.type     as never,
+              description:    b.description,
+              unit:           b.unit || "R$",
+              plannedValue:   b.plannedValue,
+              realizedValue:  0,
+              frequency:      b.frequency as never,
+              status:         "PLANNED"   as never,
               customTypeName: b.customTypeName ?? null,
-              createdById:   session.user.id!,
+              impactLevel:    (b.impactLevel ?? null) as never,
+              strategicWeight: b.strategicWeight ?? 0,
+              createdById:    session.user.id!,
             })),
           }
         : undefined,

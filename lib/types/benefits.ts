@@ -22,6 +22,7 @@ export type BenefitType =
 export type BenefitFrequency   = "ONCE" | "MONTHLY" | "ANNUAL"
 export type BenefitPeriodicity = "MONTHLY" | "QUARTERLY" | "SEMIANNUAL" | "ANNUAL"
 export type BenefitStatus      = "PLANNED" | "IN_PROGRESS" | "REALIZED" | "PARTIAL" | "NOT_REALIZED" | "CANCELLED"
+export type ImpactLevel        = "LOW" | "MEDIUM" | "HIGH" | "VERY_HIGH"
 
 export interface BenefitAttachmentItem {
   id: string
@@ -71,6 +72,8 @@ export interface BenefitItem {
   hourlyRate: number | null
   // Strategic weight
   strategicWeight: number
+  // Impact level — drives plannedValue and strategicWeight
+  impactLevel: ImpactLevel | null
   createdById: string
   createdAt: string
   updatedAt: string
@@ -167,6 +170,7 @@ export interface BenefitFormData {
   executionsPerMonth?: number | null
   hourlyRate?: number | null
   strategicWeight?: number
+  impactLevel?: ImpactLevel | null
 }
 
 export interface MeasurementFormData {
@@ -307,9 +311,56 @@ export interface IvgBreakdown {
 }
 
 export const IVG_BANDS = [
-  { min: 90, label: "Valor Excepcional", color: "#10B981", bg: "rgba(16,185,129,0.1)" },
-  { min: 80, label: "Alto Valor",        color: "#3B82F6", bg: "rgba(59,130,246,0.1)" },
-  { min: 70, label: "Bom Valor",         color: "#7B2FBE", bg: "rgba(123,47,190,0.1)" },
-  { min: 50, label: "Valor Moderado",    color: "#F59E0B", bg: "rgba(245,158,11,0.1)" },
+  { min: 70, label: "Valor Excepcional", color: "#10B981", bg: "rgba(16,185,129,0.1)" },
+  { min: 50, label: "Alto Valor",        color: "#3B82F6", bg: "rgba(59,130,246,0.1)" },
+  { min: 30, label: "Bom Valor",         color: "#7B2FBE", bg: "rgba(123,47,190,0.1)" },
+  { min: 15, label: "Valor Moderado",    color: "#F59E0B", bg: "rgba(245,158,11,0.1)" },
   { min: 0,  label: "Baixo Valor",       color: "#EF4444", bg: "rgba(239,68,68,0.1)"  },
 ] as const
+
+// ── Impact level constants ────────────────────────────────────────────────────
+
+export const IMPACT_LEVEL_LABELS: Record<ImpactLevel, string> = {
+  LOW:       "Baixo",
+  MEDIUM:    "Médio",
+  HIGH:      "Alto",
+  VERY_HIGH: "Muito Alto",
+}
+
+export const IMPACT_LEVEL_COLORS: Record<ImpactLevel, string> = {
+  LOW:       "#64748B",
+  MEDIUM:    "#F59E0B",
+  HIGH:      "#3B82F6",
+  VERY_HIGH: "#10B981",
+}
+
+export const IMPACT_LEVEL_BG: Record<ImpactLevel, string> = {
+  LOW:       "rgba(100,116,139,0.12)",
+  MEDIUM:    "rgba(245,158,11,0.12)",
+  HIGH:      "rgba(59,130,246,0.12)",
+  VERY_HIGH: "rgba(16,185,129,0.12)",
+}
+
+// strategicWeight (0–100) auto-derived from impact level
+export const IMPACT_STRATEGIC_WEIGHT: Record<ImpactLevel, number> = {
+  LOW:       25,
+  MEDIUM:    50,
+  HIGH:      75,
+  VERY_HIGH: 100,
+}
+
+// plannedValue auto-derived from impact level by category
+export const IMPACT_PLANNED_VALUES: Record<ImpactLevel, Record<BenefitCategory, number>> = {
+  LOW:       { FINANCIAL: 10000,   OPERATIONAL: 200,  STRATEGIC: 25,  COMPLIANCE: 25  },
+  MEDIUM:    { FINANCIAL: 50000,   OPERATIONAL: 500,  STRATEGIC: 50,  COMPLIANCE: 50  },
+  HIGH:      { FINANCIAL: 200000,  OPERATIONAL: 1000, STRATEGIC: 75,  COMPLIANCE: 75  },
+  VERY_HIGH: { FINANCIAL: 1000000, OPERATIONAL: 2000, STRATEGIC: 100, COMPLIANCE: 100 },
+}
+
+// Human-readable hints per category (shown under the selector)
+export const IMPACT_HINTS: Record<ImpactLevel, Record<BenefitCategory, string>> = {
+  LOW:       { FINANCIAL: "até R$ 10k/ano",         OPERATIONAL: "impacto pontual e limitado",       STRATEGIC: "benefício indireto ou de suporte",    COMPLIANCE: "adequação básica"           },
+  MEDIUM:    { FINANCIAL: "R$ 10k–50k/ano",          OPERATIONAL: "melhoria mensurável e consistente", STRATEGIC: "melhoria relevante com evidências",  COMPLIANCE: "conformidade intermediária" },
+  HIGH:      { FINANCIAL: "R$ 50k–200k/ano",         OPERATIONAL: "ganho significativo e sustentado",  STRATEGIC: "diferencial competitivo claro",       COMPLIANCE: "conformidade avançada"      },
+  VERY_HIGH: { FINANCIAL: "R$ 200k+/ano",            OPERATIONAL: "transformação estrutural do processo", STRATEGIC: "mudança estratégica transformacional", COMPLIANCE: "referência regulatória"    },
+}

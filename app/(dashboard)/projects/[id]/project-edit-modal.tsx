@@ -35,6 +35,7 @@ type BenefitRow = {
   responsibleId: string | null
   responsibleName: string | null
   targetDate: string | null
+  impactLevel: ImpactLevel | null
 }
 
 // ── Benefits constants ──────────────────────────────────────────────────────
@@ -126,6 +127,31 @@ const BEN_PERIODICITIES = [
   { value: "SEMIANNUAL", label: "Semestral" },
   { value: "ANNUAL",     label: "Anual"     },
 ] as const
+
+type ImpactLevel = "LOW" | "MEDIUM" | "HIGH" | "VERY_HIGH"
+
+const IMPACT_LEVELS: { value: ImpactLevel; label: string; color: string }[] = [
+  { value: "LOW",       label: "Baixo",     color: "#64748B" },
+  { value: "MEDIUM",    label: "Médio",     color: "#F59E0B" },
+  { value: "HIGH",      label: "Alto",      color: "#3B82F6" },
+  { value: "VERY_HIGH", label: "Muito Alto", color: "#10B981" },
+]
+
+const IMPACT_PLANNED: Record<ImpactLevel, Record<string, number>> = {
+  LOW:       { FINANCIAL: 10000,   OPERATIONAL: 200,  STRATEGIC: 25,  COMPLIANCE: 25  },
+  MEDIUM:    { FINANCIAL: 50000,   OPERATIONAL: 500,  STRATEGIC: 50,  COMPLIANCE: 50  },
+  HIGH:      { FINANCIAL: 200000,  OPERATIONAL: 1000, STRATEGIC: 75,  COMPLIANCE: 75  },
+  VERY_HIGH: { FINANCIAL: 1000000, OPERATIONAL: 2000, STRATEGIC: 100, COMPLIANCE: 100 },
+}
+
+const IMPACT_WEIGHT: Record<ImpactLevel, number> = { LOW: 25, MEDIUM: 50, HIGH: 75, VERY_HIGH: 100 }
+
+const IMPACT_HINTS: Record<ImpactLevel, Record<string, string>> = {
+  LOW:       { FINANCIAL: "até R$ 10k/ano",      OPERATIONAL: "impacto pontual e limitado",         STRATEGIC: "benefício indireto ou de suporte",    COMPLIANCE: "adequação básica"           },
+  MEDIUM:    { FINANCIAL: "R$ 10k–50k/ano",       OPERATIONAL: "melhoria mensurável e consistente",  STRATEGIC: "melhoria relevante com evidências",   COMPLIANCE: "conformidade intermediária" },
+  HIGH:      { FINANCIAL: "R$ 50k–200k/ano",      OPERATIONAL: "ganho significativo e sustentado",   STRATEGIC: "diferencial competitivo claro",        COMPLIANCE: "conformidade avançada"      },
+  VERY_HIGH: { FINANCIAL: "R$ 200k+/ano",         OPERATIONAL: "transformação estrutural do processo", STRATEGIC: "mudança estratégica transformacional", COMPLIANCE: "referência regulatória"    },
+}
 
 const MONITORING_OPTIONS = [
   { value: 3,  label: "3 meses"  },
@@ -224,6 +250,7 @@ type EditState = {
   description: string; plannedValue: string; realizedValue: string
   status: string; frequency: string; indicator: string
   responsibleId: string; targetDate: string; notes: string; periodicity: string
+  impactLevel: ImpactLevel | ""
 }
 
 type NewBenefit = {
@@ -232,7 +259,7 @@ type NewBenefit = {
   name: string
   description: string
   indicator: string
-  plannedValue: string
+  impactLevel: ImpactLevel | ""
   frequency: BenefitRow["frequency"]
   customTypeName: string
   responsibleId: string
@@ -243,7 +270,7 @@ type NewBenefit = {
 
 const EMPTY_NEW: NewBenefit = {
   category: "FINANCIAL", types: ["COST_REDUCTION"],
-  name: "", description: "", indicator: "", plannedValue: "",
+  name: "", description: "", indicator: "", impactLevel: "",
   frequency: "MONTHLY", customTypeName: "",
   responsibleId: "", targetDate: "",
   periodicity: "MONTHLY", monitoringMonths: 12,
@@ -278,6 +305,7 @@ function BenefitsSection({ projectId, initialBenefits, allUsers }: { projectId: 
         targetDate:    b.targetDate ? b.targetDate.split("T")[0] : "",
         notes:         b.notes ?? "",
         periodicity:   b.periodicity ?? "MONTHLY",
+        impactLevel:   b.impactLevel ?? "",
       },
     }))
   }
@@ -286,23 +314,30 @@ function BenefitsSection({ projectId, initialBenefits, allUsers }: { projectId: 
     const ev = editValues[b.id]
     if (!ev) return
     setSavingId(b.id)
-    const meta    = BEN_META[b.type]
-    const planned  = meta?.valueType === "currency" ? parseBRLEdit(ev.plannedValue) : clamp(parseFloat(ev.plannedValue) || 0, 0, meta?.maxVal ?? 99999)
+    const meta     = BEN_META[b.type]
+    // Derive plannedValue from impactLevel if selected, else fall back to existing
+    const planned  = ev.impactLevel
+      ? IMPACT_PLANNED[ev.impactLevel][b.category] ?? 0
+      : meta?.valueType === "currency" ? parseBRLEdit(ev.plannedValue) : clamp(parseFloat(ev.plannedValue) || 0, 0, meta?.maxVal ?? 99999)
     const realized = meta?.valueType === "currency" ? parseBRLEdit(ev.realizedValue) : clamp(parseFloat(ev.realizedValue) || 0, 0, meta?.maxVal ?? 99999)
     startTransition(async () => {
       try {
         await updateBenefit(b.id, {
-          description:   ev.description,
-          plannedValue:  planned,
-          realizedValue: realized,
-          status:        ev.status as never,
-          frequency:     ev.frequency as never,
-          unit:          meta?.unit ?? b.unit,
-          indicator:     ev.indicator || null,
-          responsibleId: ev.responsibleId || null,
-          targetDate:    ev.targetDate || null,
-          notes:         ev.notes || null,
-          periodicity:   ev.periodicity as never,
+          description:    ev.description,
+          plannedValue:   planned,
+          realizedValue:  realized,
+          status:         ev.status as never,
+          frequency:      ev.frequency as never,
+          unit:           meta?.unit ?? b.unit,
+          indicator:      ev.indicator || null,
+          responsibleId:  ev.responsibleId || null,
+          targetDate:     ev.targetDate || null,
+          notes:          ev.notes || null,
+          periodicity:    ev.periodicity as never,
+          ...(ev.impactLevel ? {
+            impactLevel:     ev.impactLevel as never,
+            strategicWeight: IMPACT_WEIGHT[ev.impactLevel],
+          } : {}),
         })
         setBenefits(prev => prev.map(x => x.id === b.id
           ? {
@@ -332,10 +367,9 @@ function BenefitsSection({ projectId, initialBenefits, allUsers }: { projectId: 
   }
 
   function handleAdd() {
-    const t0   = newBen.types[0]
-    const meta = BEN_META[t0]
-    const val  = meta?.valueType === "currency" ? parseBRLEdit(newBen.plannedValue) : clamp(parseFloat(newBen.plannedValue) || 0, 0, meta?.maxVal ?? 99999)
-    const snap = { ...newBen }
+    const impact = newBen.impactLevel as ImpactLevel | ""
+    const val    = impact ? IMPACT_PLANNED[impact][newBen.category] ?? 0 : 0
+    const snap   = { ...newBen }
     startTransition(async () => {
       try {
         await Promise.all(snap.types.map(t =>
@@ -360,6 +394,8 @@ function BenefitsSection({ projectId, initialBenefits, allUsers }: { projectId: 
             notes:           null,
             customTypeName:  t === "OTHER" ? (snap.customTypeName || null) : null,
             responsibleId:   snap.responsibleId || null,
+            impactLevel:     impact || null,
+            strategicWeight: impact ? IMPACT_WEIGHT[impact] : 0,
           })
         ))
         setAdding(false)
@@ -386,6 +422,7 @@ function BenefitsSection({ projectId, initialBenefits, allUsers }: { projectId: 
             responsibleId:   snap.responsibleId || null,
             responsibleName: allUsers.find(u => u.id === snap.responsibleId)?.name ?? null,
             targetDate:      snap.targetDate || null,
+            impactLevel:     (snap.impactLevel as ImpactLevel) || null,
           })),
         ])
       } catch (err) { console.error(err) }
@@ -510,14 +547,26 @@ function BenefitsSection({ projectId, initialBenefits, allUsers }: { projectId: 
                       onChange={e => setEditValues(v => ({ ...v, [b.id]: { ...v[b.id], description: e.target.value } }))} />
                   </div>
 
-                  {/* Valor Previsto */}
+                  {/* Nível de Impacto (substitui Valor Previsto) */}
                   <div>
-                    <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400 mb-1">
-                      {meta?.valueType === "currency" ? "Valor Previsto" : `Previsto (${meta?.suffix})`}
-                    </p>
-                    <ValueInput valueType={meta?.valueType ?? "currency"} maxVal={meta?.maxVal ?? 99999}
-                      value={ev.plannedValue} suffix={meta?.suffix ?? ""} catColor={cat.color}
-                      onChange={v => setEditValues(x => ({ ...x, [b.id]: { ...x[b.id], plannedValue: v } }))} />
+                    <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400 mb-1">Nível de Impacto</p>
+                    <div className="grid grid-cols-2 gap-1">
+                      {IMPACT_LEVELS.map(il => (
+                        <button key={il.value} type="button"
+                          onClick={() => setEditValues(x => ({ ...x, [b.id]: { ...x[b.id], impactLevel: il.value } }))}
+                          className="h-8 rounded-lg text-[9px] font-bold border-2 transition-all"
+                          style={ev.impactLevel === il.value
+                            ? { borderColor: il.color, background: il.color, color: "#fff" }
+                            : { borderColor: "#E2E8F0", background: "#fff", color: "#94A3B8" }}>
+                          {il.label}
+                        </button>
+                      ))}
+                    </div>
+                    {ev.impactLevel && (
+                      <p className="mt-1 text-[9px]" style={{ color: cat.color }}>
+                        {IMPACT_HINTS[ev.impactLevel as ImpactLevel]?.[b.category] ?? ""}
+                      </p>
+                    )}
                   </div>
 
                   {/* Valor Realizado */}
@@ -639,7 +688,7 @@ function BenefitsSection({ projectId, initialBenefits, allUsers }: { projectId: 
         const firstMeta  = BEN_META[newBen.types[0]]
         const showFreq   = newBen.types.some(t => BEN_META[t]?.showFrequency)
         const hasOther   = newBen.types.includes("OTHER")
-        const canAdd     = newBen.types.length > 0 && newBen.description.trim() && (!hasOther || newBen.customTypeName.trim())
+        const canAdd     = newBen.types.length > 0 && newBen.description.trim() && !!newBen.impactLevel && (!hasOther || newBen.customTypeName.trim())
         return (
           <div className="rounded-xl border-2 overflow-hidden" style={{ borderColor: `${activeCat.color}40` }}>
             {/* Category selector */}
@@ -712,35 +761,25 @@ function BenefitsSection({ projectId, initialBenefits, allUsers }: { projectId: 
                     value={newBen.description} onChange={e => setNewBen(n => ({ ...n, description: e.target.value }))} />
                 </div>
 
-                {/* Valor previsto */}
-                <div>
-                  <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400 mb-1">
-                    {firstMeta?.valueType === "currency" ? "Valor Previsto (R$)" : `Valor Previsto (${firstMeta?.suffix ?? ""})`}
-                    {firstMeta && firstMeta.valueType !== "currency" && (
-                      <span className="ml-1 normal-case text-slate-300">máx. {firstMeta.maxVal.toLocaleString("pt-BR")}</span>
-                    )}
-                  </p>
-                  {firstMeta?.valueType === "currency" ? (
-                    <div className="relative">
-                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-emerald-600">R$</span>
-                      <input className={`${inpCls} pl-7`} placeholder="0,00"
-                        value={newBen.plannedValue}
-                        onChange={e => { const raw = e.target.value.replace(/\D/g, ""); setNewBen(n => ({ ...n, plannedValue: raw ? fmtBRLInput(raw) : "" })) }} />
-                    </div>
-                  ) : (
-                    <div className="relative">
-                      <input type="number" min={0} max={firstMeta?.maxVal ?? 99999}
-                        step={(firstMeta?.valueType === "percent" || firstMeta?.valueType === "score") ? "0.1" : "1"}
-                        className={`${inpCls} pr-10`} placeholder="0"
-                        value={newBen.plannedValue}
-                        onBlur={e => {
-                          const n = parseFloat(e.target.value) || 0
-                          setNewBen(x => ({ ...x, plannedValue: String(Math.min(firstMeta?.maxVal ?? 99999, Math.max(0, n))) }))
-                        }}
-                        onChange={e => setNewBen(n => ({ ...n, plannedValue: e.target.value }))} />
-                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] font-black"
-                        style={{ color: activeCat.color }}>{firstMeta?.suffix}</span>
-                    </div>
+                {/* Nível de Impacto */}
+                <div className="col-span-2">
+                  <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400 mb-1">Nível de Impacto <span className="text-red-400">*</span></p>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {IMPACT_LEVELS.map(il => (
+                      <button key={il.value} type="button"
+                        onClick={() => setNewBen(n => ({ ...n, impactLevel: il.value }))}
+                        className="h-9 rounded-lg text-[10px] font-bold border-2 transition-all"
+                        style={newBen.impactLevel === il.value
+                          ? { borderColor: il.color, background: il.color, color: "#fff" }
+                          : { borderColor: "#E2E8F0", background: "#fff", color: "#94A3B8" }}>
+                        {il.label}
+                      </button>
+                    ))}
+                  </div>
+                  {newBen.impactLevel && (
+                    <p className="mt-1 text-[9px]" style={{ color: activeCat.color }}>
+                      {IMPACT_HINTS[newBen.impactLevel as ImpactLevel]?.[newBen.category] ?? ""}
+                    </p>
                   )}
                 </div>
 
