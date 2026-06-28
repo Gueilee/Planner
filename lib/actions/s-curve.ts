@@ -229,10 +229,10 @@ export async function getSCurveData(projectId: string): Promise<SCurvePayload | 
     { weekStartsOn: 1 }
   )
 
-  // Extend range to cover projection (add 25% of project duration after latest end)
   const latestEnd = allDates.reduce((max, d) => isAfter(d, max) ? d : max, allDates[0])
   const projectDays = differenceInDays(latestEnd, rangeStart)
-  const rangeEnd = addWeeks(latestEnd, Math.max(4, Math.ceil(projectDays / 28)))
+  // Use actual project end as range boundary — no artificial buffer
+  const rangeEnd = latestEnd
 
   // Granularity: weekly for short projects, monthly for > 6 months
   const useMonthly = projectDays > 180

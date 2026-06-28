@@ -1225,7 +1225,7 @@ function GanttHeader({ ganttStart, ganttEnd, dayWidth, zoom }: {
 
   return (
     <div style={{ position: "relative", height: HDR_H, minWidth: "100%" }}>
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 32, background: "#0F172A", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 32, background: "#0F172A", borderBottom: "1px solid rgba(255,255,255,0.25)" }}>
         {months.map((m) => {
           const mStart = startOfMonth(m); const mEnd = endOfMonth(m)
           const vStart = isAfter(mStart, ganttStart) ? mStart : ganttStart
@@ -1234,7 +1234,7 @@ function GanttHeader({ ganttStart, ganttEnd, dayWidth, zoom }: {
           const width  = (differenceInDays(vEnd, vStart) + 1) * dayWidth
           if (width < 4) return null
           return (
-            <div key={m.toISOString()} style={{ position: "absolute", left, width, top: 0, height: 32, display: "flex", alignItems: "center", paddingLeft: 10, overflow: "hidden", borderRight: "1px solid rgba(255,255,255,0.06)" }}>
+            <div key={m.toISOString()} style={{ position: "absolute", left, width, top: 0, height: 32, display: "flex", alignItems: "center", paddingLeft: 10, overflow: "hidden", borderRight: "1px solid rgba(255,255,255,0.25)" }}>
               <span style={{ fontSize: 11, fontWeight: 800, color: "rgba(248,250,252,0.80)", whiteSpace: "nowrap", textTransform: "capitalize" }}>
                 {format(m, zoom === "month" ? "MMMM yyyy" : "MMM yyyy", { locale: ptBR })}
               </span>
@@ -1243,7 +1243,7 @@ function GanttHeader({ ganttStart, ganttEnd, dayWidth, zoom }: {
         })}
       </div>
 
-      <div style={{ position: "absolute", top: 32, left: 0, right: 0, height: 32, background: "#1E293B", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+      <div style={{ position: "absolute", top: 32, left: 0, right: 0, height: 32, background: "#1E293B", borderBottom: "1px solid rgba(255,255,255,0.20)" }}>
         {zoom === "day" ? (
           Array.from({ length: differenceInDays(ganttEnd, ganttStart) + 1 }).map((_, i) => {
             const d    = addDays(ganttStart, i)
@@ -1277,7 +1277,7 @@ function GanttHeader({ ganttStart, ganttEnd, dayWidth, zoom }: {
             const width  = (differenceInDays(vEnd, vStart) + 1) * dayWidth
             if (width < 4) return null
             return (
-              <div key={w.toISOString()} style={{ position: "absolute", left, width, height: 32, display: "flex", alignItems: "center", paddingLeft: 6, borderRight: "1px solid rgba(255,255,255,0.06)", overflow: "hidden" }}>
+              <div key={w.toISOString()} style={{ position: "absolute", left, width, height: 32, display: "flex", alignItems: "center", paddingLeft: 6, borderRight: "1px solid rgba(255,255,255,0.25)", overflow: "hidden" }}>
                 <span style={{ fontSize: 10, fontWeight: 600, color: "rgba(248,250,252,0.50)", whiteSpace: "nowrap" }}>
                   {zoom === "week" ? format(w, "d MMM", { locale: ptBR }) : `Sem ${format(w, "w")}`}
                 </span>
@@ -1386,8 +1386,8 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
         onDragStart={(e) => e.stopPropagation()}
         draggable={false}
         title="Arrastar para redimensionar"
-        style={{ position: "absolute", right: -4, top: "20%", bottom: "20%", width: 9, cursor: "col-resize", zIndex: 20, borderRight: "2px solid rgba(255,255,255,0.18)", borderRadius: 2 }}
-        className="hover:border-r-white/70 transition-colors"
+        style={{ position: "absolute", right: -4, top: "20%", bottom: "20%", width: 9, cursor: "col-resize", zIndex: 20, borderRight: "2px solid rgba(255,255,255,0.45)", borderRadius: 2 }}
+        className="hover:border-r-white transition-colors"
       />
     )
   }
@@ -2123,9 +2123,9 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
 
           {/* Header — overflow hidden, synced via JS to body scrollLeft */}
           <div ref={listHeaderRef} style={{ overflowX: "hidden", overflowY: "visible", flexShrink: 0 }}>
-            <div className="flex items-center border-b border-white/10 bg-[#0F172A]" style={{ height: 44, minWidth: listMinW }}>
+            <div className="flex items-center border-b border-white/25 bg-[#0F172A]" style={{ height: 44, minWidth: listMinW }}>
               <div style={{ width: 24, flexShrink: 0 }} />
-              <div style={{ width: 84, flexShrink: 0, borderRight: "1px solid rgba(255,255,255,0.10)" }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center h-full flex items-center justify-center">Ações</div>
+              <div style={{ width: 84, flexShrink: 0, borderRight: "1px solid rgba(255,255,255,0.30)" }} className="text-[10px] font-black text-white/40 uppercase tracking-widest text-center h-full flex items-center justify-center">Ações</div>
               {colOrder.map(col => {
                 const { label, cls } = COL_HEADER_META[col]
                 const isOver = dragColOver === col && dragColFrom !== null
@@ -2144,7 +2144,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                       position: "relative",
                       opacity: isDrag ? 0.4 : 1,
                       background: isOver ? "rgba(36,99,255,0.22)" : undefined,
-                      borderLeft: isOver ? "2px solid #2463FF" : "1px solid rgba(255,255,255,0.08)",
+                      borderLeft: isOver ? "2px solid #2463FF" : "1px solid rgba(255,255,255,0.25)",
                       cursor: "grab",
                       userSelect: "none",
                       transition: "background 0.1s",

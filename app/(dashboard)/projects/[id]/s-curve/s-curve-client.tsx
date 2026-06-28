@@ -831,7 +831,6 @@ export function SCurveClient({ projectId, initialData }: SCurveClientProps) {
                     selected={timeMachineId}
                     onSelect={(id) => {
                       setTimeMachineId(id)
-                      if (id !== null) setPanel("baselines")
                     }}
                     dark={dark}
                   />
