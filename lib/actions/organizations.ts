@@ -78,6 +78,83 @@ export async function toggleOrganizationActive(id: string): Promise<{ active: bo
   return { active: !current.active }
 }
 
+// ─── User management (cross-org, admin only) ──────────────────────────────────
+
+export type OrgUserRow = {
+  id: string
+  name: string
+  email: string
+  role: string
+  department: string | null
+  phone: string | null
+  active: boolean
+  createdAt: string
+}
+
+export async function getUsersByOrg(orgId: string): Promise<OrgUserRow[]> {
+  const session = await auth()
+  if (!session?.user || session.user.role !== "ADMIN") throw new Error("Não autorizado")
+
+  const users = await db.user.findMany({
+    where: { organizationId: orgId },
+    select: { id: true, name: true, email: true, role: true, department: true, phone: true, active: true, createdAt: true },
+    orderBy: { name: "asc" },
+  })
+
+  return users.map((u) => ({ ...u, role: u.role as string, createdAt: u.createdAt.toISOString() }))
+}
+
+export async function updateUserInOrg(
+  userId: string,
+  data: { name: string; email: string; role: string; department: string | null; phone: string | null }
+): Promise<void> {
+  const session = await auth()
+  if (!session?.user || session.user.role !== "ADMIN") throw new Error("Não autorizado")
+
+  const email = data.email.trim().toLowerCase()
+  const conflict = await db.user.findFirst({ where: { email, NOT: { id: userId } } })
+  if (conflict) throw new Error("Já existe outro usuário com este e-mail")
+
+  await db.user.update({
+    where: { id: userId },
+    data: {
+      name:       data.name.trim(),
+      email,
+      role:       data.role as never,
+      department: data.department?.trim() || null,
+      phone:      data.phone?.trim()      || null,
+    },
+  })
+
+  revalidatePath("/organizations")
+}
+
+export async function resetUserPassword(userId: string, newPassword: string): Promise<void> {
+  const session = await auth()
+  if (!session?.user || session.user.role !== "ADMIN") throw new Error("Não autorizado")
+
+  if (!newPassword || newPassword.length < 6) throw new Error("Senha deve ter no mínimo 6 caracteres")
+
+  const bcrypt = (await import("bcryptjs")).default
+  const hash = await bcrypt.hash(newPassword, 10)
+
+  await db.user.update({ where: { id: userId }, data: { password: hash } })
+}
+
+export async function toggleUserActiveInOrg(userId: string): Promise<{ active: boolean }> {
+  const session = await auth()
+  if (!session?.user || session.user.role !== "ADMIN") throw new Error("Não autorizado")
+
+  const current = await db.user.findUnique({ where: { id: userId }, select: { active: true } })
+  if (!current) throw new Error("Usuário não encontrado")
+
+  const active = !current.active
+  await db.user.update({ where: { id: userId }, data: { active } })
+
+  revalidatePath("/organizations")
+  return { active }
+}
+
 export async function createUserInOrganization(data: {
   organizationId: string
   name: string
