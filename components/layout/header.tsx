@@ -305,7 +305,7 @@ export function Header({ title, subtitle }: HeaderProps) {
             </div>
             <div className="p-1.5">
               <DropdownMenuItem
-                onClick={() => router.push("/settings/profile")}
+                onClick={() => router.push("/settings")}
                 className="gap-2.5 rounded-lg cursor-pointer text-sm font-medium"
               >
                 <Settings className="h-4 w-4 text-slate-400" />
