@@ -12,6 +12,34 @@ export const metadata = { title: "Indicadores de Gestão" }
 
 export type UserOption = { id: string; name: string }
 
+export type TaskDashData = {
+  id: string
+  title: string
+  wbsAreaId: string | null
+  parentId: string | null
+  status: string
+  progress: number
+  startDate: string | null
+  endDate: string | null
+  actualStart: string | null
+  actualEnd: string | null
+  completedAt: string | null
+  budgetedCost: number | null
+  actualCost: number | null
+  estimatedEffort: number | null
+  actualEffort: number | null
+  riskStatus: string
+  responsibleName: string | null
+  responsibleId: string | null
+}
+
+export type AreaDashData = {
+  id: string
+  name: string
+  color: string | null
+  weight: number | null
+}
+
 export type ProjectIndicator = {
   id: string
   title: string
@@ -31,6 +59,8 @@ export type ProjectIndicator = {
   expectedEnd: string | null
   reportStatus: { cost: string; schedule: string; resources: string; overall: string }
   taskResponsibles: string[]
+  tasks: TaskDashData[]
+  areas: AreaDashData[]
 }
 
 // Nesses status o projeto ainda não iniciou ou está pausado — não calcular KPIs de progresso
@@ -65,14 +95,30 @@ export default async function AnalyticsPage() {
         sponsor: { select: { name: true } },
         tasks: {
           select: {
-            status: true, progress: true, wbsAreaId: true,
-            startDate: true, endDate: true,
-            budgetedCost: true, actualCost: true,
-            responsible: { select: { name: true } },
+            id: true,
+            title: true,
+            wbsAreaId: true,
+            parentId: true,
+            status: true,
+            progress: true,
+            startDate: true,
+            endDate: true,
+            actualStart: true,
+            actualEnd: true,
+            completedAt: true,
+            budgetedCost: true,
+            actualCost: true,
+            estimatedEffort: true,
+            actualEffort: true,
+            riskStatus: true,
+            responsible: { select: { id: true, name: true } },
           },
         },
         risks:    { select: { status: true } },
-        wbsAreas: { select: { id: true, weight: true }, orderBy: { order: "asc" } },
+        wbsAreas: {
+          select: { id: true, name: true, color: true, weight: true },
+          orderBy: { order: "asc" },
+        },
       },
     }),
     db.user.findMany({
@@ -187,6 +233,36 @@ export default async function AnalyticsPage() {
       ...new Set(tasks.map((t) => t.responsible?.name).filter((n): n is string => Boolean(n)))
     ]
 
+    // ── Serialização de tarefas ───────────────────────────────────────────────
+    const serializedTasks: TaskDashData[] = tasks.map((t) => ({
+      id:               t.id,
+      title:            t.title,
+      wbsAreaId:        t.wbsAreaId ?? null,
+      parentId:         t.parentId ?? null,
+      status:           t.status,
+      progress:         t.progress,
+      startDate:        t.startDate?.toISOString() ?? null,
+      endDate:          t.endDate?.toISOString() ?? null,
+      actualStart:      t.actualStart?.toISOString() ?? null,
+      actualEnd:        t.actualEnd?.toISOString() ?? null,
+      completedAt:      t.completedAt?.toISOString() ?? null,
+      budgetedCost:     t.budgetedCost ?? null,
+      actualCost:       t.actualCost ?? null,
+      estimatedEffort:  t.estimatedEffort ?? null,
+      actualEffort:     t.actualEffort ?? null,
+      riskStatus:       t.riskStatus,
+      responsibleName:  t.responsible?.name ?? null,
+      responsibleId:    t.responsible?.id ?? null,
+    }))
+
+    // ── Serialização de áreas WBS ─────────────────────────────────────────────
+    const serializedAreas: AreaDashData[] = p.wbsAreas.map((a) => ({
+      id:     a.id,
+      name:   a.name,
+      color:  a.color ?? null,
+      weight: a.weight ?? null,
+    }))
+
     return {
       id:             p.id,
       title:          p.title,
@@ -211,6 +287,8 @@ export default async function AnalyticsPage() {
         resources: p.reportStatusResources,
         overall:   p.reportStatusOverall,
       },
+      tasks:  serializedTasks,
+      areas:  serializedAreas,
     }
   })
 
