@@ -15,7 +15,7 @@ import {
   X, ChevronDown, Check, Sparkles, Target, Users, Calendar,
   BarChart3, AlertTriangle, BookOpen, Layers, MapPin,
   Building2, Star, Phone, Mail, Clock, Rocket, MessageSquare,
-  TrendingUp, Shield, CheckCircle2, Presentation,
+  TrendingUp, Shield, CheckCircle2, Presentation, ImageIcon, Upload,
 } from "lucide-react"
 import Link from "next/link"
 import { format } from "date-fns"
@@ -287,7 +287,7 @@ function SlideThumbnail({ slide, index, isActive, onClick, onDelete }: {
 
 // ─── Slide Renderer (light theme) ────────────────────────────────────────────
 
-export function KOSlideRenderer({ slide, scale = 1, noShadow }: { slide: KOSlide; scale?: number; noShadow?: boolean }) {
+export function KOSlideRenderer({ slide, scale = 1, noShadow, onEdit }: { slide: KOSlide; scale?: number; noShadow?: boolean; onEdit?: (patch: Partial<KOSlide>) => void }) {
   const s = (v: number) => `${v * scale}px`
 
   const slideBase: React.CSSProperties = {
@@ -301,11 +301,18 @@ export function KOSlideRenderer({ slide, scale = 1, noShadow }: { slide: KOSlide
   }
 
   function Header({ title, accent = "#7B2FBE", slideNum }: { title: string; accent?: string; slideNum?: string }) {
+    const editStyle = onEdit ? { outline: "none", cursor: "text", borderBottom: `${s(1.5)} dashed ${accent}66`, paddingBottom: s(2), minWidth: s(80), display: "inline-block" } : {}
     return (
       <div style={{ marginBottom: s(24) }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
-            <h2 style={{ fontSize: s(22), fontWeight: 900, color: "#0F172A", margin: 0, lineHeight: 1.1 }}>{title}</h2>
+            <h2
+              key={slide.id + "title"}
+              contentEditable={!!onEdit}
+              suppressContentEditableWarning
+              onBlur={onEdit ? (e) => onEdit({ title: e.currentTarget.textContent ?? "" }) : undefined}
+              style={{ fontSize: s(22), fontWeight: 900, color: "#0F172A", margin: 0, lineHeight: 1.1, ...editStyle }}
+            >{title}</h2>
             <div style={{ height: s(3), width: s(48), background: `linear-gradient(90deg, ${accent}, transparent)`, borderRadius: "99px", marginTop: s(8) }} />
           </div>
           {slideNum && <span style={{ fontSize: s(9), fontWeight: 800, color: "#CBD5E1", letterSpacing: "0.1em" }}>{slideNum}</span>}
@@ -331,7 +338,13 @@ export function KOSlideRenderer({ slide, scale = 1, noShadow }: { slide: KOSlide
             <span style={{ fontSize: s(10), fontWeight: 800, color: "#7B2FBE", letterSpacing: "0.14em", textTransform: "uppercase" }}>Reunião de Kick-Off</span>
           </div>
           {/* Title */}
-          <h1 style={{ fontSize: s(38), fontWeight: 900, color: "#0F172A", lineHeight: 1.1, margin: `0 0 ${s(12)}`, maxWidth: "70%" }}>{slide.title}</h1>
+          <h1
+            key={slide.id + "title"}
+            contentEditable={!!onEdit}
+            suppressContentEditableWarning
+            onBlur={onEdit ? (e) => onEdit({ title: e.currentTarget.textContent ?? "" }) : undefined}
+            style={{ fontSize: s(38), fontWeight: 900, color: "#0F172A", lineHeight: 1.1, margin: `0 0 ${s(12)}`, maxWidth: "70%", outline: "none", cursor: onEdit ? "text" : "default" }}
+          >{slide.title}</h1>
           <div style={{ height: s(3), width: s(64), background: "linear-gradient(90deg, #7B2FBE, #2463FF)", borderRadius: "99px", marginBottom: s(20) }} />
           {/* Date + location */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: s(16) }}>
@@ -570,45 +583,119 @@ export function KOSlideRenderer({ slide, scale = 1, noShadow }: { slide: KOSlide
 
     case "timeline": {
       const items = (slide.timelineItems ?? []).filter((i) => i.date)
+      const doneCount = items.filter((i) => i.done).length
+      const linePct   = items.length > 1 ? Math.round((doneCount / (items.length - 1)) * 100) : 0
       return (
-        <div style={slideBase}>
-          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: s(5), background: "linear-gradient(90deg, #F59E0B, #D97706)" }} />
-          <div style={{ padding: `${s(28)} ${s(48)}`, height: "100%", boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
-            <Header title={slide.title} accent="#F59E0B" />
-            <div style={{ flex: 1, display: "flex", alignItems: "center" }}>
-              <div style={{ width: "100%", position: "relative" }}>
-                {/* Horizontal line */}
-                <div style={{ position: "absolute", top: "50%", left: s(16), right: s(16), height: s(3), background: "linear-gradient(90deg, #F59E0B, #D97706)", borderRadius: s(2), transform: "translateY(-50%)" }} />
-                {/* Items */}
-                <div style={{ display: "flex", justifyContent: "space-between", position: "relative", padding: `0 ${s(16)}` }}>
-                  {items.map((item, i) => {
-                    const above = i % 2 === 0
-                    return (
-                      <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: s(4), flex: 1 }}>
-                        {above && (
-                          <div style={{ textAlign: "center", paddingBottom: s(8) }}>
-                            <p style={{ fontSize: s(10), fontWeight: 700, color: "#0F172A", margin: 0 }}>{item.label}</p>
-                            <p style={{ fontSize: s(9), color: "#64748B", margin: `${s(2)} 0 0` }}>{item.date ? format(new Date(item.date + "T00:00:00"), "MMM/yy", { locale: ptBR }).toUpperCase() : "—"}</p>
-                          </div>
-                        )}
-                        <div style={{ width: s(14), height: s(14), borderRadius: "50%", background: item.done ? "#10B981" : "#fff", border: `${s(2.5)} solid ${item.done ? "#10B981" : "#F59E0B"}`, zIndex: 1, flexShrink: 0 }} />
-                        {!above && (
-                          <div style={{ textAlign: "center", paddingTop: s(8) }}>
-                            <p style={{ fontSize: s(10), fontWeight: 700, color: "#0F172A", margin: 0 }}>{item.label}</p>
-                            <p style={{ fontSize: s(9), color: "#64748B", margin: `${s(2)} 0 0` }}>{item.date ? format(new Date(item.date + "T00:00:00"), "MMM/yy", { locale: ptBR }).toUpperCase() : "—"}</p>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                  {items.length === 0 && (
-                    <div style={{ width: "100%", textAlign: "center", padding: s(20) }}>
-                      <p style={{ fontSize: s(12), color: "#94A3B8" }}>Nenhum marco definido ainda.</p>
-                    </div>
+        <div style={{ ...slideBase, background: "linear-gradient(160deg, #0F172A 0%, #1E293B 60%, #0F172A 100%)" }}>
+          {/* Top accent */}
+          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: s(4), background: "linear-gradient(90deg, #F59E0B, #FBBF24, #F97316)" }} />
+          {/* Decorative glow */}
+          <div style={{ position: "absolute", top: s(-60), right: s(-60), width: s(300), height: s(300), borderRadius: "50%", background: "radial-gradient(circle, rgba(245,158,11,0.08) 0%, transparent 70%)", pointerEvents: "none" }} />
+          <div style={{ position: "absolute", bottom: s(-40), left: s(-40), width: s(200), height: s(200), borderRadius: "50%", background: "radial-gradient(circle, rgba(249,115,22,0.06) 0%, transparent 70%)", pointerEvents: "none" }} />
+
+          <div style={{ padding: `${s(24)} ${s(44)} ${s(20)}`, height: "100%", boxSizing: "border-box", display: "flex", flexDirection: "column", position: "relative" }}>
+            {/* Header */}
+            <div style={{ marginBottom: s(20) }}>
+              <div style={{ display: "flex", alignItems: "center", gap: s(8), marginBottom: s(6) }}>
+                <div style={{ width: s(20), height: s(20), borderRadius: s(5), background: "linear-gradient(135deg, #F59E0B, #F97316)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <Calendar style={{ width: s(10), height: s(10), color: "#fff" }} />
+                </div>
+                <span style={{ fontSize: s(9), fontWeight: 800, color: "#F59E0B", textTransform: "uppercase", letterSpacing: "0.16em" }}>Macro Cronograma</span>
+              </div>
+              <h2 style={{ fontSize: s(22), fontWeight: 900, color: "#F8FAFC", margin: 0, lineHeight: 1.1 }}>{slide.title}</h2>
+              <div style={{ height: s(2.5), width: s(48), background: "linear-gradient(90deg, #F59E0B, transparent)", borderRadius: "99px", marginTop: s(6) }} />
+            </div>
+
+            {items.length === 0 ? (
+              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <p style={{ fontSize: s(12), color: "#475569" }}>Nenhum marco definido ainda.</p>
+              </div>
+            ) : (
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                {/* Track container */}
+                <div style={{ position: "relative", padding: `${s(44)} 0` }}>
+                  {/* Background track */}
+                  <div style={{ position: "absolute", top: "50%", left: s(24), right: s(24), height: s(2), background: "rgba(255,255,255,0.08)", transform: "translateY(-50%)", borderRadius: s(2) }} />
+                  {/* Progress track */}
+                  {linePct > 0 && (
+                    <div style={{ position: "absolute", top: "50%", left: s(24), height: s(2), width: `calc(${linePct}% - ${s(24)}px)`, background: "linear-gradient(90deg, #10B981, #059669)", transform: "translateY(-50%)", borderRadius: s(2) }} />
                   )}
+
+                  {/* Items */}
+                  <div style={{ display: "flex", justifyContent: "space-between", position: "relative", padding: `0 ${s(24)}` }}>
+                    {items.map((item, i) => {
+                      const above = i % 2 === 0
+                      const done  = item.done
+                      const dateStr = item.date
+                        ? format(new Date(item.date + "T00:00:00"), "dd/MMM/yy", { locale: ptBR }).toUpperCase()
+                        : ""
+                      return (
+                        <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1, position: "relative" }}>
+                          {/* Label above */}
+                          {above ? (
+                            <div style={{ textAlign: "center", marginBottom: s(8), minHeight: s(40) }}>
+                              <p style={{ fontSize: s(10), fontWeight: 700, color: "#F1F5F9", margin: `0 0 ${s(4)}`, lineHeight: 1.3, maxWidth: s(90) }}>{item.label}</p>
+                              <div style={{ display: "inline-block", padding: `${s(2)} ${s(7)}`, borderRadius: "99px", background: done ? "rgba(16,185,129,0.15)" : "rgba(245,158,11,0.12)", border: `1px solid ${done ? "rgba(16,185,129,0.35)" : "rgba(245,158,11,0.3)"}` }}>
+                                <span style={{ fontSize: s(7.5), fontWeight: 700, color: done ? "#34D399" : "#FBBF24", letterSpacing: "0.04em" }}>{dateStr}</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ minHeight: s(40) }} />
+                          )}
+
+                          {/* Connector stem above */}
+                          {above && <div style={{ width: s(1.5), height: s(10), background: done ? "rgba(16,185,129,0.4)" : "rgba(245,158,11,0.2)" }} />}
+
+                          {/* Milestone circle */}
+                          <div style={{
+                            width: s(32), height: s(32), borderRadius: "50%", flexShrink: 0, zIndex: 2,
+                            background: done
+                              ? "linear-gradient(135deg, #10B981, #059669)"
+                              : "linear-gradient(135deg, #F59E0B, #F97316)",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            boxShadow: done
+                              ? `0 0 0 ${s(4)} rgba(16,185,129,0.15), 0 ${s(4)} ${s(12)} rgba(16,185,129,0.3)`
+                              : `0 0 0 ${s(4)} rgba(245,158,11,0.15), 0 ${s(4)} ${s(12)} rgba(245,158,11,0.3)`,
+                          }}>
+                            {done
+                              ? <CheckCircle2 style={{ width: s(16), height: s(16), color: "#fff" }} />
+                              : <span style={{ fontSize: s(12), fontWeight: 900, color: "#fff", lineHeight: 1 }}>{i + 1}</span>
+                            }
+                          </div>
+
+                          {/* Connector stem below */}
+                          {!above && <div style={{ width: s(1.5), height: s(10), background: done ? "rgba(16,185,129,0.4)" : "rgba(245,158,11,0.2)" }} />}
+
+                          {/* Label below */}
+                          {!above ? (
+                            <div style={{ textAlign: "center", marginTop: s(8), minHeight: s(40) }}>
+                              <p style={{ fontSize: s(10), fontWeight: 700, color: "#F1F5F9", margin: `0 0 ${s(4)}`, lineHeight: 1.3, maxWidth: s(90) }}>{item.label}</p>
+                              <div style={{ display: "inline-block", padding: `${s(2)} ${s(7)}`, borderRadius: "99px", background: done ? "rgba(16,185,129,0.15)" : "rgba(245,158,11,0.12)", border: `1px solid ${done ? "rgba(16,185,129,0.35)" : "rgba(245,158,11,0.3)"}` }}>
+                                <span style={{ fontSize: s(7.5), fontWeight: 700, color: done ? "#34D399" : "#FBBF24", letterSpacing: "0.04em" }}>{dateStr}</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ minHeight: s(40) }} />
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Legend */}
+                <div style={{ display: "flex", justifyContent: "center", gap: s(20), marginTop: s(4) }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: s(5) }}>
+                    <div style={{ width: s(8), height: s(8), borderRadius: "50%", background: "linear-gradient(135deg, #10B981, #059669)" }} />
+                    <span style={{ fontSize: s(8), color: "#64748B", fontWeight: 600 }}>Concluído</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: s(5) }}>
+                    <div style={{ width: s(8), height: s(8), borderRadius: "50%", background: "linear-gradient(135deg, #F59E0B, #F97316)" }} />
+                    <span style={{ fontSize: s(8), color: "#64748B", fontWeight: 600 }}>Planejado</span>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       )
@@ -740,10 +827,23 @@ export function KOSlideRenderer({ slide, scale = 1, noShadow }: { slide: KOSlide
     case "content": return (
       <div style={slideBase}>
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: s(5), background: "linear-gradient(90deg, #64748B, #94A3B8)" }} />
-        <div style={{ padding: `${s(28)} ${s(48)}`, height: "100%", boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
+        {slide.imageUrl && (
+          <div style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: "42%", overflow: "hidden" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={slide.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, #fff 0%, transparent 20%)" }} />
+          </div>
+        )}
+        <div style={{ padding: `${s(28)} ${s(48)}`, height: "100%", boxSizing: "border-box", display: "flex", flexDirection: "column", maxWidth: slide.imageUrl ? "62%" : "100%" }}>
           <Header title={slide.title} accent="#64748B" />
           <div style={{ flex: 1, padding: s(16), borderRadius: s(12), background: "#F8FAFC", border: "1px solid #E2E8F0", borderLeft: `${s(3)} solid #64748B` }}>
-            <p style={{ fontSize: s(13), color: "#475569", lineHeight: 1.75, margin: 0, whiteSpace: "pre-wrap" }}>{slide.content}</p>
+            <p
+              key={slide.id + "content"}
+              contentEditable={!!onEdit}
+              suppressContentEditableWarning
+              onBlur={onEdit ? (e) => onEdit({ content: e.currentTarget.textContent ?? "" }) : undefined}
+              style={{ fontSize: s(13), color: "#475569", lineHeight: 1.75, margin: 0, whiteSpace: "pre-wrap", outline: "none", cursor: onEdit ? "text" : "default" }}
+            >{slide.content}</p>
           </div>
         </div>
       </div>
@@ -752,13 +852,30 @@ export function KOSlideRenderer({ slide, scale = 1, noShadow }: { slide: KOSlide
     case "bullets": return (
       <div style={slideBase}>
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: s(5), background: "linear-gradient(90deg, #64748B, #94A3B8)" }} />
-        <div style={{ padding: `${s(28)} ${s(48)}`, height: "100%", boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
+        {slide.imageUrl && (
+          <div style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: "38%", overflow: "hidden" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={slide.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, #fff 0%, transparent 18%)" }} />
+          </div>
+        )}
+        <div style={{ padding: `${s(28)} ${s(48)}`, height: "100%", boxSizing: "border-box", display: "flex", flexDirection: "column", maxWidth: slide.imageUrl ? "66%" : "100%" }}>
           <Header title={slide.title} accent="#64748B" />
           <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: s(10) }}>
             {(slide.bullets ?? []).map((b, i) => (
               <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: s(12), padding: `${s(8)} ${s(14)}`, borderRadius: s(8), background: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                 <div style={{ width: s(6), height: s(6), borderRadius: "50%", background: "#7B2FBE", marginTop: s(6), flexShrink: 0 }} />
-                <p style={{ fontSize: s(13), color: "#0F172A", margin: 0, lineHeight: 1.5 }}>{b}</p>
+                <p
+                  key={slide.id + "b" + i}
+                  contentEditable={!!onEdit}
+                  suppressContentEditableWarning
+                  onBlur={onEdit ? (e) => {
+                    const newBullets = [...(slide.bullets ?? [])]
+                    newBullets[i] = e.currentTarget.textContent ?? ""
+                    onEdit({ bullets: newBullets })
+                  } : undefined}
+                  style={{ fontSize: s(13), color: "#0F172A", margin: 0, lineHeight: 1.5, outline: "none", cursor: onEdit ? "text" : "default", flex: 1 }}
+                >{b}</p>
               </div>
             ))}
           </div>
@@ -930,6 +1047,47 @@ function PropertyEditor({ slide, onUpdate }: { slide: KOSlide; onUpdate: (patch:
         <div><label className={lbl}>Mensagem final</label><input value={slide.content??""} onChange={(e) => onUpdate({ content: e.target.value })} className={inp} /></div>
       </>}
 
+      {/* Image — shown for content/bullets/objectives/about/methodology/closing slides */}
+      {["content", "bullets", "objectives", "about", "methodology", "closing", "cover"].includes(slide.type) && (
+        <div>
+          <label className={lbl}>Imagem</label>
+          {slide.imageUrl ? (
+            <div className="space-y-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={slide.imageUrl} alt="" className="w-full h-24 object-cover rounded-xl border border-slate-200" />
+              <div className="flex gap-2">
+                <label className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold text-violet-600 bg-violet-50 border border-violet-200 rounded-lg cursor-pointer hover:bg-violet-100 transition-colors">
+                  <Upload className="w-3 h-3" /> Trocar
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    const reader = new FileReader()
+                    reader.onload = (ev) => onUpdate({ imageUrl: ev.target?.result as string })
+                    reader.readAsDataURL(file)
+                  }} />
+                </label>
+                <button onClick={() => onUpdate({ imageUrl: undefined })} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-red-500 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors">
+                  <X className="w-3 h-3" /> Remover
+                </button>
+              </div>
+            </div>
+          ) : (
+            <label className="flex flex-col items-center gap-2 p-4 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-violet-300 hover:bg-violet-50 transition-all group">
+              <ImageIcon className="w-6 h-6 text-slate-300 group-hover:text-violet-400 transition-colors" />
+              <span className="text-xs text-slate-400 group-hover:text-violet-500 font-medium">Clique para adicionar imagem</span>
+              <span className="text-[10px] text-slate-300">PNG, JPG, WEBP</span>
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                const reader = new FileReader()
+                reader.onload = (ev) => onUpdate({ imageUrl: ev.target?.result as string })
+                reader.readAsDataURL(file)
+              }} />
+            </label>
+          )}
+        </div>
+      )}
+
       {/* Notes — always shown */}
       <div>
         <label className={lbl}>Notas do Apresentador</label>
@@ -1046,6 +1204,14 @@ export function KOBuilderClient({ project, kickoff, existing }: KOBuilderClientP
     })
   }
 
+  function handlePresent() {
+    start(async () => {
+      const result = await saveKickOffPresentation({ id: docId, projectId: project.id, title, slides })
+      setDocId(result.id)
+      router.push(`/projects/${project.id}/kickoff-presentation/view`)
+    })
+  }
+
   const scale = previewW / 960
 
   return (
@@ -1072,11 +1238,11 @@ export function KOBuilderClient({ project, kickoff, existing }: KOBuilderClientP
               : saveStatus === "saved" ? <><Check className="w-3.5 h-3.5 text-emerald-500" /> Salvo</>
               : <><Save className="w-3.5 h-3.5" /> Salvar</>}
           </button>
-          <Link href={`/projects/${project.id}/kickoff-presentation/view`}
-            className="inline-flex items-center gap-1.5 px-4 h-8 text-xs font-black rounded-xl text-white transition-all hover:opacity-90"
+          <button onClick={handlePresent} disabled={pending}
+            className="inline-flex items-center gap-1.5 px-4 h-8 text-xs font-black rounded-xl text-white transition-all hover:opacity-90 disabled:opacity-60"
             style={{ background: "linear-gradient(135deg, #7B2FBE, #2463FF)", boxShadow: "0 4px 16px rgba(123,47,190,0.35)" }}>
-            <Play className="w-3.5 h-3.5" /> Apresentar
-          </Link>
+            {pending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />} Apresentar
+          </button>
         </div>
       </div>
 
@@ -1121,7 +1287,7 @@ export function KOBuilderClient({ project, kickoff, existing }: KOBuilderClientP
             <div ref={previewRef} className="w-full max-w-4xl">
               {activeSlide && (
                 <div style={{ width: "100%", aspectRatio: "16/9" }}>
-                  <KOSlideRenderer slide={activeSlide} scale={scale} />
+                  <KOSlideRenderer slide={activeSlide} scale={scale} onEdit={updateActiveSlide} />
                 </div>
               )}
             </div>
