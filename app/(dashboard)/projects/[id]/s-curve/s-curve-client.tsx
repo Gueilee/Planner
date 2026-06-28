@@ -116,14 +116,21 @@ function KpiCard({
   label: string; value: string; sub?: string; color: string; dark: boolean
   icon?: typeof TrendingUp
 }) {
+  const isLong = value.length > 6
   return (
-    <div className={`rounded-2xl border p-3.5 ${dark ? "bg-[#1E293B] border-[#334155]" : "bg-white border-slate-200"}`}>
-      <div className="flex items-center gap-2 mb-2">
+    <div className={`rounded-2xl border p-3.5 min-w-0 overflow-hidden ${dark ? "bg-[#1E293B] border-[#334155]" : "bg-white border-slate-200"}`}>
+      <div className="flex items-center gap-2 mb-2 min-w-0">
         {Icon && <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${color}18` }}><Icon className="w-3 h-3" style={{ color }} /></div>}
-        <p className={`text-[10px] font-black uppercase tracking-widest ${dark ? "text-slate-400" : "text-slate-500"}`}>{label}</p>
+        <p className={`text-[10px] font-black uppercase tracking-widest truncate ${dark ? "text-slate-400" : "text-slate-500"}`}>{label}</p>
       </div>
-      <p className="text-2xl font-black leading-none" style={{ color }}>{value}</p>
-      {sub && <p className={`text-xs mt-1 ${dark ? "text-slate-500" : "text-slate-400"}`}>{sub}</p>}
+      <p
+        className={`${isLong ? "text-lg" : "text-2xl"} font-black leading-none truncate`}
+        style={{ color }}
+        title={value}
+      >
+        {value}
+      </p>
+      {sub && <p className={`text-xs mt-1 truncate ${dark ? "text-slate-500" : "text-slate-400"}`} title={sub}>{sub}</p>}
     </div>
   )
 }
@@ -595,7 +602,7 @@ export function SCurveClient({ projectId, initialData }: SCurveClientProps) {
 
             {/* KPI Cards */}
             {stats && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 2xl:grid-cols-6 gap-3">
                 <KpiCard
                   dark={dark} label="Planejado Hoje" icon={Calendar}
                   value={`${stats.plannedToday}%`}
