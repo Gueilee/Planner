@@ -82,6 +82,7 @@ export async function createUserInOrganization(data: {
   organizationId: string
   name: string
   email: string
+  password: string
   department?: string | null
   role: string
   phone?: string | null
@@ -89,12 +90,15 @@ export async function createUserInOrganization(data: {
   const session = await auth()
   if (!session?.user || session.user.role !== "ADMIN") throw new Error("Não autorizado")
 
+  if (!data.password || data.password.length < 6)
+    throw new Error("Senha deve ter no mínimo 6 caracteres")
+
   const bcrypt = (await import("bcryptjs")).default
   const email = data.email.trim().toLowerCase()
   const existing = await db.user.findUnique({ where: { email } })
   if (existing) throw new Error("Já existe um usuário com este e-mail")
 
-  const hash = await bcrypt.hash(crypto.randomUUID(), 10)
+  const hash = await bcrypt.hash(data.password, 10)
 
   await db.user.create({
     data: {

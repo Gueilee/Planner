@@ -29,6 +29,7 @@ export function OrganizationsClient({ initialOrgs, currentOrgId }: Props) {
   // New user form state
   const [newUserName, setNewUserName] = useState("")
   const [newUserEmail, setNewUserEmail] = useState("")
+  const [newUserPassword, setNewUserPassword] = useState("")
   const [newUserRole, setNewUserRole] = useState("PROJECT_MEMBER")
   const [newUserDept, setNewUserDept] = useState("")
   const [newUserPhone, setNewUserPhone] = useState("")
@@ -84,13 +85,14 @@ export function OrganizationsClient({ initialOrgs, currentOrgId }: Props) {
   }
 
   function handleCreateUser(orgId: string) {
-    if (!newUserName.trim() || !newUserEmail.trim()) return
+    if (!newUserName.trim() || !newUserEmail.trim() || !newUserPassword.trim()) return
     startTransition(async () => {
       try {
         await createUserInOrganization({
           organizationId: orgId,
           name: newUserName,
           email: newUserEmail,
+          password: newUserPassword,
           role: newUserRole,
           department: newUserDept || null,
           phone: newUserPhone || null,
@@ -102,6 +104,7 @@ export function OrganizationsClient({ initialOrgs, currentOrgId }: Props) {
         )
         setNewUserName("")
         setNewUserEmail("")
+        setNewUserPassword("")
         setNewUserRole("PROJECT_MEMBER")
         setNewUserDept("")
         setNewUserPhone("")
@@ -295,6 +298,16 @@ export function OrganizationsClient({ initialOrgs, currentOrgId }: Props) {
                     />
                   </div>
                   <div>
+                    <label className="text-xs font-medium text-gray-600 block mb-1">Senha inicial *</label>
+                    <input
+                      value={newUserPassword}
+                      onChange={(e) => setNewUserPassword(e.target.value)}
+                      placeholder="Mínimo 6 caracteres"
+                      type="text"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
                     <label className="text-xs font-medium text-gray-600 block mb-1">Perfil</label>
                     <select
                       value={newUserRole}
@@ -316,13 +329,13 @@ export function OrganizationsClient({ initialOrgs, currentOrgId }: Props) {
                     />
                   </div>
                 </div>
-                <p className="text-xs text-gray-400">
-                  A senha inicial será gerada automaticamente. O usuário pode redefinir no primeiro acesso.
+                <p className="text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
+                  Anote a senha e envie para o usuário — ela não poderá ser recuperada depois. O usuário pode alterá-la em Configurações após o primeiro acesso.
                 </p>
                 <div className="flex gap-3">
                   <button
                     onClick={() => handleCreateUser(org.id)}
-                    disabled={isPending || !newUserName.trim() || !newUserEmail.trim()}
+                    disabled={isPending || !newUserName.trim() || !newUserEmail.trim() || newUserPassword.length < 6}
                     className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition-colors"
                   >
                     {isPending ? "Criando..." : "Criar usuário"}
