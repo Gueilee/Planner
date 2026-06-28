@@ -406,6 +406,23 @@ export async function renameArea(areaId: string, name: string, projectId: string
   revalidatePath(`/projects/${projectId}/schedule`)
 }
 
+export async function convertUngroupedToArea(name: string, projectId: string) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+  const trimmed = name.trim()
+  if (!trimmed) return null
+  const order = await db.wbsArea.count({ where: { projectId } })
+  const area = await db.wbsArea.create({
+    data: { projectId, name: trimmed, order, color: "#CBD5E1" },
+  })
+  await db.scheduleTask.updateMany({
+    where: { projectId, wbsAreaId: null },
+    data: { wbsAreaId: area.id },
+  })
+  revalidatePath(`/projects/${projectId}/schedule`)
+  return { id: area.id, name: trimmed, color: "#CBD5E1" }
+}
+
 export async function reorderAreas(projectId: string, orderedIds: string[]) {
   const session = await auth()
   if (!session?.user) throw new Error("Não autorizado")

@@ -21,7 +21,7 @@ import {
 } from "lucide-react"
 import { SCurveClient, type SCurveData } from "../s-curve/s-curve-client"
 import {
-  createTask, updateTask, deleteTask, createArea, deleteArea, renameArea,
+  createTask, updateTask, deleteTask, createArea, deleteArea, renameArea, convertUngroupedToArea,
   reorderAreas, reorderTasks,
   getTaskAttachments, addTaskAttachments,
   type AttachmentUpload,
@@ -1798,6 +1798,19 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
     const trimmed = newName.trim()
     setEditingAreaId(null)
     if (!trimmed) return
+
+    if (areaId === "__ungrouped__") {
+      // Convert virtual ungrouped row into a real DB area and reassign its tasks
+      start(async () => {
+        const result = await convertUngroupedToArea(trimmed, project.id)
+        if (result) {
+          setAreas((prev) => [...prev, { id: result.id, name: result.name, color: result.color }])
+          setTasks((prev) => prev.map((t) => t.wbsAreaId === null ? { ...t, wbsAreaId: result.id } : t))
+        }
+      })
+      return
+    }
+
     const current = areas.find((a) => a.id === areaId)
     if (!current || trimmed === current.name) return
     setAreas((prev) => prev.map((a) => a.id === areaId ? { ...a, name: trimmed } : a))
@@ -2233,25 +2246,23 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                         >
                           <Plus className="w-3 h-3" />
                         </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setEditingAreaId(row.id); setEditingAreaValue(row.id === "__ungrouped__" ? "" : row.name) }}
+                          title={row.id === "__ungrouped__" ? "Dar nome a este módulo" : "Renomear módulo"}
+                          className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
+                          style={{ background: "#EDE9FE", color: "#7C3AED" }}
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
                         {row.id !== "__ungrouped__" && (
-                          <>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setEditingAreaId(row.id); setEditingAreaValue(row.name) }}
-                              title="Renomear módulo"
-                              className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
-                              style={{ background: "#EDE9FE", color: "#7C3AED" }}
-                            >
-                              <Pencil className="w-3 h-3" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteArea(row.id, row.name)}
-                              title="Excluir módulo e todas as atividades"
-                              className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
-                              style={{ background: "#FEE2E2", color: "#DC2626" }}
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          </>
+                          <button
+                            onClick={() => handleDeleteArea(row.id, row.name)}
+                            title="Excluir módulo e todas as atividades"
+                            className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
+                            style={{ background: "#FEE2E2", color: "#DC2626" }}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
                         )}
                       </div>
 
@@ -2818,25 +2829,23 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                             >
                               <Plus className="w-3 h-3" />
                             </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setEditingAreaId(areaId); setEditingAreaValue(areaId === "__ungrouped__" ? "" : areaName) }}
+                              title={areaId === "__ungrouped__" ? "Dar nome a este módulo" : "Renomear módulo"}
+                              className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
+                              style={{ background: "#EDE9FE", color: "#7C3AED" }}
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </button>
                             {areaId !== "__ungrouped__" && (
-                              <>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); setEditingAreaId(areaId); setEditingAreaValue(areaName) }}
-                                  title="Renomear módulo"
-                                  className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
-                                  style={{ background: "#EDE9FE", color: "#7C3AED" }}
-                                >
-                                  <Pencil className="w-3 h-3" />
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteArea(areaId, areaName)}
-                                  title="Excluir módulo e todas as atividades"
-                                  className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
-                                  style={{ background: "#FEE2E2", color: "#DC2626" }}
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
-                              </>
+                              <button
+                                onClick={() => handleDeleteArea(areaId, areaName)}
+                                title="Excluir módulo e todas as atividades"
+                                className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
+                                style={{ background: "#FEE2E2", color: "#DC2626" }}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
                             )}
                           </div>
                         </div>
