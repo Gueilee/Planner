@@ -21,7 +21,7 @@ import {
 } from "lucide-react"
 import { SCurveClient, type SCurveData } from "../s-curve/s-curve-client"
 import {
-  createTask, updateTask, deleteTask, createArea, deleteArea,
+  createTask, updateTask, deleteTask, createArea, deleteArea, renameArea,
   reorderAreas, reorderTasks,
   getTaskAttachments, addTaskAttachments,
   type AttachmentUpload,
@@ -1307,6 +1307,8 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
 
   // List view state
   const [expandedAreas, setExpandedAreas] = useState<Set<string>>(() => new Set(initialAreas.map((a) => a.id)))
+  const [editingAreaId, setEditingAreaId]     = useState<string | null>(null)
+  const [editingAreaValue, setEditingAreaValue] = useState("")
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(() => {
     const parentIds = new Set(initialTasks.filter((t) => t.parentId).map((t) => t.parentId!))
     return new Set(initialTasks.filter((t) => parentIds.has(t.id)).map((t) => t.id))
@@ -1792,6 +1794,16 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
     })
   }
 
+  function handleRenameArea(areaId: string, newName: string) {
+    const trimmed = newName.trim()
+    setEditingAreaId(null)
+    if (!trimmed) return
+    const current = areas.find((a) => a.id === areaId)
+    if (!current || trimmed === current.name) return
+    setAreas((prev) => prev.map((a) => a.id === areaId ? { ...a, name: trimmed } : a))
+    start(async () => { await renameArea(areaId, trimmed, project.id) })
+  }
+
   function saveTaskField(taskId: string, data: Record<string, unknown>) {
     // Optimistic update with derived progress/status
     const current = tasksRef.current.find(t => t.id === taskId)
@@ -2224,6 +2236,14 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                               <Plus className="w-3 h-3" />
                             </button>
                             <button
+                              onClick={(e) => { e.stopPropagation(); setEditingAreaId(row.id); setEditingAreaValue(row.name) }}
+                              title="Renomear módulo"
+                              className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110 opacity-0 group-hover:opacity-100"
+                              style={{ background: "#EDE9FE", color: "#7C3AED" }}
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                            <button
                               onClick={() => handleDeleteArea(row.id, row.name)}
                               title="Excluir módulo e todas as atividades"
                               className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110 opacity-0 group-hover:opacity-100"
@@ -2239,7 +2259,32 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                       {(() => {
                         const areaCells: Record<ColKey, React.ReactNode> = {
                           eap: <div style={{ width: colW.eap, flexShrink: 0 }} className="flex items-center justify-center"><span className="text-[10px] font-bold text-slate-400 font-mono">{row.eap}</span></div>,
-                          name: <div style={{ width: colW.name, flexShrink: 0 }} className="flex items-center gap-2.5 px-2 cursor-pointer overflow-hidden" onClick={() => toggleArea(row.id)}><div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: row.color ?? "#CBD5E1" }} /><span className="font-black text-[#0F172A] text-sm truncate">{row.name}</span><span className="text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0" style={{ background: "#EDE9FE", color: "#7C3AED" }}>Módulo</span></div>,
+                          name: (
+                            <div
+                              style={{ width: colW.name, flexShrink: 0 }}
+                              className={`flex items-center gap-2.5 px-2 overflow-hidden ${editingAreaId === row.id ? "cursor-default" : "cursor-pointer"}`}
+                              onClick={() => { if (editingAreaId !== row.id) toggleArea(row.id) }}
+                            >
+                              <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: row.color ?? "#CBD5E1" }} />
+                              {editingAreaId === row.id ? (
+                                <input
+                                  autoFocus
+                                  value={editingAreaValue}
+                                  onChange={(e) => setEditingAreaValue(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") { e.preventDefault(); handleRenameArea(row.id, editingAreaValue) }
+                                    if (e.key === "Escape") setEditingAreaId(null)
+                                  }}
+                                  onBlur={() => handleRenameArea(row.id, editingAreaValue)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="flex-1 min-w-0 text-sm font-black text-[#0F172A] bg-transparent border-b-2 border-[#7B2FBE] outline-none"
+                                />
+                              ) : (
+                                <span className="font-black text-[#0F172A] text-sm truncate">{row.name}</span>
+                              )}
+                              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0" style={{ background: "#EDE9FE", color: "#7C3AED" }}>Módulo</span>
+                            </div>
+                          ),
                           status: <div style={{ width: colW.status, flexShrink: 0 }} className="flex justify-center"><span className="text-[10px] text-slate-400 font-medium">{row.doneCount}/{row.taskCount}</span></div>,
                           responsible: <div style={{ width: colW.responsible, flexShrink: 0 }} />,
                           startDate:   <div style={{ width: colW.startDate,   flexShrink: 0 }} />,
@@ -2726,6 +2771,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                       return (
                         <div
                           key={`ga-${areaId}`}
+                          className="group"
                           style={{
                             height: ROW_H, display: "flex", alignItems: "center",
                             background: areaColor ? `${areaColor}12` : "#F8FAFC",
@@ -2762,17 +2808,35 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                           <div style={{ width: 76, flexShrink: 0 }} />
                           <div style={{ width: 48, flexShrink: 0 }} />
 
-                          {/* Add task to this area */}
-                          <div style={{ width: 56, flexShrink: 0 }} className="flex items-center justify-center gap-1 pr-2">
+                          {/* Area actions */}
+                          <div style={{ width: 56, flexShrink: 0 }} className="flex items-center justify-center gap-0.5 pr-1">
                             {areaId !== "__ungrouped__" && (
-                              <button
-                                onClick={() => openAdd(undefined, areaId)}
-                                title="Nova atividade nesta área"
-                                className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
-                                style={{ background: "#DCFCE7", color: "#16A34A" }}
-                              >
-                                <Plus className="w-3 h-3" />
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => openAdd(undefined, areaId)}
+                                  title="Nova atividade nesta área"
+                                  className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
+                                  style={{ background: "#DCFCE7", color: "#16A34A" }}
+                                >
+                                  <Plus className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setEditingAreaId(areaId); setEditingAreaValue(areaName) }}
+                                  title="Renomear módulo"
+                                  className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110 opacity-0 group-hover:opacity-100"
+                                  style={{ background: "#EDE9FE", color: "#7C3AED" }}
+                                >
+                                  <Pencil className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteArea(areaId, areaName)}
+                                  title="Excluir módulo e todas as atividades"
+                                  className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110 opacity-0 group-hover:opacity-100"
+                                  style={{ background: "#FEE2E2", color: "#DC2626" }}
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </>
                             )}
                           </div>
                         </div>

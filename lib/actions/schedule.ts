@@ -397,6 +397,15 @@ export async function deleteArea(areaId: string, projectId: string) {
   revalidatePath(`/projects/${projectId}/schedule`)
 }
 
+export async function renameArea(areaId: string, name: string, projectId: string) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+  const trimmed = name.trim()
+  if (!trimmed) return
+  await db.wbsArea.update({ where: { id: areaId }, data: { name: trimmed } })
+  revalidatePath(`/projects/${projectId}/schedule`)
+}
+
 export async function reorderAreas(projectId: string, orderedIds: string[]) {
   const session = await auth()
   if (!session?.user) throw new Error("Não autorizado")
