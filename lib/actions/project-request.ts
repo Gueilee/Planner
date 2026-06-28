@@ -40,8 +40,9 @@ export async function createProjectRequest(data: {
 
   const project = await db.project.create({
     data: {
-      title:         data.title,
-      requestNumber: nextNumber,
+      title:          data.title,
+      requestNumber:  nextNumber,
+      organizationId: session.user.organizationId,
       description:    data.scope || null,
       status:         ProjectStatus.PENDING_GO_NO_GO,
       projectArea:    (data.projectArea || "TECNOLOGIA") as never,

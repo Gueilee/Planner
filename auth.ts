@@ -33,7 +33,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
           const turso = getTursoClient()
           const result = await turso.execute({
-            sql:  `SELECT id, name, email, password, role, department, image, active
+            sql:  `SELECT id, name, email, password, role, department, image, active, organizationId
                    FROM "User" WHERE email = ? LIMIT 1`,
             args: [credentials.email as string],
           })
@@ -54,13 +54,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const uid = row.id as string
           const rawImage = row.image as string | null
           return {
-            id:         uid,
-            name:       row.name       as string,
-            email:      row.email      as string,
-            role:       row.role       as UserRole,
-            department: row.department as string | null,
+            id:             uid,
+            name:           row.name           as string,
+            email:          row.email          as string,
+            role:           row.role           as UserRole,
+            department:     row.department     as string | null,
+            organizationId: (row.organizationId as string | null) ?? "org_vendemmia",
             // Armazena só o path — nunca o base64 — para o JWT não estourar o cookie
-            image:      rawImage ? `/api/avatar/${uid}` : null,
+            image:          rawImage ? `/api/avatar/${uid}` : null,
           }
         } catch (err) {
           console.error("[auth] authorize error:", err)
@@ -73,11 +74,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user, trigger }) {
       // First login: persist all fields
       if (user) {
-        token.id         = user.id ?? token.sub ?? ""
-        token.role       = (user as { role: UserRole }).role
-        token.department = (user as { department?: string | null }).department ?? null
-        token.image      = (user as { image?: string | null }).image ?? null
-        token.name       = user.name ?? null
+        token.id             = user.id ?? token.sub ?? ""
+        token.role           = (user as { role: UserRole }).role
+        token.department     = (user as { department?: string | null }).department ?? null
+        token.image          = (user as { image?: string | null }).image ?? null
+        token.name           = user.name ?? null
+        token.organizationId = (user as { organizationId?: string }).organizationId ?? "org_vendemmia"
       }
       // Session update triggered (e.g. after profile save): refresh from DB
       if (trigger === "update" && token.id) {
@@ -102,10 +104,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     async session({ session, token }) {
       if (token && session.user) {
-        session.user.id         = token.id as string
-        session.user.role       = token.role as UserRole
-        session.user.department = token.department as string | null
-        session.user.image      = (token.image as string | null) ?? null
+        session.user.id             = token.id as string
+        session.user.role           = token.role as UserRole
+        session.user.department     = token.department as string | null
+        session.user.image          = (token.image as string | null) ?? null
+        session.user.organizationId = (token.organizationId as string | null) ?? "org_vendemmia"
         if (token.name) session.user.name = token.name as string
       }
       return session
@@ -116,27 +119,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 declare module "next-auth" {
   interface Session {
     user: {
-      id: string
-      name: string
-      email: string
-      role: UserRole
-      department?: string | null
-      image?: string | null
+      id:             string
+      name:           string
+      email:          string
+      role:           UserRole
+      department?:    string | null
+      image?:         string | null
+      organizationId: string
     }
   }
 
   interface User {
-    role: UserRole
-    department?: string | null
+    role:            UserRole
+    department?:     string | null
+    organizationId?: string
   }
 }
 
 declare module "next-auth/jwt" {
   interface JWT {
-    id:          string
-    role:        UserRole
-    department?: string | null
-    image?:      string | null
-    name?:       string | null
+    id:              string
+    role:            UserRole
+    department?:     string | null
+    image?:          string | null
+    name?:           string | null
+    organizationId?: string | null
   }
 }

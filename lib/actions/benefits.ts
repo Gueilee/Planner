@@ -124,7 +124,11 @@ export async function getPortfolioBenefits(filters?: {
   charts: PortfolioChartData
   projects: ProjectBenefitMetrics[]
 }> {
+  const session = await auth()
+  if (!session?.user?.id) throw new Error("Unauthorized")
+
   const projectWhere: Record<string, unknown> = {}
+  projectWhere.organizationId = session.user.organizationId
   if (filters?.areas?.length)      projectWhere.projectArea = { in: filters.areas }
   if (filters?.statuses?.length)   projectWhere.status      = { in: filters.statuses }
   if (filters?.managerIds?.length) projectWhere.members = { some: { userId: { in: filters.managerIds } } }

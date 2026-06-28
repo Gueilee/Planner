@@ -21,7 +21,7 @@ export default async function StatusReportPage() {
   if (!session?.user) redirect("/login")
 
   const projects = await db.project.findMany({
-    where:   { status: { in: ACTIVE_STATUSES } },
+    where:   { status: { in: ACTIVE_STATUSES }, organizationId: session.user.organizationId },
     orderBy: { createdAt: "asc" },
     include: {
       sponsor:  { select: { name: true } },

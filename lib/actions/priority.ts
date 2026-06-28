@@ -46,8 +46,11 @@ const ACTIVE_STATUSES: ProjectStatus[] = [
 ]
 
 export async function getProjectsForPriority() {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+
   return db.project.findMany({
-    where: { status: { in: ACTIVE_STATUSES } },
+    where: { status: { in: ACTIVE_STATUSES }, organizationId: session.user.organizationId },
     orderBy: [
       { priority: { sort: "asc", nulls: "last" } },
       { createdAt: "asc" },

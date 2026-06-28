@@ -89,7 +89,7 @@ export default async function AnalyticsPage() {
 
   const [projectsRaw, users] = await Promise.all([
     db.project.findMany({
-      where:   { status: { not: ProjectStatus.CANCELLED } },
+      where:   { status: { not: ProjectStatus.CANCELLED }, organizationId: session.user.organizationId },
       orderBy: { createdAt: "asc" },
       include: {
         sponsor: { select: { name: true } },
@@ -122,7 +122,7 @@ export default async function AnalyticsPage() {
       },
     }),
     db.user.findMany({
-      where:   { active: true },
+      where:   { active: true, organizationId: session.user.organizationId },
       select:  { id: true, name: true },
       orderBy: { name: "asc" },
     }),

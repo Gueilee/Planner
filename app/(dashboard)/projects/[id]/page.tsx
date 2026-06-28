@@ -64,7 +64,7 @@ export default async function ProjectDetailPage({
 
   const [project, allUsers] = await Promise.all([
    db.project.findUnique({
-    where: { id },
+    where: { id, organizationId: session?.user?.organizationId },
     include: {
       members: { include: { user: { select: { id: true, name: true, email: true, role: true, department: true, image: true } } } },
       wbsAreas: {
@@ -121,7 +121,7 @@ export default async function ProjectDetailPage({
     },
    }),
    db.user.findMany({
-     where: { active: true },
+     where: { active: true, organizationId: session?.user?.organizationId },
      select: { id: true, name: true, department: true, role: true },
      orderBy: { name: "asc" },
    }),

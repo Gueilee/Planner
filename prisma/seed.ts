@@ -35,8 +35,12 @@ async function main() {
   await db.projectMember.deleteMany()
   await db.project.deleteMany()
   await db.user.deleteMany()
+  await db.organization.deleteMany()
 
   console.log("✅ Banco limpo\n")
+
+  // ── Organização padrão ────────────────────────────────────────────────────
+  await db.organization.create({ data: { id: "org_vendemmia", name: "Vendemmia", slug: "vendemmia" } })
 
   // ── Usuários ──────────────────────────────────────────────────────────────
   console.log("👥 Criando usuários...")
@@ -48,20 +52,20 @@ async function main() {
     raquel, jose, paulo, marcos,
     jaqueline, daniel, wiverton,
   ] = await Promise.all([
-    db.user.create({ data: { name: "Gueilee Pereira",    email: "gppereira@vendemmia.com.br",     password: hash, role: UserRole.ADMIN,           department: "Projetos"    } }),
-    db.user.create({ data: { name: "Rafael Puglia",      email: "rafael.puglia@vendemmia.com.br", password: hash, role: UserRole.DIRECTOR,         department: "Diretoria"   } }),
-    db.user.create({ data: { name: "Osni Tavares",       email: "osni.tavares@vendemmia.com.br",  password: hash, role: UserRole.DIRECTOR,         department: "Diretoria"   } }),
-    db.user.create({ data: { name: "Paola Schreiber",    email: "paola.schreiber@vendemmia.com.br",   password: hash, role: UserRole.SPONSOR, department: "Compras"     } }),
-    db.user.create({ data: { name: "Marcelo Barros",     email: "marcelo.barros@vendemmia.com.br",    password: hash, role: UserRole.SPONSOR, department: "Controller"  } }),
-    db.user.create({ data: { name: "Monique Aranda",     email: "monique.aranda@vendemmia.com.br",    password: hash, role: UserRole.SPONSOR, department: "Operações"   } }),
-    db.user.create({ data: { name: "Caroline de Souza",  email: "caroline.souza@vendemmia.com.br",    password: hash, role: UserRole.SPONSOR, department: "Qualidade"   } }),
-    db.user.create({ data: { name: "Raquel Milsoni",     email: "raquel.milsoni@vendemmia.com.br",    password: hash, role: UserRole.PROJECT_MEMBER, department: "Marketing"   } }),
-    db.user.create({ data: { name: "José Netto",         email: "jose.netto@vendemmia.com.br",        password: hash, role: UserRole.SPONSOR, department: "RH"          } }),
-    db.user.create({ data: { name: "Paulo Chiaradia",    email: "paulo.chiaradia@vendemmia.com.br",   password: hash, role: UserRole.SPONSOR, department: "Financeiro"  } }),
-    db.user.create({ data: { name: "Marcos Lima",        email: "marcos.lima@vendemmia.com.br",       password: hash, role: UserRole.SPONSOR, department: "Transportes" } }),
-    db.user.create({ data: { name: "Jaqueline Almeida",  email: "jaqueline.almeida@vendemmia.com.br", password: hash, role: UserRole.PROJECT_MEMBER, department: "Financeiro"  } }),
-    db.user.create({ data: { name: "Daniel Tavares",     email: "daniel.tavares@vendemmia.com.br",    password: hash, role: UserRole.SPONSOR, department: "Comercial"   } }),
-    db.user.create({ data: { name: "Wiverton da Silva",  email: "wiverton.silva@vendemmia.com.br",    password: hash, role: UserRole.SPONSOR, department: "Transportes" } }),
+    db.user.create({ data: { name: "Gueilee Pereira",    email: "gppereira@vendemmia.com.br",     password: hash, role: UserRole.ADMIN,           department: "Projetos",    organizationId: "org_vendemmia" } }),
+    db.user.create({ data: { name: "Rafael Puglia",      email: "rafael.puglia@vendemmia.com.br", password: hash, role: UserRole.DIRECTOR,         department: "Diretoria",   organizationId: "org_vendemmia" } }),
+    db.user.create({ data: { name: "Osni Tavares",       email: "osni.tavares@vendemmia.com.br",  password: hash, role: UserRole.DIRECTOR,         department: "Diretoria",   organizationId: "org_vendemmia" } }),
+    db.user.create({ data: { name: "Paola Schreiber",    email: "paola.schreiber@vendemmia.com.br",   password: hash, role: UserRole.SPONSOR, department: "Compras",     organizationId: "org_vendemmia" } }),
+    db.user.create({ data: { name: "Marcelo Barros",     email: "marcelo.barros@vendemmia.com.br",    password: hash, role: UserRole.SPONSOR, department: "Controller",  organizationId: "org_vendemmia" } }),
+    db.user.create({ data: { name: "Monique Aranda",     email: "monique.aranda@vendemmia.com.br",    password: hash, role: UserRole.SPONSOR, department: "Operações",   organizationId: "org_vendemmia" } }),
+    db.user.create({ data: { name: "Caroline de Souza",  email: "caroline.souza@vendemmia.com.br",    password: hash, role: UserRole.SPONSOR, department: "Qualidade",   organizationId: "org_vendemmia" } }),
+    db.user.create({ data: { name: "Raquel Milsoni",     email: "raquel.milsoni@vendemmia.com.br",    password: hash, role: UserRole.PROJECT_MEMBER, department: "Marketing",   organizationId: "org_vendemmia" } }),
+    db.user.create({ data: { name: "José Netto",         email: "jose.netto@vendemmia.com.br",        password: hash, role: UserRole.SPONSOR, department: "RH",          organizationId: "org_vendemmia" } }),
+    db.user.create({ data: { name: "Paulo Chiaradia",    email: "paulo.chiaradia@vendemmia.com.br",   password: hash, role: UserRole.SPONSOR, department: "Financeiro",  organizationId: "org_vendemmia" } }),
+    db.user.create({ data: { name: "Marcos Lima",        email: "marcos.lima@vendemmia.com.br",       password: hash, role: UserRole.SPONSOR, department: "Transportes", organizationId: "org_vendemmia" } }),
+    db.user.create({ data: { name: "Jaqueline Almeida",  email: "jaqueline.almeida@vendemmia.com.br", password: hash, role: UserRole.PROJECT_MEMBER, department: "Financeiro",  organizationId: "org_vendemmia" } }),
+    db.user.create({ data: { name: "Daniel Tavares",     email: "daniel.tavares@vendemmia.com.br",    password: hash, role: UserRole.SPONSOR, department: "Comercial",   organizationId: "org_vendemmia" } }),
+    db.user.create({ data: { name: "Wiverton da Silva",  email: "wiverton.silva@vendemmia.com.br",    password: hash, role: UserRole.SPONSOR, department: "Transportes", organizationId: "org_vendemmia" } }),
   ])
 
   const byName: Record<string, typeof gueilee> = {
@@ -166,6 +170,7 @@ async function main() {
         title:          d.title,
         description:    d.resumo,
         status:         pStatus(d.status),
+        organizationId: "org_vendemmia",
         origin:         d.areaSol === "SÓCIO" ? "SPONSOR" : "INTERNAL",
         scope:          d.resumo,
         sponsorId:      sponsor.id,

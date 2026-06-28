@@ -22,8 +22,12 @@ export type ClosureMeetingInput = {
 // ─── Queries ─────────────────────────────────────────────────────────────────
 
 export async function getProjectsForClosure() {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+
   return db.project.findMany({
     where: {
+      organizationId: session.user.organizationId,
       status: { in: ["GO_LIVE", "POST_GOLIVE"] },
     },
     orderBy: [{ priority: "asc" }, { title: "asc" }],

@@ -28,6 +28,7 @@ async function upsertProject(
       id,
       title,
       status,
+      organizationId: "org_vendemmia",
       members: {
         create: [
           { userId: managerId, role: "Gerente de Projeto" },

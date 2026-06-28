@@ -7,6 +7,30 @@ import { ProjectStatus, TaskStatus, RiskLevel } from "@/lib/generated/prisma/enu
 
 // ─── Project ───────────────────────────────────────────────────────────────
 
+export async function createProject(data: {
+  title: string
+  description?: string
+  projectArea?: string
+  roadmapYear?: number
+  roadmapQuarter?: number
+}) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+
+  const project = await db.project.create({
+    data: {
+      title:          data.title,
+      description:    data.description,
+      projectArea:    data.projectArea ? (data.projectArea as never) : undefined,
+      roadmapYear:    data.roadmapYear,
+      roadmapQuarter: data.roadmapQuarter,
+      organizationId: session.user.organizationId,
+    },
+  })
+  revalidatePath(`/projects`)
+  return project
+}
+
 export async function updateProjectStatus(id: string, status: ProjectStatus) {
   const session = await auth()
   if (!session?.user) throw new Error("Não autorizado")

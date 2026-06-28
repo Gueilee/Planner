@@ -9,7 +9,7 @@ import type { KickOffData, ExternalAttendee } from "@/lib/types/kickoff"
 import { generateMeetingATA } from "@/lib/actions/ata"
 import bcrypt from "bcryptjs"
 
-async function syncExternalAttendees(projectId: string, externalAttendees: ExternalAttendee[]) {
+async function syncExternalAttendees(projectId: string, externalAttendees: ExternalAttendee[], organizationId: string) {
   for (const ext of externalAttendees) {
     if (!ext.name?.trim()) continue
     const slug  = ext.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 30).replace(/-$/, "")
@@ -19,7 +19,7 @@ async function syncExternalAttendees(projectId: string, externalAttendees: Exter
       if (!user) {
         const hash = await bcrypt.hash(crypto.randomUUID(), 10)
         user = await db.user.create({
-          data: { name: ext.name.trim(), email, password: hash, role: "PROJECT_MEMBER", active: true, department: ext.role || "Externo" },
+          data: { name: ext.name.trim(), email, password: hash, role: "PROJECT_MEMBER", active: true, department: ext.role || "Externo", organizationId },
         })
       }
       await db.projectMember.upsert({
@@ -64,7 +64,7 @@ export async function saveKickOff(data: KickOffData) {
   })
 
   if (data.externalAttendees?.length) {
-    await syncExternalAttendees(data.projectId, data.externalAttendees)
+    await syncExternalAttendees(data.projectId, data.externalAttendees, session.user.organizationId)
   }
 
   if (data.id) {
@@ -111,7 +111,7 @@ export async function registerKickOff(data: KickOffData) {
   })
 
   if (data.externalAttendees?.length) {
-    await syncExternalAttendees(data.projectId, data.externalAttendees)
+    await syncExternalAttendees(data.projectId, data.externalAttendees, session.user.organizationId)
   }
 
   const meetingId = await db.$transaction(async (tx) => {

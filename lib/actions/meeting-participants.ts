@@ -1,6 +1,7 @@
 "use server"
 
 import { db } from "@/lib/db"
+import { auth } from "@/auth"
 
 export type ProjectParticipant = {
   id:         string
@@ -59,8 +60,10 @@ export async function getProjectParticipants(projectId: string): Promise<Project
  * Retorna todos os usuários ativos do sistema (para busca/adição).
  */
 export async function getAllActiveUsers(): Promise<ProjectParticipant[]> {
+  const session = await auth()
+  if (!session?.user) return []
   const users = await db.user.findMany({
-    where:   { active: true },
+    where:   { active: true, organizationId: session.user.organizationId },
     select:  { id: true, name: true, department: true, image: true },
     orderBy: { name: "asc" },
   })

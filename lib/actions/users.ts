@@ -23,6 +23,7 @@ export async function listUsers(): Promise<UserRow[]> {
   if (!session?.user) throw new Error("Não autorizado")
 
   const users = await db.user.findMany({
+    where: { organizationId: session.user.organizationId },
     select: {
       id: true,
       name: true,
@@ -65,6 +66,7 @@ export async function createUser(data: {
       phone: data.phone?.trim() || null,
       password: hash,
       active: true,
+      organizationId: session.user.organizationId,
     },
     select: {
       id: true, name: true, email: true, department: true,

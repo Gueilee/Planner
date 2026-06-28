@@ -7,7 +7,7 @@ import { signOut, useSession } from "next-auth/react"
 import { cn } from "@/lib/utils"
 import {
   LayoutDashboard, FolderKanban,
-  BookOpen, Settings, ChevronLeft, LogOut, Users, FileBarChart2, Star, Columns3, History, CheckCircle2, TrendingUp, FileText, LayoutTemplate, Gem,
+  BookOpen, Settings, ChevronLeft, LogOut, Users, FileBarChart2, Star, Columns3, History, CheckCircle2, TrendingUp, FileText, LayoutTemplate, Gem, Building2,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ROLE_LABELS } from "@/lib/permissions"
@@ -31,7 +31,8 @@ const SYSTEM_ITEMS = [
 ]
 
 const ADMIN_ITEMS = [
-  { label: "Documentos", href: "/docs", icon: FileText },
+  { label: "Documentos",    href: "/docs",           icon: FileText },
+  { label: "Organizações",  href: "/organizations",  icon: Building2 },
 ]
 
 interface SidebarProps {

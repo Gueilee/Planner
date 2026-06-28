@@ -197,22 +197,41 @@ enum BenefitStatus {
 }
 
 // ─────────────────────────────────────────────
+// ORGANIZATIONS (multi-tenant)
+// ─────────────────────────────────────────────
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  logoUrl   String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users    User[]
+  projects Project[]
+}
+
+// ─────────────────────────────────────────────
 // AUTH
 // ─────────────────────────────────────────────
 
 model User {
-  id            String    @id @default(cuid())
-  name          String
-  email         String    @unique
-  emailVerified DateTime?
-  image         String?
-  password      String
-  role          UserRole  @default(PROJECT_MEMBER)
-  department    String?
-  phone         String?
-  active        Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id             String       @id @default(cuid())
+  name           String
+  email          String       @unique
+  emailVerified  DateTime?
+  image          String?
+  password       String
+  role           UserRole     @default(PROJECT_MEMBER)
+  department     String?
+  phone          String?
+  active         Boolean      @default(true)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   projectMemberships   ProjectMember[]
   sponsoredProjects    Project[]         @relation("ProjectSponsor")
@@ -259,6 +278,9 @@ model Project {
   economy        Float?
   expectedStart  DateTime?
   expectedEnd    DateTime?
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
 
   // Sponsor
   sponsorId String?

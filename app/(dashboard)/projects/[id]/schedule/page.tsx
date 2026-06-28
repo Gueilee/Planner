@@ -23,7 +23,7 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
       orderBy: { order: "asc" },
     }),
     db.user.findMany({
-      where: { active: true },
+      where: { active: true, organizationId: session.user.organizationId },
       select: { id: true, name: true, department: true },
       orderBy: { name: "asc" },
     }),

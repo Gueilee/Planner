@@ -15,7 +15,7 @@ export default async function BenefitsPage() {
   const [data, users] = await Promise.all([
     getPortfolioBenefits(),
     db.user.findMany({
-      where: { active: true },
+      where: { active: true, organizationId: session.user.organizationId },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),

@@ -70,8 +70,12 @@ export async function updateTaskStatusKanban(taskId: string, status: TaskStatus)
 }
 
 export async function getAllProjectsForKanban() {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+
   return db.project.findMany({
     where: {
+      organizationId: session.user.organizationId,
       status: {
         notIn: [ProjectStatus.CANCELLED],
       },

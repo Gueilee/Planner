@@ -462,7 +462,7 @@ export async function addExternalMember(projectId: string, name: string): Promis
   if (!user) {
     const hash = await bcrypt.hash(crypto.randomUUID(), 10)
     user = await db.user.create({
-      data: { name: trimmed, email, password: hash, role: "PROJECT_MEMBER", active: true, department: "Externo" },
+      data: { name: trimmed, email, password: hash, role: "PROJECT_MEMBER", active: true, department: "Externo", organizationId: session.user.organizationId },
     })
   }
 

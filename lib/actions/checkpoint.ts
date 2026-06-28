@@ -69,7 +69,7 @@ export async function saveCheckpoint(data: CheckpointInput) {
   // Fetch participants names for ATA
   const participantUsers = data.attendeeIds.length
     ? await db.user.findMany({
-        where: { id: { in: data.attendeeIds } },
+        where: { id: { in: data.attendeeIds }, organizationId: session.user.organizationId },
         select: { name: true, department: true },
       })
     : []

@@ -11,6 +11,9 @@ export default async function UsersPage() {
   if (!session?.user) redirect("/login")
 
   const users = await db.user.findMany({
+    where: {
+      organizationId: session.user.organizationId,
+    },
     select: {
       id: true,
       name: true,

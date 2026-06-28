@@ -44,10 +44,10 @@ export default async function DashboardPage() {
     onHoldProjects,
     riskProjects,
   ] = await Promise.all([
-    db.project.findMany({ select: { status: true } }),
+    db.project.findMany({ where: { organizationId: session.user.organizationId }, select: { status: true } }),
 
     db.project.findMany({
-      where: { expectedEnd: { lt: today }, status: { in: NOT_DONE } },
+      where: { organizationId: session.user.organizationId, expectedEnd: { lt: today }, status: { in: NOT_DONE } },
       orderBy: { expectedEnd: "asc" },
       take: 6,
       select: {
@@ -57,7 +57,7 @@ export default async function DashboardPage() {
     }),
 
     db.project.findMany({
-      where: { expectedEnd: { gte: today, lte: in60 }, status: { in: NOT_DONE } },
+      where: { organizationId: session.user.organizationId, expectedEnd: { gte: today, lte: in60 }, status: { in: NOT_DONE } },
       orderBy: { expectedEnd: "asc" },
       take: 8,
       select: { id: true, title: true, status: true, expectedEnd: true },
@@ -79,7 +79,7 @@ export default async function DashboardPage() {
 
     // Projetos em espera (ON_HOLD)
     db.project.findMany({
-      where: { status: ProjectStatus.ON_HOLD },
+      where: { organizationId: session.user.organizationId, status: ProjectStatus.ON_HOLD },
       orderBy: { updatedAt: "desc" },
       take: 5,
       select: { id: true, title: true, expectedEnd: true, sponsor: { select: { name: true } } },
@@ -88,6 +88,7 @@ export default async function DashboardPage() {
     // Projetos ativos com pelo menos 1 risco ALTO ou CRÍTICO
     db.project.findMany({
       where: {
+        organizationId: session.user.organizationId,
         status: { in: ACTIVE },
         risks: { some: { status: { in: ["HIGH", "CRITICAL"] } } },
       },

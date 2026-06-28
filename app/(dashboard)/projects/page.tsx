@@ -16,9 +16,11 @@ const KPI_GRADIENTS = [
 
 export default async function ProjectsPage() {
   const session = await auth()
+  if (!session?.user) return null
 
   const [projects, counts] = await Promise.all([
     db.project.findMany({
+      where: { organizationId: session.user.organizationId },
       select: {
         id: true,
         title: true,
@@ -39,7 +41,7 @@ export default async function ProjectsPage() {
       },
       orderBy: { createdAt: "desc" },
     }),
-    db.project.groupBy({ by: ["status"], _count: true }),
+    db.project.groupBy({ by: ["status"], where: { organizationId: session.user.organizationId }, _count: true }),
   ])
 
   const byStatus       = Object.fromEntries(counts.map((c) => [c.status, c._count]))

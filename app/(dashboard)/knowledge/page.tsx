@@ -14,6 +14,7 @@ export default async function KnowledgePage() {
     getAllLessons(),
     getKnowledgeStats(),
     db.project.findMany({
+      where: { organizationId: session.user.organizationId },
       select: { id: true, title: true },
       orderBy: { title: "asc" },
     }),

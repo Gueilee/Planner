@@ -29,6 +29,7 @@ export async function getAllUsers() {
   if (!session?.user) throw new Error("Não autorizado")
   if (session.user.role !== "ADMIN") throw new Error("Acesso restrito a administradores")
   return db.user.findMany({
+    where:   { organizationId: session.user.organizationId },
     orderBy: { name: "asc" },
     select:  { id: true, name: true, email: true, department: true, phone: true, image: true, role: true, active: true },
   })
@@ -125,13 +126,14 @@ export async function createUser(data: {
   const hash = await bcrypt.hash(data.password, 10)
   const user = await db.user.create({
     data: {
-      name:       data.name.trim(),
-      email:      data.email.trim().toLowerCase(),
-      password:   hash,
-      role:       data.role as never,
-      department: data.department?.trim() || null,
-      phone:      data.phone?.trim()      || null,
-      active:     true,
+      name:           data.name.trim(),
+      email:          data.email.trim().toLowerCase(),
+      password:       hash,
+      role:           data.role as never,
+      department:     data.department?.trim() || null,
+      phone:          data.phone?.trim()      || null,
+      active:         true,
+      organizationId: session.user.organizationId,
     },
     select: { id: true, name: true, email: true, department: true, phone: true, image: true, role: true, active: true },
   })
