@@ -64,14 +64,14 @@ export default async function DashboardPage() {
     }),
 
     db.scheduleTask.findMany({
-      where: { status: { notIn: ["COMPLETED"] }, endDate: { lt: today } },
+      where: { status: { notIn: ["COMPLETED"] }, endDate: { lt: today }, project: { organizationId: session.user.organizationId } },
       orderBy: { endDate: "asc" },
       take: 6,
       select: taskSel,
     }),
 
     db.scheduleTask.findMany({
-      where: { status: { in: ["IN_PROGRESS", "PLANNING"] }, endDate: { gte: today, lte: in14 } },
+      where: { status: { in: ["IN_PROGRESS", "PLANNING"] }, endDate: { gte: today, lte: in14 }, project: { organizationId: session.user.organizationId } },
       orderBy: { endDate: "asc" },
       take: 6,
       select: taskSel,

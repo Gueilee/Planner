@@ -32,6 +32,9 @@ const SYSTEM_ITEMS = [
 
 const ADMIN_ITEMS = [
   { label: "Documentos",    href: "/docs",           icon: FileText },
+]
+
+const ROOT_ADMIN_ITEMS = [
   { label: "Organizações",  href: "/organizations",  icon: Building2 },
 ]
 
@@ -185,7 +188,10 @@ export function Sidebar({ collapsed, onToggle, orgLogoUrl, orgName = "PLANNER" }
             )}
 
             <div className="space-y-0.5">
-              {ADMIN_ITEMS.map((item) => {
+              {[
+                ...ADMIN_ITEMS,
+                ...(session.user.organizationId === "org_vendemmia" ? ROOT_ADMIN_ITEMS : []),
+              ].map((item) => {
                 const active = isActive(item.href)
                 const Icon   = item.icon
                 return (
