@@ -2225,20 +2225,20 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
 
                       {/* Inline actions for area */}
                       <div style={{ width: 84 }} className="flex items-center justify-center gap-0.5 shrink-0">
+                        <button
+                          onClick={() => openAdd(undefined, row.id === "__ungrouped__" ? undefined : row.id)}
+                          title="Nova atividade nesta área"
+                          className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
+                          style={{ background: "#DCFCE7", color: "#16A34A" }}
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
                         {row.id !== "__ungrouped__" && (
                           <>
                             <button
-                              onClick={() => openAdd(undefined, row.id)}
-                              title="Nova atividade nesta área"
-                              className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
-                              style={{ background: "#DCFCE7", color: "#16A34A" }}
-                            >
-                              <Plus className="w-3 h-3" />
-                            </button>
-                            <button
                               onClick={(e) => { e.stopPropagation(); setEditingAreaId(row.id); setEditingAreaValue(row.name) }}
                               title="Renomear módulo"
-                              className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110 opacity-0 group-hover:opacity-100"
+                              className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
                               style={{ background: "#EDE9FE", color: "#7C3AED" }}
                             >
                               <Pencil className="w-3 h-3" />
@@ -2246,7 +2246,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                             <button
                               onClick={() => handleDeleteArea(row.id, row.name)}
                               title="Excluir módulo e todas as atividades"
-                              className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110 opacity-0 group-hover:opacity-100"
+                              className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
                               style={{ background: "#FEE2E2", color: "#DC2626" }}
                             >
                               <Trash2 className="w-3 h-3" />
@@ -2810,20 +2810,20 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
 
                           {/* Area actions */}
                           <div style={{ width: 56, flexShrink: 0 }} className="flex items-center justify-center gap-0.5 pr-1">
+                            <button
+                              onClick={() => openAdd(undefined, areaId === "__ungrouped__" ? undefined : areaId)}
+                              title="Nova atividade nesta área"
+                              className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
+                              style={{ background: "#DCFCE7", color: "#16A34A" }}
+                            >
+                              <Plus className="w-3 h-3" />
+                            </button>
                             {areaId !== "__ungrouped__" && (
                               <>
                                 <button
-                                  onClick={() => openAdd(undefined, areaId)}
-                                  title="Nova atividade nesta área"
-                                  className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
-                                  style={{ background: "#DCFCE7", color: "#16A34A" }}
-                                >
-                                  <Plus className="w-3 h-3" />
-                                </button>
-                                <button
                                   onClick={(e) => { e.stopPropagation(); setEditingAreaId(areaId); setEditingAreaValue(areaName) }}
                                   title="Renomear módulo"
-                                  className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110 opacity-0 group-hover:opacity-100"
+                                  className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
                                   style={{ background: "#EDE9FE", color: "#7C3AED" }}
                                 >
                                   <Pencil className="w-3 h-3" />
@@ -2831,7 +2831,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                                 <button
                                   onClick={() => handleDeleteArea(areaId, areaName)}
                                   title="Excluir módulo e todas as atividades"
-                                  className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110 opacity-0 group-hover:opacity-100"
+                                  className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
                                   style={{ background: "#FEE2E2", color: "#DC2626" }}
                                 >
                                   <Trash2 className="w-3 h-3" />
