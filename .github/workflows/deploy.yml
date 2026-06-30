@@ -9,16 +9,18 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Redeploy stack no Portainer (força rebuild)
-        run: |
-          TOKEN=$(curl -sk -X POST \
-            "${{ secrets.PORTAINER_URL }}/api/auth" \
-            -H "Content-Type: application/json" \
-            -d "{\"username\":\"${{ secrets.PORTAINER_USERNAME }}\",\"password\":\"${{ secrets.PORTAINER_PASSWORD }}\"}" \
-            | jq -r '.jwt')
-
-          curl -sk -X POST \
-            "${{ secrets.PORTAINER_URL }}/api/stacks/2/git/redeploy?endpointId=3" \
-            -H "Authorization: Bearer $TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "{\"pullImage\":true,\"repositoryReferenceName\":\"refs/heads/main\",\"repositoryAuthentication\":true,\"repositoryUsername\":\"x-access-token\",\"repositoryPassword\":\"${{ secrets.GH_PAT }}\"}"
+      - name: Deploy via SSH (rebuild Docker image)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 191.232.234.87
+          username: azureuser
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            STACK_DIR=$(docker inspect planner-planner-1 \
+              --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}')
+            echo "Stack dir: $STACK_DIR"
+            cd "$STACK_DIR"
+            git remote set-url origin "https://x-access-token:${{ secrets.GH_PAT }}@github.com/vendemmia-logistica/Planner.git"
+            git fetch origin main
+            git reset --hard origin/main
+            docker compose up --build -d --remove-orphans
