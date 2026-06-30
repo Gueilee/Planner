@@ -9,18 +9,40 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy via SSH (rebuild Docker image)
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: 191.232.234.87
-          username: azureuser
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            STACK_DIR=$(docker inspect planner-planner-1 \
-              --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}')
-            echo "Stack dir: $STACK_DIR"
-            cd "$STACK_DIR"
-            git remote set-url origin "https://x-access-token:${{ secrets.GH_PAT }}@github.com/vendemmia-logistica/Planner.git"
-            git fetch origin main
-            git reset --hard origin/main
-            docker compose up --build -d --remove-orphans
+      - name: Force rebuild via Portainer API
+        run: |
+          PORTAINER_URL="${{ secrets.PORTAINER_URL }}"
+          GH_PAT="${{ secrets.GH_PAT }}"
+
+          # 1. Autenticar
+          TOKEN=$(curl -sk -X POST "$PORTAINER_URL/api/auth" \
+            -H "Content-Type: application/json" \
+            -d "{\"username\":\"${{ secrets.PORTAINER_USERNAME }}\",\"password\":\"${{ secrets.PORTAINER_PASSWORD }}\"}" \
+            | jq -r '.jwt')
+          echo "Autenticado no Portainer"
+
+          # 2. Parar o stack
+          curl -sk -X POST "$PORTAINER_URL/api/stacks/2/stop?endpointId=3" \
+            -H "Authorization: Bearer $TOKEN"
+          echo "Stack parado"
+          sleep 5
+
+          # 3. Apagar a imagem antiga (força rebuild no próximo deploy)
+          IMAGE_ID=$(curl -sk "$PORTAINER_URL/api/endpoints/3/docker/images/json" \
+            -H "Authorization: Bearer $TOKEN" \
+            | jq -r '.[] | select(.RepoTags != null) | select(.RepoTags[] | contains("planner-planner")) | .Id' | head -1)
+
+          if [ -n "$IMAGE_ID" ] && [ "$IMAGE_ID" != "null" ]; then
+            curl -sk -X DELETE "$PORTAINER_URL/api/endpoints/3/docker/images/$IMAGE_ID?force=true" \
+              -H "Authorization: Bearer $TOKEN"
+            echo "Imagem $IMAGE_ID apagada"
+          else
+            echo "Nenhuma imagem planner-planner encontrada"
+          fi
+
+          # 4. Redeploy com novo código (docker-compose rebuild pois imagem não existe)
+          curl -sk -X POST "$PORTAINER_URL/api/stacks/2/git/redeploy?endpointId=3" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"pullImage\":false,\"repositoryReferenceName\":\"refs/heads/main\",\"repositoryAuthentication\":true,\"repositoryUsername\":\"x-access-token\",\"repositoryPassword\":\"$GH_PAT\"}"
+          echo "Redeploy iniciado"
