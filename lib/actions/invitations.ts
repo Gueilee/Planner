@@ -3,7 +3,7 @@
 import { randomBytes } from "crypto"
 import bcrypt from "bcryptjs"
 import { auth } from "@/auth"
-import { getPrisma } from "@/lib/prisma"
+import { db } from "@/lib/db"
 import { sendInviteEmail } from "@/lib/email"
 import { UserRole } from "@/lib/generated/prisma/enums"
 
@@ -19,7 +19,7 @@ export async function createInvitation(data: {
     return { error: "Sem permissão" }
   }
 
-  const db = getPrisma()
+
 
   // Check if user already exists
   const existing = await db.user.findUnique({ where: { email: data.email } })
@@ -59,7 +59,7 @@ export async function createInvitation(data: {
 // ── Validate token ───────────────────────────────────────────────────────────
 
 export async function validateInvitation(token: string) {
-  const db = getPrisma()
+
   const inv = await db.invitation.findUnique({ where: { token } })
 
   if (!inv)            return { error: "Convite inválido" }
@@ -74,7 +74,7 @@ export async function validateInvitation(token: string) {
 export async function acceptInvitation(token: string, password: string) {
   if (password.length < 6) return { error: "Senha deve ter no mínimo 6 caracteres" }
 
-  const db = getPrisma()
+
   const inv = await db.invitation.findUnique({ where: { token } })
 
   if (!inv)            return { error: "Convite inválido" }
