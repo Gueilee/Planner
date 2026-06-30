@@ -216,8 +216,9 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users    User[]
-  projects Project[]
+  users       User[]
+  projects    Project[]
+  invitations Invitation[]
 }
 
 // ─────────────────────────────────────────────
@@ -258,6 +259,23 @@ model User {
   createdMeasurements     BenefitMeasurement[]
   timeEntries             TimeEntry[]
   baselines               ProjectBaseline[]
+  createdInvitations      Invitation[]      @relation("InvitationCreator")
+}
+
+model Invitation {
+  id             String    @id @default(cuid())
+  email          String
+  name           String
+  role           UserRole  @default(PROJECT_MEMBER)
+  token          String    @unique
+  expiresAt      DateTime
+  usedAt         DateTime?
+  organizationId String
+  createdById    String
+  createdAt      DateTime  @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdBy      User         @relation("InvitationCreator", fields: [createdById], references: [id])
 }
 
 // ─────────────────────────────────────────────

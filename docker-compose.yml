@@ -12,4 +12,6 @@ services:
       - AUTH_SECRET=${AUTH_SECRET}
       - AUTH_TRUST_HOST=true
       - NEXTAUTH_URL=${NEXTAUTH_URL}
+      - MAILER_DSN=${MAILER_DSN}
+      - MAILER_FROM=${MAILER_FROM}
       - NODE_ENV=production

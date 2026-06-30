@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getToken } from "next-auth/jwt"
 
-const PUBLIC_ROUTES = ["/login", "/api/auth"]
+const PUBLIC_ROUTES = ["/login", "/api/auth", "/invite"]
 
 export default async function middleware(req: NextRequest) {
   const { nextUrl } = req
