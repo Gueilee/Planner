@@ -1,0 +1,11 @@
+.git
+.gitignore
+.env*.local
+.env.prod
+.env.production
+node_modules
+.next
+*.pem
+README.md
+.vscode
+.claude
