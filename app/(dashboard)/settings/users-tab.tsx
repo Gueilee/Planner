@@ -700,14 +700,21 @@ function InviteForm({ orgs, onClose }: { orgs: OrgRow[]; onClose: () => void }) 
 
 // ─── Send Reset Email Modal ───────────────────────────────────────────────────
 
-function SendResetEmailModal({ user, onClose }: { user: User; onClose: () => void }) {
-  const [done,      setDone]      = useState(false)
-  const [error,     setError]     = useState<string | null>(null)
-  const [isPending, start]        = useTransition()
+function SendResetEmailModal({ user, orgs, onClose }: { user: User; orgs: OrgRow[]; onClose: () => void }) {
+  const [done,           setDone]           = useState(false)
+  const [error,          setError]          = useState<string | null>(null)
+  const [selectedOrgIds, setSelectedOrgIds] = useState<string[]>([])
+  const [isPending,      start]             = useTransition()
+
+  useEffect(() => {
+    if (!orgs.length) return
+    getUserOrgAccess(user.id).then(setSelectedOrgIds).catch(() => {})
+  }, [user.id, orgs.length])
 
   function handleSend() {
     setError(null)
     start(async () => {
+      if (orgs.length) await setUserOrgAccess(user.id, selectedOrgIds).catch(() => {})
       const res = await sendResetToUser(user.id)
       if ("error" in res && res.error) { setError(res.error); return }
       setDone(true)
@@ -717,7 +724,7 @@ function SendResetEmailModal({ user, onClose }: { user: User; onClose: () => voi
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.4)" }} onClick={onClose}>
-      <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-3 mb-5">
           <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
             <Mail className="w-5 h-5 text-blue-500" />
@@ -739,6 +746,13 @@ function SendResetEmailModal({ user, onClose }: { user: User; onClose: () => voi
               <span className="font-semibold text-[#0F172A]">{user.email}</span>.
               O link ficará válido por <strong>24 horas</strong>.
             </p>
+
+            {orgs.length > 0 && (
+              <div className="pt-1">
+                <FilialPicker orgs={orgs} selected={selectedOrgIds} onChange={setSelectedOrgIds} />
+              </div>
+            )}
+
             {error && (
               <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-50 text-xs text-red-600 font-medium">
                 <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {error}
@@ -1008,7 +1022,7 @@ export function UsersTab({ initialUsers, currentUserId, orgs = [] }: { initialUs
         <PasswordModal userId={passwordUser.id} userName={passwordUser.name} onClose={() => setPasswordUser(null)} />
       )}
       {sendResetUser && (
-        <SendResetEmailModal user={sendResetUser} onClose={() => setSendResetUser(null)} />
+        <SendResetEmailModal user={sendResetUser} orgs={orgs} onClose={() => setSendResetUser(null)} />
       )}
       {deleteTarget && (
         <DeleteModal
