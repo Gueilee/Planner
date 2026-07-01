@@ -7,7 +7,7 @@ import { signOut, useSession } from "next-auth/react"
 import { cn } from "@/lib/utils"
 import {
   LayoutDashboard, FolderKanban,
-  BookOpen, Settings, ChevronLeft, LogOut, Users, FileBarChart2, Star, Columns3, History, CheckCircle2, TrendingUp, FileText, LayoutTemplate, Gem, Building2,
+  BookOpen, Settings, ChevronLeft, LogOut, FileBarChart2, Star, Columns3, History, CheckCircle2, TrendingUp, LayoutTemplate, Gem,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ROLE_LABELS } from "@/lib/permissions"
@@ -28,14 +28,6 @@ const NAV_ITEMS = [
 ]
 const SYSTEM_ITEMS = [
   { label: "Configurações", href: "/settings", icon: Settings },
-]
-
-const ADMIN_ITEMS = [
-  { label: "Documentos",    href: "/docs",           icon: FileText },
-]
-
-const ROOT_ADMIN_ITEMS = [
-  { label: "Organizações",  href: "/organizations",  icon: Building2 },
 ]
 
 interface SidebarProps {
@@ -175,60 +167,6 @@ export function Sidebar({ collapsed, onToggle, orgLogoUrl, orgName = "PLANNER" }
           {SYSTEM_ITEMS.map((item) => <NavLink key={item.href} item={item} />)}
         </div>
 
-        {session?.user?.role === UserRole.ADMIN && (
-          <>
-            <div className="my-4 mx-2" style={{ height: "1px", background: "rgba(239,68,68,0.15)" }} />
-
-            {!collapsed && (
-              <p className="px-3 mb-3 text-[9px] font-bold uppercase tracking-[0.15em] flex items-center gap-1.5"
-                style={{ color: "#DC2626" }}>
-                <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
-                Administrador
-              </p>
-            )}
-
-            <div className="space-y-0.5">
-              {[
-                ...ADMIN_ITEMS,
-                ...(session.user.organizationId === "org_vendemmia" ? ROOT_ADMIN_ITEMS : []),
-              ].map((item) => {
-                const active = isActive(item.href)
-                const Icon   = item.icon
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    title={collapsed ? item.label : undefined}
-                    className={cn(
-                      "relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group overflow-hidden",
-                      active ? "text-red-600" : "text-red-400 hover:text-red-600 hover:bg-red-50/60"
-                    )}
-                    style={active ? {
-                      background: "linear-gradient(135deg, rgba(239,68,68,0.08) 0%, rgba(220,38,38,0.12) 100%)",
-                      border: "1px solid rgba(239,68,68,0.18)",
-                    } : undefined}
-                  >
-                    {active && (
-                      <span
-                        className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full bg-red-500"
-                      />
-                    )}
-                    <Icon className={cn(
-                      "shrink-0 transition-all duration-200",
-                      collapsed ? "w-5 h-5 mx-auto" : "w-4 h-4",
-                    )} />
-                    {!collapsed && (
-                      <span className="flex-1 truncate tracking-wide">{item.label}</span>
-                    )}
-                    {active && !collapsed && (
-                      <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-red-500" />
-                    )}
-                  </Link>
-                )
-              })}
-            </div>
-          </>
-        )}
       </nav>
 
       {/* Perfil do usuário */}
