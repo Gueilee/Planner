@@ -3,17 +3,19 @@
 import { useState } from "react"
 import {
   User, Bell, Building2, Users, ChevronRight,
-  FileText, Network, Settings2, Shield,
+  FileText, Network, Settings2, Shield, ShieldCheck,
 } from "lucide-react"
-import { ProfileTab }      from "./profile-tab"
-import { NotificationsTab } from "./notifications-tab"
-import { OrganizationTab }  from "./organization-tab"
-import { UsersTab }         from "./users-tab"
-import { DocsTab }          from "./docs-tab"
-import { FiliaisTab }       from "./filiais-tab"
+import { ProfileTab }          from "./profile-tab"
+import { NotificationsTab }    from "./notifications-tab"
+import { OrganizationTab }     from "./organization-tab"
+import { UsersTab }            from "./users-tab"
+import { DocsTab }             from "./docs-tab"
+import { FiliaisTab }          from "./filiais-tab"
+import { AccessProfilesTab }   from "./access-profiles-tab"
 import type { NotificationPreferenceData } from "@/lib/actions/notification-preferences"
 import type { OrgConfigData }              from "@/lib/types/org-config"
 import type { OrgRow }                     from "@/lib/actions/organizations"
+import type { ProfileRow }                 from "@/lib/actions/access-profiles"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -36,21 +38,22 @@ type NotifItem = {
 }
 
 type Props = {
-  profile:       UserProfile
-  allUsers:      UserProfile[]
-  isAdmin:       boolean
-  isRootAdmin:   boolean
-  preferences:   NotificationPreferenceData
-  notifications: NotifItem[]
-  orgConfig:     OrgConfigData
-  currentUserId: string
-  currentOrgId:  string
-  initialOrgs:   OrgRow[]
+  profile:         UserProfile
+  allUsers:        UserProfile[]
+  isAdmin:         boolean
+  isRootAdmin:     boolean
+  preferences:     NotificationPreferenceData
+  notifications:   NotifItem[]
+  orgConfig:       OrgConfigData
+  currentUserId:   string
+  currentOrgId:    string
+  initialOrgs:     OrgRow[]
+  initialProfiles: ProfileRow[]
 }
 
 // ─── Tab config ───────────────────────────────────────────────────────────────
 
-type TabId = "profile" | "notifications" | "empresa" | "usuarios" | "documentos" | "filiais"
+type TabId = "profile" | "notifications" | "empresa" | "usuarios" | "perfis" | "documentos" | "filiais"
 
 type TabSection = {
   label:   string
@@ -101,6 +104,13 @@ const SECTIONS: TabSection[] = [
         label:       "Usuários",
         description: "Gestão de acessos e permissões",
         icon:        Users,
+        adminOnly:   true,
+      },
+      {
+        id:          "perfis",
+        label:       "Perfis de Acesso",
+        description: "Permissões por funcionalidade",
+        icon:        ShieldCheck,
         adminOnly:   true,
       },
     ],
@@ -184,11 +194,11 @@ function NavItem({
 export function SettingsClient({
   profile, allUsers, isAdmin, isRootAdmin,
   preferences, notifications, orgConfig,
-  currentUserId, currentOrgId, initialOrgs,
+  currentUserId, currentOrgId, initialOrgs, initialProfiles,
 }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>("profile")
 
-  const isWide = activeTab === "usuarios" || activeTab === "filiais" || activeTab === "documentos"
+  const isWide = activeTab === "usuarios" || activeTab === "filiais" || activeTab === "documentos" || activeTab === "perfis"
 
   const visibleSections = SECTIONS
     .map((section) => ({
@@ -292,6 +302,9 @@ export function SettingsClient({
                 currentUserId={currentUserId}
                 orgs={isRootAdmin ? initialOrgs : []}
               />
+            )}
+            {activeTab === "perfis" && isAdmin && (
+              <AccessProfilesTab initialProfiles={initialProfiles} />
             )}
             {activeTab === "documentos" && isAdmin && (
               <DocsTab />

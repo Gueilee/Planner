@@ -259,6 +259,40 @@ async function main() {
     // Column already exists — ignore
   }
 
+  // ── Migration 7: AccessProfile + User.profileId ──────────────────────────────
+  await client.batch([
+    {
+      sql: `CREATE TABLE IF NOT EXISTS "AccessProfile" (
+        "id"             TEXT     NOT NULL PRIMARY KEY,
+        "name"           TEXT     NOT NULL,
+        "description"    TEXT,
+        "color"          TEXT     NOT NULL DEFAULT '#7B2FBE',
+        "permissions"    TEXT     NOT NULL DEFAULT '{}',
+        "isSystem"       INTEGER  NOT NULL DEFAULT 0,
+        "organizationId" TEXT     NOT NULL,
+        "createdAt"      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt"      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "AccessProfile_organizationId_fkey"
+          FOREIGN KEY ("organizationId") REFERENCES "Organization" ("id")
+          ON DELETE CASCADE ON UPDATE CASCADE
+      )`,
+      args: [],
+    },
+    {
+      sql: `CREATE INDEX IF NOT EXISTS "AccessProfile_organizationId_idx"
+        ON "AccessProfile"("organizationId")`,
+      args: [],
+    },
+  ], "write")
+
+  try {
+    await client.execute(
+      `ALTER TABLE "User" ADD COLUMN "profileId" TEXT REFERENCES "AccessProfile"("id") ON DELETE SET NULL`
+    )
+  } catch {
+    // Column already exists — ignore
+  }
+
   console.log("✅ Migrations aplicadas com sucesso!")
   client.close()
 }

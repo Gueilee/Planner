@@ -216,10 +216,28 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  users          User[]
+  projects       Project[]
+  invitations    Invitation[]
+  userAccesses   UserOrganizationAccess[]
+  accessProfiles AccessProfile[]
+}
+
+model AccessProfile {
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  color          String   @default("#7B2FBE")
+  permissions    String   @default("{}")
+  isSystem       Boolean  @default(false)
+  organizationId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   users        User[]
-  projects     Project[]
-  invitations  Invitation[]
-  userAccesses UserOrganizationAccess[]
+
+  @@index([organizationId])
 }
 
 // ─────────────────────────────────────────────
@@ -263,6 +281,8 @@ model User {
   createdInvitations      Invitation[]      @relation("InvitationCreator")
   passwordResetTokens     PasswordResetToken[]
   organizationAccess      UserOrganizationAccess[]
+  profileId               String?
+  accessProfile           AccessProfile?    @relation(fields: [profileId], references: [id], onDelete: SetNull)
 }
 
 model Invitation {

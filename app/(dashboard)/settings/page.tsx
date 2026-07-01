@@ -6,6 +6,7 @@ import { getNotificationPreferences } from "@/lib/actions/notification-preferenc
 import { getMyNotifications } from "@/lib/actions/notifications"
 import { getOrgConfig } from "@/lib/actions/org-config"
 import { listOrganizations } from "@/lib/actions/organizations"
+import { listAccessProfiles } from "@/lib/actions/access-profiles"
 import { SettingsClient } from "./settings-client"
 
 export const metadata = { title: "Configurações — Planner" }
@@ -17,13 +18,14 @@ export default async function SettingsPage() {
   const isAdmin     = session.user.role === "ADMIN"
   const isRootAdmin = isAdmin && session.user.organizationId === "org_vendemmia"
 
-  const [profile, allUsers, preferences, notifications, orgConfig, initialOrgs] = await Promise.all([
+  const [profile, allUsers, preferences, notifications, orgConfig, initialOrgs, initialProfiles] = await Promise.all([
     getMyProfile(),
     isAdmin ? getAllUsers() : Promise.resolve([]),
     getNotificationPreferences(),
     getMyNotifications(50),
     getOrgConfig(),
     isRootAdmin ? listOrganizations() : Promise.resolve([]),
+    isAdmin ? listAccessProfiles() : Promise.resolve([]),
   ])
 
   if (!profile) redirect("/login")
@@ -51,6 +53,7 @@ export default async function SettingsPage() {
         currentUserId={profile.id}
         currentOrgId={session.user.organizationId ?? ""}
         initialOrgs={initialOrgs}
+        initialProfiles={initialProfiles}
       />
     </div>
   )
