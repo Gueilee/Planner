@@ -18,6 +18,7 @@ import {
   Link2, Lock, ArrowRight, GripVertical, FileSpreadsheet, ArrowUpDown,
   Upload, Download, FileText, FileImage, FileArchive, Users,
   LayoutTemplate, Milestone, Zap, Award, Star, Globe2, TrendingUp, Clock, Send,
+  Maximize2, Minimize2,
 } from "lucide-react"
 import { SCurveClient, type SCurveData } from "../s-curve/s-curve-client"
 import {
@@ -1450,6 +1451,10 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
   const [baselineCreating, setBaselineCreating] = useState(false)
   const [baselineToast,    setBaselineToast]    = useState<string | null>(null)
 
+  // ── Fullscreen ───────────────────────────────────────────────────────────
+  const [fullscreen, setFullscreen] = useState(false)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+
   async function openTemplateModal() {
     setTplModalOpen(true)
     setTplSelected(null)
@@ -1501,6 +1506,25 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
     loadSCurve()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewMode])
+
+  useEffect(() => {
+    if (fullscreen) containerRef.current?.requestFullscreen?.().catch(() => {})
+    else if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
+  }, [fullscreen])
+  useEffect(() => {
+    function onFsc() { if (!document.fullscreenElement) setFullscreen(false) }
+    document.addEventListener("fullscreenchange", onFsc)
+    return () => document.removeEventListener("fullscreenchange", onFsc)
+  }, [])
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (viewMode === "curva-s") return
+      if (e.key === "f" || e.key === "F") setFullscreen((v) => !v)
+      if (e.key === "Escape" && fullscreen) setFullscreen(false)
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [fullscreen, viewMode])
 
   async function loadSCurve() {
     setSCurveLoading(true)
@@ -1984,7 +2008,11 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-full" style={{ background: "#F8FAFC" }}>
+    <div
+      ref={containerRef}
+      className={`flex flex-col ${fullscreen ? "fixed inset-0 z-[60] overflow-hidden" : "h-full"}`}
+      style={{ background: "#F8FAFC" }}
+    >
 
       {/* ── Top bar ──────────────────────────────────────────────────────── */}
       <div className="flex flex-col border-b border-slate-200 bg-white shrink-0">
@@ -2015,6 +2043,17 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
               <TrendingUp className="w-3.5 h-3.5" /> Curva S
             </button>
           </div>
+
+          {/* Tela cheia — só no List e Gantt; Curva S tem o próprio botão */}
+          {viewMode !== "curva-s" && (
+            <button
+              onClick={() => setFullscreen((f) => !f)}
+              className="p-2 rounded-xl border border-slate-200 text-slate-500 hover:border-[#7B2FBE] hover:text-[#7B2FBE] transition-all bg-white shrink-0"
+              title={fullscreen ? "Sair da tela cheia (F)" : "Tela cheia (F)"}
+            >
+              {fullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            </button>
+          )}
 
           {/* Gravar Baseline */}
           <button onClick={() => setBaselineModal(true)}
@@ -2830,7 +2869,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
               <div style={{ width: 76 }} className="text-[10px] font-black text-white/50 uppercase tracking-widest text-center">Início</div>
               <div style={{ width: 76 }} className="text-[10px] font-black text-white/50 uppercase tracking-widest text-center">Fim</div>
               <div style={{ width: 48 }} className="text-[10px] font-black text-white/50 uppercase tracking-widest text-center">%</div>
-              <div style={{ width: 56 }} className="text-[10px] font-black text-white/50 uppercase tracking-widest text-center">Ações</div>
+              <div style={{ width: 80 }} className="text-[10px] font-black text-white/50 uppercase tracking-widest text-center">Ações</div>
             </div>
 
             {/* Left panel body — area-grouped */}
@@ -2906,7 +2945,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                           <div style={{ width: 48, flexShrink: 0 }} />
 
                           {/* Area actions */}
-                          <div style={{ width: 56, flexShrink: 0 }} className="flex items-center justify-center gap-0.5 pr-1">
+                          <div style={{ width: 80, flexShrink: 0 }} className="flex items-center justify-center gap-0.5 pr-1">
                             <button
                               onClick={() => openAdd(undefined, areaId === "__ungrouped__" ? undefined : areaId)}
                               title="Nova atividade nesta área"
@@ -3077,7 +3116,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                         </div>
 
                         {/* Actions — always visible */}
-                        <div style={{ width: 56, flexShrink: 0, display: "flex", alignItems: "center", gap: 1, padding: "0 4px" }}>
+                        <div style={{ width: 80, flexShrink: 0, display: "flex", alignItems: "center", gap: 2, padding: "0 6px" }}>
                           <button
                             onClick={() => openEdit(t)}
                             title="Editar atividade"
