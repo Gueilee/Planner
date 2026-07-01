@@ -27,7 +27,7 @@ export default async function ProjectBenefitsPage({
 
   return (
     <div className="flex flex-col h-full">
-      <Header title="Detalhamento de Benefícios" subtitle={project.title} />
+      <Header title="Detalhamento de Benefícios" subtitle="Ganhos financeiros, operacionais e estratégicos gerados pelos projetos" />
       <div className="flex-1 overflow-auto p-6">
         <div className="max-w-6xl mx-auto space-y-5">
           <BackButton />
