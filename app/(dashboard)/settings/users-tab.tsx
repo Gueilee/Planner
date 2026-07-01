@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition, useRef } from "react"
+import { useState, useEffect, useTransition, useRef } from "react"
 import {
   Plus, Search, Pencil, Key, Power, Trash2,
   X, Save, Loader2, Check, AlertCircle, Camera,
@@ -11,7 +11,9 @@ import {
   deleteUser, resetUserPassword,
 } from "@/lib/actions/profile"
 import { createInvitation } from "@/lib/actions/invitations"
+import { getUserOrgAccess, setUserOrgAccess } from "@/lib/actions/user-org-access"
 import { sendResetToUser } from "@/lib/actions/password-reset"
+import type { OrgRow } from "@/lib/actions/organizations"
 import { ROLE_LABELS, UserRole } from "@/lib/permissions"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -138,16 +140,95 @@ function UserAvatar({
   )
 }
 
+// ─── Filial Picker ────────────────────────────────────────────────────────────
+
+function FilialPicker({ orgs, selected, onChange }: {
+  orgs:     OrgRow[]
+  selected: string[]
+  onChange: (ids: string[]) => void
+}) {
+  const [open, setOpen] = useState(false)
+
+  const toggle = (id: string) =>
+    onChange(selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id])
+
+  const selectedOrgs = orgs.filter((o) => selected.includes(o.id))
+
+  return (
+    <div>
+      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
+        Acesso às Filiais
+      </label>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-3 py-2.5 text-sm rounded-xl border bg-[#F7F6F2] text-left transition-all hover:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-200"
+        style={{ borderColor: open ? "#a78bfa" : "#e2e8f0" }}
+      >
+        <span className="text-sm" style={{ color: selected.length ? "#0F172A" : "#CBD5E1" }}>
+          {selected.length === 0
+            ? "Nenhuma filial selecionada"
+            : `${selected.length} filial${selected.length > 1 ? "is" : ""} selecionada${selected.length > 1 ? "s" : ""}`}
+        </span>
+        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform shrink-0 ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="mt-1 rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+          {orgs.map((org) => (
+            <button
+              key={org.id}
+              type="button"
+              onClick={() => toggle(org.id)}
+              className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 transition-colors text-left border-b border-slate-50 last:border-0"
+            >
+              <div
+                className="w-4 h-4 rounded flex items-center justify-center border transition-all shrink-0"
+                style={{
+                  background:   selected.includes(org.id) ? "#7B2FBE" : "#fff",
+                  borderColor:  selected.includes(org.id) ? "#7B2FBE" : "#CBD5E1",
+                }}
+              >
+                {selected.includes(org.id) && <Check className="w-2.5 h-2.5 text-white" />}
+              </div>
+              <span className="text-sm text-slate-700 flex-1 truncate">{org.name}</span>
+              <span className="text-[10px] text-slate-400 shrink-0">{org._count.users} usuários</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {selectedOrgs.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {selectedOrgs.map((org) => (
+            <span
+              key={org.id}
+              className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+              style={{ background: "#F3EFFE", color: "#7B2FBE", border: "1px solid #DDD6FE" }}
+            >
+              {org.name}
+              <button type="button" onClick={() => toggle(org.id)} className="hover:opacity-70">
+                <X className="w-2.5 h-2.5" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── User Form (create / edit) ────────────────────────────────────────────────
 
 type FormMode = "create" | "edit"
 
 function UserForm({
-  mode, initial, currentUserId, onSave, onCancel,
+  mode, initial, currentUserId, orgs, onSave, onCancel,
 }: {
   mode:          FormMode
   initial?:      User
   currentUserId: string
+  orgs:          OrgRow[]
   onSave:        (u: User) => void
   onCancel:      () => void
 }) {
@@ -165,11 +246,17 @@ function UserForm({
   const [customDept, setCustomDept] = useState(
     initDept && !DEPARTMENTS.includes(initDept) ? initDept : ""
   )
-  const [phone,      setPhone]      = useState(initial?.phone      ?? "")
-  const [imageUrl,   setImageUrl]   = useState<string | null>(initial?.image ?? null)
-  const [active,     setActive]     = useState(initial?.active     ?? true)
-  const [error,      setError]      = useState<string | null>(null)
-  const [isPending,  start]         = useTransition()
+  const [phone,           setPhone]           = useState(initial?.phone  ?? "")
+  const [imageUrl,        setImageUrl]        = useState<string | null>(initial?.image ?? null)
+  const [active,          setActive]          = useState(initial?.active ?? true)
+  const [selectedOrgIds,  setSelectedOrgIds]  = useState<string[]>([])
+  const [error,           setError]           = useState<string | null>(null)
+  const [isPending,       start]              = useTransition()
+
+  useEffect(() => {
+    if (mode !== "edit" || !initial || !orgs.length) return
+    getUserOrgAccess(initial.id).then(setSelectedOrgIds).catch(() => {})
+  }, [mode, initial?.id, orgs.length])
 
   // Effective department: if select is "__other__", use the customDept text
   const effectiveDept = department === "__other__" ? customDept : department
@@ -183,10 +270,14 @@ function UserForm({
     start(async () => {
       try {
         if (mode === "create") {
-          const created = await createUser({ name, email, password, role, department: effectiveDept, phone })
+          const created = await createUser({
+            name, email, password, role, department: effectiveDept, phone,
+            extraOrgIds: orgs.length ? selectedOrgIds : undefined,
+          })
           onSave({ ...created, phone: created.phone ?? null, createdAt: undefined })
         } else if (initial) {
           const updated = await updateUserById(initial.id, { name, email, department: effectiveDept, phone, image: imageUrl, role, active })
+          if (orgs.length) await setUserOrgAccess(initial.id, selectedOrgIds)
           onSave({ ...initial, ...updated, email: email.trim().toLowerCase(), role: updated.role ?? initial.role, active: updated.active ?? initial.active })
         }
       } catch (e: unknown) {
@@ -300,6 +391,10 @@ function UserForm({
           <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">Telefone</label>
           <input value={phone} onChange={(e) => setPhone(e.target.value)} className={iCls} placeholder="(00) 00000-0000" />
         </div>
+
+        {orgs.length > 0 && (
+          <FilialPicker orgs={orgs} selected={selectedOrgIds} onChange={setSelectedOrgIds} />
+        )}
 
         {mode === "edit" && initial && initial.id !== currentUserId && (
           <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
@@ -493,20 +588,24 @@ function DeleteModal({ user, onConfirm, onClose, onDeactivate, isPending, error 
 
 // ─── Invite Form ─────────────────────────────────────────────────────────────
 
-function InviteForm({ onClose }: { onClose: () => void }) {
-  const [name,      setName]      = useState("")
-  const [email,     setEmail]     = useState("")
-  const [role,      setRole]      = useState<string>("PROJECT_MEMBER")
-  const [error,     setError]     = useState<string | null>(null)
-  const [success,   setSuccess]   = useState(false)
-  const [isPending, start]        = useTransition()
+function InviteForm({ orgs, onClose }: { orgs: OrgRow[]; onClose: () => void }) {
+  const [name,           setName]           = useState("")
+  const [email,          setEmail]          = useState("")
+  const [role,           setRole]           = useState<string>("PROJECT_MEMBER")
+  const [selectedOrgIds, setSelectedOrgIds] = useState<string[]>([])
+  const [error,          setError]          = useState<string | null>(null)
+  const [success,        setSuccess]        = useState(false)
+  const [isPending,      start]             = useTransition()
 
   function handleSubmit() {
     if (!name.trim())  { setError("Nome é obrigatório"); return }
     if (!email.trim()) { setError("E-mail é obrigatório"); return }
     setError(null)
     start(async () => {
-      const res = await createInvitation({ name, email, role: role as UserRole })
+      const res = await createInvitation({
+        name, email, role: role as UserRole,
+        extraOrgIds: orgs.length ? selectedOrgIds : undefined,
+      })
       if ("error" in res && res.error) { setError(res.error); return }
       setSuccess(true)
     })
@@ -533,7 +632,7 @@ function InviteForm({ onClose }: { onClose: () => void }) {
             <p className="text-sm font-bold text-slate-800">Convite enviado!</p>
             <p className="text-xs text-slate-400">O usuário receberá um e-mail com o link de acesso.</p>
             <button
-              onClick={() => { setName(""); setEmail(""); setRole("PROJECT_MEMBER"); setSuccess(false) }}
+              onClick={() => { setName(""); setEmail(""); setRole("PROJECT_MEMBER"); setSelectedOrgIds([]); setSuccess(false) }}
               className="mt-2 text-xs font-semibold text-violet-600 hover:underline"
             >
               Convidar outro usuário
@@ -568,6 +667,10 @@ function InviteForm({ onClose }: { onClose: () => void }) {
                 {ALL_ROLES.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
             </div>
+
+            {orgs.length > 0 && (
+              <FilialPicker orgs={orgs} selected={selectedOrgIds} onChange={setSelectedOrgIds} />
+            )}
 
             {error && (
               <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-100">
@@ -663,7 +766,7 @@ function SendResetEmailModal({ user, onClose }: { user: User; onClose: () => voi
 
 // ─── Main Users Tab ───────────────────────────────────────────────────────────
 
-export function UsersTab({ initialUsers, currentUserId }: { initialUsers: User[]; currentUserId: string }) {
+export function UsersTab({ initialUsers, currentUserId, orgs = [] }: { initialUsers: User[]; currentUserId: string; orgs?: OrgRow[] }) {
   const [users,      setUsers]     = useState<User[]>(initialUsers)
   const [search,     setSearch]    = useState("")
   const [roleFilter, setRoleFilter] = useState<string>("ALL")
@@ -886,12 +989,13 @@ export function UsersTab({ initialUsers, currentUserId }: { initialUsers: User[]
           }}
         >
           {panel === "invite" ? (
-            <InviteForm onClose={closePanel} />
+            <InviteForm orgs={orgs} onClose={closePanel} />
           ) : (
             <UserForm
               mode={panel}
               initial={editUser ?? undefined}
               currentUserId={currentUserId}
+              orgs={orgs}
               onSave={handleSaved}
               onCancel={closePanel}
             />

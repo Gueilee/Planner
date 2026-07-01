@@ -287,7 +287,11 @@ export function SettingsClient({
               <OrganizationTab initial={orgConfig} />
             )}
             {activeTab === "usuarios" && isAdmin && (
-              <UsersTab initialUsers={allUsers} currentUserId={currentUserId} />
+              <UsersTab
+                initialUsers={allUsers}
+                currentUserId={currentUserId}
+                orgs={isRootAdmin ? initialOrgs : []}
+              />
             )}
             {activeTab === "documentos" && isAdmin && (
               <DocsTab />

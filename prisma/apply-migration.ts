@@ -224,6 +224,41 @@ async function main() {
     },
   ], "write")
 
+  // ── Migration 6: UserOrganizationAccess + Invitation.extraOrgIds ────────────
+  await client.batch([
+    {
+      sql: `CREATE TABLE IF NOT EXISTS "UserOrganizationAccess" (
+        "id"             TEXT     NOT NULL PRIMARY KEY,
+        "userId"         TEXT     NOT NULL,
+        "organizationId" TEXT     NOT NULL,
+        "createdAt"      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "UserOrganizationAccess_userId_fkey"
+          FOREIGN KEY ("userId") REFERENCES "User" ("id")
+          ON DELETE CASCADE ON UPDATE CASCADE,
+        CONSTRAINT "UserOrganizationAccess_orgId_fkey"
+          FOREIGN KEY ("organizationId") REFERENCES "Organization" ("id")
+          ON DELETE CASCADE ON UPDATE CASCADE
+      )`,
+      args: [],
+    },
+    {
+      sql: `CREATE UNIQUE INDEX IF NOT EXISTS "UserOrganizationAccess_userId_orgId_key"
+        ON "UserOrganizationAccess"("userId", "organizationId")`,
+      args: [],
+    },
+    {
+      sql: `CREATE INDEX IF NOT EXISTS "UserOrganizationAccess_userId_idx"
+        ON "UserOrganizationAccess"("userId")`,
+      args: [],
+    },
+  ], "write")
+
+  try {
+    await client.execute(`ALTER TABLE "Invitation" ADD COLUMN "extraOrgIds" TEXT`)
+  } catch {
+    // Column already exists — ignore
+  }
+
   console.log("✅ Migrations aplicadas com sucesso!")
   client.close()
 }

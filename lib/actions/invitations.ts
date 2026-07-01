@@ -10,16 +10,15 @@ import { UserRole } from "@/lib/generated/prisma/enums"
 // ── Create invitation ────────────────────────────────────────────────────────
 
 export async function createInvitation(data: {
-  email: string
-  name:  string
-  role:  UserRole
+  email:        string
+  name:         string
+  role:         UserRole
+  extraOrgIds?: string[]
 }) {
   const session = await auth()
   if (!session?.user || session.user.role !== "ADMIN") {
     return { error: "Sem permissão" }
   }
-
-
 
   // Check if user already exists
   const existing = await db.user.findUnique({ where: { email: data.email } })
@@ -43,6 +42,7 @@ export async function createInvitation(data: {
       expiresAt,
       organizationId: session.user.organizationId,
       createdById:    session.user.id,
+      extraOrgIds:    data.extraOrgIds?.length ? JSON.stringify(data.extraOrgIds) : null,
     },
   })
 
@@ -86,7 +86,7 @@ export async function acceptInvitation(token: string, password: string) {
 
   const hashed = await bcrypt.hash(password, 12)
 
-  await db.$transaction([
+  const [newUser] = await db.$transaction([
     db.user.create({
       data: {
         name:           inv.name,
@@ -102,6 +102,15 @@ export async function acceptInvitation(token: string, password: string) {
       data:  { usedAt: new Date() },
     }),
   ])
+
+  if (inv.extraOrgIds) {
+    const orgIds = JSON.parse(inv.extraOrgIds) as string[]
+    if (orgIds.length > 0) {
+      await db.userOrganizationAccess.createMany({
+        data: orgIds.map((organizationId) => ({ userId: newUser.id, organizationId })),
+      })
+    }
+  }
 
   return { success: true }
 }

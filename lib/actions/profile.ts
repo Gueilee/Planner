@@ -105,12 +105,13 @@ export async function updateUserById(userId: string, data: ProfileInput & { role
 // ─── Admin: create new user ───────────────────────────────────────────────────
 
 export async function createUser(data: {
-  name:        string
-  email:       string
-  password:    string
-  role:        string
-  department?: string
-  phone?:      string
+  name:         string
+  email:        string
+  password:     string
+  role:         string
+  department?:  string
+  phone?:       string
+  extraOrgIds?: string[]
 }) {
   const session = await auth()
   if (!session?.user) throw new Error("Não autorizado")
@@ -137,6 +138,12 @@ export async function createUser(data: {
     },
     select: { id: true, name: true, email: true, department: true, phone: true, image: true, role: true, active: true },
   })
+
+  if (data.extraOrgIds?.length) {
+    await db.userOrganizationAccess.createMany({
+      data: data.extraOrgIds.map((organizationId) => ({ userId: user.id, organizationId })),
+    })
+  }
 
   revalidatePath("/settings")
   return user

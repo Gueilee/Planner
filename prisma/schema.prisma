@@ -216,9 +216,10 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users       User[]
-  projects    Project[]
-  invitations Invitation[]
+  users        User[]
+  projects     Project[]
+  invitations  Invitation[]
+  userAccesses UserOrganizationAccess[]
 }
 
 // ─────────────────────────────────────────────
@@ -261,6 +262,7 @@ model User {
   baselines               ProjectBaseline[]
   createdInvitations      Invitation[]      @relation("InvitationCreator")
   passwordResetTokens     PasswordResetToken[]
+  organizationAccess      UserOrganizationAccess[]
 }
 
 model Invitation {
@@ -272,11 +274,25 @@ model Invitation {
   expiresAt      DateTime
   usedAt         DateTime?
   organizationId String
+  extraOrgIds    String?
   createdById    String
   createdAt      DateTime  @default(now())
 
   organization   Organization @relation(fields: [organizationId], references: [id])
   createdBy      User         @relation("InvitationCreator", fields: [createdById], references: [id])
+}
+
+model UserOrganizationAccess {
+  id             String       @id @default(cuid())
+  userId         String
+  organizationId String
+  createdAt      DateTime     @default(now())
+
+  user         User         @relation(fields: [userId],         references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([userId])
 }
 
 model PasswordResetToken {
