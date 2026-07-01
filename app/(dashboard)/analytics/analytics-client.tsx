@@ -72,7 +72,7 @@ function KpiCard({
 }) {
   return (
     <div
-      className="rounded-2xl border p-5 flex flex-col gap-3 transition-all hover:shadow-md"
+      className="rounded-2xl border p-4 flex flex-col gap-2.5 transition-all hover:shadow-md"
       style={{
         background: accent ? `${color}08` : "#fff",
         borderColor: accent ? `${color}30` : "#E2E8F0",
@@ -80,19 +80,19 @@ function KpiCard({
       }}
     >
       <div
-        className="w-9 h-9 rounded-xl flex items-center justify-center"
+        className="w-8 h-8 rounded-xl flex items-center justify-center"
         style={{ background: `${color}15` }}
       >
-        <Icon className="w-4.5 h-4.5" style={{ color }} />
+        <Icon className="w-4 h-4" style={{ color }} />
       </div>
       <div>
         <p
-          className="text-2xl font-black leading-none tabular-nums"
+          className="text-xl font-black leading-none tabular-nums"
           style={{ color, fontVariantNumeric: "tabular-nums" }}
         >
           {value}
         </p>
-        <p className="text-[11px] text-slate-500 mt-1.5 font-semibold leading-tight">{label}</p>
+        <p className="text-[10px] text-slate-500 mt-1 font-semibold leading-tight">{label}</p>
       </div>
     </div>
   )
@@ -275,7 +275,7 @@ export function AnalyticsClient({
               sub="Visão consolidada do portfólio"
               accentColor={C.blue}
             />
-            <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(148px, 1fr))" }}>
+            <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(7, 1fr)" }}>
               <KpiCard label="Total de Projetos"     value={totalProjects}     color={C.blue}   icon={Briefcase}     accent />
               <KpiCard label="Em Andamento"          value={activeProjects}    color={C.cyan}   icon={Activity} />
               <KpiCard label="Concluídos"            value={completedProjects} color={C.green}  icon={CheckCircle2} />
