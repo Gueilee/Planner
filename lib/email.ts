@@ -70,6 +70,11 @@ export async function sendInviteEmail(to: string, name: string, token: string) {
   await sendMail(to, 'Você foi convidado para o PLANNER Vendemmia', inviteHtml(name, link))
 }
 
+export async function sendPasswordResetEmail(to: string, name: string, token: string) {
+  const link = `${BASE_URL}/reset/${token}`
+  await sendMail(to, 'Redefinição de senha — PLANNER Vendemmia', resetHtml(name, link))
+}
+
 // ── HTML Templates ───────────────────────────────────────────────────────────
 
 function wrapper(content: string) {
@@ -140,6 +145,35 @@ function btn(label: string, link: string) {
         </td>
       </tr>
     </table>`
+}
+
+function resetHtml(name: string, link: string) {
+  return wrapper(`
+    <p style="margin:0;font-family:Arial,sans-serif;font-size:12px;font-weight:bold;color:#C026D3;text-transform:uppercase;letter-spacing:1.5px;line-height:20px">
+      Redefinição de senha
+    </p>
+    <h2 style="margin:8px 0 20px;font-family:Arial,sans-serif;font-size:24px;font-weight:bold;color:#422c76;line-height:32px">
+      Olá, ${name}!
+    </h2>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
+      <tr><td bgcolor="#e8e3f4" height="1" style="font-size:0;line-height:0">&nbsp;</td></tr>
+    </table>
+    <p style="margin:20px 0 0;font-family:Arial,sans-serif;font-size:15px;color:#4b5563;line-height:1.7">
+      Recebemos uma solicitação para redefinir a senha da sua conta no
+      <strong style="color:#422c76">PLANNER Vendemmia</strong>.
+      Clique no botão abaixo para criar uma nova senha.
+    </p>
+    ${btn('Redefinir minha senha', link)}
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin-top:8px">
+      <tr>
+        <td width="4" bgcolor="#422c76" style="font-size:0;line-height:0">&nbsp;</td>
+        <td bgcolor="#f0ecff" style="padding:14px 18px;font-family:Arial,sans-serif;font-size:13px;color:#555;line-height:1.6">
+          <strong style="color:#422c76">Este link é válido por 2 horas.</strong><br>
+          Se você não solicitou esta redefinição, ignore este e-mail — sua senha permanece a mesma.
+        </td>
+      </tr>
+    </table>
+  `)
 }
 
 function inviteHtml(name: string, link: string) {

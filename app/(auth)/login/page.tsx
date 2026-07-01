@@ -70,9 +70,9 @@ export default function LoginPage() {
               <div className="lp-field">
                 <div className="lp-lbl-row">
                   <label className="lp-lbl">Senha</label>
-                  <button type="button" tabIndex={-1} className="lp-forgot">
+                  <a href="/reset-password" className="lp-forgot">
                     Esqueceu a senha?
-                  </button>
+                  </a>
                 </div>
                 <div className="lp-pw-wrap">
                   <input
