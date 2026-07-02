@@ -106,7 +106,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             const res = await withTimeout(
               turso.execute({
                 sql:  `SELECT name, image, department FROM "User" WHERE id = ? LIMIT 1`,
-                args: [token.id],
+                args: [token.id as string],
               }),
               10000,
               "Turso jwt-update"
@@ -158,7 +158,7 @@ declare module "next-auth" {
   }
 }
 
-declare module "next-auth/jwt" {
+declare module "@auth/core/jwt" {
   interface JWT {
     id:              string
     role:            UserRole
