@@ -7,9 +7,10 @@ export default async function middleware(req: NextRequest) {
   const { nextUrl } = req
   const isPublic = PUBLIC_ROUTES.some((r) => nextUrl.pathname.startsWith(r))
 
-  // NextAuth v5 changed the cookie name from "next-auth.session-token" (v4)
-  // to "authjs.session-token" (v5), prefixed with "__Secure-" on HTTPS.
-  const useSecure = nextUrl.protocol === "https:"
+  // nginx forwards HTTP internally; Cloudflare sets X-Forwarded-Proto:https.
+  // nextUrl.protocol would be "http:" here, so we read the header instead.
+  const proto = req.headers.get("x-forwarded-proto") ?? nextUrl.protocol.replace(":", "")
+  const useSecure = proto === "https"
   const cookieName = `${useSecure ? "__Secure-" : ""}authjs.session-token`
 
   const token = await getToken({
