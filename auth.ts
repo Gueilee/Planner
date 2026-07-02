@@ -13,6 +13,15 @@ function getTursoClient() {
   return createClient({ url, authToken })
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timeout after ${ms}ms`)), ms)
+    ),
+  ])
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: process.env.AUTH_SECRET,
   session: { strategy: "jwt" },
@@ -32,11 +41,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           if (!credentials?.email || !credentials?.password) return null
 
           const turso = getTursoClient()
-          const result = await turso.execute({
-            sql:  `SELECT id, name, email, password, role, department, image, active, organizationId
-                   FROM "User" WHERE email = ? LIMIT 1`,
-            args: [credentials.email as string],
-          })
+          const result = await withTimeout(
+            turso.execute({
+              sql:  `SELECT id, name, email, password, role, department, image, active, organizationId
+                     FROM "User" WHERE email = ? LIMIT 1`,
+              args: [credentials.email as string],
+            }),
+            15000,
+            "Turso login"
+          )
           await turso.close()
 
           if (result.rows.length === 0) return null
@@ -90,10 +103,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           // Regular profile refresh from DB (e.g. after avatar/name save)
           try {
             const turso = getTursoClient()
-            const res = await turso.execute({
-              sql:  `SELECT name, image, department FROM "User" WHERE id = ? LIMIT 1`,
-              args: [token.id],
-            })
+            const res = await withTimeout(
+              turso.execute({
+                sql:  `SELECT name, image, department FROM "User" WHERE id = ? LIMIT 1`,
+                args: [token.id],
+              }),
+              10000,
+              "Turso jwt-update"
+            )
             await turso.close()
             if (res.rows.length > 0) {
               const row = res.rows[0]
