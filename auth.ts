@@ -97,7 +97,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (trigger === "update" && token.id) {
         const payload = updateData as Record<string, unknown> | null
         // Root-admin org switch — update organizationId without DB round-trip
-        if (payload?.switchToOrgId && token.email === "gppereira@vendemmia.com.br") {
+        const ROOT_ADMINS = ["gppereira@vendemmia.com.br", "mflorentina@vendemmia.com.br"]
+        if (payload?.switchToOrgId && ROOT_ADMINS.includes(token.email as string)) {
           token.organizationId = payload.switchToOrgId as string
         } else {
           // Regular profile refresh from DB (e.g. after avatar/name save)

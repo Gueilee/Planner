@@ -170,7 +170,8 @@ export type OrgSwitchItem = { id: string; name: string; slug: string; active: bo
 
 export async function getOrgsForSwitch(): Promise<OrgSwitchItem[]> {
   const session = await auth()
-  if (session?.user?.email !== "gppereira@vendemmia.com.br") throw new Error("Acesso restrito")
+  const ROOT_ADMINS = ["gppereira@vendemmia.com.br", "mflorentina@vendemmia.com.br"]
+  if (!ROOT_ADMINS.includes(session?.user?.email ?? "")) throw new Error("Acesso restrito")
 
   return db.organization.findMany({
     orderBy: { name: "asc" },
