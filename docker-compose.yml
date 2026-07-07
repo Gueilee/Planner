@@ -15,3 +15,13 @@ services:
       - MAILER_DSN=${MAILER_DSN}
       - MAILER_FROM=${MAILER_FROM}
       - NODE_ENV=production
+    networks:
+      - planner_net
+      - gateway_net
+
+networks:
+  planner_net:
+    driver: bridge
+  gateway_net:
+    external: true
+    name: people_people_net
