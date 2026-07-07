@@ -41,14 +41,14 @@ interface HeaderProps {
   subtitle?: string
 }
 
-const ROOT_ADMIN_EMAIL = "gppereira@vendemmia.com.br"
+const ROOT_ADMINS = ["gppereira@vendemmia.com.br", "mflorentina@vendemmia.com.br"]
 
 export function Header({ title, subtitle }: HeaderProps) {
   const { data: session, update } = useSession()
   const router = useRouter()
 
   // Org switcher state (root admin only)
-  const isRootAdmin = session?.user?.email === ROOT_ADMIN_EMAIL
+  const isRootAdmin = ROOT_ADMINS.includes(session?.user?.email ?? "")
   const [switchOrgs,   setSwitchOrgs]   = useState<OrgSwitchItem[]>([])
   const [orgsLoaded,   setOrgsLoaded]   = useState(false)
   const [switching,    setSwitching]    = useState(false)
