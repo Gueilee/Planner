@@ -36,8 +36,11 @@ export async function createProjectRequest(data: {
   const memberIds = [session.user.id]
   if (data.sponsorId !== session.user.id) memberIds.push(data.sponsorId)
 
-  // Generate next sequential request number (VDM-NNNN)
-  const maxResult  = await db.project.aggregate({ _max: { requestNumber: true } })
+  // Generate next sequential request number scoped per organization
+  const maxResult  = await db.project.aggregate({
+    _max: { requestNumber: true },
+    where: { organizationId: session.user.organizationId },
+  })
   const nextNumber = (maxResult._max.requestNumber ?? 0) + 1
 
   const project = await db.project.create({

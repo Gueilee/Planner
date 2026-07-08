@@ -13,7 +13,7 @@ export default async function NewProjectPage() {
   if (!session?.user) redirect("/login")
 
   const users = await db.user.findMany({
-    where: { active: true },
+    where: { active: true, organizationId: session.user.organizationId },
     select: { id: true, name: true, department: true, role: true },
     orderBy: { name: "asc" },
   })

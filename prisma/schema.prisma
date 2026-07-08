@@ -385,8 +385,8 @@ model Project {
   priorityNotes     String?
   priorityUpdatedAt DateTime?
 
-  // Sequential request number — VDM-NNNN format, unique across all projects
-  requestNumber Int? @unique
+  // Sequential request number — unique per organization (each filial has its own sequence)
+  requestNumber Int?
 
   // Status Report indicators (GREEN | YELLOW | RED)
   reportStatusCost      String  @default("GREEN")
@@ -412,6 +412,8 @@ model Project {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, requestNumber])
 }
 
 model ProjectMember {
