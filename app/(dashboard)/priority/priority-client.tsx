@@ -21,6 +21,7 @@ import { CSS } from "@dnd-kit/utilities"
 import { savePriorities } from "@/lib/actions/priority"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { parseDateStr } from "@/lib/date-utils"
 import {
   GripVertical, CheckCircle2, Loader2, Users, TrendingUp,
   Star, ChevronDown, ChevronUp, Save, ArrowUpDown,
@@ -156,7 +157,7 @@ function SortableCard({
             <p className="text-sm font-bold text-gray-900 truncate leading-tight">{project.title}</p>
             <p className="text-[10px] text-gray-400 mt-0.5 truncate">
               {project.sponsor}
-              {project.expectedEnd && ` · Prazo: ${format(new Date(project.expectedEnd), "MM/yyyy", { locale: ptBR })}`}
+              {project.expectedEnd && ` · Prazo: ${format(parseDateStr(project.expectedEnd), "MM/yyyy", { locale: ptBR })}`}
             </p>
           </div>
 

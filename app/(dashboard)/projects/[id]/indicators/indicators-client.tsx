@@ -4,6 +4,7 @@ import { useState, useMemo, useCallback } from "react"
 import Link from "next/link"
 import { differenceInDays, format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { parseDateStr, fmtDateShort } from "@/lib/date-utils"
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area, LineChart, Line, ComposedChart,
@@ -491,7 +492,7 @@ function DrillModal({ drill, dark, onClose }: { drill: DrillDown; dark: boolean;
                   {t.endDate && (
                     <span className={`text-xs ${late ? "text-red-500 font-bold" : dark ? "text-slate-400" : "text-slate-500"}`}>
                       <Calendar className="w-3 h-3 inline mr-1" />
-                      {format(new Date(t.endDate), "dd/MM/yy")}
+                      {fmtDateShort(t.endDate)}
                       {late && " ⚠"}
                     </span>
                   )}
@@ -731,10 +732,10 @@ export function IndicatorsClient({ data, projectId }: Props) {
                       {m.daysRemaining >= 0 ? "dias restantes" : "dias de atraso"}
                     </p>
                     {data.project.expectedEnd && (
-                      <p className={`text-xs mt-1 ${sub}`}>Prev.: {format(new Date(data.project.expectedEnd), "dd/MM/yy")}</p>
+                      <p className={`text-xs mt-1 ${sub}`}>Prev.: {fmtDateShort(data.project.expectedEnd)}</p>
                     )}
                     {data.project.expectedStart && (
-                      <p className={`text-xs ${sub}`}>Início: {format(new Date(data.project.expectedStart), "dd/MM/yy")}</p>
+                      <p className={`text-xs ${sub}`}>Início: {fmtDateShort(data.project.expectedStart)}</p>
                     )}
                   </>
                 ) : (

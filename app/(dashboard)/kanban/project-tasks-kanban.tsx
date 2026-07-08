@@ -10,6 +10,7 @@ import {
 import { CSS } from "@dnd-kit/utilities"
 import { format, differenceInDays } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { parseDateStr } from "@/lib/date-utils"
 import {
   X, LayoutGrid, List, Loader2, ExternalLink,
   Clock, Layers, CheckCircle2, PauseCircle, ClipboardCheck,
@@ -225,7 +226,7 @@ function TaskCard({
             )}
             {task.endDate && (
               <span className="text-[9px] font-bold" style={{ color: isDelayed ? "#DC2626" : "#94A3B8" }}>
-                {format(new Date(task.endDate), "dd/MM", { locale: ptBR })}
+                {format(parseDateStr(task.endDate), "dd/MM", { locale: ptBR })}
               </span>
             )}
           </div>

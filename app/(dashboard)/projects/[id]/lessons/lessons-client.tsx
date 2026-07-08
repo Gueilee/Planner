@@ -4,6 +4,7 @@ import { useState, useMemo } from "react"
 import Link from "next/link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { parseDateStr } from "@/lib/date-utils"
 import {
   ArrowLeft, Plus, Trash2, Pencil, BookOpen, CheckCircle2,
   AlertTriangle, Minus, ChevronDown, X, Save, Lightbulb,
@@ -387,7 +388,7 @@ function LessonCard({
         {/* Footer */}
         <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-gray-50">
           <span className="text-[10px] text-gray-400">
-            {format(new Date(lesson.identifiedAt), "dd/MM/yyyy", { locale: ptBR })}
+            {format(parseDateStr(lesson.identifiedAt), "dd/MM/yyyy", { locale: ptBR })}
           </span>
           <button onClick={() => setExpanded(!expanded)}
             className="text-[10px] font-semibold text-violet-500 hover:text-violet-700 transition-colors">

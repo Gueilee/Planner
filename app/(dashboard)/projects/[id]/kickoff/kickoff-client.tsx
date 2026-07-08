@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { parseDateStr } from "@/lib/date-utils"
 import {
   ArrowLeft, Save, Rocket, Plus, Trash2, Upload, X, Loader2,
   Calendar, MapPin, Target, Users, Paperclip, ChevronRight,
@@ -783,10 +784,10 @@ export function KickOffClient({ project, existing, projectParticipants, allUsers
                 <div className="flex flex-wrap items-center gap-4 mt-4 text-xs text-white/40">
                   <span>Solicitante: <strong className="text-white/70">{project.sponsor?.name ?? "—"}</strong></span>
                   {project.expectedStart && (
-                    <span>Início previsto: <strong className="text-white/70">{format(new Date(project.expectedStart), "dd/MM/yyyy")}</strong></span>
+                    <span>Início previsto: <strong className="text-white/70">{format(parseDateStr(project.expectedStart), "dd/MM/yyyy")}</strong></span>
                   )}
                   {project.expectedEnd && (
-                    <span>Término previsto: <strong className="text-white/70">{format(new Date(project.expectedEnd), "dd/MM/yyyy")}</strong></span>
+                    <span>Término previsto: <strong className="text-white/70">{format(parseDateStr(project.expectedEnd), "dd/MM/yyyy")}</strong></span>
                   )}
                 </div>
               </div>

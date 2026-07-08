@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useRef, useEffect } from "react"
 import { ProjectTasksKanban } from "./project-tasks-kanban"
+import { parseDateStr, fmtDateLong } from "@/lib/date-utils"
 import {
   DndContext, DragOverlay, closestCorners,
   PointerSensor, KeyboardSensor, useSensor, useSensors,
@@ -214,7 +215,7 @@ function getUrgency(project: KanbanProject): { level: UrgencyLevel; daysLate: nu
 
 function fmt(d: string | null) {
   if (!d) return "—"
-  return format(new Date(d), "dd/MM/yyyy", { locale: ptBR })
+  return fmtDateLong(d)
 }
 function currency(v: number | null) {
   if (!v) return "—"
@@ -499,7 +500,7 @@ function ProjectCard({
                     className="text-[9px] font-semibold"
                     style={{ color: urg.level === "delayed" ? "#DC2626" : urg.level === "at_risk" ? "#D97706" : "#94A3B8" }}
                   >
-                    {format(new Date(project.expectedEnd), "dd/MM", { locale: ptBR })}
+                    {format(parseDateStr(project.expectedEnd), "dd/MM", { locale: ptBR })}
                   </span>
                 )}
               </div>

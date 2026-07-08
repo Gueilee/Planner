@@ -4,6 +4,7 @@ import { useState, useMemo } from "react"
 import Link from "next/link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { parseDateStr, fmtDateShort } from "@/lib/date-utils"
 import {
   BookOpen, Search, Filter, TrendingUp, TrendingDown, Minus,
   CheckCircle2, AlertTriangle, Activity, X, ChevronDown,
@@ -154,7 +155,7 @@ function LessonModal({ lesson, onClose }: { lesson: Lesson; onClose: () => void 
 
           {/* Footer meta */}
           <div className="flex items-center justify-between text-xs text-gray-400 pt-2 border-t border-gray-50">
-            <span>Identificada em {format(new Date(lesson.identifiedAt), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</span>
+            <span>Identificada em {format(parseDateStr(lesson.identifiedAt), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</span>
             <Link href={`/projects/${lesson.project.id}/lessons`}
               className="flex items-center gap-1 text-violet-600 font-semibold hover:underline">
               Ver projeto <ExternalLink className="w-3 h-3" />
@@ -235,7 +236,7 @@ function LessonListRow({ lesson, onClick }: { lesson: Lesson; onClick: () => voi
       <div className="shrink-0 text-right">
         <p className="text-[10px] font-semibold text-gray-500">{lesson.area}</p>
         <p className="text-[9px] text-gray-400 mt-1">
-          {format(new Date(lesson.identifiedAt), "dd/MM/yy", { locale: ptBR })}
+          {fmtDateShort(lesson.identifiedAt)}
         </p>
       </div>
     </button>

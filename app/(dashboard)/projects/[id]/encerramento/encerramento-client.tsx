@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { parseDateStr } from "@/lib/date-utils"
 import {
   ArrowLeft, CheckCircle2, Calendar, Users, FileText,
   AlertTriangle, BookOpen, MessageSquare, ChevronDown,
@@ -92,7 +93,7 @@ const MEETING_TYPE_LABEL: Record<string, string> = {
 
 function fmt(d: string | null | undefined, pattern = "dd/MM/yyyy") {
   if (!d) return "—"
-  return format(new Date(d), pattern, { locale: ptBR })
+  return format(parseDateStr(d), pattern, { locale: ptBR })
 }
 
 function currency(v: number | null | undefined) {

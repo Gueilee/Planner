@@ -18,6 +18,7 @@ import {
 import Link from "next/link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { parseDateStr } from "@/lib/date-utils"
 import { savePresentation } from "@/lib/actions/presentation"
 import type { Slide, SlideType, Presentation, PresentationTheme, TableData, TeamMember } from "@/lib/types/presentation"
 
@@ -103,8 +104,8 @@ function generateSlides(project: ProjectData): Slide[] {
 
   if (project.expectedStart || project.expectedEnd) {
     const items = []
-    if (project.expectedStart) items.push({ date: format(new Date(project.expectedStart), "MM/yyyy"), label: "Início", done: false })
-    if (project.expectedEnd) items.push({ date: format(new Date(project.expectedEnd), "MM/yyyy"), label: "Conclusão", done: false })
+    if (project.expectedStart) items.push({ date: format(parseDateStr(project.expectedStart), "MM/yyyy"), label: "Início", done: false })
+    if (project.expectedEnd) items.push({ date: format(parseDateStr(project.expectedEnd), "MM/yyyy"), label: "Conclusão", done: false })
     slides.push({ id: nanoid(), type: "timeline", title: "Cronograma Previsto", timelineItems: items })
   }
 

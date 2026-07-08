@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { parseDateStr } from "@/lib/date-utils"
 import {
   Plus, Trash2, Pencil, TrendingUp, TrendingDown, Minus,
   Lightbulb, X, Save, ExternalLink, BookOpen,
@@ -398,7 +399,7 @@ export function ProjectLessonsTab({ project, members, initialLessons }: Props) {
                         Por <span className="font-semibold text-slate-500">{lesson.createdBy?.name ?? "—"}</span>
                       </span>
                       <span className="text-[10px] text-slate-400">
-                        {format(new Date(lesson.identifiedAt), "dd/MM/yyyy", { locale: ptBR })}
+                        {format(parseDateStr(lesson.identifiedAt), "dd/MM/yyyy", { locale: ptBR })}
                       </span>
                     </div>
                   </div>

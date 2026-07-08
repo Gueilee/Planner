@@ -4,11 +4,12 @@ import { useState, useTransition } from "react"
 import { CalendarCheck2, CalendarX2, Clock, Pencil, Check, X } from "lucide-react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { fmtDateLong } from "@/lib/date-utils"
 import { updateSuggestedDates } from "@/lib/actions/projects"
 
 function fmtDate(d: Date | string | null): string {
   if (!d) return "—"
-  return format(new Date(d), "dd/MM/yyyy", { locale: ptBR })
+  return fmtDateLong(typeof d === "string" ? d : (d as Date).toISOString())
 }
 
 function toInputValue(d: Date | string | null): string {

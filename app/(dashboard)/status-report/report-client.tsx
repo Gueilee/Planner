@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { parseDateStr, fmtDateShort } from "@/lib/date-utils"
 import Link from "next/link"
 import {
   ChevronLeft, ChevronRight, Maximize2, Minimize2,
@@ -350,8 +351,8 @@ function TimelineThermometer({ timelineProgress, progress }: { timelineProgress:
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function fmt(d:string|null){return d?format(new Date(d),"dd/MM/yy"):"—"}
-function fmtLong(d:string){return format(new Date(d),"dd 'de' MMM 'de' yyyy",{locale:ptBR})}
+function fmt(d:string|null){return fmtDateShort(d)}
+function fmtLong(d:string){return format(parseDateStr(d),"dd 'de' MMM 'de' yyyy",{locale:ptBR})}
 function currency(v:number|null){if(!v)return "—";return v>=1e6?`R$ ${(v/1e6).toFixed(1)}M`:`R$ ${(v/1e3).toFixed(0)}K`}
 
 // ═══════════════════════════════════════════════════════════════════════════════

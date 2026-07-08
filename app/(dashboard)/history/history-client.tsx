@@ -4,6 +4,7 @@ import { useState, useTransition, useCallback } from "react"
 import { getProjectFullHistory, deleteMeeting, deleteAttachment } from "@/lib/actions/history"
 import { format, differenceInDays, formatDistanceToNow } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { fmtDateLong } from "@/lib/date-utils"
 import Link from "next/link"
 import {
   Search, X, Clock, AlertTriangle, Users, TrendingUp,
@@ -104,7 +105,7 @@ const ACTIVE_STATUSES = ["PLANNING", "IN_PROGRESS", "PILOT", "RAMP_UP", "GO_LIVE
 
 function fmt(d: string | Date | null | undefined): string {
   if (!d) return "—"
-  return format(new Date(d as string), "dd/MM/yyyy", { locale: ptBR })
+  return fmtDateLong(typeof d === "string" ? d : (d as Date).toISOString())
 }
 function currency(v: number | null | undefined): string {
   if (!v) return "—"

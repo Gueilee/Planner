@@ -10,6 +10,7 @@ import {
 } from "lucide-react"
 import { format, differenceInDays } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { parseDateStr } from "@/lib/date-utils"
 import Link from "next/link"
 import { saveGoNoGoDecision } from "@/lib/actions/go-no-go"
 import type { NewParticipant } from "@/components/meeting-new-participant"
@@ -49,12 +50,12 @@ type ProjectData = {
 
 function fmtDate(d: string | null): string {
   if (!d) return "Não definido"
-  return format(new Date(d), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
+  return format(parseDateStr(d), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
 }
 
 function fmtDateShort(d: string | null): string {
   if (!d) return "—"
-  return format(new Date(d), "dd MMM yyyy", { locale: ptBR })
+  return format(parseDateStr(d), "dd MMM yyyy", { locale: ptBR })
 }
 
 function fmtCurrency(v: number | null): string {

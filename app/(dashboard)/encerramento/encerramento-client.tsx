@@ -4,6 +4,7 @@ import { useState, useMemo } from "react"
 import Link from "next/link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { fmtDateLong } from "@/lib/date-utils"
 import {
   CheckCircle2, Search, Calendar, Users, BarChart3,
   ChevronRight, FolderKanban, Clock, Star,
@@ -44,7 +45,7 @@ const STATUS_CFG: Record<string, { label: string; pill: string; dot: string }> =
 
 function fmt(d: string | null | undefined) {
   if (!d) return "—"
-  return format(new Date(d), "dd/MM/yyyy", { locale: ptBR })
+  return fmtDateLong(d)
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
