@@ -200,8 +200,9 @@ export function EncerramentoMeetingClient({ project, members, projectParticipant
       ])
       setLessonArea(""); setLessonResp(""); setLessonOcc(""); setLessonText("")
       setShowLessonForm(false)
-    } catch {
-      setError("Erro ao salvar lição aprendida.")
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setError(`Erro ao salvar lição aprendida: ${msg}`)
     } finally {
       setSavingLesson(false)
     }
