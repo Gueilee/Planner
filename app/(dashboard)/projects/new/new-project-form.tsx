@@ -14,7 +14,7 @@ import { createProjectRequest } from "@/lib/actions/project-request"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type RiskItem    = { description: string; level: "LOW" | "MEDIUM" | "HIGH"; mitigation: string }
-type FileItem    = { name: string; url: string; size: number; localFile?: File }
+type FileItem    = { id?: string; name: string; url: string; size: number; localFile?: File }
 type ImpactLevel = "LOW" | "MEDIUM" | "HIGH" | "VERY_HIGH"
 type BenefitItem = {
   category: "FINANCIAL" | "OPERATIONAL" | "STRATEGIC"

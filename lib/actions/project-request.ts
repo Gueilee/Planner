@@ -21,7 +21,7 @@ export async function createProjectRequest(data: {
   expectedStart: string
   expectedEnd: string
   risks: Array<{ description: string; level: string; mitigation: string }>
-  files: Array<{ name: string; url: string; size: number }>
+  files: Array<{ id?: string; name: string; url: string; size: number }>
   benefits: Array<{
     category: string; type: string; description: string
     unit: string; plannedValue: number; frequency: string
@@ -79,16 +79,6 @@ export async function createProjectRequest(data: {
             })),
           }
         : undefined,
-      attachments: data.files.length > 0
-        ? {
-            create: data.files.map((f) => ({
-              fileName: f.name,
-              fileUrl:  f.url,
-              fileSize: f.size,
-              fileType: f.name.split(".").pop()?.toLowerCase() ?? "",
-            })),
-          }
-        : undefined,
       benefits: data.benefits.length > 0
         ? {
             create: data.benefits.map((b) => ({
@@ -109,6 +99,15 @@ export async function createProjectRequest(data: {
         : undefined,
     },
   })
+
+  // Link pre-uploaded attachments (created by /api/upload) to this project
+  const uploadedIds = data.files.map(f => f.id).filter(Boolean) as string[]
+  if (uploadedIds.length > 0) {
+    await db.attachment.updateMany({
+      where: { id: { in: uploadedIds } },
+      data:  { projectId: project.id },
+    })
+  }
 
   revalidatePath("/projects")
   revalidatePath("/dashboard")

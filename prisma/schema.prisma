@@ -688,11 +688,13 @@ model Comment {
 }
 
 model Attachment {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   fileName  String
   fileUrl   String
   fileType  String
   fileSize  Int?
+  blobData  String? // base64-encoded file content (stored in DB when no external storage)
+  mimeType  String? // MIME type for serving via /api/files/[id]
 
   taskId    String?
   commentId String?
