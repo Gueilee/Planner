@@ -139,8 +139,10 @@ function btn(label: string, link: string) {
       <tr>
         <td align="center" style="padding:28px 0 4px">
           <a href="${link}"
-            style="display:inline-block;padding:15px 40px;background:linear-gradient(135deg,#422c76 0%,#C026D3 100%);color:#ffffff;text-decoration:none;font-size:16px;font-weight:bold;font-family:Arial,sans-serif;border-radius:8px">
+            style="display:inline-block;padding:15px 40px;background-color:#422c76;background:linear-gradient(135deg,#422c76 0%,#C026D3 100%);color:#ffffff;text-decoration:none;font-size:16px;font-weight:bold;font-family:Arial,sans-serif;border-radius:8px;mso-padding-alt:15px 40px">
+            <!--[if mso]><i style="letter-spacing:40px;mso-font-width:-100%;mso-text-raise:30pt">&nbsp;</i><![endif]-->
             ${label}
+            <!--[if mso]><i style="letter-spacing:40px;mso-font-width:-100%">&nbsp;</i><![endif]-->
           </a>
         </td>
       </tr>
