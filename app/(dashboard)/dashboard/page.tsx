@@ -5,12 +5,34 @@ import { Header } from "@/components/layout/header"
 import { redirect } from "next/navigation"
 import { addDays } from "date-fns"
 import { ProjectStatus } from "@/lib/generated/prisma/enums"
+import { getEffectivePermissions, canView } from "@/lib/permissions-guard"
+import { ShieldAlert } from "lucide-react"
 
 export const metadata = { title: "Dashboard" }
 
 export default async function DashboardPage() {
   const session = await auth()
   if (!session?.user) redirect("/login")
+
+  // Única tela que não redireciona quando negada — evita loop, já que as
+  // demais páginas caem de volta pro Dashboard quando o usuário não tem acesso.
+  const perms = await getEffectivePermissions(session.user)
+  if (!canView(perms, "dashboard")) {
+    return (
+      <div className="flex flex-col h-full">
+        <Header />
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="flex flex-col items-center gap-3 text-center max-w-sm">
+            <ShieldAlert className="w-10 h-10 text-slate-300" />
+            <p className="text-sm font-bold text-slate-700">Nenhuma tela liberada para o seu usuário</p>
+            <p className="text-xs text-slate-400">
+              Fale com o administrador do sistema para vincular um perfil de acesso à sua conta.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const today = new Date()
   const in60  = addDays(today, 60)

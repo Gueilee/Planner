@@ -1,13 +1,11 @@
-import { auth } from "@/auth"
-import { redirect } from "next/navigation"
+import { requireScreenView } from "@/lib/permissions-guard"
 import { getProjectsForClosure } from "@/lib/actions/encerramento"
 import { EncerramentoClient } from "./encerramento-client"
 
 export const metadata = { title: "Encerramento de Projeto" }
 
 export default async function EncerramentoPage() {
-  const session = await auth()
-  if (!session?.user) redirect("/login")
+  await requireScreenView("closure")
 
   const projects = await getProjectsForClosure()
 

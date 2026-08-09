@@ -1,6 +1,6 @@
 import { Suspense } from "react"
 import { db } from "@/lib/db"
-import { auth } from "@/auth"
+import { requireScreenView } from "@/lib/permissions-guard"
 import { Header } from "@/components/layout/header"
 import { FolderKanban, Layers, Clock, CheckCircle2, BarChart3, PauseCircle } from "lucide-react"
 import { ProjectsClient, type ProjectRow } from "./projects-client"
@@ -15,8 +15,7 @@ const KPI_GRADIENTS = [
 ]
 
 export default async function ProjectsPage() {
-  const session = await auth()
-  if (!session?.user) return null
+  const { session } = await requireScreenView("projects")
 
   const [projects, counts] = await Promise.all([
     db.project.findMany({

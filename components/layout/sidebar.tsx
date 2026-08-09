@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
@@ -14,20 +15,20 @@ import { ROLE_LABELS } from "@/lib/permissions"
 import { UserRole } from "@/lib/generated/prisma/enums"
 
 const NAV_ITEMS = [
-  { label: "Dashboard",            href: "/dashboard",     icon: LayoutDashboard },
-  { label: "Projetos",             href: "/projects",      icon: FolderKanban },
-  { label: "Priorização",          href: "/priority",      icon: Star },
-  { label: "Kanban",               href: "/kanban",        icon: Columns3 },
-  { label: "Status Report",        href: "/status-report", icon: FileBarChart2 },
-  { label: "Indicadores",          href: "/analytics",     icon: TrendingUp },
-  { label: "Encerramento",         href: "/encerramento",  icon: CheckCircle2 },
-  { label: "Base de Conhecimento", href: "/knowledge",     icon: BookOpen },
-  { label: "Consulta de Projetos", href: "/history",       icon: History },
-  { label: "Modelos de Cronograma", href: "/templates",   icon: LayoutTemplate },
-  { label: "Benefícios e Valor",    href: "/benefits",    icon: Gem },
+  { key: "dashboard",      label: "Dashboard",             href: "/dashboard",     icon: LayoutDashboard },
+  { key: "projects",       label: "Projetos",              href: "/projects",      icon: FolderKanban },
+  { key: "priority",       label: "Priorização",           href: "/priority",      icon: Star },
+  { key: "kanban",         label: "Kanban",                href: "/kanban",        icon: Columns3 },
+  { key: "status_report",  label: "Status Report",         href: "/status-report", icon: FileBarChart2 },
+  { key: "analytics",      label: "Indicadores",           href: "/analytics",     icon: TrendingUp },
+  { key: "closure",        label: "Encerramento",          href: "/encerramento",  icon: CheckCircle2 },
+  { key: "knowledge_base", label: "Base de Conhecimento",  href: "/knowledge",     icon: BookOpen },
+  { key: "history",        label: "Consulta de Projetos",  href: "/history",       icon: History },
+  { key: "templates",      label: "Modelos de Cronograma", href: "/templates",     icon: LayoutTemplate },
+  { key: "benefits",       label: "Benefícios e Valor",    href: "/benefits",      icon: Gem },
 ]
 const SYSTEM_ITEMS = [
-  { label: "Configurações", href: "/settings", icon: Settings },
+  { key: "settings", label: "Configurações", href: "/settings", icon: Settings },
 ]
 
 interface SidebarProps {
@@ -40,6 +41,21 @@ interface SidebarProps {
 export function Sidebar({ collapsed, onToggle, orgLogoUrl, orgName = "PLANNER" }: SidebarProps) {
   const pathname      = usePathname()
   const { data: session } = useSession()
+
+  // null enquanto carrega = mostra tudo (a proteção real é o redirect de cada
+  // página); depois de resolvido, esconde as telas que o perfil não libera.
+  const [visibleKeys, setVisibleKeys] = useState<string[] | null>(null)
+
+  useEffect(() => {
+    fetch("/api/my-permissions")
+      .then((r) => r.json() as Promise<{ visibleKeys?: string[] }>)
+      .then((data) => setVisibleKeys(data.visibleKeys ?? []))
+      .catch(() => {})
+  }, [])
+
+  const visibleNavItems = visibleKeys === null
+    ? NAV_ITEMS
+    : NAV_ITEMS.filter((item) => visibleKeys.includes(item.key))
 
   const isActive = (href: string) =>
     href === "/dashboard" ? pathname === href : pathname.startsWith(href)
@@ -153,7 +169,7 @@ export function Sidebar({ collapsed, onToggle, orgLogoUrl, orgName = "PLANNER" }
         {collapsed && <div className="mb-3" />}
 
         <div className="space-y-0.5">
-          {NAV_ITEMS.map((item) => <NavLink key={item.href} item={item} />)}
+          {visibleNavItems.map((item) => <NavLink key={item.href} item={item} />)}
         </div>
 
         <div className="my-4 mx-2" style={{ height: "1px", background: "rgba(0,0,0,0.06)" }} />

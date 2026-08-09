@@ -3,13 +3,13 @@
 import { useState, useTransition } from "react"
 import {
   Plus, Trash2, Save, Loader2, Check, AlertCircle,
-  Eye, Edit3, Shield, X, ChevronDown, Users,
+  Eye, Edit3, Shield, X, ChevronDown, Users, PlusCircle,
 } from "lucide-react"
-import { FEATURE_GROUPS } from "@/lib/constants/features"
-import type { FeatureDef } from "@/lib/constants/features"
+import { SCREEN_GROUPS } from "@/lib/constants/features"
+import type { ScreenDef } from "@/lib/constants/features"
 import {
   createAccessProfile, updateAccessProfile, deleteAccessProfile,
-  type ProfileRow, type PermissionsMap,
+  type ProfileRow, type PermissionsMap, type FeaturePermission,
 } from "@/lib/actions/access-profiles"
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -19,20 +19,24 @@ const PROFILE_COLORS = [
   "#D97706", "#0891B2", "#64748B", "#EA580C",
 ]
 
-function buildAllPermissions(canEdit: boolean): PermissionsMap {
+const EMPTY_PERM: FeaturePermission = { canView: false, canCreate: false, canEdit: false, canDelete: false }
+
+function buildAllPermissions(full: boolean): PermissionsMap {
   const result: PermissionsMap = {}
-  for (const g of FEATURE_GROUPS) {
-    for (const f of g.features) {
-      result[f.key] = { canView: true, canEdit: f.hasEdit ? canEdit : false }
+  for (const g of SCREEN_GROUPS) {
+    for (const s of g.screens) {
+      result[s.key] = full
+        ? { canView: true, canCreate: true, canEdit: true, canDelete: true }
+        : { canView: true, canCreate: false, canEdit: false, canDelete: false }
     }
   }
   return result
 }
 
 const PRESETS = [
-  { key: "full",     label: "Liberar tudo",          desc: "Visualizar e editar tudo",     dot: "#059669" },
-  { key: "readonly", label: "Somente visualização",   desc: "Ver sem poder editar",         dot: "#2463FF" },
-  { key: "clear",    label: "Remover tudo",            desc: "Nenhuma permissão concedida", dot: "#DC2626" },
+  { key: "full",     label: "Liberar tudo",          desc: "Ver, criar, editar e excluir tudo", dot: "#059669" },
+  { key: "readonly", label: "Somente visualização",   desc: "Ver sem poder alterar nada",         dot: "#2463FF" },
+  { key: "clear",    label: "Remover tudo",            desc: "Nenhuma permissão concedida",        dot: "#DC2626" },
 ] as const
 
 // ─── Toggle ───────────────────────────────────────────────────────────────────
@@ -63,55 +67,40 @@ function Toggle({
   )
 }
 
-// ─── Feature Row ──────────────────────────────────────────────────────────────
+// ─── Screen Row ───────────────────────────────────────────────────────────────
 
-function FeatureRow({
-  feature, perm, onChange,
+function ScreenRow({
+  screen, perm, onChange,
 }: {
-  feature:  FeatureDef
-  perm:     { canView: boolean; canEdit: boolean }
-  onChange: (key: string, p: { canView: boolean; canEdit: boolean }) => void
+  screen:   ScreenDef
+  perm:     FeaturePermission
+  onChange: (key: string, p: FeaturePermission) => void
 }) {
-  const setView = (v: boolean) =>
-    onChange(feature.key, { canView: v, canEdit: v ? perm.canEdit : false })
-  const setEdit = (v: boolean) =>
-    onChange(feature.key, { canView: perm.canView, canEdit: v })
+  const setView   = (v: boolean) => onChange(screen.key, v ? { ...perm, canView: true } : EMPTY_PERM)
+  const setCreate = (v: boolean) => onChange(screen.key, { ...perm, canCreate: v })
+  const setEdit   = (v: boolean) => onChange(screen.key, { ...perm, canEdit: v })
+  const setDelete = (v: boolean) => onChange(screen.key, { ...perm, canDelete: v })
 
   return (
     <div className="flex items-center gap-4 px-5 py-3 hover:bg-slate-50/70 transition-colors border-b border-slate-50 last:border-0">
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-semibold text-slate-700 leading-tight">{feature.label}</p>
-        <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">{feature.desc}</p>
+        <p className="text-xs font-semibold text-slate-700 leading-tight">{screen.label}</p>
+        <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">{screen.desc}</p>
       </div>
-      <div className="flex items-center gap-8 shrink-0">
-        <div className="w-10 flex justify-center">
+      <div className="flex items-center gap-6 shrink-0">
+        <div className="w-9 flex justify-center">
           <Toggle checked={perm.canView} onChange={setView} />
         </div>
-        <div className="w-10 flex justify-center">
-          {feature.hasEdit
-            ? <Toggle checked={perm.canEdit} disabled={!perm.canView} onChange={setEdit} />
-            : <span className="text-slate-200 text-sm font-bold">—</span>}
+        <div className="w-9 flex justify-center">
+          <Toggle checked={perm.canCreate} disabled={!perm.canView} onChange={setCreate} />
+        </div>
+        <div className="w-9 flex justify-center">
+          <Toggle checked={perm.canEdit} disabled={!perm.canView} onChange={setEdit} />
+        </div>
+        <div className="w-9 flex justify-center">
+          <Toggle checked={perm.canDelete} disabled={!perm.canView} onChange={setDelete} />
         </div>
       </div>
-    </div>
-  )
-}
-
-// ─── Permission Summary ───────────────────────────────────────────────────────
-
-function PermSummary({ permissions }: { permissions: PermissionsMap }) {
-  const viewCount = Object.values(permissions).filter((p) => p.canView).length
-  const editCount = Object.values(permissions).filter((p) => p.canEdit).length
-  const total     = FEATURE_GROUPS.flatMap((g) => g.features).length
-
-  return (
-    <div className="flex items-center gap-3 mt-1">
-      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100">
-        <Eye className="w-2.5 h-2.5" /> {viewCount}/{total} ver
-      </span>
-      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-50 text-violet-600 border border-violet-100">
-        <Edit3 className="w-2.5 h-2.5" /> {editCount} editar
-      </span>
     </div>
   )
 }
@@ -186,9 +175,9 @@ function ProfileEditor({
   const [expandedGrp, setExpandedGrp] = useState<string | null>(null)
   const [isPending,   start]          = useTransition()
 
-  const perm = (key: string) => permissions[key] ?? { canView: false, canEdit: false }
+  const perm = (key: string) => permissions[key] ?? EMPTY_PERM
 
-  function setFeaturePerm(key: string, p: { canView: boolean; canEdit: boolean }) {
+  function setScreenPerm(key: string, p: FeaturePermission) {
     setPermissions((prev) => ({ ...prev, [key]: p }))
     setSaved(false)
   }
@@ -223,7 +212,7 @@ function ProfileEditor({
 
   const viewCount = Object.values(permissions).filter((p) => p.canView).length
   const editCount = Object.values(permissions).filter((p) => p.canEdit).length
-  const total     = FEATURE_GROUPS.flatMap((g) => g.features).length
+  const total     = SCREEN_GROUPS.flatMap((g) => g.screens).length
 
   const iCls = "w-full px-3 py-2 text-sm rounded-xl border border-slate-200 bg-[#F7F6F2] outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-400 transition-all placeholder:text-slate-300"
 
@@ -379,23 +368,31 @@ function ProfileEditor({
             style={{ background: "#F8F7F3", borderBottom: "1px solid rgba(0,0,0,0.06)" }}
           >
             <div className="flex-1">
-              <p className="text-[9px] font-black uppercase tracking-[0.14em] text-slate-400">Funcionalidade</p>
+              <p className="text-[9px] font-black uppercase tracking-[0.14em] text-slate-400">Tela</p>
             </div>
-            <div className="flex items-center gap-8 shrink-0">
-              <div className="w-10 text-center">
+            <div className="flex items-center gap-6 shrink-0">
+              <div className="w-9 text-center">
                 <Eye className="w-3.5 h-3.5 text-slate-400 mx-auto" />
                 <p className="text-[8px] font-black uppercase tracking-wider text-slate-400 mt-0.5">Ver</p>
               </div>
-              <div className="w-10 text-center">
+              <div className="w-9 text-center">
+                <PlusCircle className="w-3.5 h-3.5 text-slate-400 mx-auto" />
+                <p className="text-[8px] font-black uppercase tracking-wider text-slate-400 mt-0.5">Criar</p>
+              </div>
+              <div className="w-9 text-center">
                 <Edit3 className="w-3.5 h-3.5 text-slate-400 mx-auto" />
                 <p className="text-[8px] font-black uppercase tracking-wider text-slate-400 mt-0.5">Editar</p>
+              </div>
+              <div className="w-9 text-center">
+                <Trash2 className="w-3.5 h-3.5 text-slate-400 mx-auto" />
+                <p className="text-[8px] font-black uppercase tracking-wider text-slate-400 mt-0.5">Excluir</p>
               </div>
             </div>
           </div>
 
-          {/* Feature groups */}
-          {FEATURE_GROUPS.map((group) => {
-            const groupViewCount = group.features.filter((f) => perm(f.key).canView).length
+          {/* Screen groups */}
+          {SCREEN_GROUPS.map((group) => {
+            const groupViewCount = group.screens.filter((s) => perm(s.key).canView).length
             const isExpanded     = expandedGrp !== group.key
             return (
               <div key={group.key}>
@@ -420,7 +417,7 @@ function ProfileEditor({
                     className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
                     style={{ background: `${group.color}18`, color: group.color }}
                   >
-                    {groupViewCount}/{group.features.length}
+                    {groupViewCount}/{group.screens.length}
                   </span>
                   <ChevronDown
                     className="w-3.5 h-3.5 transition-transform shrink-0"
@@ -428,13 +425,13 @@ function ProfileEditor({
                   />
                 </button>
 
-                {/* Feature rows */}
-                {isExpanded && group.features.map((f) => (
-                  <FeatureRow
-                    key={f.key}
-                    feature={f}
-                    perm={perm(f.key)}
-                    onChange={setFeaturePerm}
+                {/* Screen rows */}
+                {isExpanded && group.screens.map((s) => (
+                  <ScreenRow
+                    key={s.key}
+                    screen={s}
+                    perm={perm(s.key)}
+                    onChange={setScreenPerm}
                   />
                 ))}
               </div>

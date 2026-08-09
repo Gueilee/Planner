@@ -1,6 +1,5 @@
-import { auth } from "@/auth"
 import { db } from "@/lib/db"
-import { redirect } from "next/navigation"
+import { requireScreenView } from "@/lib/permissions-guard"
 import { differenceInDays, startOfWeek, eachWeekOfInterval, isAfter, isBefore, addWeeks } from "date-fns"
 import { computeProjectProgress } from "@/lib/utils/project-progress"
 import { ProjectStatus } from "@/lib/generated/prisma/enums"
@@ -17,8 +16,7 @@ const ACTIVE_STATUSES: ProjectStatus[] = [
 ]
 
 export default async function StatusReportPage() {
-  const session = await auth()
-  if (!session?.user) redirect("/login")
+  const { session } = await requireScreenView("status_report")
 
   const projects = await db.project.findMany({
     where:   { status: { in: ACTIVE_STATUSES }, organizationId: session.user.organizationId },

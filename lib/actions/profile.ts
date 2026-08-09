@@ -31,7 +31,11 @@ export async function getAllUsers() {
   return db.user.findMany({
     where:   { organizationId: session.user.organizationId },
     orderBy: { name: "asc" },
-    select:  { id: true, name: true, email: true, department: true, phone: true, image: true, role: true, active: true },
+    select:  {
+      id: true, name: true, email: true, department: true, phone: true, image: true, role: true, active: true,
+      profileId: true,
+      accessProfile: { select: { id: true, name: true, color: true } },
+    },
   })
 }
 
@@ -58,7 +62,10 @@ export async function updateProfile(data: ProfileInput) {
 
 // ─── Admin: update any user's profile ────────────────────────────────────────
 
-export async function updateUserById(userId: string, data: ProfileInput & { role?: string; active?: boolean }) {
+export async function updateUserById(
+  userId: string,
+  data: ProfileInput & { role?: string; active?: boolean; profileId?: string | null }
+) {
   const session = await auth()
   if (!session?.user) throw new Error("Não autorizado")
   if (session.user.role !== "ADMIN") throw new Error("Acesso restrito a administradores")
@@ -83,10 +90,15 @@ export async function updateUserById(userId: string, data: ProfileInput & { role
         phone:      data.phone.trim()      || null,
         image:      data.image             || null,
         ...(newEmail                       && { email: newEmail }),
-        ...(data.role   !== undefined      && { role:  data.role   as never }),
-        ...(data.active !== undefined      && { active: data.active }),
+        ...(data.role      !== undefined   && { role:  data.role   as never }),
+        ...(data.active    !== undefined   && { active: data.active }),
+        ...(data.profileId !== undefined   && { profileId: data.profileId }),
       },
-      select: { id: true, name: true, email: true, image: true, department: true, role: true, active: true },
+      select: {
+        id: true, name: true, email: true, image: true, department: true, role: true, active: true,
+        profileId: true,
+        accessProfile: { select: { id: true, name: true, color: true } },
+      },
     })
 
     // Revalidate only after a confirmed successful update
@@ -112,6 +124,7 @@ export async function createUser(data: {
   department?:  string
   phone?:       string
   extraOrgIds?: string[]
+  profileId?:   string | null
 }) {
   const session = await auth()
   if (!session?.user) throw new Error("Não autorizado")
@@ -135,8 +148,13 @@ export async function createUser(data: {
       phone:          data.phone?.trim()      || null,
       active:         true,
       organizationId: session.user.organizationId,
+      profileId:      data.profileId || null,
     },
-    select: { id: true, name: true, email: true, department: true, phone: true, image: true, role: true, active: true },
+    select: {
+      id: true, name: true, email: true, department: true, phone: true, image: true, role: true, active: true,
+      profileId: true,
+      accessProfile: { select: { id: true, name: true, color: true } },
+    },
   })
 
   if (data.extraOrgIds?.length) {
@@ -219,4 +237,21 @@ export async function resetUserPassword(userId: string, newPassword: string) {
   const hash = await bcrypt.hash(newPassword, 10)
   await db.user.update({ where: { id: userId }, data: { password: hash } })
   return { success: true }
+}
+
+// ─── Admin: vincular vários usuários já cadastrados a um perfil de uma vez ────
+
+export async function bulkAssignProfile(userIds: string[], profileId: string | null) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+  if (session.user.role !== "ADMIN") throw new Error("Acesso restrito a administradores")
+  if (userIds.length === 0) return { success: true, count: 0 }
+
+  const result = await db.user.updateMany({
+    where: { id: { in: userIds }, organizationId: session.user.organizationId },
+    data:  { profileId },
+  })
+
+  revalidatePath("/settings")
+  return { success: true, count: result.count }
 }

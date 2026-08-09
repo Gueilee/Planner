@@ -8,26 +8,29 @@ import {
 } from "lucide-react"
 import {
   createUser, updateUserById, toggleUserActive,
-  deleteUser, resetUserPassword,
+  deleteUser, resetUserPassword, bulkAssignProfile,
 } from "@/lib/actions/profile"
 import { createInvitation } from "@/lib/actions/invitations"
 import { getUserOrgAccess, setUserOrgAccess } from "@/lib/actions/user-org-access"
 import { sendResetToUser } from "@/lib/actions/password-reset"
 import type { OrgRow } from "@/lib/actions/organizations"
+import type { ProfileRow } from "@/lib/actions/access-profiles"
 import { ROLE_LABELS, UserRole } from "@/lib/permissions"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type User = {
-  id:         string
-  name:       string
-  email:      string
-  department: string | null
-  phone:      string | null
-  image:      string | null
-  role:       string
-  active:     boolean
-  createdAt?: Date
+  id:            string
+  name:          string
+  email:         string
+  department:    string | null
+  phone:         string | null
+  image:         string | null
+  role:          string
+  active:        boolean
+  createdAt?:    Date
+  profileId?:    string | null
+  accessProfile?: { id: string; name: string; color: string } | null
 }
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -223,12 +226,13 @@ function FilialPicker({ orgs, selected, onChange }: {
 type FormMode = "create" | "edit"
 
 function UserForm({
-  mode, initial, currentUserId, orgs, onSave, onCancel,
+  mode, initial, currentUserId, orgs, profiles, onSave, onCancel,
 }: {
   mode:          FormMode
   initial?:      User
   currentUserId: string
   orgs:          OrgRow[]
+  profiles:      ProfileRow[]
   onSave:        (u: User) => void
   onCancel:      () => void
 }) {
@@ -249,6 +253,7 @@ function UserForm({
   const [phone,           setPhone]           = useState(initial?.phone  ?? "")
   const [imageUrl,        setImageUrl]        = useState<string | null>(initial?.image ?? null)
   const [active,          setActive]          = useState(initial?.active ?? true)
+  const [profileId,       setProfileId]       = useState<string>(initial?.profileId ?? "")
   const [selectedOrgIds,  setSelectedOrgIds]  = useState<string[]>([])
   const [error,           setError]           = useState<string | null>(null)
   const [isPending,       start]              = useTransition()
@@ -273,10 +278,14 @@ function UserForm({
           const created = await createUser({
             name, email, password, role, department: effectiveDept, phone,
             extraOrgIds: orgs.length ? selectedOrgIds : undefined,
+            profileId: profileId || null,
           })
           onSave({ ...created, phone: created.phone ?? null, createdAt: undefined })
         } else if (initial) {
-          const updated = await updateUserById(initial.id, { name, email, department: effectiveDept, phone, image: imageUrl, role, active })
+          const updated = await updateUserById(initial.id, {
+            name, email, department: effectiveDept, phone, image: imageUrl, role, active,
+            profileId: profileId || null,
+          })
           if (orgs.length) await setUserOrgAccess(initial.id, selectedOrgIds)
           onSave({ ...initial, ...updated, email: email.trim().toLowerCase(), role: updated.role ?? initial.role, active: updated.active ?? initial.active })
         }
@@ -357,6 +366,24 @@ function UserForm({
             </select>
             <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
           </div>
+        </div>
+
+        <div>
+          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
+            Perfil de Acesso <span className="text-slate-300 normal-case font-medium">(telas e permissões)</span>
+          </label>
+          <div className="relative">
+            <select value={profileId} onChange={(e) => setProfileId(e.target.value)} className={`${iCls} appearance-none pr-8 cursor-pointer`}>
+              <option value="">Nenhum perfil (sem acesso às telas)</option>
+              {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          </div>
+          {!profileId && role !== "ADMIN" && (
+            <p className="text-[10px] text-amber-500 mt-1 font-medium">
+              Sem perfil, este usuário só verá o Dashboard até um perfil ser atribuído.
+            </p>
+          )}
         </div>
 
         <div>
@@ -780,7 +807,11 @@ function SendResetEmailModal({ user, orgs, onClose }: { user: User; orgs: OrgRow
 
 // ─── Main Users Tab ───────────────────────────────────────────────────────────
 
-export function UsersTab({ initialUsers, currentUserId, orgs = [] }: { initialUsers: User[]; currentUserId: string; orgs?: OrgRow[] }) {
+export function UsersTab({
+  initialUsers, currentUserId, orgs = [], profiles = [],
+}: {
+  initialUsers: User[]; currentUserId: string; orgs?: OrgRow[]; profiles?: ProfileRow[]
+}) {
   const [users,      setUsers]     = useState<User[]>(initialUsers)
   const [search,     setSearch]    = useState("")
   const [roleFilter, setRoleFilter] = useState<string>("ALL")
@@ -791,6 +822,42 @@ export function UsersTab({ initialUsers, currentUserId, orgs = [] }: { initialUs
   const [deleteTarget,  setDeleteTarget]  = useState<User | null>(null)
   const [deleteError,  setDeleteError]  = useState<string | null>(null)
   const [isPending,  start]        = useTransition()
+
+  // Seleção múltipla para atribuir perfil de acesso em massa
+  const [selectedIds,     setSelectedIds]     = useState<Set<string>>(new Set())
+  const [bulkProfileId,   setBulkProfileId]   = useState<string>("")
+  const [bulkPending,     startBulk]          = useTransition()
+  const [bulkDone,        setBulkDone]        = useState(false)
+
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set())
+    setBulkProfileId("")
+    setBulkDone(false)
+  }
+
+  function handleBulkAssign() {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    setBulkDone(false)
+    startBulk(async () => {
+      await bulkAssignProfile(ids, bulkProfileId || null)
+      const profile = profiles.find((p) => p.id === bulkProfileId) ?? null
+      setUsers((prev) => prev.map((u) => ids.includes(u.id)
+        ? { ...u, profileId: bulkProfileId || null, accessProfile: profile ? { id: profile.id, name: profile.name, color: profile.color } : null }
+        : u
+      ))
+      setBulkDone(true)
+      setTimeout(clearSelection, 1800)
+    })
+  }
 
   // Derived stats
   const total    = users.length
@@ -916,6 +983,41 @@ export function UsersTab({ initialUsers, currentUserId, orgs = [] }: { initialUs
           </button>
         </div>
 
+        {/* Barra de atribuição de perfil em massa */}
+        {selectedIds.size > 0 && (
+          <div className="bg-violet-50 border border-violet-200 rounded-2xl px-4 py-3 flex items-center gap-3">
+            <span className="text-xs font-bold text-violet-700 shrink-0">
+              {selectedIds.size} usuário{selectedIds.size > 1 ? "s" : ""} selecionado{selectedIds.size > 1 ? "s" : ""}
+            </span>
+            <div className="relative flex-1 max-w-xs">
+              <select
+                value={bulkProfileId}
+                onChange={(e) => setBulkProfileId(e.target.value)}
+                className="w-full pl-3 pr-8 py-2 text-xs font-semibold rounded-xl border border-violet-200 bg-white outline-none cursor-pointer appearance-none focus:ring-2 focus:ring-violet-200"
+              >
+                <option value="">Nenhum perfil (remover acesso)</option>
+                {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+            </div>
+            <button
+              onClick={handleBulkAssign}
+              disabled={bulkPending}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90 disabled:opacity-50 shrink-0"
+              style={{ background: "linear-gradient(135deg, #7B2FBE, #2463FF)" }}
+            >
+              {bulkPending
+                ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Atribuindo...</>
+                : bulkDone
+                  ? <><Check className="w-3.5 h-3.5" /> Atribuído!</>
+                  : "Atribuir perfil"}
+            </button>
+            <button onClick={clearSelection} className="text-xs font-semibold text-violet-500 hover:underline shrink-0">
+              Cancelar
+            </button>
+          </div>
+        )}
+
         {/* User list */}
         <div className="bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
           {filtered.length === 0 ? (
@@ -934,6 +1036,19 @@ export function UsersTab({ initialUsers, currentUserId, orgs = [] }: { initialUs
                     className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50/60 transition-colors group"
                     style={{ opacity: user.active ? 1 : 0.55 }}
                   >
+                    {/* Checkbox de seleção em massa */}
+                    <button
+                      type="button"
+                      onClick={() => toggleSelected(user.id)}
+                      className="w-4 h-4 rounded flex items-center justify-center border transition-all shrink-0"
+                      style={{
+                        background:  selectedIds.has(user.id) ? "#7B2FBE" : "#fff",
+                        borderColor: selectedIds.has(user.id) ? "#7B2FBE" : "#CBD5E1",
+                      }}
+                    >
+                      {selectedIds.has(user.id) && <Check className="w-2.5 h-2.5 text-white" />}
+                    </button>
+
                     {/* Avatar */}
                     <UserAvatar name={user.name} imageUrl={user.image} size={40} />
 
@@ -952,6 +1067,23 @@ export function UsersTab({ initialUsers, currentUserId, orgs = [] }: { initialUs
                         {ROLE_LABELS[user.role as UserRole] ?? user.role}
                       </span>
                       {user.department && <p className="text-[10px] text-slate-400 mt-0.5 truncate">{user.department}</p>}
+                    </div>
+
+                    {/* Perfil de acesso */}
+                    <div className="shrink-0 min-w-[110px] hidden lg:block">
+                      {user.accessProfile ? (
+                        <span
+                          className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-lg border"
+                          style={{ background: `${user.accessProfile.color}12`, color: user.accessProfile.color, borderColor: `${user.accessProfile.color}35` }}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: user.accessProfile.color }} />
+                          {user.accessProfile.name}
+                        </span>
+                      ) : user.role === "ADMIN" ? (
+                        <span className="text-[10px] text-slate-300 font-medium">— (admin)</span>
+                      ) : (
+                        <span className="text-[10px] text-amber-500 font-semibold">Sem perfil</span>
+                      )}
                     </div>
 
                     {/* Status */}
@@ -1010,6 +1142,7 @@ export function UsersTab({ initialUsers, currentUserId, orgs = [] }: { initialUs
               initial={editUser ?? undefined}
               currentUserId={currentUserId}
               orgs={orgs}
+              profiles={profiles}
               onSave={handleSaved}
               onCancel={closePanel}
             />

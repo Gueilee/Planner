@@ -1,5 +1,4 @@
-import { auth } from "@/auth"
-import { redirect } from "next/navigation"
+import { requireScreenView } from "@/lib/permissions-guard"
 import { getAllProjectsSummary } from "@/lib/actions/history"
 import { HistoryClient } from "./history-client"
 import { differenceInDays } from "date-fns"
@@ -7,8 +6,7 @@ import { differenceInDays } from "date-fns"
 export const metadata = { title: "Consulta de Projetos" }
 
 export default async function HistoryPage() {
-  const session = await auth()
-  if (!session?.user) redirect("/login")
+  const { session } = await requireScreenView("history")
 
   const raw = await getAllProjectsSummary()
 

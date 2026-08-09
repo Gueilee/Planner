@@ -1,13 +1,11 @@
-import { auth } from "@/auth"
-import { redirect } from "next/navigation"
+import { requireScreenView } from "@/lib/permissions-guard"
 import { getProjectsForPriority } from "@/lib/actions/priority"
 import { PriorityClient } from "./priority-client"
 
 export const metadata = { title: "Priorização de Projetos" }
 
 export default async function PriorityPage() {
-  const session = await auth()
-  if (!session?.user) redirect("/login")
+  await requireScreenView("priority")
 
   const projects = await getProjectsForPriority()
 

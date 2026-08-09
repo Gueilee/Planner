@@ -4,7 +4,7 @@ import { auth } from "@/auth"
 import { db } from "@/lib/db"
 import { revalidatePath } from "next/cache"
 
-export type FeaturePermission = { canView: boolean; canEdit: boolean }
+export type FeaturePermission = { canView: boolean; canCreate: boolean; canEdit: boolean; canDelete: boolean }
 export type PermissionsMap    = Record<string, FeaturePermission>
 
 export type ProfileRow = {

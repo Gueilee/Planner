@@ -1,5 +1,4 @@
-import { auth } from "@/auth"
-import { redirect } from "next/navigation"
+import { requireScreenView } from "@/lib/permissions-guard"
 import { Header } from "@/components/layout/header"
 import { getPortfolioBenefits } from "@/lib/actions/benefits"
 import { BenefitsClient } from "./benefits-client"
@@ -9,8 +8,7 @@ export const dynamic  = "force-dynamic"
 export const metadata = { title: "Benefícios e Valor Gerado" }
 
 export default async function BenefitsPage() {
-  const session = await auth()
-  if (!session?.user) redirect("/login")
+  const { session } = await requireScreenView("benefits")
 
   const [data, users] = await Promise.all([
     getPortfolioBenefits(),

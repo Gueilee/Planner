@@ -1,6 +1,5 @@
-import { auth } from "@/auth"
 import { db } from "@/lib/db"
-import { redirect } from "next/navigation"
+import { requireScreenView } from "@/lib/permissions-guard"
 import { differenceInDays } from "date-fns"
 import { computeProjectProgress } from "@/lib/utils/project-progress"
 import { ProjectStatus } from "@/lib/generated/prisma/enums"
@@ -69,8 +68,7 @@ const SKIP_KPI_STATUSES = new Set([
 ])
 
 export default async function AnalyticsPage() {
-  const session = await auth()
-  if (!session?.user) redirect("/login")
+  const { session } = await requireScreenView("analytics")
 
   const today = new Date()
   const userRole = (session.user.role ?? "PROJECT_MEMBER") as string

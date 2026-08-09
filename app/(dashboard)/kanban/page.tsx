@@ -1,5 +1,4 @@
-import { auth } from "@/auth"
-import { redirect } from "next/navigation"
+import { requireScreenView } from "@/lib/permissions-guard"
 import { getAllProjectsForKanban } from "@/lib/actions/kanban"
 import { KanbanClient } from "./kanban-client"
 import { differenceInDays } from "date-fns"
@@ -11,8 +10,7 @@ export const metadata = { title: "Kanban — Projetos" }
 const FULL_ACCESS_ROLES = new Set(["ADMIN", "DIRECTOR", "PROJECT_MANAGER"])
 
 export default async function KanbanPage() {
-  const session = await auth()
-  if (!session?.user) redirect("/login")
+  const { session } = await requireScreenView("kanban")
 
   const userId   = session.user.id   ?? ""
   const userRole = (session.user.role ?? "PROJECT_MEMBER") as string

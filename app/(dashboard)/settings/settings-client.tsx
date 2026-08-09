@@ -301,6 +301,7 @@ export function SettingsClient({
                 initialUsers={allUsers}
                 currentUserId={currentUserId}
                 orgs={isRootAdmin ? initialOrgs : []}
+                profiles={initialProfiles}
               />
             )}
             {activeTab === "perfis" && isAdmin && (
