@@ -1,26 +1,8 @@
 import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials"
-import { createClient } from "@libsql/client"
 import bcrypt from "bcryptjs"
+import { db } from "@/lib/db"
 import { UserRole } from "@/lib/generated/prisma/enums"
-
-function getTursoClient() {
-  const rawUrl    = process.env.DATABASE_URL ?? "file:./dev.db"
-  const authToken = process.env.TURSO_AUTH_TOKEN
-  const url = rawUrl.startsWith("libsql://")
-    ? rawUrl.replace("libsql://", "https://")
-    : rawUrl
-  return createClient({ url, authToken })
-}
-
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} timeout after ${ms}ms`)), ms)
-    ),
-  ])
-}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: process.env.AUTH_SECRET,
@@ -40,41 +22,34 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         try {
           if (!credentials?.email || !credentials?.password) return null
 
-          const turso = getTursoClient()
-          const result = await withTimeout(
-            turso.execute({
-              sql:  `SELECT id, name, email, password, role, department, image, active, organizationId
-                     FROM "User" WHERE email = ? LIMIT 1`,
-              args: [credentials.email as string],
-            }),
-            15000,
-            "Turso login"
-          )
-          await turso.close()
+          const row = await db.user.findUnique({
+            where:  { email: credentials.email as string },
+            select: {
+              id: true, name: true, email: true, password: true, role: true,
+              department: true, image: true, active: true, organizationId: true, profileId: true,
+            },
+          })
 
-          if (result.rows.length === 0) return null
-
-          const row = result.rows[0]
-          if (!row.active) return null
+          if (!row || !row.active) return null
 
           const passwordMatch = await bcrypt.compare(
             credentials.password as string,
-            row.password as string
+            row.password
           )
 
           if (!passwordMatch) return null
 
-          const uid = row.id as string
-          const rawImage = row.image as string | null
+          const uid = row.id
           return {
             id:             uid,
-            name:           row.name           as string,
-            email:          row.email          as string,
-            role:           row.role           as UserRole,
-            department:     row.department     as string | null,
-            organizationId: (row.organizationId as string | null) ?? "org_vendemmia",
+            name:           row.name,
+            email:          row.email,
+            role:           row.role,
+            department:     row.department,
+            profileId:      row.profileId,
+            organizationId: row.organizationId ?? "org_vendemmia",
             // Armazena só o path — nunca o base64 — para o JWT não estourar o cookie
-            image:          rawImage ? `/api/avatar/${uid}` : null,
+            image:          row.image ? `/api/avatar/${uid}` : null,
           }
         } catch (err) {
           console.error("[auth] authorize error:", err)
@@ -90,6 +65,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.id             = user.id ?? token.sub ?? ""
         token.role           = (user as { role: UserRole }).role
         token.department     = (user as { department?: string | null }).department ?? null
+        token.profileId      = (user as { profileId?: string | null }).profileId ?? null
         token.image          = (user as { image?: string | null }).image ?? null
         token.name           = user.name ?? null
         token.organizationId = (user as { organizationId?: string }).organizationId ?? "org_vendemmia"
@@ -103,22 +79,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         } else {
           // Regular profile refresh from DB (e.g. after avatar/name save)
           try {
-            const turso = getTursoClient()
-            const res = await withTimeout(
-              turso.execute({
-                sql:  `SELECT name, image, department FROM "User" WHERE id = ? LIMIT 1`,
-                args: [token.id as string],
-              }),
-              10000,
-              "Turso jwt-update"
-            )
-            await turso.close()
-            if (res.rows.length > 0) {
-              const row = res.rows[0]
-              token.name       = (row.name       as string | null) ?? token.name
-              token.department = (row.department as string | null) ?? null
-              const rawImg = row.image as string | null
-              token.image  = rawImg ? `/api/avatar/${token.id}` : null
+            const row = await db.user.findUnique({
+              where:  { id: token.id as string },
+              select: { name: true, image: true, department: true },
+            })
+            if (row) {
+              token.name       = row.name ?? token.name
+              token.department = row.department ?? null
+              token.image       = row.image ? `/api/avatar/${token.id}` : null
             }
           } catch { /* best effort */ }
         }
@@ -130,6 +98,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.id             = token.id as string
         session.user.role           = token.role as UserRole
         session.user.department     = token.department as string | null
+        session.user.profileId      = (token.profileId as string | null) ?? null
         session.user.image          = (token.image as string | null) ?? null
         session.user.organizationId = (token.organizationId as string | null) ?? "org_vendemmia"
         if (token.name) session.user.name = token.name as string
@@ -147,6 +116,7 @@ declare module "next-auth" {
       email:          string
       role:           UserRole
       department?:    string | null
+      profileId?:     string | null
       image?:         string | null
       organizationId: string
     }
@@ -155,6 +125,7 @@ declare module "next-auth" {
   interface User {
     role:            UserRole
     department?:     string | null
+    profileId?:      string | null
     organizationId?: string
   }
 }
@@ -164,6 +135,7 @@ declare module "@auth/core/jwt" {
     id:              string
     role:            UserRole
     department?:     string | null
+    profileId?:      string | null
     image?:          string | null
     name?:           string | null
     organizationId?: string | null

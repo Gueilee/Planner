@@ -1,13 +1,13 @@
 import "dotenv/config"
 import { PrismaClient } from "../lib/generated/prisma/client"
-import { PrismaLibSql } from "@prisma/adapter-libsql"
+import { PrismaPg } from "@prisma/adapter-pg"
 import { UserRole, ProjectStatus } from "../lib/generated/prisma/enums"
 import bcrypt from "bcryptjs"
 
-const rawUrl    = process.env.DATABASE_URL ?? "file:./dev.db"
-const authToken = process.env.TURSO_AUTH_TOKEN
-const dbUrl = rawUrl.startsWith("libsql://") ? rawUrl.replace("libsql://", "https://") : rawUrl
-const adapter = new PrismaLibSql({ url: dbUrl, authToken })
+const adapter = new PrismaPg(
+  { connectionString: process.env.DATABASE_URL ?? "", ssl: { rejectUnauthorized: false } },
+  { schema: "planner" }
+)
 const db = new PrismaClient({ adapter })
 
 function pStatus(s: string): ProjectStatus {

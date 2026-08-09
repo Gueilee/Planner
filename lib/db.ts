@@ -1,17 +1,37 @@
+import { setDefaultResultOrder } from "node:dns"
 import { PrismaClient } from "@/lib/generated/prisma/client"
-import { PrismaLibSql } from "@prisma/adapter-libsql"
+import { PrismaPg } from "@prisma/adapter-pg"
+
+// Sob o runtime do Next.js (dev e standalone), a resolução de DNS do Node às vezes
+// prioriza AAAA (IPv6) para o host do Azure, e a conexão IPv6 fica pendurada até
+// estourar o timeout — mesmo quando IPv4 responde instantaneamente. Força IPv4
+// primeiro para evitar esse timeout intermitente no login.
+setDefaultResultOrder("ipv4first")
+
+// Schema Postgres dedicado ao Planner — o banco "vdm_projetos" no Azure é
+// compartilhado com outros sistemas (schemas "compras", "malha", "reserva_reuniao"
+// e tabelas legadas em "public"), por isso todas as tabelas do Planner vivem
+// isoladas dentro do schema "planner".
+const PLANNER_SCHEMA = "planner"
 
 function createPrismaClient() {
-  const rawUrl    = process.env.DATABASE_URL ?? "file:./dev.db"
-  const authToken = process.env.TURSO_AUTH_TOKEN
+  const connectionString = process.env.DATABASE_URL ?? ""
 
-  // Prisma v7 adapter factory pattern: pass config directly, not a pre-created client.
-  // libsql:// (WebSocket) → https:// (HTTP) for Vercel serverless compatibility.
-  const url = rawUrl.startsWith("libsql://")
-    ? rawUrl.replace("libsql://", "https://")
-    : rawUrl
-
-  const adapter = new PrismaLibSql({ url, authToken })
+  const adapter = new PrismaPg(
+    {
+      connectionString,
+      ssl: { rejectUnauthorized: false },
+      // TCP keepalive evita que o Azure (ou algum firewall/NAT no caminho) derrube
+      // conexões ociosas do pool em silêncio, o que causava timeout na 1ª query
+      // depois de o servidor ficar parado por alguns segundos.
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 10_000,
+      max: 10,
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 10_000,
+    },
+    { schema: PLANNER_SCHEMA }
+  )
   return new PrismaClient({ adapter })
 }
 

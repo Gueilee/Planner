@@ -1,5 +1,10 @@
+// OBSOLETO — este script falava direto em SQL/libSQL para contornar limitações do
+// Turso/SQLite (sem suporte a `prisma migrate dev` completo). Desde a migração para
+// Postgres (Azure, schema "planner"), mudanças de schema usam `prisma migrate dev`
+// normalmente. Mantido só como histórico; não rodar mais contra o banco Postgres.
 import "dotenv/config"
 import { createClient } from "@libsql/client"
+import { randomUUID } from "node:crypto"
 
 const rawUrl    = process.env.DATABASE_URL ?? "file:./dev.db"
 const authToken = process.env.TURSO_AUTH_TOKEN
@@ -291,6 +296,95 @@ async function main() {
     )
   } catch {
     // Column already exists — ignore
+  }
+
+  // ── Migration 8: seed de perfis de acesso padrão (isSystem) ──────────────────
+  // Chaves de tela — mesmas de lib/constants/features.ts (ALL_SCREEN_KEYS)
+  const SCREEN_KEYS = [
+    "dashboard", "projects", "priority", "kanban", "status_report", "analytics",
+    "closure", "knowledge_base", "history", "templates", "benefits",
+  ]
+
+  type ScreenPerm = { canView: boolean; canCreate: boolean; canEdit: boolean; canDelete: boolean }
+
+  function buildPermissions(over: {
+    view?: string[]; create?: string[]; edit?: string[]; delete?: string[]
+  }): string {
+    const perms: Record<string, ScreenPerm> = {}
+    for (const key of SCREEN_KEYS) {
+      perms[key] = {
+        canView:   over.view?.includes(key)   ?? false,
+        canCreate: over.create?.includes(key) ?? false,
+        canEdit:   over.edit?.includes(key)   ?? false,
+        canDelete: over.delete?.includes(key) ?? false,
+      }
+    }
+    return JSON.stringify(perms)
+  }
+
+  const DEFAULT_PROFILES: { name: string; description: string; color: string; permissions: string }[] = [
+    {
+      name: "Administrador", color: "#DC2626",
+      description: "Acesso total a todas as telas e ações do sistema.",
+      permissions: buildPermissions({ view: SCREEN_KEYS, create: SCREEN_KEYS, edit: SCREEN_KEYS, delete: SCREEN_KEYS }),
+    },
+    {
+      name: "Diretor", color: "#7C3AED",
+      description: "Visão executiva do portfólio, com edição das telas de decisão estratégica.",
+      permissions: buildPermissions({
+        view: SCREEN_KEYS,
+        edit: ["priority", "status_report", "closure", "benefits"],
+      }),
+    },
+    {
+      name: "Gerente de Projeto", color: "#2463FF",
+      description: "Conduz a execução dos projetos: cronograma, kanban, status report e encerramento.",
+      permissions: buildPermissions({
+        view:   SCREEN_KEYS,
+        create: ["projects", "kanban", "status_report", "closure", "benefits", "templates", "priority"],
+        edit:   ["projects", "kanban", "status_report", "closure", "benefits", "templates", "priority"],
+      }),
+    },
+    {
+      name: "Membro de Projeto", color: "#16A34A",
+      description: "Executa tarefas do dia a dia: visualiza projetos e atualiza o quadro kanban.",
+      permissions: buildPermissions({
+        view: ["dashboard", "projects", "kanban", "knowledge_base", "history"],
+        edit: ["kanban"],
+      }),
+    },
+    {
+      name: "Sponsor", color: "#EA580C",
+      description: "Acompanha o andamento dos projetos que patrocina, sem poder de edição.",
+      permissions: buildPermissions({
+        view: ["dashboard", "projects", "priority", "status_report", "analytics", "closure", "benefits", "knowledge_base", "history"],
+      }),
+    },
+    {
+      name: "Cliente", color: "#64748B",
+      description: "Acesso externo restrito ao status e encerramento dos projetos do cliente.",
+      permissions: buildPermissions({
+        view: ["dashboard", "status_report", "closure", "benefits", "knowledge_base"],
+      }),
+    },
+  ]
+
+  const orgsResult = await client.execute(`SELECT id FROM "Organization"`)
+  for (const row of orgsResult.rows) {
+    const organizationId = row.id as string
+    for (const profile of DEFAULT_PROFILES) {
+      const existing = await client.execute({
+        sql:  `SELECT id FROM "AccessProfile" WHERE organizationId = ? AND name = ? LIMIT 1`,
+        args: [organizationId, profile.name],
+      })
+      if (existing.rows.length > 0) continue
+
+      await client.execute({
+        sql: `INSERT INTO "AccessProfile" (id, name, description, color, permissions, isSystem, organizationId)
+              VALUES (?, ?, ?, ?, ?, 1, ?)`,
+        args: [randomUUID(), profile.name, profile.description, profile.color, profile.permissions, organizationId],
+      })
+    }
   }
 
   console.log("✅ Migrations aplicadas com sucesso!")
