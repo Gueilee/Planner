@@ -275,19 +275,21 @@ function UserForm({
     start(async () => {
       try {
         if (mode === "create") {
-          const created = await createUser({
+          const result = await createUser({
             name, email, password, role, department: effectiveDept, phone,
             extraOrgIds: orgs.length ? selectedOrgIds : undefined,
             profileId: profileId || null,
           })
-          onSave({ ...created, phone: created.phone ?? null, createdAt: undefined })
+          if (!result.success) { setError(result.error); return }
+          onSave({ ...result.user, phone: result.user.phone ?? null, createdAt: undefined })
         } else if (initial) {
-          const updated = await updateUserById(initial.id, {
+          const result = await updateUserById(initial.id, {
             name, email, department: effectiveDept, phone, image: imageUrl, role, active,
             profileId: profileId || null,
           })
+          if (!result.success) { setError(result.error); return }
           if (orgs.length) await setUserOrgAccess(initial.id, selectedOrgIds)
-          onSave({ ...initial, ...updated, email: email.trim().toLowerCase(), role: updated.role ?? initial.role, active: updated.active ?? initial.active })
+          onSave({ ...initial, ...result.user, email: email.trim().toLowerCase(), role: result.user.role ?? initial.role, active: result.user.active ?? initial.active })
         }
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : "Erro ao salvar")

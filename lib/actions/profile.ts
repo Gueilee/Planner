@@ -62,13 +62,33 @@ export async function updateProfile(data: ProfileInput) {
 
 // ─── Admin: update any user's profile ────────────────────────────────────────
 
+export type UpdateUserResult =
+  | { success: true;  user: NonNullable<Awaited<ReturnType<typeof updateUserRow>>> }
+  | { success: false; error: string }
+
+async function updateUserRow(userId: string, data: Record<string, unknown>) {
+  return db.user.update({
+    where: { id: userId },
+    data,
+    select: {
+      id: true, name: true, email: true, phone: true, image: true, department: true, role: true, active: true,
+      profileId: true,
+      accessProfile: { select: { id: true, name: true, color: true } },
+    },
+  })
+}
+
+// Next.js redige a mensagem de qualquer erro lançado (throw) de uma Server Action em
+// produção, mostrando só um texto genérico ao usuário — por isso essas validações
+// esperadas (e-mail duplicado, campo obrigatório etc.) retornam {success:false,error}
+// em vez de lançar exceção, pra mensagem real chegar até a tela.
 export async function updateUserById(
   userId: string,
   data: ProfileInput & { role?: string; active?: boolean; profileId?: string | null }
-) {
+): Promise<UpdateUserResult> {
   const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
-  if (session.user.role !== "ADMIN") throw new Error("Acesso restrito a administradores")
+  if (!session?.user) return { success: false, error: "Não autorizado" }
+  if (session.user.role !== "ADMIN") return { success: false, error: "Acesso restrito a administradores" }
 
   const newEmail = data.email?.trim().toLowerCase()
 
@@ -78,43 +98,39 @@ export async function updateUserById(
       where: { email: { equals: newEmail }, NOT: { id: userId } },
       select: { id: true },
     })
-    if (conflict) throw new Error("Já existe outro usuário com este e-mail. Verifique os cadastros duplicados.")
+    if (conflict) return { success: false, error: "Já existe outro usuário com este e-mail. Verifique os cadastros duplicados." }
   }
 
   try {
-    const updated = await db.user.update({
-      where: { id: userId },
-      data: {
-        name:       data.name.trim(),
-        department: data.department.trim() || null,
-        phone:      data.phone.trim()      || null,
-        image:      data.image             || null,
-        ...(newEmail                       && { email: newEmail }),
-        ...(data.role      !== undefined   && { role:  data.role   as never }),
-        ...(data.active    !== undefined   && { active: data.active }),
-        ...(data.profileId !== undefined   && { profileId: data.profileId }),
-      },
-      select: {
-        id: true, name: true, email: true, image: true, department: true, role: true, active: true,
-        profileId: true,
-        accessProfile: { select: { id: true, name: true, color: true } },
-      },
+    const updated = await updateUserRow(userId, {
+      name:       data.name.trim(),
+      department: data.department.trim() || null,
+      phone:      data.phone.trim()      || null,
+      image:      data.image             || null,
+      ...(newEmail                       && { email: newEmail }),
+      ...(data.role      !== undefined   && { role:  data.role   as never }),
+      ...(data.active     !== undefined  && { active: data.active }),
+      ...(data.profileId !== undefined   && { profileId: data.profileId }),
     })
 
     // Revalidate only after a confirmed successful update
     revalidatePath("/settings")
-    return updated
+    return { success: true, user: updated }
   } catch (err: unknown) {
     // Prisma P2002 = unique constraint violation (email collision at DB level)
     const msg = err instanceof Error ? err.message : ""
     if (msg.includes("P2002") || msg.includes("Unique constraint")) {
-      throw new Error("Já existe outro usuário com este e-mail. Verifique os cadastros duplicados.")
+      return { success: false, error: "Já existe outro usuário com este e-mail. Verifique os cadastros duplicados." }
     }
-    throw new Error("Erro ao salvar as alterações. Tente novamente.")
+    return { success: false, error: "Erro ao salvar as alterações. Tente novamente." }
   }
 }
 
 // ─── Admin: create new user ───────────────────────────────────────────────────
+
+export type CreateUserResult =
+  | { success: true;  user: NonNullable<Awaited<ReturnType<typeof updateUserRow>>> }
+  | { success: false; error: string }
 
 export async function createUser(data: {
   name:         string
@@ -125,17 +141,17 @@ export async function createUser(data: {
   phone?:       string
   extraOrgIds?: string[]
   profileId?:   string | null
-}) {
+}): Promise<CreateUserResult> {
   const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
-  if (session.user.role !== "ADMIN") throw new Error("Acesso restrito a administradores")
+  if (!session?.user) return { success: false, error: "Não autorizado" }
+  if (session.user.role !== "ADMIN") return { success: false, error: "Acesso restrito a administradores" }
 
-  if (!data.name.trim())     throw new Error("Nome é obrigatório")
-  if (!data.email.trim())    throw new Error("E-mail é obrigatório")
-  if (data.password.length < 6) throw new Error("Senha deve ter no mínimo 6 caracteres")
+  if (!data.name.trim())        return { success: false, error: "Nome é obrigatório" }
+  if (!data.email.trim())       return { success: false, error: "E-mail é obrigatório" }
+  if (data.password.length < 6) return { success: false, error: "Senha deve ter no mínimo 6 caracteres" }
 
   const exists = await db.user.findUnique({ where: { email: data.email.trim().toLowerCase() } })
-  if (exists) throw new Error("Já existe um usuário com este e-mail")
+  if (exists) return { success: false, error: "Já existe um usuário com este e-mail" }
 
   const hash = await bcrypt.hash(data.password, 10)
   const user = await db.user.create({
@@ -164,7 +180,7 @@ export async function createUser(data: {
   }
 
   revalidatePath("/settings")
-  return user
+  return { success: true, user }
 }
 
 // ─── Admin: toggle active ─────────────────────────────────────────────────────

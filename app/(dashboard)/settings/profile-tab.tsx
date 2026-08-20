@@ -291,7 +291,8 @@ export function ProfileTab({ profile, allUsers, isAdmin }: Props) {
           // Refresh NextAuth session so sidebar/header update immediately
           await updateSession()
         } else {
-          await updateUserById(editingUser.id, data)
+          const result = await updateUserById(editingUser.id, data)
+          if (!result.success) { setError(result.error); return }
         }
         setSaved(true)
         setTimeout(() => setSaved(false), 3000)
