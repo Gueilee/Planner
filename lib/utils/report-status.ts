@@ -1,4 +1,4 @@
-import { differenceInDays } from "date-fns"
+import { computeExpectedPct, computeScheduleStatus, DEFAULT_RISK_THRESHOLD_PCT } from "./schedule-status"
 
 type TL = "GREEN" | "YELLOW" | "RED"
 
@@ -20,7 +20,10 @@ type ProjectSnapshot = {
   risks: { status: string }[]
 }
 
-export function computeReportStatus(p: ProjectSnapshot): AutoReportStatus {
+export function computeReportStatus(
+  p: ProjectSnapshot,
+  riskThresholdPct: number = DEFAULT_RISK_THRESHOLD_PCT,
+): AutoReportStatus {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const isFinished = ["COMPLETED", "CANCELLED"].includes(p.status)
@@ -51,8 +54,9 @@ export function computeReportStatus(p: ProjectSnapshot): AutoReportStatus {
   if (critHighRisks >= 5 && cost === "YELLOW") cost = "RED"
 
   // ── CRONOGRAMA ─────────────────────────────────────────────────────────────
-  // δ = progresso_real − progresso_esperado_pela_timeline
-  // Também penaliza pela proporção de tarefas com prazo vencido e ainda abertas.
+  // Usa a mesma regra canônica de progresso esperado/variação do resto do
+  // sistema (lib/utils/schedule-status.ts), com o limite de risco configurável
+  // por organização — em vez de uma fórmula própria e divergente.
   let schedule: TL = "GREEN"
   if (!isFinished) {
     if (p.expectedEnd && p.expectedEnd < today) {
@@ -61,22 +65,12 @@ export function computeReportStatus(p: ProjectSnapshot): AutoReportStatus {
     } else {
       const total = p.tasks.length
       if (total > 0) {
-        const overdueCount  = p.tasks.filter(t =>
-          t.status !== "COMPLETED" && t.endDate && t.endDate < today
-        ).length
-        const overdueRatio  = overdueCount / total
+        const actual        = Math.round(p.tasks.reduce((s, t) => s + t.progress, 0) / total)
+        const expected      = computeExpectedPct(p.expectedStart, p.expectedEnd, today)
+        const scheduleStatus = computeScheduleStatus(actual, expected, riskThresholdPct)
 
-        let delta = 0
-        if (p.expectedStart && p.expectedEnd) {
-          const span       = differenceInDays(p.expectedEnd, p.expectedStart)
-          const elapsed    = differenceInDays(today, p.expectedStart)
-          const expected   = span > 0 ? Math.max(0, Math.min(100, Math.round((elapsed / span) * 100))) : 0
-          const actual     = Math.round(p.tasks.reduce((s, t) => s + t.progress, 0) / total)
-          delta = actual - expected   // negativo = atrás do plano
-        }
-
-        if      (delta < -25 || overdueRatio > 0.25) schedule = "RED"
-        else if (delta < -10 || overdueRatio > 0.10) schedule = "YELLOW"
+        if      (scheduleStatus === "DELAYED") schedule = "RED"
+        else if (scheduleStatus === "AT_RISK") schedule = "YELLOW"
       }
     }
   }

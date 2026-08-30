@@ -49,6 +49,7 @@ type Props = {
   currentOrgId:    string
   initialOrgs:     OrgRow[]
   initialProfiles: ProfileRow[]
+  riskThresholdPct: number
 }
 
 // ─── Tab config ───────────────────────────────────────────────────────────────
@@ -194,7 +195,7 @@ function NavItem({
 export function SettingsClient({
   profile, allUsers, isAdmin, isRootAdmin,
   preferences, notifications, orgConfig,
-  currentUserId, currentOrgId, initialOrgs, initialProfiles,
+  currentUserId, currentOrgId, initialOrgs, initialProfiles, riskThresholdPct,
 }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>("profile")
 
@@ -294,7 +295,7 @@ export function SettingsClient({
               <NotificationsTab preferences={preferences} notifications={notifications} />
             )}
             {activeTab === "empresa" && isAdmin && (
-              <OrganizationTab initial={orgConfig} />
+              <OrganizationTab initial={orgConfig} initialRiskThresholdPct={riskThresholdPct} />
             )}
             {activeTab === "usuarios" && isAdmin && (
               <UsersTab

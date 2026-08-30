@@ -213,6 +213,9 @@ model Organization {
   slug      String   @unique
   logoUrl   String?
   active    Boolean  @default(true)
+  // Limite de risco de cronograma (em pontos percentuais) usado para classificar
+  // projetos/tarefas como "on track"/"at risk"/"delayed" (ver lib/utils/schedule-status.ts).
+  riskThresholdPct Int @default(10)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

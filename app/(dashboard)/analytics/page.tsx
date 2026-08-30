@@ -1,7 +1,7 @@
 import { db } from "@/lib/db"
 import { requireScreenView } from "@/lib/permissions-guard"
-import { differenceInDays } from "date-fns"
 import { computeProjectProgress } from "@/lib/utils/project-progress"
+import { computeExpectedPct, computeScheduleStatus, DEFAULT_RISK_THRESHOLD_PCT } from "@/lib/utils/schedule-status"
 import { ProjectStatus } from "@/lib/generated/prisma/enums"
 import { AnalyticsClient } from "./analytics-client"
 
@@ -85,7 +85,7 @@ export default async function AnalyticsPage() {
     else if (dept)                   userArea = "ESTRATEGICO"
   }
 
-  const [projectsRaw, users] = await Promise.all([
+  const [projectsRaw, users, org] = await Promise.all([
     db.project.findMany({
       where:   { status: { not: ProjectStatus.CANCELLED }, organizationId: session.user.organizationId },
       orderBy: { createdAt: "asc" },
@@ -124,7 +124,13 @@ export default async function AnalyticsPage() {
       select:  { id: true, name: true },
       orderBy: { name: "asc" },
     }),
+    db.organization.findUnique({
+      where:  { id: session.user.organizationId },
+      select: { riskThresholdPct: true },
+    }),
   ])
+
+  const riskThresholdPct = org?.riskThresholdPct ?? DEFAULT_RISK_THRESHOLD_PCT
 
   const data: ProjectIndicator[] = projectsRaw.map((p) => {
     const tasks   = p.tasks
@@ -136,27 +142,10 @@ export default async function AnalyticsPage() {
         : p.status === "COMPLETED" ? 100 : 0
 
     // ── Desvio de prazo ───────────────────────────────────────────────────────
-    //
-    // Estratégia de cálculo do % planejado (em ordem de prioridade):
-    //
-    // MÉTODO 1 — Baseado nas datas das tarefas (mais preciso):
-    //   Pergunta: "Qual % das tarefas já deveriam estar concluídas até hoje?"
-    //   plannedPct = (tarefas com endDate ≤ hoje) / (total de tarefas) × 100
-    //   Vantagem: reflete o cronograma real do projeto, não interpolação linear.
-    //
-    // MÉTODO 2 — Calendário (fallback quando tarefas não têm datas):
-    //   plannedPct = (dias decorridos / duração total do projeto) × 100
-    //   Limitação: assume progresso linear, pode super-estimar para projetos
-    //              com trabalho concentrado no final.
-    //
-    // Desvio (devio) = progress - plannedPct  [em pontos percentuais]
-    //   +15pp = 15pp adiantado do planejado
-    //   -10pp = 10pp atrás do planejado
-    //
-    // Classificação (thresholds baseados em tolerância prática de PMO):
-    //   devio ≥ -15pp  → No Prazo  (tolerância de 15pp)
-    //   devio ≥ -30pp  → Em Risco  (15–30pp atrás)
-    //   devio <  -30pp → Atrasado  (mais de 30pp atrás)
+    // % esperado = dias decorridos ÷ duração total do projeto (calendário),
+    // e status (on track/at risk/delayed) a partir da variação vs. o limite de
+    // risco configurado pela organização — regra canônica única do sistema
+    // (lib/utils/schedule-status.ts), a mesma usada no semáforo RAG do projeto.
 
     let plannedPct:     number | null = null
     let devio:          number | null = null
@@ -171,42 +160,14 @@ export default async function AnalyticsPage() {
       idp            = 1.0
 
     } else if (!skipKpi) {
+      plannedPct = computeExpectedPct(p.expectedStart, p.expectedEnd, today)
 
-      // ── MÉTODO 1: baseado em datas das tarefas ────────────────────────────
-      const tasksWithEnd = tasks.filter((t) => t.endDate !== null)
-
-      if (tasksWithEnd.length >= 2) {
-        // Tarefas cujo prazo planejado já chegou (independente do status)
-        const tasksDue    = tasksWithEnd.filter((t) => t.endDate! <= today).length
-        // plannedPct em relação ao TOTAL de tarefas do projeto
-        const base        = tasks.length > 0 ? tasks.length : tasksWithEnd.length
-        plannedPct        = Math.round((tasksDue / base) * 100)
-        devio             = progress - plannedPct
+      if (plannedPct !== null) {
+        devio = progress - plannedPct
+        if (plannedPct > 0) idp = Math.round((progress / plannedPct) * 100) / 100
       }
 
-      // ── MÉTODO 2: interpolação calendário (fallback) ──────────────────────
-      if (plannedPct === null && p.expectedStart && p.expectedEnd) {
-        const totalDays   = differenceInDays(p.expectedEnd, p.expectedStart)
-        const elapsedDays = differenceInDays(today, p.expectedStart)
-
-        if (totalDays > 0 && elapsedDays > 0) {
-          // Limita a 100% mesmo que o projeto já tenha passado do prazo
-          plannedPct = Math.min(100, Math.round((elapsedDays / totalDays) * 100))
-          devio      = progress - plannedPct
-        }
-      }
-
-      // ── Classificação por desvio em pp ────────────────────────────────────
-      if (devio !== null) {
-        if      (devio >= -15) scheduleStatus = "ON_TIME"
-        else if (devio >= -30) scheduleStatus = "AT_RISK"
-        else                   scheduleStatus = "DELAYED"
-      }
-
-      // IDP mantido como referência auxiliar (progress / plannedPct)
-      if (plannedPct !== null && plannedPct > 0) {
-        idp = Math.round((progress / plannedPct) * 100) / 100
-      }
+      scheduleStatus = computeScheduleStatus(progress, plannedPct, riskThresholdPct)
     }
 
     // ── IDC — EVM: Valor Agregado / Custo Real ────────────────────────────────

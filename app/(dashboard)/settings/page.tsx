@@ -5,7 +5,7 @@ import { getMyProfile, getAllUsers } from "@/lib/actions/profile"
 import { getNotificationPreferences } from "@/lib/actions/notification-preferences"
 import { getMyNotifications } from "@/lib/actions/notifications"
 import { getOrgConfig } from "@/lib/actions/org-config"
-import { listOrganizations } from "@/lib/actions/organizations"
+import { listOrganizations, getMyRiskThreshold } from "@/lib/actions/organizations"
 import { listAccessProfiles } from "@/lib/actions/access-profiles"
 import { SettingsClient } from "./settings-client"
 
@@ -18,7 +18,7 @@ export default async function SettingsPage() {
   const isAdmin     = session.user.role === "ADMIN"
   const isRootAdmin = isAdmin && session.user.organizationId === "org_vendemmia"
 
-  const [profile, allUsers, preferences, notifications, orgConfig, initialOrgs, initialProfiles] = await Promise.all([
+  const [profile, allUsers, preferences, notifications, orgConfig, initialOrgs, initialProfiles, riskThresholdPct] = await Promise.all([
     getMyProfile(),
     isAdmin ? getAllUsers() : Promise.resolve([]),
     getNotificationPreferences(),
@@ -26,6 +26,7 @@ export default async function SettingsPage() {
     getOrgConfig(),
     isRootAdmin ? listOrganizations() : Promise.resolve([]),
     isAdmin ? listAccessProfiles() : Promise.resolve([]),
+    getMyRiskThreshold(),
   ])
 
   if (!profile) redirect("/login")
@@ -54,6 +55,7 @@ export default async function SettingsPage() {
         currentOrgId={session.user.organizationId ?? ""}
         initialOrgs={initialOrgs}
         initialProfiles={initialProfiles}
+        riskThresholdPct={riskThresholdPct}
       />
     </div>
   )

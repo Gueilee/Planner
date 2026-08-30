@@ -3,9 +3,10 @@
 import { useState, useRef, useTransition } from "react"
 import {
   Save, Loader2, Check, AlertCircle, Camera,
-  Building2, Globe, Tag, Layers, Info,
+  Building2, Globe, Tag, Layers, Info, Gauge,
 } from "lucide-react"
 import { saveOrgConfig } from "@/lib/actions/org-config"
+import { updateRiskThreshold } from "@/lib/actions/organizations"
 import { DEFAULT_AREA_CONFIGS, type OrgConfigData, type AreaConfigs } from "@/lib/types/org-config"
 
 // ─── Logo upload ──────────────────────────────────────────────────────────────
@@ -125,7 +126,12 @@ function AreaCard({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function OrganizationTab({ initial }: { initial: OrgConfigData }) {
+export function OrganizationTab({
+  initial, initialRiskThresholdPct,
+}: {
+  initial: OrgConfigData
+  initialRiskThresholdPct: number
+}) {
   const [name,        setName]        = useState(initial.name)
   const [logoUrl,     setLogoUrl]     = useState<string | null>(initial.logoUrl)
   const [sector,      setSector]      = useState(initial.sector ?? "")
@@ -136,6 +142,11 @@ export function OrganizationTab({ initial }: { initial: OrgConfigData }) {
   const [saved,       setSaved]       = useState(false)
   const [error,       setError]       = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  const [riskThresholdPct, setRiskThresholdPct] = useState(String(initialRiskThresholdPct))
+  const [riskSaved,        setRiskSaved]        = useState(false)
+  const [riskError,        setRiskError]        = useState<string | null>(null)
+  const [isRiskPending,    startRisk]           = useTransition()
 
   function updateArea(key: keyof AreaConfigs, field: string, val: string) {
     setAreaConfigs((prev) => ({
@@ -175,6 +186,24 @@ export function OrganizationTab({ initial }: { initial: OrgConfigData }) {
         setTimeout(() => setSaved(false), 3000)
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : "Erro ao salvar")
+      }
+    })
+  }
+
+  function handleSaveRiskThreshold() {
+    const value = Number(riskThresholdPct)
+    if (!Number.isFinite(value) || value < 1 || value > 100) {
+      setRiskError("Informe um valor entre 1 e 100")
+      return
+    }
+    setRiskError(null)
+    startRisk(async () => {
+      try {
+        await updateRiskThreshold(value)
+        setRiskSaved(true)
+        setTimeout(() => setRiskSaved(false), 3000)
+      } catch (e: unknown) {
+        setRiskError(e instanceof Error ? e.message : "Erro ao salvar")
       }
     })
   }
@@ -248,6 +277,58 @@ export function OrganizationTab({ initial }: { initial: OrgConfigData }) {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* ── Risk threshold card ────────────────────────────────────────────── */}
+      <div className="bg-white rounded-2xl p-6 space-y-4" style={{ border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+        <div className="flex items-center gap-3 pb-4" style={{ borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: "linear-gradient(135deg, #D9770622, #DC262622)" }}>
+            <Gauge className="w-4.5 h-4.5 text-amber-600" style={{ width: 18, height: 18 }} />
+          </div>
+          <div>
+            <h2 className="text-sm font-black text-[#0F172A]">Regra de Risco de Cronograma</h2>
+            <p className="text-[11px] text-slate-400 mt-0.5">Define quando um projeto ou tarefa passa de "em risco" para "atrasado"</p>
+          </div>
+        </div>
+
+        <div className="flex items-end gap-3">
+          <div className="w-40">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
+              Limite (pontos percentuais)
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={100}
+              value={riskThresholdPct}
+              onChange={(e) => { setRiskThresholdPct(e.target.value); setRiskSaved(false) }}
+              className={iCls}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={handleSaveRiskThreshold}
+            disabled={isRiskPending}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90 disabled:opacity-50 shrink-0"
+            style={{ background: "linear-gradient(135deg, #D97706, #DC2626)" }}
+          >
+            {isRiskPending
+              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Salvando...</>
+              : riskSaved
+                ? <><Check className="w-3.5 h-3.5" /> Salvo!</>
+                : <><Save className="w-3.5 h-3.5" /> Salvar</>}
+          </button>
+        </div>
+
+        {riskError && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-50 border border-red-100 text-xs text-red-600 font-medium">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {riskError}
+          </div>
+        )}
+
+        <p className="text-[11px] text-slate-400 leading-relaxed">
+          Se o progresso real de um projeto ficar até <span className="font-bold text-slate-500">{riskThresholdPct || 10}pp</span> abaixo do esperado pela data, ele aparece como <span className="font-semibold text-amber-600">"Em risco"</span>; abaixo disso, como <span className="font-semibold text-red-600">"Atrasado"</span>. Vale para o Dashboard, Indicadores e o farol de status do projeto.
+        </p>
       </div>
 
       {/* ── Area configs card ──────────────────────────────────────────────── */}

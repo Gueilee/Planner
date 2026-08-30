@@ -62,7 +62,7 @@ export default async function ProjectDetailPage({
   const { id } = await params
   const session = await auth()
 
-  const [project, allUsers] = await Promise.all([
+  const [project, allUsers, org] = await Promise.all([
    db.project.findUnique({
     where: { id, organizationId: session?.user?.organizationId },
     include: {
@@ -125,6 +125,10 @@ export default async function ProjectDetailPage({
      select: { id: true, name: true, department: true, role: true },
      orderBy: { name: "asc" },
    }),
+   db.organization.findUnique({
+     where:  { id: session?.user?.organizationId ?? "" },
+     select: { riskThresholdPct: true },
+   }),
   ])
 
   if (!project) notFound()
@@ -144,7 +148,7 @@ export default async function ProjectDetailPage({
       actualCost:   t.actualCost,
     })),
     risks: project.risks.map(r => ({ status: r.status })),
-  })
+  }, org?.riskThresholdPct)
 
   // Only auto-overwrite when the project is still in auto mode (user hasn't manually overridden)
   const isManualMode = project.reportStatusManual

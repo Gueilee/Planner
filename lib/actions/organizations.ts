@@ -78,6 +78,38 @@ export async function toggleOrganizationActive(id: string): Promise<{ active: bo
   return { active: !current.active }
 }
 
+// ─── Regra de risco de cronograma (por organização/filial) ────────────────────
+
+export async function getMyRiskThreshold(): Promise<number> {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+
+  const org = await db.organization.findUnique({
+    where:  { id: session.user.organizationId },
+    select: { riskThresholdPct: true },
+  })
+  return org?.riskThresholdPct ?? 10
+}
+
+export async function updateRiskThreshold(value: number): Promise<void> {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+  if (session.user.role !== "ADMIN") throw new Error("Acesso restrito a administradores")
+  if (!Number.isFinite(value) || value < 1 || value > 100) {
+    throw new Error("Informe um valor entre 1 e 100")
+  }
+
+  await db.organization.update({
+    where: { id: session.user.organizationId },
+    data:  { riskThresholdPct: Math.round(value) },
+  })
+
+  revalidatePath("/settings")
+  revalidatePath("/analytics")
+  revalidatePath("/dashboard")
+  revalidatePath("/status-report")
+}
+
 // ─── User management (cross-org, admin only) ──────────────────────────────────
 
 export type OrgUserRow = {

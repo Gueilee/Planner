@@ -1,12 +1,13 @@
 "use client"
 
 import { useState, useMemo } from "react"
+import Link from "next/link"
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
 } from "recharts"
 import {
   TrendingUp, Briefcase, Activity, CheckCircle2,
-  ListTodo, Clock, AlertTriangle, BarChart3, Gauge,
+  ListTodo, Clock, AlertTriangle, BarChart3, Gauge, ChevronRight,
 } from "lucide-react"
 import { format, isBefore, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -182,12 +183,36 @@ export function AnalyticsClient({
 }) {
   const today = useMemo(() => new Date(), [])
   const [filter, setFilter] = useState<"ACTIVE" | "ALL">("ACTIVE")
+  const [sponsorFilter, setSponsorFilter] = useState<string>("ALL")
+  const [areaFilter,    setAreaFilter]    = useState<string>("ALL")
+
+  const sponsorOptions = useMemo(
+    () => [...new Set(projects.map((p) => p.sponsor).filter((s): s is string => Boolean(s)))].sort(),
+    [projects],
+  )
+  const areaOptions = useMemo(
+    () => [...new Set(projects.map((p) => p.projectArea))].sort(),
+    [projects],
+  )
 
   // ── Filtered projects ────────────────────────────────────────────────────────
-  const filtered = useMemo(
-    () => filter === "ACTIVE" ? projects.filter((p) => ACTIVE_STATUSES.has(p.status)) : projects,
-    [projects, filter],
-  )
+  const filtered = useMemo(() => {
+    let list = filter === "ACTIVE" ? projects.filter((p) => ACTIVE_STATUSES.has(p.status)) : projects
+    if (sponsorFilter !== "ALL") list = list.filter((p) => p.sponsor === sponsorFilter)
+    if (areaFilter    !== "ALL") list = list.filter((p) => p.projectArea === areaFilter)
+    return list
+  }, [projects, filter, sponsorFilter, areaFilter])
+
+  // ── Situação de prazo (scheduleStatus já calculado no servidor) ──────────────
+  const scheduleBreakdown = useMemo(() => {
+    const onTime  = filtered.filter((p) => p.scheduleStatus === "ON_TIME").length
+    const atRisk  = filtered.filter((p) => p.scheduleStatus === "AT_RISK").length
+    const delayed = filtered.filter((p) => p.scheduleStatus === "DELAYED").length
+    const atRiskOrDelayed = filtered
+      .filter((p) => p.scheduleStatus === "AT_RISK" || p.scheduleStatus === "DELAYED")
+      .sort((a, b) => (a.devio ?? 0) - (b.devio ?? 0))
+    return { onTime, atRisk, delayed, atRiskOrDelayed }
+  }, [filtered])
 
   const allTasks = useMemo(() => filtered.flatMap((p) => p.tasks), [filtered])
 
@@ -249,21 +274,39 @@ export function AnalyticsClient({
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-1 bg-white rounded-xl border border-slate-200 p-1 shadow-sm">
-              {(["ACTIVE", "ALL"] as const).map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setFilter(f)}
-                  className={
-                    "px-4 py-2 rounded-lg text-xs font-bold transition-all duration-200 " +
-                    (filter === f
-                      ? "bg-slate-900 text-white shadow-sm"
-                      : "text-slate-500 hover:text-slate-700")
-                  }
-                >
-                  {f === "ACTIVE" ? "Projetos Ativos" : "Todos os Projetos"}
-                </button>
-              ))}
+            <div className="flex items-center gap-2 flex-wrap">
+              <select
+                value={sponsorFilter}
+                onChange={(e) => setSponsorFilter(e.target.value)}
+                className="px-3 py-2 rounded-xl text-xs font-semibold border border-slate-200 bg-white shadow-sm outline-none focus:ring-2 focus:ring-violet-200 cursor-pointer"
+              >
+                <option value="ALL">Todos os sponsors</option>
+                {sponsorOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <select
+                value={areaFilter}
+                onChange={(e) => setAreaFilter(e.target.value)}
+                className="px-3 py-2 rounded-xl text-xs font-semibold border border-slate-200 bg-white shadow-sm outline-none focus:ring-2 focus:ring-violet-200 cursor-pointer"
+              >
+                <option value="ALL">Todas as áreas</option>
+                {areaOptions.map((a) => <option key={a} value={a}>{a}</option>)}
+              </select>
+              <div className="flex items-center gap-1 bg-white rounded-xl border border-slate-200 p-1 shadow-sm">
+                {(["ACTIVE", "ALL"] as const).map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setFilter(f)}
+                    className={
+                      "px-4 py-2 rounded-lg text-xs font-bold transition-all duration-200 " +
+                      (filter === f
+                        ? "bg-slate-900 text-white shadow-sm"
+                        : "text-slate-500 hover:text-slate-700")
+                    }
+                  >
+                    {f === "ACTIVE" ? "Projetos Ativos" : "Todos os Projetos"}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -290,6 +333,49 @@ export function AnalyticsClient({
                 accent={delayedTasks > 0}
               />
             </div>
+          </section>
+
+          {/* ── SITUAÇÃO DE PRAZO ────────────────────────────────────────────── */}
+          <section>
+            <SectionHeader
+              icon={Clock}
+              label="Situação de Prazo do Portfólio"
+              sub="Projeto real vs. esperado até hoje, pelo limite de risco configurado"
+              accentColor={C.orange}
+            />
+            <div className="grid gap-3 mb-4" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+              <KpiCard label="No Prazo"  value={scheduleBreakdown.onTime}  color={C.green} icon={CheckCircle2} />
+              <KpiCard label="Em Risco"  value={scheduleBreakdown.atRisk}  color={C.amber} icon={AlertTriangle} accent={scheduleBreakdown.atRisk > 0} />
+              <KpiCard label="Atrasado"  value={scheduleBreakdown.delayed} color={C.red}   icon={AlertTriangle} accent={scheduleBreakdown.delayed > 0} />
+            </div>
+
+            {scheduleBreakdown.atRiskOrDelayed.length > 0 && (
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm divide-y divide-slate-50">
+                {scheduleBreakdown.atRiskOrDelayed.map((p) => (
+                  <Link
+                    key={p.id}
+                    href={`/projects/${p.id}`}
+                    className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50/70 transition-colors"
+                  >
+                    <span
+                      className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0"
+                      style={{
+                        background: p.scheduleStatus === "DELAYED" ? `${C.red}15` : `${C.amber}15`,
+                        color:      p.scheduleStatus === "DELAYED" ? C.red : C.amber,
+                      }}
+                    >
+                      {p.scheduleStatus === "DELAYED" ? "Atrasado" : "Em risco"}
+                    </span>
+                    <span className="flex-1 min-w-0 text-xs font-semibold text-slate-700 truncate">{p.title}</span>
+                    {p.sponsor && <span className="text-[10px] text-slate-400 shrink-0">{p.sponsor}</span>}
+                    <span className="text-[10px] font-bold tabular-nums shrink-0" style={{ color: p.scheduleStatus === "DELAYED" ? C.red : C.amber }}>
+                      {p.devio !== null ? `${p.devio}pp` : "—"}
+                    </span>
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                  </Link>
+                ))}
+              </div>
+            )}
           </section>
 
           {/* ── GRÁFICOS ─────────────────────────────────────────────────────── */}
