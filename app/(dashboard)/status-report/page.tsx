@@ -29,7 +29,7 @@ export default async function StatusReportPage() {
           title: true, status: true, progress: true,
           startDate: true, endDate: true,
           budgetedCost: true, actualCost: true,
-          completedAt: true, wbsAreaId: true,
+          completedAt: true, wbsAreaId: true, parentId: true,
           responsible: { select: { name: true, image: true } },
           _count: { select: { subtasks: true } },
         },
@@ -73,7 +73,7 @@ export default async function StatusReportPage() {
     )
     const planning   = leafTasks.filter((t) => t.status === "PLANNING")
     const avgProgress = tasks.length > 0
-      ? computeProjectProgress(tasks, p.wbsAreas)
+      ? computeProjectProgress(tasks)
       : (p.status === "COMPLETED" ? 100 : 0)
 
     // IDC

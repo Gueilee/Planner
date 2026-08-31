@@ -123,7 +123,7 @@ export async function getProjectForClosure(projectId: string) {
           },
         },
       },
-      tasks: { orderBy: { order: "asc" }, select: { id: true, status: true, progress: true } },
+      tasks: { orderBy: { order: "asc" }, select: { id: true, status: true, progress: true, parentId: true } },
       risks: { orderBy: { createdAt: "asc" } },
       meetings: {
         orderBy: { date: "asc" },

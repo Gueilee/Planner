@@ -145,7 +145,7 @@ export default async function AnalyticsPage() {
 
     const progress =
       tasks.length > 0
-        ? computeProjectProgress(tasks, p.wbsAreas)
+        ? computeProjectProgress(tasks)
         : p.status === "COMPLETED" ? 100 : 0
 
     // ── Desvio de prazo ───────────────────────────────────────────────────────

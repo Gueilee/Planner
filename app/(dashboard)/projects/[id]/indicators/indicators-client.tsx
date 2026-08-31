@@ -16,6 +16,7 @@ import {
   ArrowUpRight, ArrowDownRight, Minus, Info, Star, AlertCircle, Bell,
 } from "lucide-react"
 import type { IndicatorsData, IndicatorsTask, IndicatorsProject, IndicatorsArea } from "@/lib/actions/indicators"
+import { computeProjectProgress } from "@/lib/utils/project-progress"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -83,8 +84,18 @@ function computeMetrics(tasks: Task[], project: Project, today: Date) {
   const overdue     = overdueList.length
   const critical    = tasks.filter((t) => t.riskStatus === "CRITICAL" || t.riskStatus === "HIGH").length
 
-  // Average progress
-  const avgProgress = total > 0 ? tasks.reduce((s, t) => s + t.progress, 0) / total : 0
+  // Average progress — função canônica (lib/utils/project-progress.ts), a
+  // mesma do Cronograma/Kanban/Detalhes do Projeto/Status Report, para não
+  // divergir; tarefas de topo já refletem a média das suas subtarefas, então
+  // somar as duas juntas contaria o mesmo avanço 2x. Se o filtro ativo excluir
+  // toda tarefa de topo (ex.: filtrando por um responsável só de subtarefas),
+  // cai para a média simples do recorte filtrado.
+  const topLevelTasks = tasks.filter((t) => !t.parentId)
+  const avgProgress = total > 0
+    ? (topLevelTasks.length > 0
+        ? computeProjectProgress(topLevelTasks.map((t) => ({ progress: t.progress, parentId: null })))
+        : tasks.reduce((s, t) => s + t.progress, 0) / total)
+    : 0
 
   // Expected progress from timeline
   let expectedProgress = 0

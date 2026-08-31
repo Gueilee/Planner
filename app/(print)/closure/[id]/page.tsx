@@ -1,6 +1,7 @@
 import { auth } from "@/auth"
 import { redirect, notFound } from "next/navigation"
 import { getProjectForClosure } from "@/lib/actions/golive"
+import { computeProjectProgress } from "@/lib/utils/project-progress"
 import { format, differenceInDays } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import Image from "next/image"
@@ -368,7 +369,7 @@ export default async function ClosurePage({ params }: { params: Promise<{ id: st
   const totalTasks  = tasks.length
   const doneTasks   = tasks.filter((t) => t.status === "COMPLETED").length
   const avgProgress = totalTasks > 0
-    ? Math.round(tasks.reduce((s, t) => s + t.progress, 0) / totalTasks)
+    ? computeProjectProgress(tasks.map((t) => ({ progress: t.progress, parentId: t.parentId })))
     : 0
 
   const startDate  = project.actualStart ?? project.expectedStart

@@ -1,6 +1,7 @@
 import { requireScreenView } from "@/lib/permissions-guard"
 import { getProjectsForPriority } from "@/lib/actions/priority"
 import { PriorityClient } from "./priority-client"
+import { computeProjectProgress } from "@/lib/utils/project-progress"
 
 export const metadata = { title: "Priorização de Projetos" }
 
@@ -26,9 +27,9 @@ export default async function PriorityPage() {
         teamSize:         p.members.length,
         tasksDone:        p.tasks.filter((t) => t.status === "COMPLETED").length,
         tasksTotal:       p.tasks.length,
-        progress:         p.tasks.length > 0
-          ? Math.round(p.tasks.reduce((s, t) => s + t.progress, 0) / p.tasks.length)
-          : 0,
+        progress:         computeProjectProgress(
+          p.tasks.map((t) => ({ progress: t.progress, parentId: t.parentId })),
+        ),
       }))}
     />
   )

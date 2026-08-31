@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useCallback } from "react"
 import { getProjectFullHistory, deleteMeeting, deleteAttachment } from "@/lib/actions/history"
+import { computeProjectProgress } from "@/lib/utils/project-progress"
 import { format, differenceInDays, formatDistanceToNow } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { fmtDateLong } from "@/lib/date-utils"
@@ -403,7 +404,9 @@ function ProjectHistoryView({ data, del }: { data: NonNullable<FullHistory>; del
   const done        = tasks.filter((t) => t.status === "COMPLETED").length
   const inProg      = tasks.filter((t) => t.status === "IN_PROGRESS").length
   const delayed     = tasks.filter((t) => t.status === "DELAYED").length
-  const progress    = total > 0 ? Math.round(tasks.reduce((s, t) => s + t.progress, 0) / total) : p.status === "COMPLETED" ? 100 : 0
+  const progress    = total > 0
+    ? computeProjectProgress(tasks.map((t) => ({ progress: t.progress, parentId: t.parentId })))
+    : p.status === "COMPLETED" ? 100 : 0
   const highRisks   = p.risks.filter((r) => r.status === "HIGH" || r.status === "CRITICAL").length
   const goodLessons = p.lessonsLearned.filter((l) => l.influence === "POSITIVE").length
   const badLessons  = p.lessonsLearned.filter((l) => l.influence === "NEGATIVE").length

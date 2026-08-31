@@ -7,6 +7,7 @@ import {
 export type CascadeTask = {
   id:        string
   wbsAreaId: string | null
+  parentId:  string | null
   progress:  number
   startDate: Date | null
   endDate:   Date | null
@@ -85,16 +86,16 @@ export function computeScheduleCascade(
     })
   }
 
-  // ── 3. Projeto (reaproveita a mesma ponderação por módulo do progresso real,
-  //      aplicada agora também ao lado "esperado", via tarefas substitutas) ───
-  const projectActualPct = tasks.length > 0 ? computeProjectProgress(tasks, wbsAreas) : 0
+  // ── 3. Projeto (mesma função canônica do progresso real, aplicada agora
+  //      também ao lado "esperado", via tarefas substitutas) ──────────────────
+  const projectActualPct = tasks.length > 0 ? computeProjectProgress(tasks) : 0
 
   const tasksWithExpected = tasks
     .filter((t) => expectedById.get(t.id) !== null && expectedById.get(t.id) !== undefined)
-    .map((t) => ({ wbsAreaId: t.wbsAreaId, progress: expectedById.get(t.id) as number }))
+    .map((t) => ({ parentId: t.parentId, progress: expectedById.get(t.id) as number }))
 
   const projectExpectedPct = tasksWithExpected.length > 0
-    ? computeProjectProgress(tasksWithExpected, wbsAreas)
+    ? computeProjectProgress(tasksWithExpected)
     : null
 
   return {

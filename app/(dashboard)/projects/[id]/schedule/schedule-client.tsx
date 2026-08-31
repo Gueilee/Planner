@@ -11,6 +11,7 @@ import {
 } from "date-fns"
 import { parseDateStr, fmtDateShort, todayStr } from "@/lib/date-utils"
 import { computeExpectedPct } from "@/lib/utils/schedule-status"
+import { computeProjectProgress } from "@/lib/utils/project-progress"
 import { ptBR } from "date-fns/locale"
 import {
   ArrowLeft, Plus, ChevronRight, ChevronDown, Pencil, Trash2,
@@ -1812,16 +1813,13 @@ export function ScheduleClient({ project, initialTasks, members: initialMembers,
   const completedCount = tasks.filter((t) => t.status === "COMPLETED").length
 
   // ── Project progress ─────────────────────────────────────────────────────
-  // Sem módulos: o progresso do projeto é a média simples das Atividades de
-  // topo (cada uma já reflete, via cascata própria, o progresso das suas
-  // subtarefas — por isso não entramos tarefa a tarefa aqui, para não contar
-  // o mesmo avanço duas vezes).
-  const projectProgress = useMemo(() => {
-    const topLevel = tasks.filter((t) => !t.parentId)
-    if (topLevel.length === 0) return 0
-    const avg = topLevel.reduce((s, t) => s + (t.progress ?? 0), 0) / topLevel.length
-    return Math.round(Math.min(100, avg))
-  }, [tasks])
+  // Função canônica (lib/utils/project-progress.ts) — a mesma usada em
+  // Detalhes do Projeto, Status Report, Análises e na lista de Projetos, para
+  // o % nunca divergir de tela para tela.
+  const projectProgress = useMemo(
+    () => computeProjectProgress(tasks.map((t) => ({ progress: t.progress, parentId: t.parentId }))),
+    [tasks],
+  )
 
   // ─────────────────────────────────────────────────────────────────────────
   return (

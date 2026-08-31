@@ -2,6 +2,7 @@ import { requireScreenView } from "@/lib/permissions-guard"
 import { getAllProjectsSummary } from "@/lib/actions/history"
 import { HistoryClient } from "./history-client"
 import { differenceInDays } from "date-fns"
+import { computeProjectProgress } from "@/lib/utils/project-progress"
 
 export const metadata = { title: "Consulta de Projetos" }
 
@@ -14,7 +15,7 @@ export default async function HistoryPage() {
     const total    = p.tasks.length
     const done     = p.tasks.filter((t) => t.status === "COMPLETED").length
     const progress = total > 0
-      ? Math.round(p.tasks.reduce((s, t) => s + t.progress, 0) / total)
+      ? computeProjectProgress(p.tasks.map((t) => ({ progress: t.progress, parentId: t.parentId })))
       : p.status === "COMPLETED" ? 100 : 0
 
     return {

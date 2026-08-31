@@ -2,6 +2,7 @@ import { requireScreenView } from "@/lib/permissions-guard"
 import { getAllProjectsForKanban } from "@/lib/actions/kanban"
 import { KanbanClient } from "./kanban-client"
 import { differenceInDays } from "date-fns"
+import { computeProjectProgress } from "@/lib/utils/project-progress"
 
 export const dynamic = "force-dynamic"
 
@@ -18,13 +19,15 @@ export default async function KanbanPage() {
   const raw = await getAllProjectsForKanban()
 
   const projects = raw.map((p) => {
-    // Mesma lógica do project-tasks-kanban: apenas tarefas folha (sem filhos)
+    // Cards mostram tarefas folha (sem filhos) — mas o % de progresso usa a
+    // função canônica (lib/utils/project-progress.ts), a mesma do Cronograma,
+    // Detalhes do Projeto e Status Report, para nunca divergir de tela pra tela.
     const leafTasks    = p.tasks.filter((t) => t._count.subtasks === 0)
     const total        = leafTasks.length
     const done         = leafTasks.filter((t) => t.status === "COMPLETED").length
-    const progress     = total > 0
-      ? Math.round(leafTasks.reduce((s, t) => s + t.progress, 0) / total)
-      : 0
+    const progress     = computeProjectProgress(
+      p.tasks.map((t) => ({ progress: t.progress, parentId: t.parentId })),
+    )
 
     const highRisks    = p.risks.filter((r) => r.status === "HIGH" || r.status === "CRITICAL").length
     const delayedTasks = leafTasks.filter((t) => t.status === "DELAYED").length

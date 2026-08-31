@@ -16,6 +16,7 @@ type ProjectSnapshot = {
     status:       string
     progress:     number
     wbsAreaId:    string | null
+    parentId:     string | null
     startDate:    Date | null
     endDate:      Date | null
     budgetedCost: number | null

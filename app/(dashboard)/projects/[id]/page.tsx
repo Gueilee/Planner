@@ -146,6 +146,7 @@ export default async function ProjectDetailPage({
       status:       t.status,
       progress:     t.progress,
       wbsAreaId:    t.wbsAreaId,
+      parentId:     t.parentId,
       startDate:    t.startDate,
       endDate:      t.endDate,
       budgetedCost: t.budgetedCost,
@@ -179,7 +180,7 @@ export default async function ProjectDetailPage({
   const userRole   = session?.user?.role ?? ""
   const tasksDone  = project.tasks.filter((t) => t.status === "COMPLETED").length
   const tasksTotal = project.tasks.length
-  const progress   = tasksTotal > 0 ? computeProjectProgress(project.tasks, project.wbsAreas) : (project.status === "COMPLETED" ? 100 : 0)
+  const progress   = tasksTotal > 0 ? computeProjectProgress(project.tasks) : (project.status === "COMPLETED" ? 100 : 0)
   const highRisks  = project.risks.filter((r) => ["HIGH", "CRITICAL"].includes(r.status)).length
   const daysLeft   = project.expectedEnd
     ? differenceInDays(project.expectedEnd, new Date())

@@ -1,38 +1,30 @@
-export type TaskForProgress  = { progress: number; wbsAreaId: string | null }
+export type TaskForProgress  = { progress: number; parentId: string | null }
 export type AreaForProgress  = { id: string; weight: number | null }
 
 /**
- * Calcula o progresso do projeto usando média ponderada por módulo WBS.
- * - Se algum módulo tem peso definido, usa esses pesos (normaliza se a soma ≠ 100%).
- * - Se nenhum módulo tem peso, distribui igual entre módulos com tarefas.
- * - Tarefas sem área são ignoradas no cálculo por módulo (incluídas apenas se não houver áreas).
+ * Progresso do projeto = média simples do progresso das tarefas de TOPO
+ * (sem parentId).
+ *
+ * Antes esta função ponderava por módulo WBS (peso do módulo). Módulos foram
+ * removidos do produto (Cronograma não os usa mais), mas projetos antigos
+ * ainda têm WbsArea com peso salvo no banco — se essa função continuasse
+ * lendo esses pesos, uma tela que buscasse `wbsAreas` do banco mostraria um %
+ * diferente de uma tela que não buscasse, mesmo depois de unificado o
+ * critério de tarefa-de-topo. Foi exatamente essa a causa de o mesmo projeto
+ * mostrar 3 números diferentes (Cronograma, Kanban, Detalhes/Status Report).
+ * Por isso módulo/peso não entram mais aqui, para nenhum resquício de dado
+ * legado voltar a causar divergência.
+ *
+ * Tarefas de topo já refletem, cada uma, a média das suas próprias
+ * subtarefas (recalculado a cada alteração — ver propagateParentUp em
+ * lib/actions/schedule.ts), então somar mãe e filhas juntas contaria o mesmo
+ * avanço duas vezes.
+ *
+ * Esta é a função canônica: todo lugar que precisar do progresso do projeto
+ * deve chamar esta função, nunca somar `.progress` na mão.
  */
-export function computeProjectProgress(
-  tasks: TaskForProgress[],
-  wbsAreas: AreaForProgress[],
-): number {
-  if (tasks.length === 0) return 0
-  if (wbsAreas.length === 0) {
-    return Math.round(tasks.reduce((s, t) => s + t.progress, 0) / tasks.length)
-  }
-
-  const hasCustom = wbsAreas.some((a) => a.weight !== null && a.weight > 0)
-  const equalW    = 100 / wbsAreas.length
-  let weighted = 0
-  let total    = 0
-
-  for (const area of wbsAreas) {
-    const areaTasks = tasks.filter((t) => t.wbsAreaId === area.id)
-    if (areaTasks.length === 0) continue
-    const areaProgress = areaTasks.reduce((s, t) => s + t.progress, 0) / areaTasks.length
-    const w = hasCustom ? (area.weight ?? 0) : equalW
-    weighted += (w / 100) * areaProgress
-    total    += w
-  }
-
-  if (total === 0) {
-    return Math.round(tasks.reduce((s, t) => s + t.progress, 0) / tasks.length)
-  }
-
-  return Math.round(Math.min(100, (weighted / total) * 100))
+export function computeProjectProgress(tasks: TaskForProgress[]): number {
+  const topLevel = tasks.filter((t) => !t.parentId)
+  if (topLevel.length === 0) return 0
+  return Math.round(topLevel.reduce((s, t) => s + t.progress, 0) / topLevel.length)
 }

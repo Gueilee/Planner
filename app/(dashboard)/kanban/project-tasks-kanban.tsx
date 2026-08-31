@@ -25,6 +25,7 @@ import {
   getTaskDetail, updateTaskKanban, addTaskComment, addTaskAttachmentKanban,
 } from "@/lib/actions/kanban"
 import { todayStr } from "@/lib/date-utils"
+import { computeProjectProgress } from "@/lib/utils/project-progress"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { TaskStatus } from "@/lib/generated/prisma/enums"
 import type { KanbanProject } from "./kanban-client"
@@ -65,13 +66,6 @@ const COL_BY_ID = Object.fromEntries(TASK_COLS.map((c) => [c.id, c])) as Record<
 const STATUS_REMAP: Record<string, string> = { INITIATIVE: "PLANNING" }
 function resolveColId(status: string): string {
   return STATUS_REMAP[status] ?? status
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function calcProgress(tasks: TaskItem[]) {
-  if (!tasks.length) return 0
-  return Math.round(tasks.reduce((s, t) => s + t.progress, 0) / tasks.length)
 }
 
 // ─── Task Card ────────────────────────────────────────────────────────────────
@@ -1030,7 +1024,13 @@ export function ProjectTasksKanban({
     })
   }
 
-  const progress = calcProgress(visibleTasks)
+  // Progresso do projeto: função canônica (lib/utils/project-progress.ts), a
+  // mesma usada em Cronograma, Detalhes do Projeto e Status Report — para o %
+  // nunca divergir de tela para tela. Usa todas as tarefas (não só as visíveis
+  // no board), pois a função já filtra para tarefas de topo internamente.
+  const progress = computeProjectProgress(
+    tasks.map((t) => ({ progress: t.progress, parentId: t.parentId })),
+  )
   const done     = visibleTasks.filter((t) => t.status === "COMPLETED").length
 
   return (
