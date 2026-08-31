@@ -254,14 +254,39 @@ const AREA_TABS: { key: AreaTab; label: string; color: string; bg: string }[] = 
 export function PriorityClient({ projects: initial }: { projects: ProjectRow[] }) {
   const [items, setItems]       = useState<ProjectRow[]>(initial)
   const [activeArea, setActiveArea] = useState<AreaTab>("ALL")
+  const [priorityFilter, setPriorityFilter] = useState<Set<string>>(new Set())
   const [saving, setSaving]     = useState(false)
   const [saved,  setSaved]      = useState(false)
   const [dirty,  setDirty]      = useState(false)
   const [error,  setError]      = useState<string | null>(null)
 
-  const visibleItems = activeArea === "ALL"
+  const togglePriorityFilter = useCallback((label: string) => {
+    setPriorityFilter((prev) => {
+      const next = new Set(prev)
+      if (next.has(label)) next.delete(label)
+      else next.add(label)
+      return next
+    })
+  }, [])
+
+  const areaFiltered = activeArea === "ALL"
     ? items
     : items.filter(p => p.projectArea === activeArea)
+
+  const priorityFiltered = priorityFilter.size === 0
+    ? areaFiltered
+    : areaFiltered.filter(p => p.priorityLabel !== null && priorityFilter.has(p.priorityLabel))
+
+  // Ordem de exibição: P1 primeiro, depois P2, P3, P4, sem prioridade por
+  // último — dentro de cada grupo, mantém a ordem manual (arraste) existente,
+  // já que Array.prototype.sort é estável.
+  const priorityRank = (label: string | null) => {
+    const idx = PRIORITY_LEVELS.findIndex((l) => l.label === label)
+    return idx === -1 ? PRIORITY_LEVELS.length : idx
+  }
+  const visibleItems = [...priorityFiltered].sort(
+    (a, b) => priorityRank(a.priorityLabel) - priorityRank(b.priorityLabel)
+  )
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -342,15 +367,28 @@ export function PriorityClient({ projects: initial }: { projects: ProjectRow[] }
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Priority pills */}
+            {/* Priority pills — clique para filtrar a lista por P1–P4 */}
             <div className="hidden md:flex items-center gap-2">
               {counts.map((l) => l.count > 0 && (
-                <span key={l.label}
-                  className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold border"
-                  style={{ background: l.bg, color: l.color, borderColor: l.border }}>
+                <button key={l.label}
+                  onClick={() => togglePriorityFilter(l.label)}
+                  title={`Filtrar por ${l.label} — ${l.name}`}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold border transition-all hover:scale-105 active:scale-95"
+                  style={{
+                    background: l.bg, color: l.color, borderColor: l.border,
+                    boxShadow: priorityFilter.has(l.label) ? `0 0 0 2px ${l.border}` : "none",
+                    opacity: priorityFilter.size > 0 && !priorityFilter.has(l.label) ? 0.4 : 1,
+                  }}>
                   {l.label} · {l.count}
-                </span>
+                </button>
               ))}
+              {priorityFilter.size > 0 && (
+                <button onClick={() => setPriorityFilter(new Set())}
+                  title="Limpar filtro de prioridade"
+                  className="text-[10px] font-bold px-2 py-1 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors">
+                  Limpar
+                </button>
+              )}
             </div>
 
             {error && (

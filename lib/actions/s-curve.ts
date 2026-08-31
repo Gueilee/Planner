@@ -8,6 +8,7 @@ import {
   startOfMonth, addMonths, eachMonthOfInterval,
 } from "date-fns"
 import { computeProjectProgress } from "@/lib/utils/project-progress"
+import { computePlanned, computeRealized, computeBaselineCurve, type RawTask } from "@/lib/utils/s-curve-math"
 
 const CAN_MANAGE_BASELINE = new Set(["ADMIN", "PROJECT_MANAGER", "SPONSOR"])
 
@@ -69,80 +70,6 @@ export type SCurvePayload = {
 // Curva S fazia antes) sub-pondera fases com várias tarefas substanciais e
 // super-pondera fases de 1 tarefa só (ex.: uma reunião de encerramento) —
 // por isso a troca para tarefa-folha.
-
-type RawTask = {
-  id: string
-  startDate: Date | null
-  endDate: Date | null
-  actualStart: Date | null
-  actualEnd: Date | null
-  completedAt: Date | null
-  status: string
-  progress: number
-}
-
-function linearFraction(s: Date, e: Date, T: Date): number {
-  if (T <= s) return 0
-  if (T >= e) return 1
-  const span = e.getTime() - s.getTime()
-  if (span <= 0) return 1
-  return (T.getTime() - s.getTime()) / span
-}
-
-// % esperado por tarefa (tempo decorrido ÷ duração) — mesma lógica de
-// computeExpectedPct (lib/utils/schedule-status.ts), aplicada a cada ponto da
-// série em vez de só "hoje". Média simples entre as tarefas.
-function computePlanned(tasks: RawTask[], timePoints: Date[]): number[] {
-  const withDates = tasks.filter((t) => t.endDate)
-  if (withDates.length === 0) return timePoints.map(() => 0)
-  return timePoints.map((T) => {
-    const sum = withDates.reduce((s, t) => {
-      const start = t.startDate ?? t.endDate!
-      return s + linearFraction(start, t.endDate!, T) * 100
-    }, 0)
-    return Math.round(sum / withDates.length)
-  })
-}
-
-// % realizado por tarefa, reconstruído no tempo: 0 antes de começar, sobe
-// linearmente de 0 até o progresso ATUAL da tarefa entre o início real e a
-// conclusão (ou "hoje", se ainda em andamento) — por isso, no ponto "hoje",
-// o valor de cada tarefa é exatamente o seu progress atual, e a média
-// simples das tarefas-folha fecha exatamente com o % do Cronograma.
-function computeRealized(tasks: RawTask[], timePoints: Date[], today: Date): (number | null)[] {
-  if (tasks.length === 0) return timePoints.map(() => 0)
-
-  return timePoints.map((T) => {
-    if (isAfter(T, today)) return null
-
-    const sum = tasks.reduce((s, t) => {
-      if (!t.actualStart || isAfter(t.actualStart, T)) return s
-      if (t.progress <= 0) return s
-
-      const rampEnd = t.completedAt ?? t.actualEnd ?? today
-      if (!isAfter(rampEnd, t.actualStart) || !isBefore(T, rampEnd)) return s + t.progress
-
-      const elapsed = (T.getTime() - t.actualStart.getTime()) / (rampEnd.getTime() - t.actualStart.getTime())
-      return s + t.progress * elapsed
-    }, 0)
-
-    return Math.round(sum / tasks.length)
-  })
-}
-
-function computeBaselineCurve(
-  snaps: { plannedStart: Date | null; plannedEnd: Date }[],
-  timePoints: Date[]
-): number[] {
-  if (snaps.length === 0) return timePoints.map(() => 0)
-  return timePoints.map((T) => {
-    const sum = snaps.reduce((s, snap) => {
-      const start = snap.plannedStart ?? snap.plannedEnd
-      return s + linearFraction(start, snap.plannedEnd, T) * 100
-    }, 0)
-    return Math.round(sum / snaps.length)
-  })
-}
 
 // ─── Main server action ────────────────────────────────────────────────────────
 

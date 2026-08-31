@@ -59,7 +59,7 @@ export type ProjectSlideData = {
   progressDelta: number | null
   budgetUsed: number | null
   meetingsCount: number; meetingsByType: Record<string, number>
-  sCurve: { series: { date: string; planned: number; realized: number }[] } | null
+  sCurve: { series: { date: string; planned: number; realized: number | null }[] } | null
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -516,7 +516,7 @@ function AnimProgressBar({ value, color }: { value: number; color: string }) {
 // PROJECT SLIDE  — 3 COLUNAS COMPLETAS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function MiniSCurve({series}:{series:{date:string;planned:number;realized:number}[]}) {
+function MiniSCurve({series}:{series:{date:string;planned:number;realized:number|null}[]}) {
   const todayTs = Date.now()
   const todayKey = series.length > 0
     ? series.reduce((c,s) => Math.abs(new Date(s.date).getTime()-todayTs) < Math.abs(new Date(c.date).getTime()-todayTs) ? s : c, series[0]).date

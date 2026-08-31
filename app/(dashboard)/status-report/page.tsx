@@ -2,6 +2,7 @@ import { db } from "@/lib/db"
 import { requireScreenView } from "@/lib/permissions-guard"
 import { differenceInDays, startOfWeek, eachWeekOfInterval, isAfter, isBefore, addWeeks } from "date-fns"
 import { computeProjectProgress } from "@/lib/utils/project-progress"
+import { computePlanned, computeRealized, type RawTask } from "@/lib/utils/s-curve-math"
 import { ProjectStatus } from "@/lib/generated/prisma/enums"
 import { ReportClient, type ProjectSlideData } from "./report-client"
 
@@ -30,6 +31,7 @@ export default async function StatusReportPage() {
           startDate: true, endDate: true,
           budgetedCost: true, actualCost: true,
           completedAt: true, wbsAreaId: true, parentId: true,
+          actualStart: true, actualEnd: true,
           responsible: { select: { name: true, image: true } },
           _count: { select: { subtasks: true } },
         },
@@ -178,10 +180,12 @@ export default async function StatusReportPage() {
         pct:   Math.round((a.tasks.filter((t) => t.status === "COMPLETED").length / a.tasks.length) * 100),
       }))
 
-    // S-Curve: planned vs realized weekly completion %
+    // S-Curve: mesma matemática (lib/utils/s-curve-math.ts) da tela dedicada
+    // de Curva S do projeto — planejado/realizado como média simples das
+    // tarefas-folha, nunca uma reimplementação própria que possa divergir.
     const sCurveResult = (() => {
       // Usa apenas tarefas folha — tarefas-pai têm endDate inflado abrangendo toda a hierarquia
-      const tw = leafTasks.filter(t => t.endDate !== null)
+      const tw: RawTask[] = leafTasks.filter(t => t.endDate !== null)
       if (tw.length < 3) return null
       // Range calculado apenas pelas endDates planejadas — completedAt não estende o eixo X.
       const plannedDates: Date[] = [
@@ -192,18 +196,26 @@ export default async function StatusReportPage() {
       const maxDate = plannedDates.reduce((m, d) => isAfter(d, m)  ? d : m, plannedDates[0])
       if (!isBefore(minDate, maxDate)) return null
       const rangeStart = startOfWeek(minDate, { weekStartsOn: 1 })
-      const rangeEnd   = addWeeks(maxDate, 1)
+      // O intervalo sempre cobre até hoje — senão um projeto atrasado (fim
+      // planejado no passado) deixa "hoje" fora da grade.
+      const latestKnown = isAfter(maxDate, today) ? maxDate : today
+      const rangeEnd     = addWeeks(latestKnown, 1)
       const weeks = eachWeekOfInterval({ start: rangeStart, end: rangeEnd }, { weekStartsOn: 1 })
       if (weeks.length < 3) return null
-      const total = tw.length
-      const series = weeks.map(ws => ({
+
+      const plannedCurve  = computePlanned(tw, weeks)
+      const realizedCurve = computeRealized(tw, weeks, today)
+      // Ponto mais recente com dado real forçado a bater com o % exato de
+      // hoje (mesma tarefa-folha usada no card "Progresso do Projeto" acima).
+      const lastRealIdx = weeks.reduce((acc, _, i) => (realizedCurve[i] !== null ? i : acc), -1)
+      const realizedTodayExact = computeProjectProgress(
+        tw.map((t) => ({ id: t.id, progress: t.progress, parentId: null }))
+      )
+
+      const series = weeks.map((ws, i) => ({
         date:     ws.toISOString(),
-        planned:  Math.round(tw.filter(t => !isAfter(t.endDate!, ws)).length / total * 100),
-        realized: Math.round(tw.filter(t => {
-          if (t.completedAt && !isAfter(t.completedAt, ws)) return true
-          if (t.status === "COMPLETED" && !isAfter(t.endDate!, ws)) return true
-          return false
-        }).length / total * 100),
+        planned:  plannedCurve[i],
+        realized: i === lastRealIdx ? realizedTodayExact : realizedCurve[i],
       }))
       return { series }
     })()
