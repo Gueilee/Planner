@@ -466,8 +466,10 @@ export default async function ProjectDetailPage({
                     </>
                   )}
 
-                  {/* Active: IN_PROGRESS / PILOT (Em Validação) / RAMP_UP */}
-                  {["IN_PROGRESS", "PILOT", "RAMP_UP"].includes(project.status) && (
+                  {/* Active: IN_PROGRESS / PILOT (Em Validação) / RAMP_UP / GO_LIVE / POST_GOLIVE —
+                      GO LIVE não encerra o projeto: o time ainda acompanha o pós-lançamento
+                      (ajustes, melhorias) com as mesmas ferramentas, até encerrar manualmente. */}
+                  {["IN_PROGRESS", "PILOT", "RAMP_UP", "GO_LIVE", "POST_GOLIVE"].includes(project.status) && (
                     <>
                       <Link
                         href={`/projects/${id}/checkpoint`}
@@ -528,8 +530,9 @@ export default async function ProjectDetailPage({
                     </>
                   )}
 
-                  {/* Post go-live */}
-                  {["GO_LIVE", "POST_GOLIVE", "COMPLETED"].includes(project.status) && (
+                  {/* Encerrado — só depois que o time encerra manualmente (StatusActions
+                      "Encerrar Projeto"), nunca automaticamente pelo GO LIVE */}
+                  {project.status === "COMPLETED" && (
                     <>
                       <Link
                         href={`/projects/${id}/lessons-learned`}
