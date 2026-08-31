@@ -213,6 +213,7 @@ export default async function StatusReportPage() {
       sponsor:  p.sponsor?.name ?? null,
       progress: avgProgress,
       idc, idp, timelineProgress, progressDelta,
+      budgetUsed: actualCostSum > 0 ? actualCostSum : null,
       meetingsCount:  p._count.meetings,
       meetingsByType,
       // Squad completa: membros formais + responsáveis do cronograma não listados como membros
@@ -270,5 +271,7 @@ export default async function StatusReportPage() {
   })
 
   const totalMeetings = slides.reduce((s, p) => s + p.meetingsCount, 0)
-  return <ReportClient slides={slides} totalMeetings={totalMeetings} />
+  const canCloseMonth = new Set(["ADMIN", "PROJECT_MANAGER", "SPONSOR"]).has(session.user.role ?? "")
+
+  return <ReportClient slides={slides} totalMeetings={totalMeetings} canCloseMonth={canCloseMonth} />
 }

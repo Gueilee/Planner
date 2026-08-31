@@ -13,9 +13,11 @@ import {
   CheckCheck, ListTodo, Play, Search, BarChart3,
   DollarSign, Target, RefreshCw, Activity, MapPin,
   Shield, Milestone, ChevronRight as ChevRight,
+  Lock, History, X, Loader2, AlertCircle,
 } from "lucide-react"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { LineChart, Line, XAxis, YAxis, ReferenceLine, ResponsiveContainer } from "recharts"
+import { closeMonthlyStatusReports, getStatusReportHistory, type StatusReportHistoryItem } from "@/lib/actions/status-report"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -55,6 +57,7 @@ export type ProjectSlideData = {
   }
   idc: number | null; idp: number | null; timelineProgress: number | null
   progressDelta: number | null
+  budgetUsed: number | null
   meetingsCount: number; meetingsByType: Record<string, number>
   sCurve: { series: { date: string; planned: number; realized: number }[] } | null
 }
@@ -1011,9 +1014,92 @@ function EmptyState() {
   )
 }
 
+// ─── Fechar mês — histórico ────────────────────────────────────────────────────
+
+const RAG_DOT: Record<string, string> = { GREEN: "#10B981", YELLOW: "#F59E0B", RED: "#EF4444" }
+
+function buildMonthlySnapshot(s: ProjectSlideData) {
+  const risksText = s.risks.items.length
+    ? s.risks.items.map((r) => `[${r.level}] ${r.description}${r.mitigation ? ` — Mitigação: ${r.mitigation}` : ""}`).join("\n")
+    : null
+  return {
+    projectId:      s.id,
+    tasksTotal:     s.tasks.total,
+    tasksCompleted: s.tasks.completed,
+    tasksDelayed:   s.tasks.delayed,
+    tasksPending:   Math.max(0, s.tasks.total - s.tasks.completed - s.tasks.delayed),
+    budgetUsed:     s.budgetUsed,
+    overallStatus:  s.reportStatus.overall,
+    highlights:     s.lastCheckpoint?.highlights ?? null,
+    risks:          risksText,
+    nextSteps:      s.lastCheckpoint?.nextSteps.length ? s.lastCheckpoint.nextSteps.join("\n") : null,
+  }
+}
+
+function HistoryModal({ slides, onClose }: { slides: ProjectSlideData[]; onClose: () => void }) {
+  const [projectId, setProjectId] = useState(slides[0]?.id ?? "")
+  const [history, setHistory]     = useState<StatusReportHistoryItem[]>([])
+  const [loading, setLoading]     = useState(false)
+
+  useEffect(() => {
+    if (!projectId) return
+    setLoading(true)
+    getStatusReportHistory(projectId).then(setHistory).finally(() => setLoading(false))
+  }, [projectId])
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }} onClick={onClose}>
+      <div className="w-full max-w-2xl max-h-[80vh] flex flex-col rounded-2xl overflow-hidden" style={{ background: "#0F2550", border: "1px solid rgba(255,255,255,0.1)" }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+          <div className="flex items-center gap-2">
+            <History className="w-4 h-4" style={{ color: "#93C5FD" }} />
+            <h3 className="text-sm font-bold text-white">Histórico de Status Report</h3>
+          </div>
+          <button onClick={onClose} className="text-white/50 hover:text-white transition-colors"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="px-5 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+          <select
+            value={projectId}
+            onChange={(e) => setProjectId(e.target.value)}
+            className="w-full px-3 py-2 rounded-xl text-sm outline-none cursor-pointer"
+            style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "#E2E8F0" }}
+          >
+            {slides.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
+          </select>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+          {loading ? (
+            <div className="flex items-center justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-white/40" /></div>
+          ) : history.length === 0 ? (
+            <p className="text-sm text-white/40 text-center py-10">Nenhum mês fechado ainda para este projeto.</p>
+          ) : (
+            history.map((h) => (
+              <div key={h.id} className="rounded-xl p-3.5" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-bold text-white capitalize">{format(new Date(h.periodStart), "MMMM 'de' yyyy", { locale: ptBR })}</span>
+                  <span className="flex items-center gap-1.5 text-[10px] font-bold" style={{ color: RAG_DOT[h.overallStatus] ?? "#94A3B8" }}>
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: RAG_DOT[h.overallStatus] ?? "#94A3B8" }} /> {h.overallStatus}
+                  </span>
+                </div>
+                <p className="text-[11px] text-white/50 mb-2">
+                  {h.tasksCompleted}/{h.tasksTotal} concluídas · {h.tasksDelayed} atrasada{h.tasksDelayed !== 1 ? "s" : ""}
+                  {h.budgetUsed !== null && <> · R$ {h.budgetUsed.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}</>}
+                </p>
+                {h.highlights && <p className="text-[11px] text-white/70 leading-snug mb-1">{h.highlights}</p>}
+                {h.nextSteps && <p className="text-[11px] text-white/50 leading-snug"><strong className="text-white/70">Próximos passos:</strong> {h.nextSteps}</p>}
+                <p className="text-[10px] text-white/30 mt-2">Fechado por {h.createdByName ?? "—"} em {format(new Date(h.createdAt), "dd/MM/yyyy", { locale: ptBR })}</p>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Project Selector ─────────────────────────────────────────────────────────
 
-function ProjectSelector({slides,onStart}:{slides:ProjectSlideData[];onStart:(s:ProjectSlideData[])=>void}) {
+function ProjectSelector({slides,onStart,canCloseMonth}:{slides:ProjectSlideData[];onStart:(s:ProjectSlideData[])=>void;canCloseMonth:boolean}) {
   const [selected,setSelected]=useState<Set<string>>(()=>new Set(slides.map((s)=>s.id)))
   const [search,setSearch]=useState("")
   const filtered=useMemo(()=>{const q=search.toLowerCase();return q?slides.filter((s)=>s.title.toLowerCase().includes(q)):slides},[slides,search])
@@ -1021,13 +1107,39 @@ function ProjectSelector({slides,onStart}:{slides:ProjectSlideData[];onStart:(s:
   const toggleAll=()=>setSelected(selected.size===slides.length?new Set():new Set(slides.map((s)=>s.id)))
   const date=format(new Date(),"dd 'de' MMMM 'de' yyyy",{locale:ptBR})
 
+  const [closing,setClosing]=useState(false)
+  const [closeMsg,setCloseMsg]=useState<{ok:boolean;text:string}|null>(null)
+  const [showHistory,setShowHistory]=useState(false)
+
+  useEffect(() => {
+    if (!closeMsg) return
+    const t = setTimeout(() => setCloseMsg(null), 5000)
+    return () => clearTimeout(t)
+  }, [closeMsg])
+
+  async function handleCloseMonth() {
+    const chosen = slides.filter((s) => selected.has(s.id))
+    if (chosen.length === 0) return
+    setClosing(true)
+    setCloseMsg(null)
+    try {
+      const result = await closeMonthlyStatusReports(chosen.map(buildMonthlySnapshot))
+      if (!result.success) { setCloseMsg({ok:false, text: result.error}); return }
+      setCloseMsg({ok:true, text: `${result.count} projeto${result.count !== 1 ? "s" : ""} fechado${result.count !== 1 ? "s" : ""} para este mês.`})
+    } finally {
+      setClosing(false)
+    }
+  }
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden" style={{background:"linear-gradient(145deg,#0B1D3A,#0F2550)"}}>
       <style>{KF}</style>
       <div className="flex items-center justify-between px-8 py-4 shrink-0" style={{borderBottom:"1px solid rgba(255,255,255,0.07)"}}>
         <VendemmiaLogo size="sm"/>
         <p style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.18em",color:"rgba(148,185,255,0.40)"}}>Status Report · {date}</p>
-        <div style={{width:110}}/>
+        <button onClick={()=>setShowHistory(true)} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors" style={{color:"rgba(180,210,255,0.75)",border:"1px solid rgba(148,185,255,0.22)",background:"rgba(148,185,255,0.08)"}}>
+          <History className="w-3.5 h-3.5"/> Histórico
+        </button>
       </div>
       <div className="flex-1 overflow-y-auto px-8 py-8" style={{scrollbarWidth:"none"}}>
         <div className="max-w-4xl mx-auto space-y-5">
@@ -1073,19 +1185,40 @@ function ProjectSelector({slides,onStart}:{slides:ProjectSlideData[];onStart:(s:
           <ArrowLeft className="w-3.5 h-3.5"/> Projetos
         </Link>
         <span style={{fontSize:13,fontWeight:600,color:"rgba(148,185,255,0.42)"}}>{selected.size} de {slides.length} selecionado{selected.size!==1?"s":""}</span>
-        <button onClick={()=>{const c=slides.filter((s)=>selected.has(s.id));if(c.length>0)onStart(c)}} disabled={selected.size===0}
-          className="flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm text-white disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{background:"linear-gradient(135deg,#2563EB,#7C3AED)",boxShadow:selected.size>0?"0 0 26px rgba(59,130,246,0.42),0 0 52px rgba(124,58,237,0.22)":"none"}}>
-          <Play className="w-4 h-4 fill-white"/> Iniciar Apresentação
-        </button>
+        <div className="flex items-center gap-2.5">
+          {canCloseMonth && (
+            <button onClick={handleCloseMonth} disabled={selected.size===0||closing}
+              title="Grava um snapshot do mês corrente para os projetos selecionados"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.16)",color:"rgba(200,225,255,0.85)"}}>
+              {closing ? <Loader2 className="w-4 h-4 animate-spin"/> : <Lock className="w-4 h-4"/>}
+              Fechar mês
+            </button>
+          )}
+          <button onClick={()=>{const c=slides.filter((s)=>selected.has(s.id));if(c.length>0)onStart(c)}} disabled={selected.size===0}
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm text-white disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{background:"linear-gradient(135deg,#2563EB,#7C3AED)",boxShadow:selected.size>0?"0 0 26px rgba(59,130,246,0.42),0 0 52px rgba(124,58,237,0.22)":"none"}}>
+            <Play className="w-4 h-4 fill-white"/> Iniciar Apresentação
+          </button>
+        </div>
       </div>
+
+      {closeMsg && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl text-sm font-semibold text-white select-none"
+          style={{background:closeMsg.ok?"linear-gradient(135deg,#059669,#10B981)":"linear-gradient(135deg,#B45309,#DC2626)",boxShadow:"0 8px 24px rgba(0,0,0,0.35)"}}>
+          {closeMsg.ok ? <CheckCircle2 className="w-4 h-4 shrink-0"/> : <AlertCircle className="w-4 h-4 shrink-0"/>}
+          {closeMsg.text}
+        </div>
+      )}
+
+      {showHistory && <HistoryModal slides={slides} onClose={()=>setShowHistory(false)}/>}
     </div>
   )
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function ReportClient({slides:allSlides,totalMeetings}:{slides:ProjectSlideData[];totalMeetings:number}) {
+export function ReportClient({slides:allSlides,totalMeetings,canCloseMonth}:{slides:ProjectSlideData[];totalMeetings:number;canCloseMonth:boolean}) {
   const [started,setStarted]   =useState(false)
   const [activeSlides,setActive]=useState<ProjectSlideData[]>(allSlides)
   const [current,setCurrent]   =useState(0)
@@ -1148,7 +1281,7 @@ export function ReportClient({slides:allSlides,totalMeetings}:{slides:ProjectSli
 
   if(allSlides.length===0)return <EmptyState/>
   if(!started){
-    return <ProjectSelector slides={allSlides} onStart={(chosen)=>{setActive(chosen);setCurrent(0);setStarted(true)}}/>
+    return <ProjectSelector slides={allSlides} onStart={(chosen)=>{setActive(chosen);setCurrent(0);setStarted(true)}} canCloseMonth={canCloseMonth}/>
   }
 
   return (

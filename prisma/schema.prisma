@@ -606,6 +606,9 @@ model StatusReport {
   project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
+
+  // Um snapshot por projeto por mês — "Fechar mês" grava ou atualiza o mesmo registro.
+  @@unique([projectId, periodStart])
 }
 
 // ─────────────────────────────────────────────
