@@ -10,6 +10,8 @@ import {
   isSaturday, isSunday, min, max, isAfter, isBefore, eachWeekOfInterval, parseISO,
 } from "date-fns"
 import { parseDateStr, fmtDateShort, todayStr } from "@/lib/date-utils"
+import { computeExpectedPct, computeScheduleStatus, type ScheduleStatus } from "@/lib/utils/schedule-status"
+import { computeScheduleCascade } from "@/lib/utils/schedule-cascade"
 import { ptBR } from "date-fns/locale"
 import {
   ArrowLeft, Plus, ChevronRight, ChevronDown, Pencil, Trash2,
@@ -87,6 +89,14 @@ const STATUS_CFG: Record<string, { label: string; color: string; bg: string; dot
   ON_HOLD:     { label: "Pausada",        color: "#F59E0B", bg: "#FFFBEB", dot: "#F59E0B" },
 }
 
+// Status de prazo (real vs. esperado pelo calendário) — % Est. na tabela de cronograma
+const SCHEDULE_STATUS_DOT: Record<ScheduleStatus, string> = {
+  ON_TIME: "#10B981", AT_RISK: "#F59E0B", DELAYED: "#EF4444", ND: "#CBD5E1",
+}
+const SCHEDULE_STATUS_LABEL: Record<ScheduleStatus, string> = {
+  ON_TIME: "No prazo", AT_RISK: "Em risco", DELAYED: "Atrasado", ND: "Sem dados suficientes",
+}
+
 const STATUS_CYCLE = ["PLANNING", "IN_PROGRESS", "VALIDATION", "COMPLETED", "DELAYED", "ON_HOLD"] as const
 const FORM_STATUSES = ["PLANNING", "IN_PROGRESS", "COMPLETED", "DELAYED", "VALIDATION", "ON_HOLD"] as const
 
@@ -142,12 +152,7 @@ function fmtDate(ds: string | null) {
 
 function calcEstimatedProgress(startDate: string | null, endDate: string | null): number | null {
   if (!startDate || !endDate) return null
-  const start = parseDateStr(startDate)
-  const end   = parseDateStr(endDate)
-  const today = new Date()
-  const total = differenceInDays(end, start)
-  if (total <= 0) return null
-  return Math.max(0, Math.min(100, Math.round((differenceInDays(today, start) / total) * 100)))
+  return computeExpectedPct(parseDateStr(startDate), parseDateStr(endDate))
 }
 
 function flattenTasks(tasks: Task[], expanded: Set<string>): FlatTask[] {
@@ -1298,9 +1303,10 @@ interface ScheduleClientProps {
   initialAreas: Area[]
   initialTasks: Task[]
   members: Member[]
+  riskThresholdPct: number
 }
 
-export function ScheduleClient({ project, initialAreas, initialTasks, members: initialMembers }: ScheduleClientProps) {
+export function ScheduleClient({ project, initialAreas, initialTasks, members: initialMembers, riskThresholdPct }: ScheduleClientProps) {
   const [tasks, setTasks]   = useState<Task[]>(initialTasks)
   const [areas, setAreas]   = useState<Area[]>(initialAreas)
   const [members, setMembers] = useState<Member[]>(initialMembers)
@@ -2006,6 +2012,19 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
     return { weightedProgress: normalized, totalWeight: Math.round(total * 10) / 10, hasCustomWeights: hasCustom }
   }, [areas, tasks])
 
+  // ── Cascata de status de prazo (Tarefa → Módulo → Projeto) ──────────────────
+  const cascadeAreaById = useMemo(() => {
+    const cascadeTasks = tasks.map((t) => ({
+      id:        t.id,
+      wbsAreaId: t.wbsAreaId,
+      progress:  t.progress,
+      startDate: t.startDate ? parseDateStr(t.startDate) : null,
+      endDate:   t.endDate   ? parseDateStr(t.endDate)   : null,
+    }))
+    const cascade = computeScheduleCascade(cascadeTasks, areas, riskThresholdPct)
+    return new Map(cascade.areas.map((a) => [a.id, a]))
+  }, [tasks, areas, riskThresholdPct])
+
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div
@@ -2399,6 +2418,14 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                                   </button>
                                 )
                               )}
+                              {/* Status de prazo do módulo (cascata) */}
+                              {row.id !== "__ungrouped__" && cascadeAreaById.get(row.id) && (
+                                <span
+                                  className="w-2 h-2 rounded-full shrink-0"
+                                  style={{ background: SCHEDULE_STATUS_DOT[cascadeAreaById.get(row.id)!.scheduleStatus] }}
+                                  title={`Prazo do módulo: ${SCHEDULE_STATUS_LABEL[cascadeAreaById.get(row.id)!.scheduleStatus]}`}
+                                />
+                              )}
                             </div>
                           ),
                           status: <div style={{ width: colW.status, flexShrink: 0 }} className="flex justify-center"><span className="text-[10px] text-slate-400 font-medium">{row.doneCount}/{row.taskCount}</span></div>,
@@ -2573,6 +2600,9 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                     {(() => {
                       const ep = calcEstimatedProgress(t.startDate, t.endDate)
                       const epDelta = ep !== null ? ep - t.progress : null
+                      const taskScheduleStatus: ScheduleStatus = t.status === "COMPLETED"
+                        ? "ON_TIME"
+                        : computeScheduleStatus(t.progress, ep, riskThresholdPct)
                       const taskCells: Record<ColKey, React.ReactNode> = {
                         eap: (
                           <div style={{ width: colW.eap, flexShrink: 0 }} className="flex items-center justify-center">
@@ -2745,7 +2775,14 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                           <div style={{ width: colW.pctEst, flexShrink: 0 }} className="text-center">
                             {ep !== null ? (
                               <div className="flex flex-col items-center gap-0.5">
-                                <span className="text-[9px] font-bold text-amber-600">{ep}%</span>
+                                <div className="flex items-center gap-1">
+                                  <span
+                                    className="w-1.5 h-1.5 rounded-full shrink-0"
+                                    style={{ background: SCHEDULE_STATUS_DOT[taskScheduleStatus] }}
+                                    title={SCHEDULE_STATUS_LABEL[taskScheduleStatus]}
+                                  />
+                                  <span className="text-[9px] font-bold text-amber-600">{ep}%</span>
+                                </div>
                                 {epDelta !== null && Math.abs(epDelta) >= 5 && (
                                   <span className={`text-[8px] font-bold ${epDelta > 0 ? "text-red-400" : "text-emerald-500"}`}>
                                     {epDelta > 0 ? `+${epDelta}` : epDelta}
@@ -2936,6 +2973,13 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                                 </span>
                               ) : null
                             })()}
+                            {areaId !== "__ungrouped__" && cascadeAreaById.get(areaId) && (
+                              <span
+                                className="w-2 h-2 rounded-full shrink-0"
+                                style={{ background: SCHEDULE_STATUS_DOT[cascadeAreaById.get(areaId)!.scheduleStatus] }}
+                                title={`Prazo do módulo: ${SCHEDULE_STATUS_LABEL[cascadeAreaById.get(areaId)!.scheduleStatus]}`}
+                              />
+                            )}
                           </div>
 
                           {/* Placeholder columns */}

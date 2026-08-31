@@ -1,6 +1,7 @@
 import { auth } from "@/auth"
 import { db } from "@/lib/db"
 import { notFound, redirect } from "next/navigation"
+import { DEFAULT_RISK_THRESHOLD_PCT } from "@/lib/utils/schedule-status"
 import { ScheduleClient } from "./schedule-client"
 
 export const metadata = { title: "Cronograma" }
@@ -10,7 +11,7 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
   const session = await auth()
   if (!session?.user) redirect("/login")
 
-  const [project, areas, tasks, allUsers] = await Promise.all([
+  const [project, areas, tasks, allUsers, org] = await Promise.all([
     db.project.findUnique({ where: { id }, select: { id: true, title: true, status: true } }),
     db.wbsArea.findMany({ where: { projectId: id }, orderBy: { order: "asc" } }),
     db.scheduleTask.findMany({
@@ -27,9 +28,15 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
       select: { id: true, name: true, department: true },
       orderBy: { name: "asc" },
     }),
+    db.organization.findUnique({
+      where:  { id: session.user.organizationId },
+      select: { riskThresholdPct: true },
+    }),
   ])
 
   if (!project) notFound()
+
+  const riskThresholdPct = org?.riskThresholdPct ?? DEFAULT_RISK_THRESHOLD_PCT
 
   const serializedTasks = tasks.map((t) => ({
     ...t,
@@ -49,6 +56,7 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
       initialAreas={areas.map((a) => ({ id: a.id, name: a.name, color: a.color, weight: a.weight ?? null }))}
       initialTasks={serializedTasks}
       members={allUsers}
+      riskThresholdPct={riskThresholdPct}
     />
   )
 }

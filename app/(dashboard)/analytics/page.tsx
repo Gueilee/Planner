@@ -1,7 +1,8 @@
 import { db } from "@/lib/db"
 import { requireScreenView } from "@/lib/permissions-guard"
 import { computeProjectProgress } from "@/lib/utils/project-progress"
-import { computeExpectedPct, computeScheduleStatus, DEFAULT_RISK_THRESHOLD_PCT } from "@/lib/utils/schedule-status"
+import { DEFAULT_RISK_THRESHOLD_PCT, type ScheduleStatus } from "@/lib/utils/schedule-status"
+import { computeScheduleCascade } from "@/lib/utils/schedule-cascade"
 import { ProjectStatus } from "@/lib/generated/prisma/enums"
 import { AnalyticsClient } from "./analytics-client"
 
@@ -30,6 +31,8 @@ export type TaskDashData = {
   riskStatus: string
   responsibleName: string | null
   responsibleId: string | null
+  expectedPct: number | null
+  scheduleStatus: ScheduleStatus
 }
 
 export type AreaDashData = {
@@ -37,6 +40,9 @@ export type AreaDashData = {
   name: string
   color: string | null
   weight: number | null
+  actualPct: number | null
+  expectedPct: number | null
+  scheduleStatus: ScheduleStatus | null
 }
 
 export type ProjectIndicator = {
@@ -142,15 +148,19 @@ export default async function AnalyticsPage() {
         : p.status === "COMPLETED" ? 100 : 0
 
     // ── Desvio de prazo ───────────────────────────────────────────────────────
-    // % esperado = dias decorridos ÷ duração total do projeto (calendário),
-    // e status (on track/at risk/delayed) a partir da variação vs. o limite de
-    // risco configurado pela organização — regra canônica única do sistema
-    // (lib/utils/schedule-status.ts), a mesma usada no semáforo RAG do projeto.
+    // Cascata Tarefa → Módulo → Projeto (lib/utils/schedule-cascade.ts): cada
+    // tarefa tem seu próprio % esperado pelo calendário, agregado em cascata —
+    // em vez de comparar só a data de início/fim do projeto como um todo.
+    const cascade = computeScheduleCascade(tasks, p.wbsAreas, riskThresholdPct, today)
+    const cascadeByTask = new Map(cascade.tasks.map((t) => [t.id, t]))
+    const cascadeByArea = new Map(cascade.areas.map((a) => [a.id, a]))
 
-    let plannedPct:     number | null = null
-    let devio:          number | null = null
-    let idp:            number | null = null
-    let scheduleStatus: ProjectIndicator["scheduleStatus"] = "ND"
+    let plannedPct:     number | null = cascade.expectedPct
+    let devio:          number | null = cascade.expectedPct !== null ? progress - cascade.expectedPct : null
+    let idp:            number | null = (cascade.expectedPct !== null && cascade.expectedPct > 0)
+      ? Math.round((progress / cascade.expectedPct) * 100) / 100
+      : null
+    let scheduleStatus: ProjectIndicator["scheduleStatus"] = cascade.scheduleStatus
 
     if (p.status === "COMPLETED") {
       // Projeto concluído: considerado no prazo independente de quando finalizou
@@ -158,16 +168,11 @@ export default async function AnalyticsPage() {
       plannedPct     = 100
       devio          = progress - 100
       idp            = 1.0
-
-    } else if (!skipKpi) {
-      plannedPct = computeExpectedPct(p.expectedStart, p.expectedEnd, today)
-
-      if (plannedPct !== null) {
-        devio = progress - plannedPct
-        if (plannedPct > 0) idp = Math.round((progress / plannedPct) * 100) / 100
-      }
-
-      scheduleStatus = computeScheduleStatus(progress, plannedPct, riskThresholdPct)
+    } else if (skipKpi) {
+      scheduleStatus = "ND"
+      plannedPct     = null
+      devio          = null
+      idp            = null
     }
 
     // ── IDC — EVM: Valor Agregado / Custo Real ────────────────────────────────
@@ -212,6 +217,8 @@ export default async function AnalyticsPage() {
       riskStatus:       t.riskStatus,
       responsibleName:  t.responsible?.name ?? null,
       responsibleId:    t.responsible?.id ?? null,
+      expectedPct:      cascadeByTask.get(t.id)?.expectedPct ?? null,
+      scheduleStatus:   cascadeByTask.get(t.id)?.scheduleStatus ?? "ND",
     }))
 
     // ── Serialização de áreas WBS ─────────────────────────────────────────────
@@ -220,6 +227,9 @@ export default async function AnalyticsPage() {
       name:   a.name,
       color:  a.color ?? null,
       weight: a.weight ?? null,
+      actualPct:      cascadeByArea.get(a.id)?.actualPct ?? null,
+      expectedPct:    cascadeByArea.get(a.id)?.expectedPct ?? null,
+      scheduleStatus: cascadeByArea.get(a.id)?.scheduleStatus ?? null,
     }))
 
     return {

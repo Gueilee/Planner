@@ -141,12 +141,16 @@ export default async function ProjectDetailPage({
     expectedStart:  project.expectedStart,
     expectedEnd:    project.expectedEnd,
     tasks:          project.tasks.map(t => ({
+      id:           t.id,
       status:       t.status,
       progress:     t.progress,
+      wbsAreaId:    t.wbsAreaId,
+      startDate:    t.startDate,
       endDate:      t.endDate,
       budgetedCost: t.budgetedCost,
       actualCost:   t.actualCost,
     })),
+    wbsAreas: project.wbsAreas.map(a => ({ id: a.id, weight: a.weight })),
     risks: project.risks.map(r => ({ status: r.status })),
   }, org?.riskThresholdPct)
 

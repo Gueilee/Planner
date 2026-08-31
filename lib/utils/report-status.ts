@@ -1,4 +1,5 @@
-import { computeExpectedPct, computeScheduleStatus, DEFAULT_RISK_THRESHOLD_PCT } from "./schedule-status"
+import { DEFAULT_RISK_THRESHOLD_PCT } from "./schedule-status"
+import { computeScheduleCascade } from "./schedule-cascade"
 
 type TL = "GREEN" | "YELLOW" | "RED"
 
@@ -11,12 +12,16 @@ type ProjectSnapshot = {
   expectedStart:  Date | null
   expectedEnd:    Date | null
   tasks: {
+    id:           string
     status:       string
     progress:     number
+    wbsAreaId:    string | null
+    startDate:    Date | null
     endDate:      Date | null
     budgetedCost: number | null
     actualCost:   number | null
   }[]
+  wbsAreas: { id: string; weight: number | null }[]
   risks: { status: string }[]
 }
 
@@ -54,24 +59,18 @@ export function computeReportStatus(
   if (critHighRisks >= 5 && cost === "YELLOW") cost = "RED"
 
   // ── CRONOGRAMA ─────────────────────────────────────────────────────────────
-  // Usa a mesma regra canônica de progresso esperado/variação do resto do
-  // sistema (lib/utils/schedule-status.ts), com o limite de risco configurável
-  // por organização — em vez de uma fórmula própria e divergente.
+  // Cascata Tarefa → Módulo → Projeto (lib/utils/schedule-cascade.ts): cada
+  // tarefa tem seu próprio % esperado pelo calendário, agregado em cascata —
+  // em vez de comparar só a data de início/fim do projeto como um todo.
   let schedule: TL = "GREEN"
   if (!isFinished) {
     if (p.expectedEnd && p.expectedEnd < today) {
       // Prazo final já passou e projeto não concluído → vermelho imediato
       schedule = "RED"
-    } else {
-      const total = p.tasks.length
-      if (total > 0) {
-        const actual        = Math.round(p.tasks.reduce((s, t) => s + t.progress, 0) / total)
-        const expected      = computeExpectedPct(p.expectedStart, p.expectedEnd, today)
-        const scheduleStatus = computeScheduleStatus(actual, expected, riskThresholdPct)
-
-        if      (scheduleStatus === "DELAYED") schedule = "RED"
-        else if (scheduleStatus === "AT_RISK") schedule = "YELLOW"
-      }
+    } else if (p.tasks.length > 0) {
+      const cascade = computeScheduleCascade(p.tasks, p.wbsAreas, riskThresholdPct, today)
+      if      (cascade.scheduleStatus === "DELAYED") schedule = "RED"
+      else if (cascade.scheduleStatus === "AT_RISK") schedule = "YELLOW"
     }
   }
 
