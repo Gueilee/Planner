@@ -802,7 +802,7 @@ export function SCurveClient({ projectId, initialData }: SCurveClientProps) {
               style={{ background: dark ? "rgba(59,130,246,0.08)" : "#EFF6FF", borderColor: dark ? "rgba(59,130,246,0.2)" : "#BFDBFE" }}>
               <Info className="w-4 h-4 mt-0.5 shrink-0 text-blue-400" />
               <p className="text-xs text-blue-300" style={{ color: dark ? "#93C5FD" : "#1D4ED8" }}>
-                <strong>Metodologia:</strong> Planejado e Realizado são a média simples das atividades de topo do Cronograma — a mesma base usada em Detalhes do Projeto e Status Report, para o "Realizado Hoje" nunca divergir do progresso do projeto. O Planejado distribui o avanço uniformemente entre início e fim de cada atividade; o Realizado reconstrói, com as datas reais de início/conclusão, como o progresso de cada atividade evoluiu no tempo até chegar ao seu % atual. A tendência é calculada com a velocidade média das últimas {data?.granularity === "month" ? "3 semanas" : "4 semanas"} de execução.
+                <strong>Metodologia:</strong> Planejado e Realizado são a média simples das tarefas-folha do Cronograma (sem peso por dias, horas ou custo) — a mesma base usada em Detalhes do Projeto e Status Report, para o "Realizado Hoje" nunca divergir do progresso do projeto. O Planejado distribui o avanço uniformemente entre início e fim de cada tarefa; o Realizado reconstrói, com as datas reais de início/conclusão, como o progresso de cada tarefa evoluiu no tempo até chegar ao seu % atual. A tendência é calculada com a velocidade média das últimas {data?.granularity === "month" ? "3 semanas" : "4 semanas"} de execução.
               </p>
             </div>
 

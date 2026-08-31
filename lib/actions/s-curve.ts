@@ -61,13 +61,14 @@ export type SCurvePayload = {
 }
 
 // ─── Curve algorithm ──────────────────────────────────────────────────────────
-// Usa as mesmas tarefas-FOLHA, ponderadas pela mesma duração planejada, do
-// Cronograma (lib/utils/project-progress.ts::computeProjectProgress) — para o
-// ponto de "hoje" da Curva S nunca divergir do % mostrado em Cronograma/
-// Detalhes do Projeto/Status Report. Contar "Atividades" de topo como
-// unidades iguais (o que a Curva S fazia antes) sub-pondera fases com várias
-// tarefas substanciais e super-pondera fases de 1 tarefa só (ex.: uma reunião
-// de encerramento) — por isso a troca para tarefa-folha ponderada por duração.
+// Usa as mesmas tarefas-FOLHA do Cronograma
+// (lib/utils/project-progress.ts::computeProjectProgress), em média simples
+// (sem peso por dias, horas ou custo — por decisão), para o ponto de "hoje"
+// da Curva S nunca divergir do % mostrado em Cronograma/Detalhes do Projeto/
+// Status Report. Contar "Atividades" de topo como unidades iguais (o que a
+// Curva S fazia antes) sub-pondera fases com várias tarefas substanciais e
+// super-pondera fases de 1 tarefa só (ex.: uma reunião de encerramento) —
+// por isso a troca para tarefa-folha.
 
 type RawTask = {
   id: string
@@ -88,30 +89,18 @@ function linearFraction(s: Date, e: Date, T: Date): number {
   return (T.getTime() - s.getTime()) / span
 }
 
-// Mesmo peso de lib/utils/project-progress.ts: duração planejada em dias
-// (mínimo 1), ou 1 quando faltar alguma das datas.
-function taskWeight(startDate: Date | null, endDate: Date | null): number {
-  if (!startDate || !endDate) return 1
-  const days = Math.round((endDate.getTime() - startDate.getTime()) / 86_400_000)
-  return Math.max(1, days)
-}
-
 // % esperado por tarefa (tempo decorrido ÷ duração) — mesma lógica de
 // computeExpectedPct (lib/utils/schedule-status.ts), aplicada a cada ponto da
-// série em vez de só "hoje", ponderada pela duração de cada tarefa.
+// série em vez de só "hoje". Média simples entre as tarefas.
 function computePlanned(tasks: RawTask[], timePoints: Date[]): number[] {
-  if (tasks.length === 0) return timePoints.map(() => 0)
+  const withDates = tasks.filter((t) => t.endDate)
+  if (withDates.length === 0) return timePoints.map(() => 0)
   return timePoints.map((T) => {
-    let weightedSum = 0
-    let totalWeight = 0
-    for (const t of tasks) {
-      if (!t.endDate) continue
-      const start  = t.startDate ?? t.endDate
-      const w      = taskWeight(start, t.endDate)
-      weightedSum += linearFraction(start, t.endDate, T) * 100 * w
-      totalWeight += w
-    }
-    return totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 0
+    const sum = withDates.reduce((s, t) => {
+      const start = t.startDate ?? t.endDate!
+      return s + linearFraction(start, t.endDate!, T) * 100
+    }, 0)
+    return Math.round(sum / withDates.length)
   })
 }
 
@@ -119,30 +108,25 @@ function computePlanned(tasks: RawTask[], timePoints: Date[]): number[] {
 // linearmente de 0 até o progresso ATUAL da tarefa entre o início real e a
 // conclusão (ou "hoje", se ainda em andamento) — por isso, no ponto "hoje",
 // o valor de cada tarefa é exatamente o seu progress atual, e a média
-// ponderada das tarefas-folha fecha exatamente com o % do Cronograma.
+// simples das tarefas-folha fecha exatamente com o % do Cronograma.
 function computeRealized(tasks: RawTask[], timePoints: Date[], today: Date): (number | null)[] {
   if (tasks.length === 0) return timePoints.map(() => 0)
 
   return timePoints.map((T) => {
     if (isAfter(T, today)) return null
 
-    let weightedSum = 0
-    let totalWeight = 0
-    for (const t of tasks) {
-      const w = taskWeight(t.startDate, t.endDate)
-      totalWeight += w
-
-      if (!t.actualStart || isAfter(t.actualStart, T)) continue
-      if (t.progress <= 0) continue
+    const sum = tasks.reduce((s, t) => {
+      if (!t.actualStart || isAfter(t.actualStart, T)) return s
+      if (t.progress <= 0) return s
 
       const rampEnd = t.completedAt ?? t.actualEnd ?? today
-      if (!isAfter(rampEnd, t.actualStart) || !isBefore(T, rampEnd)) { weightedSum += t.progress * w; continue }
+      if (!isAfter(rampEnd, t.actualStart) || !isBefore(T, rampEnd)) return s + t.progress
 
       const elapsed = (T.getTime() - t.actualStart.getTime()) / (rampEnd.getTime() - t.actualStart.getTime())
-      weightedSum += t.progress * elapsed * w
-    }
+      return s + t.progress * elapsed
+    }, 0)
 
-    return totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 0
+    return Math.round(sum / tasks.length)
   })
 }
 
@@ -152,15 +136,11 @@ function computeBaselineCurve(
 ): number[] {
   if (snaps.length === 0) return timePoints.map(() => 0)
   return timePoints.map((T) => {
-    let weightedSum = 0
-    let totalWeight = 0
-    for (const snap of snaps) {
+    const sum = snaps.reduce((s, snap) => {
       const start = snap.plannedStart ?? snap.plannedEnd
-      const w     = taskWeight(start, snap.plannedEnd)
-      weightedSum += linearFraction(start, snap.plannedEnd, T) * 100 * w
-      totalWeight += w
-    }
-    return totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 0
+      return s + linearFraction(start, snap.plannedEnd, T) * 100
+    }, 0)
+    return Math.round(sum / snaps.length)
   })
 }
 
