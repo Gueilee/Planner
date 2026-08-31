@@ -4,7 +4,7 @@ import { useState, useTransition, useRef } from "react"
 import {
   LayoutTemplate, Plus, Pencil, Trash2, ChevronRight, ChevronDown,
   Loader2, X, Check, Milestone, Clock, Copy, Star,
-  FolderTree, Zap, Award, Globe2, Layers, BookOpen,
+  FolderTree, Zap, Award, Globe2, Layers, BookOpen, Warehouse,
 } from "lucide-react"
 import {
   createTemplate, updateTemplate, deleteTemplate,
@@ -19,6 +19,7 @@ const TYPE_CONFIG: Record<string, { label: string; icon: React.ElementType; colo
   QUALIDADE:    { label: "Qualidade",          icon: Award,      color: "#10B981", bg: "rgba(16,185,129,0.08)",  border: "rgba(16,185,129,0.25)" },
   CERTIFICACAO: { label: "Certificações",      icon: Star,       color: "#F59E0B", bg: "rgba(245,158,11,0.08)",  border: "rgba(245,158,11,0.25)" },
   EXTERNO:      { label: "Externo / Cliente",  icon: Globe2,     color: "#2463FF", bg: "rgba(36,99,255,0.08)",   border: "rgba(36,99,255,0.25)"  },
+  ARMAZEM:      { label: "Armazéns",           icon: Warehouse,  color: "#EA580C", bg: "rgba(234,88,12,0.08)",   border: "rgba(234,88,12,0.25)"  },
   CUSTOM:       { label: "Personalizado",      icon: Layers,     color: "#64748B", bg: "rgba(100,116,139,0.08)", border: "rgba(100,116,139,0.25)"},
 }
 
@@ -260,7 +261,7 @@ export function TemplatesClient({ templates: initialTemplates, userRole }: Props
     })
   }
 
-  const typeKeys = ["AUTOMACAO", "QUALIDADE", "CERTIFICACAO", "EXTERNO", "CUSTOM"]
+  const typeKeys = ["AUTOMACAO", "QUALIDADE", "CERTIFICACAO", "EXTERNO", "ARMAZEM", "CUSTOM"]
 
   return (
     <div className="flex flex-col h-full bg-[#F8F9FC]">

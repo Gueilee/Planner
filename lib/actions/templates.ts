@@ -200,6 +200,76 @@ const DEFAULT_TEMPLATES: Omit<Template, "id" | "createdById" | "createdAt">[] = 
       { id:"", templateId:"", wbsCode:"4.2.3", parentCode:"4.2", title:"Conclusão do Projeto",                                                    estimatedEffort:null, isMilestone:false, predecessorCodes:["4.2.2"], durationDays:1, order:45 },
     ],
   },
+  {
+    name: "Armazéns",
+    description: "Modelo para projetos de implantação de novos clientes nos Armazéns da Rede de Licenciamento — documentação e contrato, operação, infraestrutura, integrações de sistema e ramp-up",
+    projectType: "ARMAZEM",
+    color: "#EA580C",
+    isBuiltIn: true,
+    tasks: [
+      // 1. Documentação / Contrato
+      { id:"", templateId:"", wbsCode:"1",   parentCode:null, title:"1 - Documentação / Contrato",                                estimatedEffort:null, isMilestone:false, predecessorCodes:[],      durationDays:1, order:1 },
+      { id:"", templateId:"", wbsCode:"1.1", parentCode:"1",  title:"Envio do Cartão CNPJ (Abertura de filial)",                   estimatedEffort:null, isMilestone:false, predecessorCodes:[],      durationDays:1, order:2 },
+      { id:"", templateId:"", wbsCode:"1.2", parentCode:"1",  title:"Definir o Regime de armazenagem",                             estimatedEffort:null, isMilestone:false, predecessorCodes:[],      durationDays:2, order:3 },
+      { id:"", templateId:"", wbsCode:"1.3", parentCode:"1",  title:"Atualizar e enviar a matriz de comunicação",                  estimatedEffort:null, isMilestone:false, predecessorCodes:["1.1"], durationDays:1, order:4 },
+      { id:"", templateId:"", wbsCode:"1.4", parentCode:"1",  title:"Contrato de Sub Locação (comodato)",                          estimatedEffort:null, isMilestone:false, predecessorCodes:["1.2"], durationDays:5, order:5 },
+      { id:"", templateId:"", wbsCode:"1.5", parentCode:"1",  title:"Contrato de armazenagem (CD2)",                               estimatedEffort:null, isMilestone:true,  predecessorCodes:["1.4"], durationDays:1, order:6 },
+
+      // 2. Operação
+      { id:"", templateId:"", wbsCode:"2",   parentCode:null, title:"2 - Operação",                                                estimatedEffort:null, isMilestone:false, predecessorCodes:[],      durationDays:1, order:7 },
+      { id:"", templateId:"", wbsCode:"2.1", parentCode:"2",  title:"Cadastro dos produtos",                                       estimatedEffort:null, isMilestone:false, predecessorCodes:["1.5"], durationDays:5,  order:8 },
+      { id:"", templateId:"", wbsCode:"2.2", parentCode:"2",  title:"Transferência do estoque",                                    estimatedEffort:null, isMilestone:false, predecessorCodes:["2.1"], durationDays:3,  order:9 },
+      { id:"", templateId:"", wbsCode:"2.3", parentCode:"2",  title:"Divulgar o cronograma de Importação",                         estimatedEffort:null, isMilestone:false, predecessorCodes:["1.5"], durationDays:1,  order:10 },
+      { id:"", templateId:"", wbsCode:"2.4", parentCode:"2",  title:"Dimensionamento da operação (Contratações)",                  estimatedEffort:null, isMilestone:false, predecessorCodes:["1.5"], durationDays:10, order:11 },
+      { id:"", templateId:"", wbsCode:"2.5", parentCode:"2",  title:"Revisão das capacidades operacionais",                        estimatedEffort:null, isMilestone:false, predecessorCodes:["2.4"], durationDays:3,  order:12 },
+      { id:"", templateId:"", wbsCode:"2.6", parentCode:"2",  title:"Layout / Demarcação",                                         estimatedEffort:null, isMilestone:false, predecessorCodes:["1.5"], durationDays:5,  order:13 },
+      { id:"", templateId:"", wbsCode:"2.7", parentCode:"2",  title:"Treinamento Interno (Integração Vendemmia)",                  estimatedEffort:null, isMilestone:false, predecessorCodes:["2.4"], durationDays:2,  order:14 },
+      { id:"", templateId:"", wbsCode:"2.8", parentCode:"2",  title:"Inventário dos Produtos",                                     estimatedEffort:null, isMilestone:false, predecessorCodes:["2.2"], durationDays:1,  order:15 },
+
+      // 3. Infraestrutura
+      { id:"", templateId:"", wbsCode:"3",    parentCode:null, title:"3 - Infraestrutura",                                         estimatedEffort:null, isMilestone:false, predecessorCodes:[],      durationDays:1, order:16 },
+      { id:"", templateId:"", wbsCode:"3.1",  parentCode:"3",  title:"Necessidade de paleteiras (compra/troca ou transferência)",   estimatedEffort:null, isMilestone:false, predecessorCodes:["1.5"], durationDays:5, order:17 },
+      { id:"", templateId:"", wbsCode:"3.2",  parentCode:"3",  title:"Adequação elétrica",                                         estimatedEffort:null, isMilestone:false, predecessorCodes:["1.5"], durationDays:10, order:18 },
+      { id:"", templateId:"", wbsCode:"3.3",  parentCode:"3",  title:"Adequação de rede",                                          estimatedEffort:null, isMilestone:false, predecessorCodes:["1.5"], durationDays:5, order:19 },
+      { id:"", templateId:"", wbsCode:"3.4",  parentCode:"3",  title:"Bancadas para recebimento, Packing e Expedição (02 unid.)",   estimatedEffort:null, isMilestone:false, predecessorCodes:["1.5"], durationDays:5, order:20 },
+      { id:"", templateId:"", wbsCode:"3.5",  parentCode:"3",  title:"Quadros de produtividade (01 unid.)",                        estimatedEffort:null, isMilestone:false, predecessorCodes:["2.6"], durationDays:3, order:21 },
+      { id:"", templateId:"", wbsCode:"3.6",  parentCode:"3",  title:"Quadros Heijunka",                                           estimatedEffort:null, isMilestone:false, predecessorCodes:["2.6"], durationDays:3, order:22 },
+      { id:"", templateId:"", wbsCode:"3.7",  parentCode:"3",  title:"Placas de Cliente (Transferência)",                          estimatedEffort:null, isMilestone:false, predecessorCodes:["1.5"], durationDays:2, order:23 },
+      { id:"", templateId:"", wbsCode:"3.8",  parentCode:"3",  title:"Impressora Zebra (operação) (02 unid.)",                     estimatedEffort:null, isMilestone:false, predecessorCodes:["1.5"], durationDays:3, order:24 },
+      { id:"", templateId:"", wbsCode:"3.9",  parentCode:"3",  title:"Computador (02 unid.)",                                      estimatedEffort:null, isMilestone:false, predecessorCodes:["1.5"], durationDays:3, order:25 },
+      { id:"", templateId:"", wbsCode:"3.10", parentCode:"3",  title:"Coletor (compra ou transferência) (2 unid.)",                estimatedEffort:null, isMilestone:false, predecessorCodes:["3.3"], durationDays:3, order:26 },
+
+      // 4. Integrações
+      { id:"", templateId:"", wbsCode:"4",   parentCode:null, title:"4 - Integrações",                                             estimatedEffort:null, isMilestone:false, predecessorCodes:[],      durationDays:1, order:27 },
+      { id:"", templateId:"", wbsCode:"4.1", parentCode:"4",  title:"Definição do Modelo da Integração",                           estimatedEffort:null, isMilestone:false, predecessorCodes:["1.5"], durationDays:3,  order:28 },
+      { id:"", templateId:"", wbsCode:"4.2", parentCode:"4",  title:"Envio de Documentação e das credenciais de acesso",           estimatedEffort:null, isMilestone:false, predecessorCodes:["4.1"], durationDays:2,  order:29 },
+      { id:"", templateId:"", wbsCode:"4.3", parentCode:"4",  title:"Configuração do ambiente de Homologação WMS",                 estimatedEffort:null, isMilestone:false, predecessorCodes:["4.2"], durationDays:5,  order:30 },
+      { id:"", templateId:"", wbsCode:"4.4", parentCode:"4",  title:"Desenvolvimento de Interfaces ERP x WMS / WMS x ERP (ERP Próprio)", estimatedEffort:null, isMilestone:false, predecessorCodes:["4.3"], durationDays:10, order:31 },
+      { id:"", templateId:"", wbsCode:"4.5", parentCode:"4",  title:"Testes Unitários de IT",                                      estimatedEffort:null, isMilestone:false, predecessorCodes:["4.4"], durationDays:3,  order:32 },
+      { id:"", templateId:"", wbsCode:"4.6", parentCode:"4",  title:"Preparação de cenário para UAT",                              estimatedEffort:null, isMilestone:false, predecessorCodes:["4.5"], durationDays:2,  order:33 },
+      { id:"", templateId:"", wbsCode:"4.7", parentCode:"4",  title:"UAT (Aceitação) Face to Face",                                estimatedEffort:null, isMilestone:false, predecessorCodes:["4.6"], durationDays:3,  order:34 },
+      { id:"", templateId:"", wbsCode:"4.8", parentCode:"4",  title:"Configuração e Go Live do ambiente de Produção WMS",          estimatedEffort:null, isMilestone:true,  predecessorCodes:["4.7"], durationDays:1,  order:35 },
+      { id:"", templateId:"", wbsCode:"4.9", parentCode:"4",  title:"Parametrização de novo CNPJ do Vendemmia Analytics",          estimatedEffort:null, isMilestone:false, predecessorCodes:["4.8"], durationDays:1,  order:36 },
+
+      // 5. Implementação
+      { id:"", templateId:"", wbsCode:"5",   parentCode:null, title:"5 - Implementação",                                           estimatedEffort:null, isMilestone:false, predecessorCodes:[],      durationDays:1, order:37 },
+      { id:"", templateId:"", wbsCode:"5.1", parentCode:"5",  title:"Confecção Ata 1º encontro",                                   estimatedEffort:null, isMilestone:false, predecessorCodes:[],      durationDays:1, order:38 },
+      { id:"", templateId:"", wbsCode:"5.2", parentCode:"5",  title:"Elaboração e Divulgações do Cronograma e suas atualizações",   estimatedEffort:null, isMilestone:false, predecessorCodes:["5.1"], durationDays:3, order:39 },
+      { id:"", templateId:"", wbsCode:"5.3", parentCode:"5",  title:"Reunião com o time para revisões dos fluxos Operacionais",     estimatedEffort:null, isMilestone:false, predecessorCodes:["5.2"], durationDays:1, order:40 },
+      { id:"", templateId:"", wbsCode:"5.4", parentCode:"5",  title:"Kick-off Interno VENDEMMIA",                                   estimatedEffort:null, isMilestone:true,  predecessorCodes:["5.3"], durationDays:1, order:41 },
+      { id:"", templateId:"", wbsCode:"5.5", parentCode:"5",  title:"1ª Reunião de Status do Projeto, Cronograma e Análise de Riscos (Interno)",  estimatedEffort:null, isMilestone:false, predecessorCodes:["5.4"], durationDays:1, order:42 },
+      { id:"", templateId:"", wbsCode:"5.6", parentCode:"5",  title:"2ª Reunião de Status do Projeto, Cronograma e Análise de Riscos (Externo)",  estimatedEffort:null, isMilestone:false, predecessorCodes:["5.5"], durationDays:1, order:43 },
+      { id:"", templateId:"", wbsCode:"5.7", parentCode:"5",  title:"3ª Reunião de Status do Projeto, Cronograma e Análise de Riscos (Externo)",  estimatedEffort:null, isMilestone:false, predecessorCodes:["5.6"], durationDays:1, order:44 },
+      { id:"", templateId:"", wbsCode:"5.8", parentCode:"5",  title:"4ª Reunião de Status do Projeto, Cronograma e Análise de Riscos (Externo)",  estimatedEffort:null, isMilestone:false, predecessorCodes:["5.7"], durationDays:1, order:45 },
+      { id:"", templateId:"", wbsCode:"5.9", parentCode:"5",  title:"5ª Reunião de Status do Projeto, Cronograma e Análise de Riscos (Externo)",  estimatedEffort:null, isMilestone:false, predecessorCodes:["5.8"], durationDays:1, order:46 },
+
+      // 6. Ramp Up
+      { id:"", templateId:"", wbsCode:"6",   parentCode:null, title:"6 - Ramp Up",                                                 estimatedEffort:null, isMilestone:false, predecessorCodes:[], durationDays:1, order:47 },
+      { id:"", templateId:"", wbsCode:"6.1", parentCode:"6",  title:"Reunião de Go / No Go",                                       estimatedEffort:null, isMilestone:true,  predecessorCodes:["2.7","2.8","3.5","3.6","3.7","3.8","3.9","3.10","4.9","5.9"], durationDays:1, order:48 },
+      { id:"", templateId:"", wbsCode:"6.2", parentCode:"6",  title:"Go Live / Ramp-up",                                           estimatedEffort:null, isMilestone:true,  predecessorCodes:["6.1"], durationDays:1, order:49 },
+      { id:"", templateId:"", wbsCode:"6.3", parentCode:"6",  title:"Treinamento Vendemmia Analytics",                             estimatedEffort:null, isMilestone:false, predecessorCodes:["6.2"], durationDays:2, order:50 },
+    ],
+  },
 ]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -232,10 +302,14 @@ export async function seedDefaultTemplates() {
   const session = await auth()
   if (!session?.user?.id) return
 
-  const existing = await db.scheduleTemplate.count({ where: { isBuiltIn: true } })
-  if (existing >= 4) return
+  // Por nome (não por contagem) — assim um novo modelo padrão adicionado ao
+  // array DEFAULT_TEMPLATES é semeado mesmo quando os anteriores já existem.
+  const existingNames = new Set(
+    (await db.scheduleTemplate.findMany({ where: { isBuiltIn: true }, select: { name: true } })).map((t) => t.name)
+  )
 
   for (const tpl of DEFAULT_TEMPLATES) {
+    if (existingNames.has(tpl.name)) continue
     const created = await db.scheduleTemplate.create({
       data: {
         name:        tpl.name,

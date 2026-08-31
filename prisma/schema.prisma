@@ -774,7 +774,7 @@ model ScheduleTemplate {
   id          String  @id @default(cuid())
   name        String
   description String?
-  projectType String  // "AUTOMACAO" | "QUALIDADE" | "CERTIFICACAO" | "EXTERNO" | "CUSTOM"
+  projectType String  // "AUTOMACAO" | "QUALIDADE" | "CERTIFICACAO" | "EXTERNO" | "ARMAZEM" | "CUSTOM"
   color       String?
   isBuiltIn   Boolean @default(false)
 
