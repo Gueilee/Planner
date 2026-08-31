@@ -7,6 +7,8 @@ import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { generateCheckpointATADirect } from "@/lib/actions/ata"
 import { deriveStatus, deriveProgress } from "@/lib/utils/task-progress"
+import { detectScheduleStatusWorsening, DEFAULT_RISK_THRESHOLD_PCT } from "@/lib/utils/schedule-status"
+import { notifyUser, notifyProjectMembers } from "@/lib/notify"
 
 export type CheckpointFrequency = "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY"
 
@@ -153,6 +155,52 @@ export async function saveCheckpoint(data: CheckpointInput) {
   revalidatePath(`/projects/${data.projectId}`)
   revalidatePath(`/projects/${data.projectId}/schedule`)
   revalidatePath(`/projects/${data.projectId}/kanban`)
+
+  // ── Alertas proativos ──────────────────────────────────────────────────────
+  try {
+    const project = await db.project.findUnique({ where: { id: data.projectId }, select: { title: true } })
+
+    // Checkpoint registrado — avisa os membros do projeto (quem quiser saber)
+    await notifyProjectMembers(data.projectId, "checkpointAdded", {
+      type:    "checkpoint_added",
+      title:   "Checkpoint registrado",
+      message: `Um checkpoint ${FREQ_LABELS[data.frequency].toLowerCase()} foi registrado no projeto "${project?.title ?? ""}".`,
+      link:    `/projects/${data.projectId}`,
+    })
+
+    // Tarefas que pioraram de faixa de prazo neste checkpoint — avisa o responsável
+    const org = await db.organization.findUnique({
+      where:  { id: session.user.organizationId },
+      select: { riskThresholdPct: true },
+    })
+    const threshold = org?.riskThresholdPct ?? DEFAULT_RISK_THRESHOLD_PCT
+    const taskIds   = data.taskUpdates.map((u) => u.taskId)
+    const respById  = taskIds.length
+      ? new Map(
+          (await db.scheduleTask.findMany({ where: { id: { in: taskIds } }, select: { id: true, responsibleId: true } }))
+            .map((t) => [t.id, t.responsibleId] as const)
+        )
+      : new Map<string, string | null>()
+
+    for (const upd of data.taskUpdates) {
+      const responsibleId = respById.get(upd.taskId)
+      if (!responsibleId) continue
+      const { to, worsened } = detectScheduleStatusWorsening(
+        upd.oldProgress, upd.progress,
+        upd.startDate ? new Date(upd.startDate) : null,
+        upd.endDate   ? new Date(upd.endDate)   : null,
+        threshold,
+      )
+      if (worsened) {
+        await notifyUser(responsibleId, "taskOverdue", {
+          type:    "task_schedule_status",
+          title:   to === "DELAYED" ? "Tarefa atrasada" : "Tarefa em risco",
+          message: `"${upd.title}" está ${to === "DELAYED" ? "atrasada" : "em risco"} em relação ao prazo planejado.`,
+          link:    `/projects/${data.projectId}/schedule`,
+        })
+      }
+    }
+  } catch { /* alertas são best-effort — não bloqueiam o checkpoint */ }
 
   // Generate rich ATA using the direct data from this session
   let ataContent: string | null = null

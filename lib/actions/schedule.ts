@@ -7,6 +7,8 @@ import bcrypt from "bcryptjs"
 import { deriveStatus, deriveProgress, type AncestorUpdate } from "@/lib/utils/task-progress"
 import { nextWorkingDay, addWorkingDays, workingDaysBetween } from "@/lib/working-days"
 import { differenceInDays } from "date-fns"
+import { detectScheduleStatusWorsening, DEFAULT_RISK_THRESHOLD_PCT } from "@/lib/utils/schedule-status"
+import { notifyUser } from "@/lib/notify"
 
 export type TaskInput = {
   projectId: string
@@ -320,6 +322,27 @@ export async function updateTask(id: string, projectId: string, data: Partial<Ta
 
   const updated = await db.scheduleTask.findUnique({ where: { id }, select: { parentId: true } })
   const ancestors = updated?.parentId ? await propagateParentUp(updated.parentId) : []
+
+  // Alerta proativo: a tarefa piorou de faixa de prazo (on track → at risk/delayed,
+  // ou at risk → delayed) — avisa o responsável, respeitando a preferência dele.
+  if (data.progress !== undefined && task.responsibleId) {
+    const org = await db.organization.findUnique({
+      where:  { id: session.user.organizationId },
+      select: { riskThresholdPct: true },
+    })
+    const { to, worsened } = detectScheduleStatusWorsening(
+      curProgress, finalProgress, task.startDate, task.endDate,
+      org?.riskThresholdPct ?? DEFAULT_RISK_THRESHOLD_PCT,
+    )
+    if (worsened) {
+      await notifyUser(task.responsibleId, "taskOverdue", {
+        type:    "task_schedule_status",
+        title:   to === "DELAYED" ? "Tarefa atrasada" : "Tarefa em risco",
+        message: `"${task.title}" está ${to === "DELAYED" ? "atrasada" : "em risco"} em relação ao prazo planejado.`,
+        link:    `/projects/${projectId}/schedule`,
+      })
+    }
+  }
 
   // Cascade to successor tasks when planned dates change
   const successorUpdates =

@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 import { auth } from "@/auth"
 import { revalidatePath } from "next/cache"
 import { ProjectStatus, TaskStatus, RiskLevel } from "@/lib/generated/prisma/enums"
+import { notifyProjectMembers } from "@/lib/notify"
 
 // ─── Project ───────────────────────────────────────────────────────────────
 
@@ -266,16 +267,29 @@ export async function createRisk(projectId: string, data: {
   const session = await auth()
   if (!session?.user) throw new Error("Não autorizado")
 
+  const level = (data.level as import("@/lib/generated/prisma/enums").RiskLevel) ?? "MEDIUM"
+
   await db.risk.create({
     data: {
       projectId,
       description: data.description,
-      status:      (data.level as import("@/lib/generated/prisma/enums").RiskLevel) ?? "MEDIUM",
+      status:      level,
       probability: data.probability ?? "MÉDIO",
       impact:      data.impact      ?? "MÉDIO",
       mitigation:  data.mitigation  ?? null,
     },
   })
+
+  if (level === "CRITICAL") {
+    const project = await db.project.findUnique({ where: { id: projectId }, select: { title: true } })
+    await notifyProjectMembers(projectId, "criticalRisk", {
+      type:    "critical_risk_added",
+      title:   "Risco crítico identificado",
+      message: `Um novo risco crítico foi registrado no projeto "${project?.title ?? ""}": ${data.description}`,
+      link:    `/projects/${projectId}`,
+    })
+  }
+
   revalidatePath(`/projects/${projectId}`)
 }
 
