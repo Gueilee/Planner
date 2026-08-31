@@ -584,7 +584,7 @@ code { font-family:'JetBrains Mono','Fira Code','Consolas',monospace; font-size:
     <div class="db-field"><span class="db-field-name">title</span><span class="db-field-type">String</span><span>NOT NULL</span><span class="db-field-desc">Nome do projeto</span></div>
     <div class="db-field"><span class="db-field-name">description</span><span class="db-field-type">String?</span><span>NULLABLE</span><span class="db-field-desc">Descrição resumida</span></div>
     <div class="db-field"><span class="db-field-name">status</span><span class="db-field-type">ProjectStatus</span><span>DEFAULT PLANNING</span><span class="db-field-desc">Status do ciclo de vida do projeto</span></div>
-    <div class="db-field"><span class="db-field-name">projectArea</span><span class="db-field-type">ProjectArea</span><span>DEFAULT TECNOLOGIA</span><span class="db-field-desc">TECNOLOGIA | QUALIDADE | ESTRATEGICO</span></div>
+    <div class="db-field"><span class="db-field-name">projectArea</span><span class="db-field-type">ProjectArea</span><span>DEFAULT TECNOLOGIA</span><span class="db-field-desc">TECNOLOGIA | QUALIDADE | ESTRATEGICO | ARMAZEM</span></div>
     <div class="db-field"><span class="db-field-name">origin</span><span class="db-field-type">String?</span><span>NULLABLE</span><span class="db-field-desc">Origem / motivação do projeto (Termo de Abertura)</span></div>
     <div class="db-field"><span class="db-field-name">scope</span><span class="db-field-type">String?</span><span>NULLABLE</span><span class="db-field-desc">Escopo definido</span></div>
     <div class="db-field"><span class="db-field-name">asIs / toBe</span><span class="db-field-type">String?</span><span>NULLABLE</span><span class="db-field-desc">Situação atual e situação desejada</span></div>
@@ -658,7 +658,7 @@ code { font-family:'JetBrains Mono','Fira Code','Consolas',monospace; font-size:
       <tr><td><strong>RiskLevel</strong></td><td>LOW, MEDIUM, HIGH, CRITICAL</td></tr>
       <tr><td><strong>MeetingType</strong></td><td>CHECKPOINT, STATUS_REPORT, GO_NO_GO, KICKOFF, PILOT, GO_LIVE, POST_GOLIVE, LESSONS_LEARNED, PROJECT_CLOSURE, OTHER</td></tr>
       <tr><td><strong>DocumentType</strong></td><td>PROJECT_OPENING, PROJECT_CLOSURE, LESSONS_LEARNED_DOC, STATUS_REPORT_DOC, GO_NO_GO_DECISION, TECHNICAL_PRESENTATION, KICKOFF, MEETING_ATA</td></tr>
-      <tr><td><strong>ProjectArea</strong></td><td>TECNOLOGIA, QUALIDADE, ESTRATEGICO</td></tr>
+      <tr><td><strong>ProjectArea</strong></td><td>TECNOLOGIA, QUALIDADE, ESTRATEGICO, ARMAZEM</td></tr>
       <tr><td><strong>ProjectPhase</strong></td><td>INITIATION, PLANNING, EXECUTION, MONITORING, CLOSURE</td></tr>
       <tr><td><strong>LessonInfluence</strong></td><td>POSITIVE, NEGATIVE, NEUTRAL</td></tr>
       <tr><td><strong>LessonImpact</strong></td><td>HIGH, MEDIUM, LOW</td></tr>

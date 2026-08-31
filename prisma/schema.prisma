@@ -114,6 +114,7 @@ enum ProjectArea {
   TECNOLOGIA
   QUALIDADE
   ESTRATEGICO
+  ARMAZEM
 }
 
 enum BenefitCategory {

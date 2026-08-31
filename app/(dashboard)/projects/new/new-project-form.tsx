@@ -99,13 +99,14 @@ const EMPTY_BENEFIT: BenefitItem = {
   category: "FINANCIAL", types: ["COST_REDUCTION"], customTypeName: "", description: "", impactLevel: "", frequency: "MONTHLY",
 }
 
-const AREAS = ["Tecnologia", "Projetos", "Qualidade", "Operações", "Financeiro", "Comercial",
+const AREAS = ["Tecnologia", "Projetos", "Qualidade", "Armazéns", "Operações", "Financeiro", "Comercial",
   "Transportes", "RH", "Marketing", "Compras", "Controller", "Diretoria"]
 
 const PROJECT_AREAS = [
   { value: "TECNOLOGIA",  label: "Tecnologia",            desc: "Sistemas, TI e projetos digitais", color: "#0891B2", icon: "💻" },
   { value: "QUALIDADE",   label: "Qualidade",             desc: "Melhoria contínua e certificações", color: "#059669", icon: "✅" },
   { value: "ESTRATEGICO", label: "Projetos Estratégicos", desc: "Iniciativas de alto impacto",       color: "#7B2FBE", icon: "🎯" },
+  { value: "ARMAZEM",     label: "Armazéns",              desc: "Rede de Licenciamento de Armazéns", color: "#EA580C", icon: "📦" },
 ]
 
 const ORIGINS = [
@@ -368,7 +369,7 @@ export function NewProjectForm({ users, currentUserId }: Props) {
 
                 <div>
                   <Label required>Portfólio / Área de Gestão</Label>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                     {PROJECT_AREAS.map(pa => {
                       const sel = form.projectArea === pa.value
                       return (

@@ -48,6 +48,7 @@ const ALL_ROLES = Object.entries(ROLE_LABELS) as [UserRole, string][]
 
 // Departamentos padronizados da Vendemmia
 const DEPARTMENTS = [
+  "Armazéns",
   "Comercial",
   "Controladoria",
   "Customer Success",

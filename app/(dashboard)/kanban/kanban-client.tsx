@@ -50,12 +50,13 @@ export type KanbanProject = {
 
 // ─── Area Config ──────────────────────────────────────────────────────────────
 
-type AreaKey = "ALL" | "TECNOLOGIA" | "QUALIDADE" | "ESTRATEGICO"
+type AreaKey = "ALL" | "TECNOLOGIA" | "QUALIDADE" | "ESTRATEGICO" | "ARMAZEM"
 
 const AREA_CFG: Record<string, { label: string; short: string; color: string; bg: string; border: string; icon: string }> = {
   TECNOLOGIA:  { label: "Tecnologia",            short: "TEC", color: "#0891B2", bg: "rgba(8,145,178,0.10)",   border: "rgba(8,145,178,0.25)",   icon: "💻" },
   QUALIDADE:   { label: "Qualidade",             short: "QUAL",color: "#059669", bg: "rgba(5,150,105,0.10)",   border: "rgba(5,150,105,0.25)",   icon: "✅" },
   ESTRATEGICO: { label: "Projetos Estratégicos", short: "EST", color: "#7B2FBE", bg: "rgba(123,47,190,0.10)", border: "rgba(123,47,190,0.25)", icon: "🎯" },
+  ARMAZEM:     { label: "Armazéns",              short: "ARM", color: "#EA580C", bg: "rgba(234,88,12,0.10)",  border: "rgba(234,88,12,0.25)",  icon: "📦" },
 }
 
 const AREA_FILTERS: { key: AreaKey; label: string; color: string }[] = [
@@ -63,6 +64,7 @@ const AREA_FILTERS: { key: AreaKey; label: string; color: string }[] = [
   { key: "TECNOLOGIA",  label: "Tecnologia",           color: "#0891B2" },
   { key: "QUALIDADE",   label: "Qualidade",            color: "#059669" },
   { key: "ESTRATEGICO", label: "Projetos Estratégicos",color: "#7B2FBE" },
+  { key: "ARMAZEM",     label: "Armazéns",             color: "#EA580C" },
 ]
 
 // ─── Column Config ────────────────────────────────────────────────────────────

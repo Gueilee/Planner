@@ -86,13 +86,14 @@ function projectProgress(p: ProjectRow): number {
 
 // ─── Area config ─────────────────────────────────────────────────────────────
 
-type AreaKey = "ALL" | "TECNOLOGIA" | "QUALIDADE" | "ESTRATEGICO"
+type AreaKey = "ALL" | "TECNOLOGIA" | "QUALIDADE" | "ESTRATEGICO" | "ARMAZEM"
 
 const AREA_TABS: { key: AreaKey; label: string; color: string }[] = [
   { key: "ALL",        label: "Todos",                color: "#2463FF" },
   { key: "TECNOLOGIA", label: "Tecnologia",           color: "#0891B2" },
   { key: "QUALIDADE",  label: "Qualidade",            color: "#059669" },
   { key: "ESTRATEGICO",label: "Projetos Estratégicos",color: "#7B2FBE" },
+  { key: "ARMAZEM",    label: "Armazéns",             color: "#EA580C" },
 ]
 
 // ─── Component ────────────────────────────────────────────────────────────────

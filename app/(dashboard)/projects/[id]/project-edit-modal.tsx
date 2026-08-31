@@ -181,6 +181,7 @@ const PROJECT_AREAS = [
   { value: "TECNOLOGIA",  label: "Tecnologia",            desc: "Sistemas, TI e projetos digitais", color: "#0891B2", icon: "💻" },
   { value: "QUALIDADE",   label: "Qualidade",             desc: "Melhoria contínua e certificações", color: "#059669", icon: "✅" },
   { value: "ESTRATEGICO", label: "Projetos Estratégicos", desc: "Iniciativas de alto impacto",       color: "#7B2FBE", icon: "🎯" },
+  { value: "ARMAZEM",     label: "Armazéns",              desc: "Rede de Licenciamento de Armazéns", color: "#EA580C", icon: "📦" },
 ]
 
 type Props = {
@@ -1444,7 +1445,7 @@ export function ProjectEditModal({ project, members, allUsers, risks, benefits }
                   )}
 
                   <Field label="Portfólio / Área de Gestão">
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
                       {PROJECT_AREAS.map(pa => {
                         const sel = form.projectArea === pa.value
                         return (

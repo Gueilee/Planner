@@ -7,7 +7,7 @@ export type AreaConfigItem = {
   icon:        string
 }
 
-export type AreaConfigs = Record<"TECNOLOGIA" | "QUALIDADE" | "ESTRATEGICO", AreaConfigItem>
+export type AreaConfigs = Record<"TECNOLOGIA" | "QUALIDADE" | "ESTRATEGICO" | "ARMAZEM", AreaConfigItem>
 
 export type OrgConfigData = {
   name:        string
@@ -21,4 +21,5 @@ export const DEFAULT_AREA_CONFIGS: AreaConfigs = {
   TECNOLOGIA:  { label: "Tecnologia",            color: "#0891B2", description: "Sistemas, TI e projetos digitais",  icon: "💻" },
   QUALIDADE:   { label: "Qualidade",             color: "#059669", description: "Melhoria contínua e certificações", icon: "✅" },
   ESTRATEGICO: { label: "Projetos Estratégicos", color: "#7B2FBE", description: "Iniciativas de alto impacto",       icon: "🎯" },
+  ARMAZEM:     { label: "Armazéns",              color: "#EA580C", description: "Rede de Licenciamento de Armazéns", icon: "📦" },
 }

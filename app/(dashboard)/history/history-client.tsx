@@ -1041,6 +1041,7 @@ const AREA_CFG: Record<string, { label: string; color: string; icon: string }> =
   TECNOLOGIA:  { label: "Tecnologia",            color: "#0891B2", icon: "💻" },
   QUALIDADE:   { label: "Qualidade",             color: "#059669", icon: "✅" },
   ESTRATEGICO: { label: "Projetos Estratégicos", color: "#7B2FBE", icon: "🎯" },
+  ARMAZEM:     { label: "Armazéns",              color: "#EA580C", icon: "📦" },
 }
 
 const ORIGIN_CFG: Record<string, { label: string; icon: string; color: string }> = {

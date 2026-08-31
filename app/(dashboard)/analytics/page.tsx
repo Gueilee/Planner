@@ -86,9 +86,10 @@ export default async function AnalyticsPage() {
       select: { department: true },
     })
     const dept = (dbUser?.department ?? "").toUpperCase().trim()
-    if (dept === "TECNOLOGIA")       userArea = "TECNOLOGIA"
-    else if (dept === "QUALIDADE")   userArea = "QUALIDADE"
-    else if (dept)                   userArea = "ESTRATEGICO"
+    if (dept === "TECNOLOGIA")            userArea = "TECNOLOGIA"
+    else if (dept === "QUALIDADE")        userArea = "QUALIDADE"
+    else if (dept === "ARMAZÉNS" || dept === "ARMAZENS" || dept === "ARMAZEM") userArea = "ARMAZEM"
+    else if (dept)                        userArea = "ESTRATEGICO"
   }
 
   const [projectsRaw, users, org] = await Promise.all([

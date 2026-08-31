@@ -57,13 +57,13 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (c: string)
 
 // ─── Area card ────────────────────────────────────────────────────────────────
 
-const ICON_OPTIONS = ["💻","✅","🎯","🔧","📊","🚀","⚡","🔬","💡","🏗️","🌐","📋"]
+const ICON_OPTIONS = ["💻","✅","🎯","📦","🔧","📊","🚀","⚡","🔬","💡","🏗️","🌐","📋"]
 
 function AreaCard({
   areaKey, config,
   onChange,
 }: {
-  areaKey: "TECNOLOGIA" | "QUALIDADE" | "ESTRATEGICO"
+  areaKey: "TECNOLOGIA" | "QUALIDADE" | "ESTRATEGICO" | "ARMAZEM"
   config: { label: string; color: string; description: string; icon: string }
   onChange: (k: keyof typeof config, v: string) => void
 }) {
@@ -345,12 +345,12 @@ export function OrganizationTab({
           </div>
           <div className="flex items-center gap-1.5 text-[10px] text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
             <Info className="w-3 h-3" />
-            3 áreas configuradas
+            4 áreas configuradas
           </div>
         </div>
 
         <div className="grid grid-cols-1 gap-4">
-          {(["TECNOLOGIA", "QUALIDADE", "ESTRATEGICO"] as const).map((key) => (
+          {(["TECNOLOGIA", "QUALIDADE", "ESTRATEGICO", "ARMAZEM"] as const).map((key) => (
             <div key={key}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-300">{key}</span>
@@ -374,7 +374,7 @@ export function OrganizationTab({
         <div className="mt-4 p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-start gap-2">
           <Tag className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
           <p className="text-[11px] text-slate-400 leading-relaxed">
-            As áreas são usadas para classificar projetos. As identificações internas (<span className="font-mono font-bold">TECNOLOGIA</span>, <span className="font-mono font-bold">QUALIDADE</span>, <span className="font-mono font-bold">ESTRATEGICO</span>) não mudam — apenas os rótulos e cores de exibição.
+            As áreas são usadas para classificar projetos. As identificações internas (<span className="font-mono font-bold">TECNOLOGIA</span>, <span className="font-mono font-bold">QUALIDADE</span>, <span className="font-mono font-bold">ESTRATEGICO</span>, <span className="font-mono font-bold">ARMAZEM</span>) não mudam — apenas os rótulos e cores de exibição.
           </p>
         </div>
       </div>

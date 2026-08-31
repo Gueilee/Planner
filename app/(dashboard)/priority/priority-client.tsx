@@ -241,13 +241,14 @@ function SortableCard({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-type AreaTab = "ALL" | "TECNOLOGIA" | "QUALIDADE" | "ESTRATEGICO"
+type AreaTab = "ALL" | "TECNOLOGIA" | "QUALIDADE" | "ESTRATEGICO" | "ARMAZEM"
 
 const AREA_TABS: { key: AreaTab; label: string; color: string; bg: string }[] = [
   { key: "ALL",         label: "Todos",                color: "#7B2FBE", bg: "rgba(123,47,190,0.08)" },
   { key: "TECNOLOGIA",  label: "Tecnologia",           color: "#0891B2", bg: "rgba(8,145,178,0.08)"  },
   { key: "QUALIDADE",   label: "Qualidade",            color: "#059669", bg: "rgba(5,150,105,0.08)"  },
   { key: "ESTRATEGICO", label: "Projetos Estratégicos",color: "#7B2FBE", bg: "rgba(123,47,190,0.08)" },
+  { key: "ARMAZEM",     label: "Armazéns",             color: "#EA580C", bg: "rgba(234,88,12,0.08)"  },
 ]
 
 export function PriorityClient({ projects: initial }: { projects: ProjectRow[] }) {
