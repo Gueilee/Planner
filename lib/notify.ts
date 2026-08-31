@@ -7,7 +7,7 @@ import { db } from "@/lib/db"
 export type NotificationPrefKey =
   | "projectDeadline" | "projectOnHold" | "projectCompleted"
   | "taskOverdue" | "taskAssigned" | "checkpointAdded"
-  | "meetingAdded" | "criticalRisk"
+  | "meetingAdded" | "criticalRisk" | "budgetExceeded"
 
 const DEFAULT_PREFS: Record<NotificationPrefKey, boolean> = {
   projectDeadline:  true,
@@ -18,6 +18,7 @@ const DEFAULT_PREFS: Record<NotificationPrefKey, boolean> = {
   checkpointAdded:  true,
   meetingAdded:     false,
   criticalRisk:     true,
+  budgetExceeded:   true,
 }
 
 async function isEnabled(userId: string, key: NotificationPrefKey): Promise<boolean> {

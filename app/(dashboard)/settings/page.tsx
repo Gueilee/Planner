@@ -48,6 +48,7 @@ export default async function SettingsPage() {
           checkpointAdded:  preferences.checkpointAdded,
           meetingAdded:     preferences.meetingAdded,
           criticalRisk:     preferences.criticalRisk,
+          budgetExceeded:   preferences.budgetExceeded,
         }}
         notifications={notifications}
         orgConfig={orgConfig}

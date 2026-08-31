@@ -13,6 +13,7 @@ export type NotificationPreferenceData = {
   checkpointAdded:  boolean
   meetingAdded:     boolean
   criticalRisk:     boolean
+  budgetExceeded:   boolean
 }
 
 export async function getNotificationPreferences() {
@@ -37,6 +38,7 @@ export async function getNotificationPreferences() {
     checkpointAdded:  true,
     meetingAdded:     false,
     criticalRisk:     true,
+    budgetExceeded:   true,
   }
 }
 

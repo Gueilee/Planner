@@ -756,6 +756,9 @@ model NotificationPreference {
   // Riscos
   criticalRisk     Boolean @default(true)   // risco crítico identificado
 
+  // Financeiro
+  budgetExceeded   Boolean @default(true)   // Capex/custo real ultrapassou o orçamento aprovado
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())

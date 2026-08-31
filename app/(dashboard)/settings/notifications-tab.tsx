@@ -6,7 +6,7 @@ import { ptBR } from "date-fns/locale"
 import {
   Bell, Check, Save, Loader2, Inbox, Trash2,
   Calendar, AlertTriangle, ShieldAlert, Users,
-  CheckCheck, Clock, CalendarClock, Info,
+  CheckCheck, Clock, CalendarClock, Info, DollarSign,
 } from "lucide-react"
 import {
   saveNotificationPreferences,
@@ -46,6 +46,7 @@ const NOTIF_CFG: Record<string, { icon: React.ElementType; color: string; bg: st
   CHECKPOINT_ADDED:    { icon: CheckCheck,      color: "#0891B2", bg: "#ECFEFF", border: "#A5F3FC" },
   MEETING_ADDED:       { icon: Calendar,        color: "#059669", bg: "#ECFDF5", border: "#A7F3D0" },
   CRITICAL_RISK:       { icon: ShieldAlert,     color: "#DC2626", bg: "#FEF2F2", border: "#FECACA" },
+  BUDGET_EXCEEDED:     { icon: DollarSign,      color: "#B45309", bg: "#FFFBEB", border: "#FDE68A" },
   DEFAULT:             { icon: Bell,            color: "#64748B", bg: "#F8FAFC", border: "#E2E8F0" },
 }
 
@@ -151,6 +152,12 @@ export function NotificationsTab({ preferences: initial, notifications: initialN
       label: "Riscos",
       items: [
         { key: "criticalRisk" as keyof Pref, label: "Risco crítico identificado", description: "Quando um risco crítico é adicionado a um projeto seu", icon: ShieldAlert, color: "#DC2626" },
+      ],
+    },
+    {
+      label: "Financeiro",
+      items: [
+        { key: "budgetExceeded" as keyof Pref, label: "Orçamento ultrapassado", description: "Quando o custo real de um projeto seu ultrapassa o orçamento aprovado ao fechar o mês", icon: DollarSign, color: "#B45309" },
       ],
     },
   ]

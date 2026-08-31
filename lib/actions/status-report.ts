@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 import { auth } from "@/auth"
 import { revalidatePath } from "next/cache"
 import { startOfMonth, endOfMonth } from "date-fns"
+import { notifyProjectMembers } from "@/lib/notify"
 
 const CAN_CLOSE = new Set(["ADMIN", "PROJECT_MANAGER", "SPONSOR"])
 
@@ -85,6 +86,23 @@ export async function closeMonthlyStatusReports(
         nextSteps:      s.nextSteps,
       },
     })
+
+    // Governança de Capex: custo real ultrapassou o orçamento aprovado do projeto
+    if (s.budgetUsed !== null) {
+      const project = await db.project.findUnique({
+        where:  { id: s.projectId },
+        select: { title: true, budget: true },
+      })
+      if (project?.budget && s.budgetUsed > project.budget) {
+        const overPct = Math.round(((s.budgetUsed - project.budget) / project.budget) * 100)
+        await notifyProjectMembers(s.projectId, "budgetExceeded", {
+          type:    "budget_exceeded",
+          title:   "Orçamento ultrapassado",
+          message: `O custo real do projeto "${project.title}" (R$ ${s.budgetUsed.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}) ultrapassou o orçamento aprovado (R$ ${project.budget.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}) em ${overPct}%.`,
+          link:    `/projects/${s.projectId}`,
+        })
+      }
+    }
   }
 
   revalidatePath("/status-report")
