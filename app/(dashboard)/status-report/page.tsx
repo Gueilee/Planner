@@ -26,7 +26,7 @@ export default async function StatusReportPage() {
       members:  { select: { role: true, user: { select: { name: true, image: true } } } },
       tasks: {
         select: {
-          title: true, status: true, progress: true,
+          id: true, title: true, status: true, progress: true,
           startDate: true, endDate: true,
           budgetedCost: true, actualCost: true,
           completedAt: true, wbsAreaId: true, parentId: true,

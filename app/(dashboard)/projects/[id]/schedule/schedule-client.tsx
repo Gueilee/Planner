@@ -1817,7 +1817,7 @@ export function ScheduleClient({ project, initialTasks, members: initialMembers,
   // Detalhes do Projeto, Status Report, Análises e na lista de Projetos, para
   // o % nunca divergir de tela para tela.
   const projectProgress = useMemo(
-    () => computeProjectProgress(tasks.map((t) => ({ progress: t.progress, parentId: t.parentId }))),
+    () => computeProjectProgress(tasks.map((t) => ({ id: t.id, progress: t.progress, parentId: t.parentId, startDate: t.startDate, endDate: t.endDate }))),
     [tasks],
   )
 

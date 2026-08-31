@@ -35,7 +35,7 @@ export default async function KanbanPage() {
     const total        = leafTasks.length
     const done         = leafTasks.filter((t) => t.status === "COMPLETED").length
     const progress     = computeProjectProgress(
-      p.tasks.map((t) => ({ progress: t.progress, parentId: t.parentId })),
+      p.tasks.map((t) => ({ id: t.id, progress: t.progress, parentId: t.parentId, startDate: t.startDate, endDate: t.endDate })),
     )
 
     const highRisks    = p.risks.filter((r) => r.status === "HIGH" || r.status === "CRITICAL").length

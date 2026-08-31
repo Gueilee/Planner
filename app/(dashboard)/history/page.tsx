@@ -15,7 +15,7 @@ export default async function HistoryPage() {
     const total    = p.tasks.length
     const done     = p.tasks.filter((t) => t.status === "COMPLETED").length
     const progress = total > 0
-      ? computeProjectProgress(p.tasks.map((t) => ({ progress: t.progress, parentId: t.parentId })))
+      ? computeProjectProgress(p.tasks.map((t) => ({ id: t.id, progress: t.progress, parentId: t.parentId, startDate: t.startDate, endDate: t.endDate })))
       : p.status === "COMPLETED" ? 100 : 0
 
     return {

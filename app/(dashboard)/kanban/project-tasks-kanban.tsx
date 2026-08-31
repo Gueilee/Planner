@@ -1027,9 +1027,9 @@ export function ProjectTasksKanban({
   // Progresso do projeto: função canônica (lib/utils/project-progress.ts), a
   // mesma usada em Cronograma, Detalhes do Projeto e Status Report — para o %
   // nunca divergir de tela para tela. Usa todas as tarefas (não só as visíveis
-  // no board), pois a função já filtra para tarefas de topo internamente.
+  // no board), pois a função já filtra/pondera por tarefa-folha internamente.
   const progress = computeProjectProgress(
-    tasks.map((t) => ({ progress: t.progress, parentId: t.parentId })),
+    tasks.map((t) => ({ id: t.id, progress: t.progress, parentId: t.parentId, startDate: t.startDate, endDate: t.endDate })),
   )
   const done     = visibleTasks.filter((t) => t.status === "COMPLETED").length
 

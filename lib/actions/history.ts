@@ -21,7 +21,7 @@ export async function getAllProjectsSummary() {
       expectedStart: true, expectedEnd: true,
       createdAt: true, updatedAt: true,
       sponsor: { select: { name: true } },
-      tasks: { select: { status: true, progress: true, parentId: true } },
+      tasks: { select: { id: true, status: true, progress: true, parentId: true, startDate: true, endDate: true } },
       _count: { select: { meetings: true, risks: true, members: true } },
     },
   })
@@ -50,7 +50,7 @@ export async function getProjectFullHistory(projectId: string) {
       },
       tasks: {
         orderBy: { order: "asc" },
-        select: { id: true, status: true, progress: true, budgetedCost: true, actualCost: true, parentId: true },
+        select: { id: true, status: true, progress: true, budgetedCost: true, actualCost: true, parentId: true, startDate: true, endDate: true },
       },
       risks: { orderBy: { createdAt: "asc" } },
       meetings: {

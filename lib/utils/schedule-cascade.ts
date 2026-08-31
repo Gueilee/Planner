@@ -92,7 +92,7 @@ export function computeScheduleCascade(
 
   const tasksWithExpected = tasks
     .filter((t) => expectedById.get(t.id) !== null && expectedById.get(t.id) !== undefined)
-    .map((t) => ({ parentId: t.parentId, progress: expectedById.get(t.id) as number }))
+    .map((t) => ({ id: t.id, parentId: t.parentId, startDate: t.startDate, endDate: t.endDate, progress: expectedById.get(t.id) as number }))
 
   const projectExpectedPct = tasksWithExpected.length > 0
     ? computeProjectProgress(tasksWithExpected)

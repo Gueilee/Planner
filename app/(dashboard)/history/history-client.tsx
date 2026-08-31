@@ -405,7 +405,7 @@ function ProjectHistoryView({ data, del }: { data: NonNullable<FullHistory>; del
   const inProg      = tasks.filter((t) => t.status === "IN_PROGRESS").length
   const delayed     = tasks.filter((t) => t.status === "DELAYED").length
   const progress    = total > 0
-    ? computeProjectProgress(tasks.map((t) => ({ progress: t.progress, parentId: t.parentId })))
+    ? computeProjectProgress(tasks.map((t) => ({ id: t.id, progress: t.progress, parentId: t.parentId, startDate: t.startDate, endDate: t.endDate })))
     : p.status === "COMPLETED" ? 100 : 0
   const highRisks   = p.risks.filter((r) => r.status === "HIGH" || r.status === "CRITICAL").length
   const goodLessons = p.lessonsLearned.filter((l) => l.influence === "POSITIVE").length

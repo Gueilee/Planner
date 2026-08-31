@@ -28,7 +28,7 @@ export default async function PriorityPage() {
         tasksDone:        p.tasks.filter((t) => t.status === "COMPLETED").length,
         tasksTotal:       p.tasks.length,
         progress:         computeProjectProgress(
-          p.tasks.map((t) => ({ progress: t.progress, parentId: t.parentId })),
+          p.tasks.map((t) => ({ id: t.id, progress: t.progress, parentId: t.parentId, startDate: t.startDate, endDate: t.endDate })),
         ),
       }))}
     />

@@ -61,11 +61,13 @@ export type SCurvePayload = {
 }
 
 // ─── Curve algorithm ──────────────────────────────────────────────────────────
-// Usa as mesmas tarefas de TOPO e a mesma média simples do Cronograma
-// (lib/utils/project-progress.ts::computeProjectProgress), para o ponto de
-// "hoje" da Curva S nunca divergir do % mostrado em Cronograma/Detalhes do
-// Projeto/Status Report — essa era a causa da Curva S mostrar um "Realizado
-// Hoje" diferente do progresso real do projeto.
+// Usa as mesmas tarefas-FOLHA, ponderadas pela mesma duração planejada, do
+// Cronograma (lib/utils/project-progress.ts::computeProjectProgress) — para o
+// ponto de "hoje" da Curva S nunca divergir do % mostrado em Cronograma/
+// Detalhes do Projeto/Status Report. Contar "Atividades" de topo como
+// unidades iguais (o que a Curva S fazia antes) sub-pondera fases com várias
+// tarefas substanciais e super-pondera fases de 1 tarefa só (ex.: uma reunião
+// de encerramento) — por isso a troca para tarefa-folha ponderada por duração.
 
 type RawTask = {
   id: string
@@ -76,7 +78,6 @@ type RawTask = {
   completedAt: Date | null
   status: string
   progress: number
-  subtaskCount: number
 }
 
 function linearFraction(s: Date, e: Date, T: Date): number {
@@ -87,44 +88,61 @@ function linearFraction(s: Date, e: Date, T: Date): number {
   return (T.getTime() - s.getTime()) / span
 }
 
+// Mesmo peso de lib/utils/project-progress.ts: duração planejada em dias
+// (mínimo 1), ou 1 quando faltar alguma das datas.
+function taskWeight(startDate: Date | null, endDate: Date | null): number {
+  if (!startDate || !endDate) return 1
+  const days = Math.round((endDate.getTime() - startDate.getTime()) / 86_400_000)
+  return Math.max(1, days)
+}
+
 // % esperado por tarefa (tempo decorrido ÷ duração) — mesma lógica de
 // computeExpectedPct (lib/utils/schedule-status.ts), aplicada a cada ponto da
-// série em vez de só "hoje".
+// série em vez de só "hoje", ponderada pela duração de cada tarefa.
 function computePlanned(tasks: RawTask[], timePoints: Date[]): number[] {
   if (tasks.length === 0) return timePoints.map(() => 0)
   return timePoints.map((T) => {
-    const sum = tasks.reduce((s, t) => {
-      if (!t.endDate) return s
-      const start = t.startDate ?? t.endDate
-      return s + linearFraction(start, t.endDate, T) * 100
-    }, 0)
-    return Math.round(sum / tasks.length)
+    let weightedSum = 0
+    let totalWeight = 0
+    for (const t of tasks) {
+      if (!t.endDate) continue
+      const start  = t.startDate ?? t.endDate
+      const w      = taskWeight(start, t.endDate)
+      weightedSum += linearFraction(start, t.endDate, T) * 100 * w
+      totalWeight += w
+    }
+    return totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 0
   })
 }
 
 // % realizado por tarefa, reconstruído no tempo: 0 antes de começar, sobe
 // linearmente de 0 até o progresso ATUAL da tarefa entre o início real e a
 // conclusão (ou "hoje", se ainda em andamento) — por isso, no ponto "hoje",
-// o valor de cada tarefa é exatamente o seu progress atual, e a média das
-// tarefas de topo fecha exatamente com o % do Cronograma.
+// o valor de cada tarefa é exatamente o seu progress atual, e a média
+// ponderada das tarefas-folha fecha exatamente com o % do Cronograma.
 function computeRealized(tasks: RawTask[], timePoints: Date[], today: Date): (number | null)[] {
   if (tasks.length === 0) return timePoints.map(() => 0)
 
   return timePoints.map((T) => {
     if (isAfter(T, today)) return null
 
-    const sum = tasks.reduce((s, t) => {
-      if (!t.actualStart || isAfter(t.actualStart, T)) return s
-      if (t.progress <= 0) return s
+    let weightedSum = 0
+    let totalWeight = 0
+    for (const t of tasks) {
+      const w = taskWeight(t.startDate, t.endDate)
+      totalWeight += w
+
+      if (!t.actualStart || isAfter(t.actualStart, T)) continue
+      if (t.progress <= 0) continue
 
       const rampEnd = t.completedAt ?? t.actualEnd ?? today
-      if (!isAfter(rampEnd, t.actualStart) || !isBefore(T, rampEnd)) return s + t.progress
+      if (!isAfter(rampEnd, t.actualStart) || !isBefore(T, rampEnd)) { weightedSum += t.progress * w; continue }
 
       const elapsed = (T.getTime() - t.actualStart.getTime()) / (rampEnd.getTime() - t.actualStart.getTime())
-      return s + t.progress * elapsed
-    }, 0)
+      weightedSum += t.progress * elapsed * w
+    }
 
-    return Math.round(sum / tasks.length)
+    return totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 0
   })
 }
 
@@ -134,11 +152,15 @@ function computeBaselineCurve(
 ): number[] {
   if (snaps.length === 0) return timePoints.map(() => 0)
   return timePoints.map((T) => {
-    const sum = snaps.reduce((s, snap) => {
+    let weightedSum = 0
+    let totalWeight = 0
+    for (const snap of snaps) {
       const start = snap.plannedStart ?? snap.plannedEnd
-      return s + linearFraction(start, snap.plannedEnd, T) * 100
-    }, 0)
-    return Math.round(sum / snaps.length)
+      const w     = taskWeight(start, snap.plannedEnd)
+      weightedSum += linearFraction(start, snap.plannedEnd, T) * 100 * w
+      totalWeight += w
+    }
+    return totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 0
   })
 }
 
@@ -179,18 +201,18 @@ export async function getSCurveData(projectId: string): Promise<SCurvePayload | 
   if (!project) return null
 
   const today = startOfWeek(new Date(), { weekStartsOn: 1 })
-  // Tarefas de TOPO (sem parentId) — mesma base do progresso canônico do
-  // projeto (computeProjectProgress). Cada uma já reflete, via propagação
-  // automática, a média das suas subtarefas.
+  // Tarefas-FOLHA (sem subtarefa) — mesma base do progresso canônico do
+  // projeto (computeProjectProgress), ponderada por duração.
   //
-  // allTopLevelTasks: TODAS as tarefas de topo, com ou sem data — usada só
-  // para os KPIs "Planejado/Realizado Hoje", que precisam bater exatamente
-  // com o Cronograma (que não exige data para entrar na média).
-  // topLevelTasks: só as que têm data de fim — usada para desenhar a curva
-  // no tempo, já que uma tarefa sem data não tem onde ser plotada.
-  const allTopLevelTasks = project.tasks.filter((t) => !t.parentId)
-  const topLevelTasks: RawTask[] = project.tasks
-    .filter((t) => !t.parentId && t.endDate)
+  // allLeafTasks: TODAS as tarefas-folha, com ou sem data — usada só para os
+  // KPIs "Planejado/Realizado Hoje", que precisam bater exatamente com o
+  // Cronograma (que não exige data para entrar na média).
+  // leafTasks: só as que têm data de fim — usada para desenhar a curva no
+  // tempo, já que uma tarefa sem data não tem onde ser plotada.
+  const parentIds  = new Set(project.tasks.map((t) => t.parentId).filter((id): id is string => id !== null))
+  const allLeafTasks = project.tasks.filter((t) => !parentIds.has(t.id))
+  const leafTasks: RawTask[] = allLeafTasks
+    .filter((t) => t.endDate)
     .map((t) => ({
       id: t.id,
       startDate: t.startDate,
@@ -200,12 +222,11 @@ export async function getSCurveData(projectId: string): Promise<SCurvePayload | 
       completedAt: t.completedAt,
       status: t.status,
       progress: t.progress,
-      subtaskCount: 0,
     }))
 
-  if (topLevelTasks.length === 0) {
+  if (leafTasks.length === 0) {
     const realizedNoDates = computeProjectProgress(
-      allTopLevelTasks.map((t) => ({ progress: t.progress, parentId: null })),
+      allLeafTasks.map((t) => ({ id: t.id, progress: t.progress, parentId: null, startDate: t.startDate, endDate: t.endDate })),
     )
     return {
       project: {
@@ -227,8 +248,8 @@ export async function getSCurveData(projectId: string): Promise<SCurvePayload | 
   const allDates = [
     project.actualStart,
     project.expectedStart,
-    ...topLevelTasks.map((t) => t.startDate),
-    ...topLevelTasks.map((t) => t.endDate),
+    ...leafTasks.map((t) => t.startDate),
+    ...leafTasks.map((t) => t.endDate),
   ].filter(Boolean) as Date[]
 
   const rangeStart = startOfWeek(
@@ -253,8 +274,8 @@ export async function getSCurveData(projectId: string): Promise<SCurvePayload | 
   const granularity: "week" | "month" = useMonthly ? "month" : "week"
 
   // ── Compute curves ────────────────────────────────────────────────────────
-  const plannedCurve  = computePlanned(topLevelTasks, timePoints)
-  const realizedCurve = computeRealized(topLevelTasks, timePoints, today)
+  const plannedCurve  = computePlanned(leafTasks, timePoints)
+  const realizedCurve = computeRealized(leafTasks, timePoints, today)
 
   // Baseline curves
   const baselineCurves: Map<string, number[]> = new Map()
@@ -289,9 +310,9 @@ export async function getSCurveData(projectId: string): Promise<SCurvePayload | 
   // grade semanal/mensal do gráfico), para bater exatamente com o Cronograma
   // mesmo quando "hoje" cai entre dois pontos da grade (granularidade mensal).
   const realizedToday = computeProjectProgress(
-    allTopLevelTasks.map((t) => ({ progress: t.progress, parentId: null })),
+    allLeafTasks.map((t) => ({ id: t.id, progress: t.progress, parentId: null, startDate: t.startDate, endDate: t.endDate })),
   )
-  const plannedToday  = computePlanned(topLevelTasks, [today])[0] ?? 0
+  const plannedToday  = computePlanned(leafTasks, [today])[0] ?? 0
 
   // Último ponto da grade com dado real (a semana/mês corrente) — forçado a
   // bater com realizedToday, já que a grade pode não cair exatamente em

@@ -34,7 +34,7 @@ export default async function ProjectsPage() {
             user: { select: { name: true, image: true } },
           },
         },
-        tasks: { select: { status: true, progress: true, wbsAreaId: true, parentId: true } },
+        tasks: { select: { id: true, status: true, progress: true, wbsAreaId: true, parentId: true, startDate: true, endDate: true } },
         wbsAreas: { select: { id: true, weight: true }, orderBy: { order: "asc" } },
         _count: { select: { tasks: true, risks: true } },
       },

@@ -369,7 +369,7 @@ export default async function ClosurePage({ params }: { params: Promise<{ id: st
   const totalTasks  = tasks.length
   const doneTasks   = tasks.filter((t) => t.status === "COMPLETED").length
   const avgProgress = totalTasks > 0
-    ? computeProjectProgress(tasks.map((t) => ({ progress: t.progress, parentId: t.parentId })))
+    ? computeProjectProgress(tasks.map((t) => ({ id: t.id, progress: t.progress, parentId: t.parentId, startDate: t.startDate, endDate: t.endDate })))
     : 0
 
   const startDate  = project.actualStart ?? project.expectedStart

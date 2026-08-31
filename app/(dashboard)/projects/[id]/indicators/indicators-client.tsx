@@ -85,16 +85,12 @@ function computeMetrics(tasks: Task[], project: Project, today: Date) {
   const critical    = tasks.filter((t) => t.riskStatus === "CRITICAL" || t.riskStatus === "HIGH").length
 
   // Average progress — função canônica (lib/utils/project-progress.ts), a
-  // mesma do Cronograma/Kanban/Detalhes do Projeto/Status Report, para não
-  // divergir; tarefas de topo já refletem a média das suas subtarefas, então
-  // somar as duas juntas contaria o mesmo avanço 2x. Se o filtro ativo excluir
-  // toda tarefa de topo (ex.: filtrando por um responsável só de subtarefas),
-  // cai para a média simples do recorte filtrado.
-  const topLevelTasks = tasks.filter((t) => !t.parentId)
+  // mesma do Cronograma/Kanban/Detalhes do Projeto/Status Report: média das
+  // tarefas-folha do recorte filtrado, ponderada pela duração planejada.
   const avgProgress = total > 0
-    ? (topLevelTasks.length > 0
-        ? computeProjectProgress(topLevelTasks.map((t) => ({ progress: t.progress, parentId: null })))
-        : tasks.reduce((s, t) => s + t.progress, 0) / total)
+    ? computeProjectProgress(
+        tasks.map((t) => ({ id: t.id, progress: t.progress, parentId: t.parentId, startDate: t.startDate, endDate: t.endDate })),
+      )
     : 0
 
   // Expected progress from timeline

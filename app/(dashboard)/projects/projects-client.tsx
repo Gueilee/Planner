@@ -18,7 +18,7 @@ export type ProjectRow = {
   projectArea: string
   requestNumber: number | null
   members: { id: string; user: { name: string; image: string | null } }[]
-  tasks: { status: string; progress: number; wbsAreaId: string | null; parentId: string | null }[]
+  tasks: { id: string; status: string; progress: number; wbsAreaId: string | null; parentId: string | null; startDate: Date | string | null; endDate: Date | string | null }[]
   wbsAreas: { id: string; weight: number | null }[]
   _count: { tasks: number; risks: number }
 }
