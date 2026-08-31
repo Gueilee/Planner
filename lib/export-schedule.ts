@@ -21,8 +21,6 @@ type Task = {
   dependencies: string[]
 }
 
-type Area = { id: string; name: string; color: string | null }
-
 const STATUS_LABELS: Record<string, string> = {
   PLANNING:    "A Iniciar",
   IN_PROGRESS: "Em Andamento",
@@ -30,22 +28,6 @@ const STATUS_LABELS: Record<string, string> = {
   DELAYED:     "Atrasado",
   VALIDATION:  "Validação",
   ON_HOLD:     "Pausada",
-}
-
-// hex #RRGGBB → ExcelJS ARGB (FF prefix)
-function toArgb(hex: string | null | undefined, alpha = "FF"): string {
-  if (!hex) return "FF94A3B8"
-  const h = hex.replace("#", "")
-  return `${alpha}${h.toUpperCase().padStart(6, "0")}`
-}
-
-// Darken a hex color for text on light bg
-function lightenHex(hex: string, amount = 0.85): string {
-  const h = hex.replace("#", "")
-  const r = Math.min(255, Math.round(parseInt(h.slice(0, 2), 16) + (255 - parseInt(h.slice(0, 2), 16)) * amount))
-  const g = Math.min(255, Math.round(parseInt(h.slice(2, 4), 16) + (255 - parseInt(h.slice(2, 4), 16)) * amount))
-  const b = Math.min(255, Math.round(parseInt(h.slice(4, 6), 16) + (255 - parseInt(h.slice(4, 6), 16)) * amount))
-  return `FF${r.toString(16).padStart(2, "0").toUpperCase()}${g.toString(16).padStart(2, "0").toUpperCase()}${b.toString(16).padStart(2, "0").toUpperCase()}`
 }
 
 function fmtDate(ds: string | null) {
@@ -62,12 +44,10 @@ function calcEstimatedProgress(startDate: string | null, endDate: string | null)
   return Math.max(0, Math.min(100, Math.round((differenceInDays(today, start) / total) * 100)))
 }
 
-// Build ordered list: [area, ...tasks, area, ...tasks, ...]
-type ExportRow =
-  | { kind: "area"; area: Area; index: number; taskCount: number; doneCount: number }
-  | { kind: "task"; task: Task; eap: string; depth: number; areaIndex: number }
+// Build ordered list: activities and tasks, flat (sem agrupamento por módulo)
+type ExportRow = { kind: "task"; task: Task; eap: string; depth: number }
 
-function buildRows(areas: Area[], tasks: Task[]): ExportRow[] {
+function buildRows(tasks: Task[]): ExportRow[] {
   const rows: ExportRow[] = []
   const childrenMap = new Map<string, Task[]>()
   for (const t of tasks) {
@@ -77,43 +57,19 @@ function buildRows(areas: Area[], tasks: Task[]): ExportRow[] {
   }
   const sortBy = (arr: Task[]) => [...arr].sort((a, b) => a.order - b.order)
 
-  function walkTask(t: Task, depth: number, eap: string, areaIndex: number) {
-    rows.push({ kind: "task", task: t, eap, depth, areaIndex })
+  function walkTask(t: Task, depth: number, eap: string) {
+    rows.push({ kind: "task", task: t, eap, depth })
     const kids = sortBy(childrenMap.get(t.id) ?? [])
-    kids.forEach((k, i) => walkTask(k, depth + 1, `${eap}.${i + 1}`, areaIndex))
+    kids.forEach((k, i) => walkTask(k, depth + 1, `${eap}.${i + 1}`))
   }
 
-  const topByArea = new Map<string | null, Task[]>()
-  for (const t of tasks) {
-    if (t.parentId) continue
-    const k = t.wbsAreaId ?? null
-    if (!topByArea.has(k)) topByArea.set(k, [])
-    topByArea.get(k)!.push(t)
-  }
-
-  areas.forEach((area, aIdx) => {
-    const areaTasks  = tasks.filter((t) => t.wbsAreaId === area.id)
-    const doneCount  = areaTasks.filter((t) => t.status === "COMPLETED").length
-    rows.push({ kind: "area", area, index: aIdx + 1, taskCount: areaTasks.length, doneCount })
-    sortBy(topByArea.get(area.id) ?? []).forEach((t, i) =>
-      walkTask(t, 0, `${aIdx + 1}.${i + 1}`, aIdx + 1)
-    )
-  })
-
-  // Ungrouped tasks
-  const ungrouped = sortBy(topByArea.get(null) ?? [])
-  if (ungrouped.length > 0) {
-    const ugIdx = areas.length + 1
-    rows.push({ kind: "area", area: { id: "__ug__", name: "Sem Área", color: "#94A3B8" }, index: ugIdx, taskCount: ungrouped.length, doneCount: ungrouped.filter((t) => t.status === "COMPLETED").length })
-    ungrouped.forEach((t, i) => walkTask(t, 0, `${ugIdx}.${i + 1}`, ugIdx))
-  }
+  sortBy(tasks.filter((t) => !t.parentId)).forEach((t, i) => walkTask(t, 0, `${i + 1}`))
 
   return rows
 }
 
 export async function exportScheduleToExcel(
   projectTitle: string,
-  areas: Area[],
   tasks: Task[],
 ): Promise<void> {
   const wb = new ExcelJS.Workbook()
@@ -206,45 +162,12 @@ export async function exportScheduleToExcel(
   })
 
   // ── Data rows ─────────────────────────────────────────────────────────────
-  const rows = buildRows(areas, tasks)
+  const rows = buildRows(tasks)
   let dataRowIndex = 5 // row 1–4 already added
 
   for (const row of rows) {
-    if (row.kind === "area") {
-      const { area, index, taskCount, doneCount } = row
-      const progress = taskCount > 0 ? Math.round((doneCount / taskCount) * 100) : 0
-      const areaColor = area.color ?? "#94A3B8"
-      const bgArgb    = lightenHex(areaColor, 0.88)
-
-      const excelRow = ws.addRow([
-        `${index}`,
-        area.name,
-        "Módulo",
-        `${doneCount}/${taskCount} (${progress}%)`,
-        "", "", "", "", "", "", "", "", "", "",
-      ])
-      excelRow.height = 24
-
-      excelRow.eachCell({ includeEmpty: true }, (cell, colN) => {
-        cell.fill  = { type: "pattern", pattern: "solid", fgColor: { argb: bgArgb } }
-        cell.font  = {
-          name: "Calibri", size: 9, bold: true,
-          color: { argb: toArgb(areaColor) },
-        }
-        cell.border = {
-          top:    { style: "thin",   color: { argb: toArgb(areaColor, "40") } },
-          bottom: { style: "thin",   color: { argb: toArgb(areaColor, "40") } },
-          left:   colN === 1 ? { style: "medium", color: { argb: toArgb(areaColor) } } : undefined,
-        }
-        cell.alignment = colN === 1 ? { vertical: "middle", horizontal: "center" }
-          : colN === 2              ? { vertical: "middle", horizontal: "left",   indent: 1 }
-          : { vertical: "middle", horizontal: "center" }
-      })
-
-      dataRowIndex++
-    } else {
-      const { task: t, eap, depth, areaIndex } = row
-      const isTarefa  = depth > 0
+    const { task: t, eap, depth } = row
+    const isTarefa  = depth > 0
       const isDone    = t.status === "COMPLETED"
       const isDelayed = t.status === "DELAYED" || (!isDone && t.endDate && new Date(t.endDate) < new Date())
 
@@ -363,7 +286,6 @@ export async function exportScheduleToExcel(
       })
 
       dataRowIndex++
-    }
   }
 
   // ── Print settings ────────────────────────────────────────────────────────

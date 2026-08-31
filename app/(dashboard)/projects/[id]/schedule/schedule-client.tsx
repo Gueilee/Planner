@@ -10,13 +10,12 @@ import {
   isSaturday, isSunday, min, max, isAfter, isBefore, eachWeekOfInterval, parseISO,
 } from "date-fns"
 import { parseDateStr, fmtDateShort, todayStr } from "@/lib/date-utils"
-import { computeExpectedPct, computeScheduleStatus, type ScheduleStatus } from "@/lib/utils/schedule-status"
-import { computeScheduleCascade } from "@/lib/utils/schedule-cascade"
+import { computeExpectedPct } from "@/lib/utils/schedule-status"
 import { ptBR } from "date-fns/locale"
 import {
   ArrowLeft, Plus, ChevronRight, ChevronDown, Pencil, Trash2,
   Loader2, X, Check, CalendarDays, AlertTriangle, Layers,
-  List, BarChart2, Search, FolderOpen, Paperclip, MessageSquare,
+  List, BarChart2, Search, Paperclip, MessageSquare,
   Link2, Lock, ArrowRight, GripVertical, FileSpreadsheet, ArrowUpDown,
   Upload, Download, FileText, FileImage, FileArchive, Users,
   LayoutTemplate, Milestone, Zap, Award, Star, Globe2, TrendingUp, Clock, Send,
@@ -24,8 +23,7 @@ import {
 } from "lucide-react"
 import { SCurveClient, type SCurveData } from "../s-curve/s-curve-client"
 import {
-  createTask, updateTask, deleteTask, createArea, deleteArea, renameArea, convertUngroupedToArea, updateAreaWeight,
-  reorderAreas, reorderTasks,
+  createTask, updateTask, deleteTask, reorderTasks,
   getTaskAttachments, addTaskAttachments,
   type AttachmentUpload,
   type SuccessorUpdate,
@@ -50,20 +48,20 @@ const ROW_H   = 40
 const HDR_H   = 64
 const LEFT_W  = 600
 // List view — resizable column system
-type ColKey = 'eap' | 'name' | 'status' | 'responsible' | 'startDate' | 'endDate' | 'actualStart' | 'actualEnd' | 'pctEst' | 'pctReal' | 'predecessors' | 'budgeted' | 'actual'
+type ColKey = 'eap' | 'name' | 'status' | 'responsible' | 'startDate' | 'endDate' | 'actualStart' | 'actualEnd' | 'pctReal' | 'predecessors' | 'budgeted' | 'actual'
 const COL_DEFAULTS: Record<ColKey, number> = {
   eap: 56, name: 280, status: 130, responsible: 160,
   startDate: 88, endDate: 88, actualStart: 88, actualEnd: 88,
-  pctEst: 68, pctReal: 68,
+  pctReal: 68,
   predecessors: 100, budgeted: 84, actual: 84,
 }
 const COL_MIN: Record<ColKey, number> = {
   eap: 40, name: 140, status: 90, responsible: 110,
   startDate: 64, endDate: 64, actualStart: 64, actualEnd: 64,
-  pctEst: 40, pctReal: 40,
+  pctReal: 40,
   predecessors: 72, budgeted: 56, actual: 56,
 }
-const DEFAULT_COL_ORDER: ColKey[] = ['eap', 'name', 'status', 'responsible', 'startDate', 'endDate', 'actualStart', 'actualEnd', 'pctEst', 'pctReal', 'predecessors', 'budgeted', 'actual']
+const DEFAULT_COL_ORDER: ColKey[] = ['eap', 'name', 'status', 'responsible', 'startDate', 'endDate', 'actualStart', 'actualEnd', 'pctReal', 'predecessors', 'budgeted', 'actual']
 const COL_HEADER_META: Record<ColKey, { label: string; cls: string }> = {
   eap:          { label: "EAP",               cls: "text-white/40 text-center" },
   name:         { label: "Nome da Atividade",  cls: "text-white/40 text-center" },
@@ -73,7 +71,6 @@ const COL_HEADER_META: Record<ColKey, { label: string; cls: string }> = {
   endDate:      { label: "Fim Plan.",         cls: "text-white/40 text-center" },
   actualStart:  { label: "Início Real",       cls: "text-emerald-400/60 text-center" },
   actualEnd:    { label: "Fim Real",          cls: "text-emerald-400/60 text-center" },
-  pctEst:       { label: "% Est.",            cls: "text-amber-400/70 text-center" },
   pctReal:      { label: "% Real",            cls: "text-white/40 text-center" },
   predecessors: { label: "Predecessoras",     cls: "text-indigo-400/70 text-center" },
   budgeted:     { label: "R$ Orç.",           cls: "text-emerald-400/80 text-center" },
@@ -94,22 +91,8 @@ const STATUS_CFG: Record<string, { label: string; color: string; bg: string; dot
   ON_HOLD:     { label: "Pausada",        color: "#F59E0B", bg: "#FFFBEB", dot: "#F59E0B" },
 }
 
-// Status de prazo (real vs. esperado pelo calendário) — % Est. na tabela de cronograma
-const SCHEDULE_STATUS_DOT: Record<ScheduleStatus, string> = {
-  ON_TIME: "#10B981", AT_RISK: "#F59E0B", DELAYED: "#EF4444", ND: "#CBD5E1",
-}
-const SCHEDULE_STATUS_LABEL: Record<ScheduleStatus, string> = {
-  ON_TIME: "No prazo", AT_RISK: "Em risco", DELAYED: "Atrasado", ND: "Sem dados suficientes",
-}
-
 const STATUS_CYCLE = ["PLANNING", "IN_PROGRESS", "VALIDATION", "COMPLETED", "DELAYED", "ON_HOLD"] as const
 const FORM_STATUSES = ["PLANNING", "IN_PROGRESS", "COMPLETED", "DELAYED", "VALIDATION", "ON_HOLD"] as const
-
-const AREA_PALETTE = [
-  "#7B2FBE","#2463FF","#10B981","#F59E0B",
-  "#EF4444","#0891B2","#8B5CF6","#EC4899",
-  "#16A34A","#EA580C","#0D9488","#9333EA",
-]
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -126,12 +109,10 @@ type Task = {
   _count: { comments: number; attachments: number }
 }
 type FlatTask = Task & { depth: number; hasChildren: boolean }
-type Area   = { id: string; name: string; color: string | null; weight: number | null }
 type Member = { id: string; name: string; department: string | null }
 
-type ARow = { kind: "area"; id: string; name: string; color: string | null; eap: string; taskCount: number; doneCount: number; weight: number | null }
-type TRow = { kind: "task"; task: Task; eap: string; depth: number; hasChildren: boolean; areaColor: string | null }
-type Row = ARow | TRow
+type TRow = { kind: "task"; task: Task; eap: string; depth: number; hasChildren: boolean }
+type Row = TRow
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -181,9 +162,7 @@ function flattenTasks(tasks: Task[], expanded: Set<string>): FlatTask[] {
 }
 
 function buildListRows(
-  areas: Area[],
   tasks: Task[],
-  expandedAreas: Set<string>,
   expandedTasks: Set<string>,
   search: string,
   hideDone: boolean,
@@ -209,55 +188,23 @@ function buildListRows(
     return true
   }
 
-  function walkTask(t: Task, depth: number, eap: string, areaColor: string | null) {
+  function walkTask(t: Task, depth: number, eap: string) {
     const kids = sortBy(childrenMap.get(t.id) ?? [])
-    result.push({ kind: "task", task: t, eap, depth, hasChildren: kids.length > 0, areaColor })
+    result.push({ kind: "task", task: t, eap, depth, hasChildren: kids.length > 0 })
     // Quando filtrando por pessoa: força expansão para mostrar descendentes
     const shouldExpand = visibleIds !== null ? true : expandedTasks.has(t.id)
     if (kids.length > 0 && shouldExpand) {
       kids.forEach((k, i) => {
-        if (matches(k)) walkTask(k, depth + 1, `${eap}.${i + 1}`, areaColor)
+        if (matches(k)) walkTask(k, depth + 1, `${eap}.${i + 1}`)
       })
     }
   }
 
-  const topByArea = new Map<string | null, Task[]>()
-  for (const t of tasks) {
-    if (t.parentId) continue
-    const k = t.wbsAreaId ?? null
-    if (!topByArea.has(k)) topByArea.set(k, [])
-    topByArea.get(k)!.push(t)
-  }
-
-  areas.forEach((area, aIdx) => {
-    const eapArea = `${aIdx + 1}`
-    const areaTasks = tasks.filter((t) => t.wbsAreaId === area.id)
-    const doneCount = areaTasks.filter((t) => t.status === "COMPLETED").length
-    result.push({ kind: "area", id: area.id, name: area.name, color: area.color, eap: eapArea, taskCount: areaTasks.length, doneCount, weight: area.weight ?? null })
-    // Quando filtrando: auto-expande área que contenha tarefas visíveis
-    const isExpanded = visibleIds !== null
-      ? areaTasks.some((t) => visibleIds.has(t.id))
-      : expandedAreas.has(area.id)
-    if (!isExpanded) return
-    sortBy(topByArea.get(area.id) ?? []).forEach((t, i) => {
-      if (matches(t)) walkTask(t, 0, `${eapArea}.${i + 1}`, area.color)
-    })
+  // Sem agrupamento por módulo: todas as tarefas de topo (sem parentId) entram
+  // direto na raiz, na ordem definida pelo usuário.
+  sortBy(tasks.filter((t) => !t.parentId)).forEach((t, i) => {
+    if (matches(t)) walkTask(t, 0, `${i + 1}`)
   })
-
-  const ungrouped = sortBy(topByArea.get(null) ?? [])
-  if (ungrouped.length > 0) {
-    const ugId = "__ungrouped__"
-    const ugEap = `${areas.length + 1}`
-    result.push({ kind: "area", id: ugId, name: "Sem Área", color: null, eap: ugEap, taskCount: ungrouped.length, doneCount: ungrouped.filter((t) => t.status === "COMPLETED").length, weight: null })
-    const ugExpanded = visibleIds !== null
-      ? ungrouped.some((t) => visibleIds.has(t.id))
-      : expandedAreas.has(ugId)
-    if (ugExpanded) {
-      ungrouped.forEach((t, i) => {
-        if (matches(t)) walkTask(t, 0, `${ugEap}.${i + 1}`, null)
-      })
-    }
-  }
 
   return result
 }
@@ -267,7 +214,6 @@ function buildListRows(
 interface TaskFormProps {
   mode: "add" | "edit"
   initial: Partial<Task> & { projectId: string }
-  areas: Area[]
   members: Member[]
   allTasks: Task[]
   onSave: (t: Task, ancestors?: AncestorUpdate[], successors?: SuccessorUpdate[], baselineDivergence?: BaselineDivergence | null) => void
@@ -275,7 +221,7 @@ interface TaskFormProps {
   onClose: () => void
 }
 
-function TaskForm({ mode, initial, areas, members, allTasks, onSave, onDelete, onClose }: TaskFormProps) {
+function TaskForm({ mode, initial, members, allTasks, onSave, onDelete, onClose }: TaskFormProps) {
   const [pending, start] = useTransition()
   const [form, setForm] = useState({
     title:           initial.title           ?? "",
@@ -390,14 +336,6 @@ function TaskForm({ mode, initial, areas, members, allTasks, onSave, onDelete, o
           <label className={labelCls}>{form.parentId ? "Tarefa *" : "Atividade *"}</label>
           <input value={form.title} onChange={(e) => upd("title", e.target.value)} className={inputCls}
             placeholder={form.parentId ? "Nome da tarefa" : "Nome da atividade"} />
-        </div>
-
-        <div>
-          <label className={labelCls}>Área / Módulo</label>
-          <select value={form.wbsAreaId} onChange={(e) => upd("wbsAreaId", e.target.value)} className={inputCls}>
-            <option value="">— Sem área —</option>
-            {areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
         </div>
 
         <div>
@@ -1161,69 +1099,6 @@ function CommentPanel({ taskId, taskTitle, projectId, onClose, onCommentAdded }:
   )
 }
 
-function AreaForm({ projectId, onSave, onClose }: { projectId: string; onSave: (a: Area) => void; onClose: () => void }) {
-  const [name, setName] = useState("")
-  const [color, setColor] = useState(AREA_PALETTE[0])
-  const [pending, start] = useTransition()
-
-  function handleSubmit() {
-    if (!name.trim()) return
-    start(async () => {
-      const area = await createArea(projectId, name.trim(), color)
-      onSave(area)
-    })
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-96 p-6" style={{ border: "1px solid #E2E8F0" }}>
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="font-black text-[#0F172A] text-sm">Nova Área / Módulo</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 transition-colors">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Nome da Área</label>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ex: Infraestrutura, Treinamento..."
-              className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 outline-none focus:border-[#7B2FBE] transition-colors"
-              autoFocus
-              onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-            />
-          </div>
-          <div>
-            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Cor</label>
-            <div className="flex flex-wrap gap-2">
-              {AREA_PALETTE.map((c) => (
-                <button key={c} onClick={() => setColor(c)}
-                  style={{ background: c, width: 28, height: 28, borderRadius: 8, border: color === c ? "3px solid #0F172A" : "2px solid transparent", transition: "border 0.1s" }}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-2 mt-6">
-          <button onClick={onClose} className="px-4 h-9 text-sm font-semibold rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 transition-all">
-            Cancelar
-          </button>
-          <button onClick={handleSubmit} disabled={pending || !name.trim()}
-            className="inline-flex items-center gap-2 px-4 h-9 text-sm font-bold rounded-xl text-white disabled:opacity-50 transition-all"
-            style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)` }}>
-            {pending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-            Criar Área
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ─── Gantt Header ─────────────────────────────────────────────────────────────
 
 function GanttHeader({ ganttStart, ganttEnd, dayWidth, zoom }: {
@@ -1307,24 +1182,17 @@ function GanttHeader({ ganttStart, ganttEnd, dayWidth, zoom }: {
 
 interface ScheduleClientProps {
   project: { id: string; title: string; status: string }
-  initialAreas: Area[]
   initialTasks: Task[]
   members: Member[]
   riskThresholdPct: number
 }
 
-export function ScheduleClient({ project, initialAreas, initialTasks, members: initialMembers, riskThresholdPct }: ScheduleClientProps) {
+export function ScheduleClient({ project, initialTasks, members: initialMembers, riskThresholdPct }: ScheduleClientProps) {
   const [tasks, setTasks]   = useState<Task[]>(initialTasks)
-  const [areas, setAreas]   = useState<Area[]>(initialAreas)
   const [members, setMembers] = useState<Member[]>(initialMembers)
   const [viewMode, setViewMode] = useState<"list" | "gantt" | "curva-s">("list")
 
   // List view state
-  const [expandedAreas, setExpandedAreas] = useState<Set<string>>(() => new Set(initialAreas.map((a) => a.id)))
-  const [editingAreaId, setEditingAreaId]       = useState<string | null>(null)
-  const [editingAreaValue, setEditingAreaValue] = useState("")
-  const [editingWeightId, setEditingWeightId]   = useState<string | null>(null)
-  const [editingWeightValue, setEditingWeightValue] = useState<string>("")
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(() => {
     const parentIds = new Set(initialTasks.filter((t) => t.parentId).map((t) => t.parentId!))
     return new Set(initialTasks.filter((t) => parentIds.has(t.id)).map((t) => t.id))
@@ -1589,21 +1457,16 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
     }
   }
 
-  // Gantt-specific expand + inline edit state
-  const [expandedGanttAreas, setExpandedGanttAreas] = useState<Set<string>>(
-    () => new Set([...initialAreas.map((a) => a.id), "__ungrouped__"])
-  )
+  // Gantt-specific inline edit state
   const [ganttInlineId,  setGanttInlineId]  = useState<string | null>(null)
   const [ganttInlineVal, setGanttInlineVal] = useState("")
 
-  // ── Drag-and-drop state ──────────────────────────────────────────────────
+  // ── Drag-and-drop state (reordenar tarefas) ──────────────────────────────
   const [draggedId,  setDraggedId]  = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
-  const [dragType,   setDragType]   = useState<"area" | "task" | null>(null)
 
-  function onDragStart(e: React.DragEvent, id: string, type: "area" | "task") {
+  function onDragStart(e: React.DragEvent, id: string) {
     setDraggedId(id)
-    setDragType(type)
     e.dataTransfer.effectAllowed = "move"
   }
 
@@ -1613,26 +1476,14 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
     if (id !== dragOverId) setDragOverId(id)
   }
 
-  function onDrop(e: React.DragEvent, targetId: string, targetType: "area" | "task") {
+  function onDrop(e: React.DragEvent, targetId: string) {
     e.preventDefault()
     const fromId = draggedId
     if (!fromId || fromId === targetId) { cleanDrag(); return }
 
-    if (dragType === "area" && targetType === "area") {
-      const arr      = [...areas]
-      const fromIdx  = arr.findIndex((a) => a.id === fromId)
-      const toIdx    = arr.findIndex((a) => a.id === targetId)
-      if (fromIdx === -1 || toIdx === -1) { cleanDrag(); return }
-      const [item]   = arr.splice(fromIdx, 1)
-      arr.splice(toIdx, 0, item)
-      setAreas(arr)
-      start(() => reorderAreas(project.id, arr.map((a) => a.id)))
-    } else if (dragType === "task" && targetType === "task") {
-      const dragged = tasks.find((t) => t.id === fromId)
-      const target  = tasks.find((t) => t.id === targetId)
-      if (!dragged || !target) { cleanDrag(); return }
-      if (dragged.parentId !== target.parentId || dragged.wbsAreaId !== target.wbsAreaId) { cleanDrag(); return }
-
+    const dragged = tasks.find((t) => t.id === fromId)
+    const target  = tasks.find((t) => t.id === targetId)
+    if (dragged && target && dragged.parentId === target.parentId) {
       const arr      = [...tasks]
       const fromIdx  = arr.findIndex((t) => t.id === fromId)
       const toIdx    = arr.findIndex((t) => t.id === targetId)
@@ -1640,7 +1491,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
       arr.splice(toIdx, 0, item)
       setTasks(arr.map((t, i) => ({ ...t, order: i })))
 
-      const group    = arr.filter((t) => t.parentId === dragged.parentId && t.wbsAreaId === dragged.wbsAreaId)
+      const group    = arr.filter((t) => t.parentId === dragged.parentId)
       start(() => reorderTasks(project.id, group.map((t) => t.id)))
     }
 
@@ -1650,7 +1501,6 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
   function cleanDrag() {
     setDraggedId(null)
     setDragOverId(null)
-    setDragType(null)
   }
 
   const listHeaderRef = useRef<HTMLDivElement>(null)
@@ -1703,11 +1553,10 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
 
   // EAP maps — always natural order so identifiers are stable
   const eapRows = useMemo(() => {
-    const allAreaIds = new Set([...areas.map(a => a.id), "__ungrouped__"])
     const parentIds  = new Set(tasks.filter(t => t.parentId).map(t => t.parentId!))
     const expandedParents = new Set(tasks.filter(t => parentIds.has(t.id)).map(t => t.id))
-    return buildListRows(areas, tasks, allAreaIds, expandedParents, "", false)
-  }, [areas, tasks])
+    return buildListRows(tasks, expandedParents, "", false)
+  }, [tasks])
   const eapById = useMemo(() => {
     const m = new Map<string, string>()
     eapRows.forEach(r => { if (r.kind === "task") m.set(r.task.id, r.eap) })
@@ -1742,14 +1591,14 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
   }, [tasks, filterResponsible])
 
   const listRows   = useMemo(
-    () => buildListRows(areas, sortedForList, expandedAreas, expandedTasks, search, hideDone, filterVisibleIds, !!sortBy),
-    [areas, sortedForList, expandedAreas, expandedTasks, search, hideDone, filterVisibleIds, sortBy],
+    () => buildListRows(sortedForList, expandedTasks, search, hideDone, filterVisibleIds, !!sortBy),
+    [sortedForList, expandedTasks, search, hideDone, filterVisibleIds, sortBy],
   )
 
-  // Gantt rows — area-grouped, uses its own expand sets
+  // Gantt rows — usa seu próprio set de expansão de subtarefas
   const ganttRows  = useMemo(
-    () => buildListRows(areas, tasks, expandedGanttAreas, expandedGantt, "", false, filterVisibleIds),
-    [areas, tasks, expandedGanttAreas, expandedGantt, filterVisibleIds],
+    () => buildListRows(tasks, expandedGantt, "", false, filterVisibleIds),
+    [tasks, expandedGantt, filterVisibleIds],
   )
   const ganttRowIndexMap = useMemo(() => {
     const m = new Map<string, number>()
@@ -1832,51 +1681,6 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
     })
   }
 
-  function handleDeleteArea(areaId: string, areaName: string) {
-    if (!confirm(`Excluir o módulo "${areaName}" e todas as suas atividades?`)) return
-    start(async () => {
-      await deleteArea(areaId, project.id)
-      setAreas((prev) => prev.filter((a) => a.id !== areaId))
-      setTasks((prev) => {
-        const areaTaskIds = new Set(prev.filter((t) => t.wbsAreaId === areaId).map((t) => t.id))
-        return prev.filter((t) => t.wbsAreaId !== areaId && !areaTaskIds.has(t.parentId ?? ""))
-      })
-      setExpandedAreas((prev) => { const s = new Set(prev); s.delete(areaId); return s })
-      setPanel(null)
-    })
-  }
-
-  function handleRenameArea(areaId: string, newName: string) {
-    const trimmed = newName.trim()
-    setEditingAreaId(null)
-    if (!trimmed) return
-
-    if (areaId === "__ungrouped__") {
-      // Convert virtual ungrouped row into a real DB area and reassign its tasks
-      start(async () => {
-        const result = await convertUngroupedToArea(trimmed, project.id)
-        if (result) {
-          setAreas((prev) => [...prev, { id: result.id, name: result.name, color: result.color, weight: null }])
-          setTasks((prev) => prev.map((t) => t.wbsAreaId === null ? { ...t, wbsAreaId: result.id } : t))
-        }
-      })
-      return
-    }
-
-    const current = areas.find((a) => a.id === areaId)
-    if (!current || trimmed === current.name) return
-    setAreas((prev) => prev.map((a) => a.id === areaId ? { ...a, name: trimmed } : a))
-    start(async () => { await renameArea(areaId, trimmed, project.id) })
-  }
-
-  function handleUpdateWeight(areaId: string, rawValue: string) {
-    setEditingWeightId(null)
-    const num = parseFloat(rawValue.replace(",", "."))
-    const weight = isNaN(num) ? null : Math.round(Math.min(100, Math.max(0, num)) * 10) / 10
-    setAreas((prev) => prev.map((a) => a.id === areaId ? { ...a, weight } : a))
-    start(async () => { await updateAreaWeight(areaId, weight, project.id) })
-  }
-
   function saveTaskField(taskId: string, data: Record<string, unknown>) {
     // Optimistic update with derived progress/status
     const current = tasksRef.current.find(t => t.id === taskId)
@@ -1928,17 +1732,11 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
     })
   }
 
-  function toggleArea(id: string) {
-    setExpandedAreas((prev) => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
-  }
   function toggleListTask(id: string) {
     setExpandedTasks((prev) => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
   }
   function toggleGanttTask(id: string) {
     setExpandedGantt((prev) => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
-  }
-  function toggleGanttArea(id: string) {
-    setExpandedGanttAreas((prev) => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
   }
 
   function saveGanttInline(task: Task) {
@@ -1957,12 +1755,10 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
   }
 
   function expandAll() {
-    setExpandedAreas(new Set([...areas.map((a) => a.id), "__ungrouped__"]))
     const parentIds = new Set(tasks.filter((t) => t.parentId).map((t) => t.parentId!))
     setExpandedTasks(new Set(tasks.filter((t) => parentIds.has(t.id)).map((t) => t.id)))
   }
   function collapseAll() {
-    setExpandedAreas(new Set())
     setExpandedTasks(new Set())
   }
 
@@ -2007,7 +1803,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
     setExporting(true)
     try {
       const { exportScheduleToExcel } = await import("@/lib/export-schedule")
-      await exportScheduleToExcel(project.title, areas, tasks)
+      await exportScheduleToExcel(project.title, tasks)
     } finally {
       setExporting(false)
     }
@@ -2015,44 +1811,17 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
 
   const completedCount = tasks.filter((t) => t.status === "COMPLETED").length
 
-  // ── Weighted project progress ──────────────────────────────────────────────
-  // Tarefas sem módulo (wbsAreaId nulo) entram como um balde "Sem Área" — do
-  // contrário, um projeto sem módulos cadastrados ficaria com 0% mesmo com
-  // tarefas concluídas, pois nenhum "area" bateria com elas.
-  const { weightedProgress, totalWeight, hasCustomWeights } = useMemo(() => {
-    const ungroupedTasks = tasks.filter((t) => !t.wbsAreaId)
-    const buckets: { weight: number | null; tasks: Task[] }[] = [
-      ...areas.map((a) => ({ weight: a.weight, tasks: tasks.filter((t) => t.wbsAreaId === a.id) })),
-      ...(ungroupedTasks.length > 0 ? [{ weight: null, tasks: ungroupedTasks }] : []),
-    ]
-    if (buckets.length === 0) return { weightedProgress: 0, totalWeight: 0, hasCustomWeights: false }
-    const hasCustom = areas.some((a) => a.weight !== null && a.weight > 0)
-    const equalW    = 100 / buckets.length
-    let weighted = 0
-    let total    = 0
-    for (const bucket of buckets) {
-      if (bucket.tasks.length === 0) continue
-      const bucketProgress = bucket.tasks.reduce((s, t) => s + (t.progress ?? 0), 0) / bucket.tasks.length
-      const w = hasCustom ? (bucket.weight ?? 0) : equalW
-      weighted += (w / 100) * bucketProgress
-      total    += w
-    }
-    const normalized = total > 0 ? Math.round(Math.min(100, (weighted / total) * 100)) : 0
-    return { weightedProgress: normalized, totalWeight: Math.round(total * 10) / 10, hasCustomWeights: hasCustom }
-  }, [areas, tasks])
-
-  // ── Cascata de status de prazo (Tarefa → Módulo → Projeto) ──────────────────
-  const cascadeAreaById = useMemo(() => {
-    const cascadeTasks = tasks.map((t) => ({
-      id:        t.id,
-      wbsAreaId: t.wbsAreaId,
-      progress:  t.progress,
-      startDate: t.startDate ? parseDateStr(t.startDate) : null,
-      endDate:   t.endDate   ? parseDateStr(t.endDate)   : null,
-    }))
-    const cascade = computeScheduleCascade(cascadeTasks, areas, riskThresholdPct)
-    return new Map(cascade.areas.map((a) => [a.id, a]))
-  }, [tasks, areas, riskThresholdPct])
+  // ── Project progress ─────────────────────────────────────────────────────
+  // Sem módulos: o progresso do projeto é a média simples das Atividades de
+  // topo (cada uma já reflete, via cascata própria, o progresso das suas
+  // subtarefas — por isso não entramos tarefa a tarefa aqui, para não contar
+  // o mesmo avanço duas vezes).
+  const projectProgress = useMemo(() => {
+    const topLevel = tasks.filter((t) => !t.parentId)
+    if (topLevel.length === 0) return 0
+    const avg = topLevel.reduce((s, t) => s + (t.progress ?? 0), 0) / topLevel.length
+    return Math.round(Math.min(100, avg))
+  }, [tasks])
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
@@ -2130,12 +1899,9 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
             <span className="text-slate-200">·</span>
             <div className="flex items-center gap-1.5">
               <div className="w-24 h-1.5 rounded-full bg-slate-200 overflow-hidden">
-                <div style={{ width: `${weightedProgress}%`, height: "100%", background: "linear-gradient(90deg,#7B2FBE,#2463FF)", transition: "width 0.4s" }} />
+                <div style={{ width: `${projectProgress}%`, height: "100%", background: "linear-gradient(90deg,#7B2FBE,#2463FF)", transition: "width 0.4s" }} />
               </div>
-              <span className="font-bold" style={{ color: "#7B2FBE" }}>{weightedProgress}%</span>
-              {hasCustomWeights && Math.abs(totalWeight - 100) > 1 && (
-                <span className="text-[10px] text-amber-500 font-semibold" title="A soma dos pesos não é 100%">⚠ {totalWeight}%</span>
-              )}
+              <span className="font-bold" style={{ color: "#7B2FBE" }}>{projectProgress}%</span>
             </div>
             {filterResponsible && filterVisibleIds !== null && (
               <>
@@ -2238,14 +2004,6 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
             </>
           )}
 
-          {/* Nova Área (list only) */}
-          {viewMode === "list" && (
-            <button onClick={() => setAddingArea(true)}
-              className="inline-flex items-center gap-1.5 px-2.5 h-7 text-xs font-semibold rounded-lg border border-slate-200 text-slate-500 hover:border-[#7B2FBE] hover:text-[#7B2FBE] transition-all bg-white shrink-0">
-              <FolderOpen className="w-3.5 h-3.5" /> Nova Área
-            </button>
-          )}
-
           {/* Exportar Excel e Usar Modelo — ocultados na view Curva S */}
           {viewMode !== "curva-s" && (
             <>
@@ -2322,189 +2080,8 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
               </div>
             ) : (
               listRows.map((row, i) => {
-                if (row.kind === "area") {
-                  const isExp = expandedAreas.has(row.id)
-                  const progress = row.taskCount > 0 ? Math.round((row.doneCount / row.taskCount) * 100) : 0
-                  return (
-                    <div
-                      key={`area-${row.id}`}
-                      className="flex items-center gap-0 border-b border-slate-100 select-none group transition-colors"
-                      draggable
-                      onDragStart={(e) => onDragStart(e, row.id, "area")}
-                      onDragOver={(e) => onDragOver(e, row.id)}
-                      onDrop={(e) => onDrop(e, row.id, "area")}
-                      onDragEnd={cleanDrag}
-                      style={{
-                        borderLeft: `4px solid ${row.color ?? "#CBD5E1"}`,
-                        background: dragOverId === row.id && dragType === "area" ? "#EEF2FF" : "#F8FAFC",
-                        minHeight: 44,
-                        outline: dragOverId === row.id && dragType === "area" ? "2px solid #7B2FBE" : "none",
-                        outlineOffset: -2,
-                      }}
-                    >
-                      {/* Drag handle */}
-                      <div
-                        style={{ width: 24, flexShrink: 0, cursor: "grab" }}
-                        className="flex items-center justify-center text-slate-300 hover:text-slate-500 transition-colors"
-                        onMouseDown={(e) => e.stopPropagation()}
-                      >
-                        <GripVertical className="w-3.5 h-3.5" />
-                      </div>
-
-                      {/* collapse toggle */}
-                      <div
-                        className="flex items-center justify-end gap-1 pr-2 shrink-0 cursor-pointer"
-                        style={{ width: 84 }}
-                        onClick={() => toggleArea(row.id)}
-                      >
-                        {isExp
-                          ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          : <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
-                      </div>
-
-                      {/* Inline actions for area */}
-                      <div style={{ width: 84 }} className="flex items-center justify-center gap-0.5 shrink-0">
-                        <button
-                          onClick={() => openAdd(undefined, row.id === "__ungrouped__" ? undefined : row.id)}
-                          title="Nova atividade nesta área"
-                          className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
-                          style={{ background: "#DCFCE7", color: "#16A34A" }}
-                        >
-                          <Plus className="w-3 h-3" />
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setEditingAreaId(row.id); setEditingAreaValue(row.id === "__ungrouped__" ? "" : row.name) }}
-                          title={row.id === "__ungrouped__" ? "Dar nome a este módulo" : "Renomear módulo"}
-                          className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
-                          style={{ background: "#EDE9FE", color: "#7C3AED" }}
-                        >
-                          <Pencil className="w-3 h-3" />
-                        </button>
-                        {row.id !== "__ungrouped__" && (
-                          <button
-                            onClick={() => handleDeleteArea(row.id, row.name)}
-                            title="Excluir módulo e todas as atividades"
-                            className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
-                            style={{ background: "#FEE2E2", color: "#DC2626" }}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Reorderable columns — area row */}
-                      {(() => {
-                        const areaCells: Record<ColKey, React.ReactNode> = {
-                          eap: <div style={{ width: colW.eap, flexShrink: 0 }} className="flex items-center justify-center"><span className="text-[10px] font-bold text-slate-400 font-mono">{row.eap}</span></div>,
-                          name: (
-                            <div
-                              style={{ width: colW.name, flexShrink: 0 }}
-                              className={`flex items-center gap-2.5 px-2 overflow-hidden ${editingAreaId === row.id ? "cursor-default" : "cursor-pointer"}`}
-                              onClick={() => { if (editingAreaId !== row.id) toggleArea(row.id) }}
-                            >
-                              <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: row.color ?? "#CBD5E1" }} />
-                              {editingAreaId === row.id ? (
-                                <input
-                                  autoFocus
-                                  value={editingAreaValue}
-                                  onChange={(e) => setEditingAreaValue(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") { e.preventDefault(); handleRenameArea(row.id, editingAreaValue) }
-                                    if (e.key === "Escape") setEditingAreaId(null)
-                                  }}
-                                  onBlur={() => handleRenameArea(row.id, editingAreaValue)}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="flex-1 min-w-0 text-sm font-black text-[#0F172A] bg-transparent border-b-2 border-[#7B2FBE] outline-none"
-                                />
-                              ) : (
-                                <span className="font-black text-[#0F172A] text-sm truncate">{row.name}</span>
-                              )}
-                              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0" style={{ background: "#EDE9FE", color: "#7C3AED" }}>Módulo</span>
-                              {/* Weight badge — inline editable */}
-                              {row.id !== "__ungrouped__" && (
-                                editingWeightId === row.id ? (
-                                  <input
-                                    autoFocus type="number" min="0" max="100" step="1"
-                                    value={editingWeightValue}
-                                    onChange={(e) => setEditingWeightValue(e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter") { e.preventDefault(); handleUpdateWeight(row.id, editingWeightValue) }
-                                      if (e.key === "Escape") setEditingWeightId(null)
-                                    }}
-                                    onBlur={() => handleUpdateWeight(row.id, editingWeightValue)}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="w-12 text-[10px] text-center font-bold bg-amber-50 border-b-2 border-amber-400 outline-none shrink-0 rounded"
-                                    style={{ color: "#D97706" }}
-                                  />
-                                ) : (
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); setEditingWeightId(row.id); setEditingWeightValue(row.weight !== null ? String(row.weight) : "") }}
-                                    title={`Peso do módulo: ${row.weight !== null ? row.weight + "%" : "clique para definir"}`}
-                                    className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full font-bold shrink-0 transition-all hover:scale-105"
-                                    style={{ background: row.weight !== null ? "#FEF3C7" : "#F1F5F9", color: row.weight !== null ? "#D97706" : "#94A3B8" }}
-                                  >
-                                    {row.weight !== null ? `${row.weight}%` : "—%"}
-                                  </button>
-                                )
-                              )}
-                              {/* Status de prazo do módulo (cascata) */}
-                              {row.id !== "__ungrouped__" && cascadeAreaById.get(row.id) && (
-                                <span
-                                  className="w-2 h-2 rounded-full shrink-0"
-                                  style={{ background: SCHEDULE_STATUS_DOT[cascadeAreaById.get(row.id)!.scheduleStatus] }}
-                                  title={`Prazo do módulo: ${SCHEDULE_STATUS_LABEL[cascadeAreaById.get(row.id)!.scheduleStatus]}`}
-                                />
-                              )}
-                            </div>
-                          ),
-                          status: <div style={{ width: colW.status, flexShrink: 0 }} className="flex justify-center"><span className="text-[10px] text-slate-400 font-medium">{row.doneCount}/{row.taskCount}</span></div>,
-                          responsible: <div style={{ width: colW.responsible, flexShrink: 0 }} />,
-                          startDate:   <div style={{ width: colW.startDate,   flexShrink: 0 }} />,
-                          endDate:     <div style={{ width: colW.endDate,     flexShrink: 0 }} />,
-                          actualStart: <div style={{ width: colW.actualStart, flexShrink: 0 }} />,
-                          actualEnd:   <div style={{ width: colW.actualEnd,   flexShrink: 0 }} />,
-                          pctEst:      <div style={{ width: colW.pctEst,      flexShrink: 0 }} />,
-                          pctReal: <div style={{ width: colW.pctReal, flexShrink: 0 }} className="px-3">
-                            {row.taskCount > 0 && (
-                              <div className="flex flex-col gap-1">
-                                <span className="text-[9px] font-bold text-slate-500 text-center">{progress}%</span>
-                                <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden">
-                                  <div style={{ width: `${progress}%`, height: "100%", background: row.color ?? "#CBD5E1", borderRadius: "inherit", transition: "width 0.3s" }} />
-                                </div>
-                              </div>
-                            )}
-                          </div>,
-                          predecessors: <div style={{ width: colW.predecessors, flexShrink: 0 }} />,
-                          budgeted: <div style={{ width: colW.budgeted, flexShrink: 0 }} className="text-center px-1">
-                            {(() => {
-                              const areaTasks = tasks.filter(t => t.wbsAreaId === row.id)
-                              const totalOrc  = areaTasks.reduce((s, t) => s + (t.budgetedCost ?? 0), 0)
-                              const fmtK = (v: number) => v === 0 ? "—" : v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })
-                              return totalOrc > 0 ? <span className="text-[9px] font-bold text-emerald-600">R$ {fmtK(totalOrc)}</span> : null
-                            })()}
-                          </div>,
-                          actual: <div style={{ width: colW.actual, flexShrink: 0 }} className="text-center px-1">
-                            {(() => {
-                              const areaTasks = tasks.filter(t => t.wbsAreaId === row.id)
-                              const totalOrc  = areaTasks.reduce((s, t) => s + (t.budgetedCost ?? 0), 0)
-                              const totalReal = areaTasks.reduce((s, t) => s + (t.actualCost   ?? 0), 0)
-                              const fmtK = (v: number) => v === 0 ? "—" : v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })
-                              return totalReal > 0 ? <span className="text-[9px] font-bold" style={{ color: totalReal > totalOrc && totalOrc > 0 ? "#EF4444" : "#F59E0B" }}>R$ {fmtK(totalReal)}</span> : null
-                            })()}
-                          </div>,
-                        }
-                        return colOrder.map(col => {
-                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                          const cell = areaCells[col] as any
-                          return cloneElement(cell, { key: col, style: { ...cell.props.style, borderLeft: "1px solid #E2E8F0" } })
-                        })
-                      })()}
-                    </div>
-                  )
-                }
-
                 // Task row
-                const { task: t, eap, depth, hasChildren, areaColor } = row
+                const { task: t, eap, depth, hasChildren } = row
                 const color  = taskColor(t)
                 const isLate = t.status === "DELAYED" || isAutoDelayed(t)
                 const isDone = t.status === "COMPLETED"
@@ -2524,9 +2101,9 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                   <div
                     key={`task-${t.id}`}
                     draggable
-                    onDragStart={(e) => onDragStart(e, t.id, "task")}
+                    onDragStart={(e) => onDragStart(e, t.id)}
                     onDragOver={(e) => onDragOver(e, t.id)}
-                    onDrop={(e) => onDrop(e, t.id, "task")}
+                    onDrop={(e) => onDrop(e, t.id)}
                     onDragEnd={cleanDrag}
                     onMouseEnter={() => setHoveredId(t.id)}
                     onMouseLeave={() => setHoveredId(null)}
@@ -2534,8 +2111,8 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                       height: ROW_H,
                       display: "flex",
                       alignItems: "center",
-                      borderBottom: dragOverId === t.id && dragType === "task" ? "2px solid #7B2FBE" : "1px solid #F1F5F9",
-                      background: dragOverId === t.id && dragType === "task"
+                      borderBottom: dragOverId === t.id ? "2px solid #7B2FBE" : "1px solid #F1F5F9",
+                      background: dragOverId === t.id
                         ? "#F5F3FF"
                         : isHov
                           ? "#EEF2FF"
@@ -2543,7 +2120,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                             ? "#F7F5FF"
                             : i % 2 === 0 ? "white" : "#FAFBFD",
                       borderLeft: isTarefa
-                        ? `3px solid ${areaColor ?? "#C4B5FD"}55`
+                        ? "3px solid #C4B5FD55"
                         : "3px solid transparent",
                       opacity: draggedId === t.id ? 0.45 : 1,
                       transition: "opacity 0.15s, background 0.1s",
@@ -2625,11 +2202,6 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
 
                     {/* Reorderable columns — task row */}
                     {(() => {
-                      const ep = calcEstimatedProgress(t.startDate, t.endDate)
-                      const epDelta = ep !== null ? ep - t.progress : null
-                      const taskScheduleStatus: ScheduleStatus = t.status === "COMPLETED"
-                        ? "ON_TIME"
-                        : computeScheduleStatus(t.progress, ep, riskThresholdPct)
                       const taskCells: Record<ColKey, React.ReactNode> = {
                         eap: (
                           <div style={{ width: colW.eap, flexShrink: 0 }} className="flex items-center justify-center">
@@ -2649,7 +2221,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                                   {expandedTasks.has(t.id) ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                                 </button>
                               ) : (
-                                <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: isTarefa ? "#A78BFA" : (areaColor ?? color) }} />
+                                <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: isTarefa ? "#A78BFA" : color }} />
                               )}
                             </div>
                             {isLate    && <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />}
@@ -2761,27 +2333,6 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                             <WorkingDayPicker compact value={t.actualEnd?.slice(0, 10) ?? ""} onChange={(v) => saveTaskField(t.id, { actualEnd: v || null })} placeholder="—" />
                           </div>
                         ),
-                        pctEst: (
-                          <div style={{ width: colW.pctEst, flexShrink: 0 }} className="text-center">
-                            {ep !== null ? (
-                              <div className="flex flex-col items-center gap-0.5">
-                                <div className="flex items-center gap-1">
-                                  <span
-                                    className="w-1.5 h-1.5 rounded-full shrink-0"
-                                    style={{ background: SCHEDULE_STATUS_DOT[taskScheduleStatus] }}
-                                    title={SCHEDULE_STATUS_LABEL[taskScheduleStatus]}
-                                  />
-                                  <span className="text-[9px] font-bold text-amber-600">{ep}%</span>
-                                </div>
-                                {epDelta !== null && Math.abs(epDelta) >= 5 && (
-                                  <span className={`text-[8px] font-bold ${epDelta > 0 ? "text-red-400" : "text-emerald-500"}`}>
-                                    {epDelta > 0 ? `+${epDelta}` : epDelta}
-                                  </span>
-                                )}
-                              </div>
-                            ) : <span className="text-[10px] text-slate-300">—</span>}
-                          </div>
-                        ),
                         pctReal: (
                           <div style={{ width: colW.pctReal, flexShrink: 0 }} className="px-2">
                             {editNum?.id === t.id && editNum.field === "progress" ? (
@@ -2866,10 +2417,6 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
 
             {/* Footer add buttons */}
             <div className="p-4 flex items-center gap-6 border-t border-slate-100">
-              <button onClick={() => setAddingArea(true)}
-                className="flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-[#7B2FBE] transition-colors">
-                <FolderOpen className="w-3.5 h-3.5" /> Nova Área / Módulo
-              </button>
               <button onClick={() => openAdd()}
                 className="flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-[#7B2FBE] transition-colors">
                 <Plus className="w-3.5 h-3.5" /> Nova Atividade
@@ -2912,107 +2459,8 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
               ) : (
                 <>
                   {ganttRows.map((row, i) => {
-                    /* ── Area header row ── */
-                    if (row.kind === "area") {
-                      const areaId    = row.id
-                      const areaName  = row.name
-                      const areaColor = row.color
-                      const isExp     = expandedGanttAreas.has(areaId)
-                      const progress  = row.taskCount > 0 ? Math.round((row.doneCount / row.taskCount) * 100) : 0
-                      return (
-                        <div
-                          key={`ga-${areaId}`}
-                          className="group"
-                          style={{
-                            height: ROW_H, display: "flex", alignItems: "center",
-                            background: areaColor ? `${areaColor}12` : "#F8FAFC",
-                            borderBottom: `1px solid ${areaColor ?? "#E2E8F0"}28`,
-                            borderLeft: `4px solid ${areaColor ?? "#CBD5E1"}`,
-                          }}
-                        >
-                          {/* Expand toggle */}
-                          <button
-                            onClick={() => toggleGanttArea(areaId)}
-                            style={{ width: 36, height: ROW_H, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-                            className="text-slate-400 hover:text-slate-700 transition-colors"
-                          >
-                            {isExp ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                          </button>
-                          <div style={{ width: 24, flexShrink: 0 }} />
-
-                          {/* Area name + count */}
-                          <div
-                            className="flex-1 flex items-center gap-2 min-w-0 px-1 cursor-pointer"
-                            onClick={() => toggleGanttArea(areaId)}
-                          >
-                            <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: areaColor ?? "#CBD5E1" }} />
-                            <span className="font-black text-[#0F172A] text-xs truncate">{areaName}</span>
-                            <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold shrink-0"
-                              style={{ background: areaColor ? `${areaColor}20` : "#EDE9FE", color: areaColor ?? "#7C3AED" }}>
-                              {row.doneCount}/{row.taskCount} · {progress}%
-                            </span>
-                            {areaId !== "__ungrouped__" && (() => {
-                              const areaObj = areas.find((a) => a.id === areaId)
-                              return areaObj ? (
-                                <span
-                                  className="text-[9px] px-1.5 py-0.5 rounded-full font-bold shrink-0"
-                                  style={{ background: areaObj.weight !== null ? "#FEF3C7" : "#F1F5F9", color: areaObj.weight !== null ? "#D97706" : "#94A3B8" }}
-                                  title="Peso do módulo"
-                                >
-                                  {areaObj.weight !== null ? `${areaObj.weight}%` : "—%"}
-                                </span>
-                              ) : null
-                            })()}
-                            {areaId !== "__ungrouped__" && cascadeAreaById.get(areaId) && (
-                              <span
-                                className="w-2 h-2 rounded-full shrink-0"
-                                style={{ background: SCHEDULE_STATUS_DOT[cascadeAreaById.get(areaId)!.scheduleStatus] }}
-                                title={`Prazo do módulo: ${SCHEDULE_STATUS_LABEL[cascadeAreaById.get(areaId)!.scheduleStatus]}`}
-                              />
-                            )}
-                          </div>
-
-                          {/* Placeholder columns */}
-                          <div style={{ width: 110, flexShrink: 0 }} />
-                          <div style={{ width: 76, flexShrink: 0 }} />
-                          <div style={{ width: 76, flexShrink: 0 }} />
-                          <div style={{ width: 48, flexShrink: 0 }} />
-
-                          {/* Area actions */}
-                          <div style={{ width: 80, flexShrink: 0 }} className="flex items-center justify-center gap-0.5 pr-1">
-                            <button
-                              onClick={() => openAdd(undefined, areaId === "__ungrouped__" ? undefined : areaId)}
-                              title="Nova atividade nesta área"
-                              className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
-                              style={{ background: "#DCFCE7", color: "#16A34A" }}
-                            >
-                              <Plus className="w-3 h-3" />
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setEditingAreaId(areaId); setEditingAreaValue(areaId === "__ungrouped__" ? "" : areaName) }}
-                              title={areaId === "__ungrouped__" ? "Dar nome a este módulo" : "Renomear módulo"}
-                              className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
-                              style={{ background: "#EDE9FE", color: "#7C3AED" }}
-                            >
-                              <Pencil className="w-3 h-3" />
-                            </button>
-                            {areaId !== "__ungrouped__" && (
-                              <button
-                                onClick={() => handleDeleteArea(areaId, areaName)}
-                                title="Excluir módulo e todas as atividades"
-                                className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:scale-110"
-                                style={{ background: "#FEE2E2", color: "#DC2626" }}
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      )
-                    }
-
                     /* ── Task row ── */
-                    const { task: t, depth, hasChildren, areaColor: aColor } = row
+                    const { task: t, depth, hasChildren } = row
                     const color     = taskColor(t)
                     const isHov     = hoveredId === t.id
                     const isDone    = t.status === "COMPLETED"
@@ -3030,7 +2478,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                           height: ROW_H, display: "flex", alignItems: "center",
                           background: isHov ? "#EEF2FF" : i % 2 === 0 ? "white" : "#FAFBFD",
                           borderBottom: "1px solid #F1F5F9",
-                          borderLeft: `3px solid ${depth > 0 ? (aColor ? `${aColor}55` : "#C4B5FD55") : color}`,
+                          borderLeft: `3px solid ${depth > 0 ? "#C4B5FD55" : color}`,
                         }}
                         onMouseEnter={() => setHoveredId(t.id)}
                         onMouseLeave={() => setHoveredId(null)}
@@ -3177,14 +2625,8 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                     )
                   })}
 
-                  {/* Footer — add buttons */}
+                  {/* Footer — add button */}
                   <div className="p-4 flex items-center gap-5 border-t border-slate-100">
-                    <button
-                      onClick={() => setAddingArea(true)}
-                      className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-[#7B2FBE] transition-colors"
-                    >
-                      <FolderOpen className="w-3.5 h-3.5" /> Nova Área
-                    </button>
                     <button
                       onClick={() => openAdd()}
                       className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-[#7B2FBE] transition-colors"
@@ -3210,27 +2652,18 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
               ) : (
                 <div style={{ position: "relative", width: ganttWidth, height: ganttRows.length * ROW_H }}>
 
-                  {/* Background rows — area rows get tinted bg */}
-                  {ganttRows.map((row, i) => {
-                    const isArea   = row.kind === "area"
-                    const aColor   = isArea ? row.color : null
-                    const bg       = isArea
-                      ? (aColor ? `${aColor}0D` : "#F8FAFC")
-                      : i % 2 === 0 ? "white" : "#FAFBFD"
-                    return (
-                      <div
-                        key={`gbg-${isArea ? row.id : row.task.id}`}
-                        style={{
-                          position: "absolute", top: i * ROW_H, left: 0, right: 0, height: ROW_H,
-                          background: bg,
-                          borderBottom: isArea
-                            ? `1px solid ${aColor ?? "#E2E8F0"}25`
-                            : "1px solid #F1F5F9",
-                          pointerEvents: "none",
-                        }}
-                      />
-                    )
-                  })}
+                  {/* Background rows — zebra striping */}
+                  {ganttRows.map((row, i) => (
+                    <div
+                      key={`gbg-${row.task.id}`}
+                      style={{
+                        position: "absolute", top: i * ROW_H, left: 0, right: 0, height: ROW_H,
+                        background: i % 2 === 0 ? "white" : "#FAFBFD",
+                        borderBottom: "1px solid #F1F5F9",
+                        pointerEvents: "none",
+                      }}
+                    />
+                  ))}
 
                   {/* Month separator lines */}
                   {eachMonthOfInterval({ start: ganttStart, end: ganttEnd }).map((m) => {
@@ -3339,7 +2772,6 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
           <TaskForm
             mode={panel.mode}
             initial={panel.task}
-            areas={areas}
             members={members}
             allTasks={tasks}
             onSave={handleSaved}
@@ -3404,14 +2836,6 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
         />
       )}
 
-      {/* ── Area form modal ──────────────────────────────────────────────── */}
-      {addingArea && (
-        <AreaForm
-          projectId={project.id}
-          onSave={(a) => { setAreas((prev) => [...prev, a]); setExpandedAreas((prev) => { const s = new Set(prev); s.add(a.id); return s }); setAddingArea(false) }}
-          onClose={() => setAddingArea(false)}
-        />
-      )}
 
       <style jsx global>{`
         [style*="scrollbar-width: none"]::-webkit-scrollbar { display: none; }

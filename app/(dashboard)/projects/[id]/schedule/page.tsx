@@ -11,9 +11,8 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
   const session = await auth()
   if (!session?.user) redirect("/login")
 
-  const [project, areas, tasks, allUsers, org] = await Promise.all([
+  const [project, tasks, allUsers, org] = await Promise.all([
     db.project.findUnique({ where: { id }, select: { id: true, title: true, status: true } }),
-    db.wbsArea.findMany({ where: { projectId: id }, orderBy: { order: "asc" } }),
     db.scheduleTask.findMany({
       where: { projectId: id },
       include: {
@@ -53,7 +52,6 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
   return (
     <ScheduleClient
       project={{ id: project.id, title: project.title, status: project.status }}
-      initialAreas={areas.map((a) => ({ id: a.id, name: a.name, color: a.color, weight: a.weight ?? null }))}
       initialTasks={serializedTasks}
       members={allUsers}
       riskThresholdPct={riskThresholdPct}
