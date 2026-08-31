@@ -1,8 +1,10 @@
+import { db } from "@/lib/db"
 import { requireScreenView } from "@/lib/permissions-guard"
 import { getAllProjectsForKanban } from "@/lib/actions/kanban"
 import { KanbanClient } from "./kanban-client"
 import { differenceInDays } from "date-fns"
 import { computeProjectProgress } from "@/lib/utils/project-progress"
+import { DEFAULT_RISK_THRESHOLD_PCT } from "@/lib/utils/schedule-status"
 
 export const dynamic = "force-dynamic"
 
@@ -16,7 +18,14 @@ export default async function KanbanPage() {
   const userId   = session.user.id   ?? ""
   const userRole = (session.user.role ?? "PROJECT_MEMBER") as string
 
-  const raw = await getAllProjectsForKanban()
+  const [raw, org] = await Promise.all([
+    getAllProjectsForKanban(),
+    db.organization.findUnique({
+      where:  { id: session.user.organizationId },
+      select: { riskThresholdPct: true },
+    }),
+  ])
+  const riskThresholdPct = org?.riskThresholdPct ?? DEFAULT_RISK_THRESHOLD_PCT
 
   const projects = raw.map((p) => {
     // Cards mostram tarefas folha (sem filhos) — mas o % de progresso usa a
@@ -66,5 +75,5 @@ export default async function KanbanPage() {
     ? projects
     : projects.filter((p) => p.members.some((m) => m.id === userId))
 
-  return <KanbanClient projects={visibleProjects} />
+  return <KanbanClient projects={visibleProjects} riskThresholdPct={riskThresholdPct} />
 }

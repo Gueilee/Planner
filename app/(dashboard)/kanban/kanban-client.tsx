@@ -3,6 +3,7 @@
 import { useState, useTransition, useRef, useEffect } from "react"
 import { ProjectTasksKanban } from "./project-tasks-kanban"
 import { parseDateStr, fmtDateLong } from "@/lib/date-utils"
+import { computeExpectedPct, computeScheduleStatus, DEFAULT_RISK_THRESHOLD_PCT } from "@/lib/utils/schedule-status"
 import {
   DndContext, DragOverlay, closestCorners,
   PointerSensor, KeyboardSensor, useSensor, useSensors,
@@ -195,21 +196,29 @@ const URGENCY_CFG: Record<UrgencyLevel, {
 
 const NO_URGENCY_STATUSES = new Set(["COMPLETED", "PAUSED", "FUTURE_ANALYSIS"])
 
-function getUrgency(project: KanbanProject): { level: UrgencyLevel; daysLate: number } {
+// Mesma régua de prazo do resto do sistema (Cronograma/Dashboard/Análises):
+// progresso real vs. esperado pelo calendário, com o limite de risco
+// configurável da organização — não "dias restantes" isolado, que ignora se
+// o projeto já está adiantado ou atrasado de verdade.
+function getUrgency(
+  project: KanbanProject,
+  riskThresholdPct: number = DEFAULT_RISK_THRESHOLD_PCT,
+): { level: UrgencyLevel; daysLate: number } {
   if (NO_URGENCY_STATUSES.has(project.status)) return { level: "none", daysLate: 0 }
 
   const pastDue         = project.daysLeft !== null && project.daysLeft < 0
   const hasDelayedTasks = project.delayedTasks > 0
+  const daysLate        = pastDue ? Math.abs(project.daysLeft!) : 0
 
-  if (pastDue || hasDelayedTasks) {
-    return { level: "delayed", daysLate: pastDue ? Math.abs(project.daysLeft!) : 0 }
-  }
-  if (project.daysLeft !== null && project.daysLeft <= 14) {
-    return { level: "at_risk", daysLate: 0 }
-  }
-  if (project.daysLeft !== null) {
-    return { level: "on_time", daysLate: 0 }
-  }
+  const expectedPct = computeExpectedPct(
+    project.expectedStart ? parseDateStr(project.expectedStart) : null,
+    project.expectedEnd   ? parseDateStr(project.expectedEnd)   : null,
+  )
+  const status = computeScheduleStatus(project.progress, expectedPct, riskThresholdPct)
+
+  if (status === "DELAYED" || hasDelayedTasks) return { level: "delayed",  daysLate }
+  if (status === "AT_RISK")                    return { level: "at_risk", daysLate }
+  if (status === "ON_TIME")                    return { level: "on_time", daysLate }
   return { level: "none", daysLate: 0 }
 }
 
@@ -294,14 +303,16 @@ function ProjectCard({
   project,
   onClick,
   isDragOverlay = false,
+  riskThresholdPct = DEFAULT_RISK_THRESHOLD_PCT,
 }: {
   project: KanbanProject
   onClick?: () => void
   isDragOverlay?: boolean
+  riskThresholdPct?: number
 }) {
   const col   = COL_BY_STATUS[project.status] ?? COLUMNS[0]
   const pCfg  = project.priorityLabel ? PRIORITY_CFG[project.priorityLabel] : null
-  const urg   = getUrgency(project)
+  const urg   = getUrgency(project, riskThresholdPct)
   const ucfg  = URGENCY_CFG[urg.level]
 
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -530,11 +541,13 @@ function KanbanColumn({
   projects,
   isOver,
   onCardClick,
+  riskThresholdPct,
 }: {
   col: typeof COLUMNS[number]
   projects: KanbanProject[]
   isOver: boolean
   onCardClick: (p: KanbanProject) => void
+  riskThresholdPct: number
 }) {
   const { setNodeRef } = useDroppable({ id: col.id })
   const Icon = col.icon
@@ -598,6 +611,7 @@ function KanbanColumn({
             key={p.id}
             project={p}
             onClick={() => onCardClick(p)}
+            riskThresholdPct={riskThresholdPct}
           />
         ))}
 
@@ -896,7 +910,7 @@ function DetailDrawer({ project, onClose }: { project: KanbanProject; onClose: (
 
 // ─── List View ────────────────────────────────────────────────────────────────
 
-function ListView({ projects, onRowClick }: { projects: KanbanProject[]; onRowClick: (p: KanbanProject) => void }) {
+function ListView({ projects, onRowClick, riskThresholdPct }: { projects: KanbanProject[]; onRowClick: (p: KanbanProject) => void; riskThresholdPct: number }) {
   const grouped = COLUMNS.map((col) => ({
     col,
     items: projects.filter((p) => col.displayStatuses.includes(p.status as never)),
@@ -926,7 +940,7 @@ function ListView({ projects, onRowClick }: { projects: KanbanProject[]; onRowCl
             >
               {items.map((p, i) => {
                 const pCfg = p.priorityLabel ? PRIORITY_CFG[p.priorityLabel] : null
-                const purg = getUrgency(p)
+                const purg = getUrgency(p, riskThresholdPct)
                 const pucfg = URGENCY_CFG[purg.level]
                 const isDelayed = purg.level === "delayed"
                 return (
@@ -1008,7 +1022,7 @@ function ListView({ projects, onRowClick }: { projects: KanbanProject[]; onRowCl
 
 // ─── Main Client ──────────────────────────────────────────────────────────────
 
-export function KanbanClient({ projects: initial }: { projects: KanbanProject[] }) {
+export function KanbanClient({ projects: initial, riskThresholdPct = DEFAULT_RISK_THRESHOLD_PCT }: { projects: KanbanProject[]; riskThresholdPct?: number }) {
   const [projects,      setProjects]      = useState<KanbanProject[]>(initial)
   const [activeId,      setActiveId]      = useState<string | null>(null)
   const [overId,        setOverId]        = useState<string | null>(null)
@@ -1182,25 +1196,6 @@ export function KanbanClient({ projects: initial }: { projects: KanbanProject[] 
           )}
         </div>
 
-        {/* Pipeline mini-stats */}
-        <div className="hidden xl:flex items-center gap-1 ml-auto">
-          {COLUMNS.map((col) => {
-            const count = filtered.filter((p) => col.displayStatuses.includes(p.status as never)).length
-            const Icon = col.icon
-            return (
-              <div
-                key={col.id}
-                className="flex items-center gap-1 px-2 h-7 rounded-lg text-[10px] font-bold"
-                style={{ background: `${col.color}0D`, color: col.color, border: `1px solid ${col.color}20` }}
-                title={col.label}
-              >
-                <Icon className="w-3 h-3 shrink-0" style={{ color: col.color }} />
-                <span className="font-black">{count}</span>
-              </div>
-            )
-          })}
-        </div>
-
         {/* Fullscreen button */}
         <button
           onClick={toggleFullscreen}
@@ -1287,7 +1282,7 @@ export function KanbanClient({ projects: initial }: { projects: KanbanProject[] 
 
       {/* ── Board / List ── */}
       {view === "list" ? (
-        <ListView projects={filtered} onRowClick={setSelected} />
+        <ListView projects={filtered} onRowClick={setSelected} riskThresholdPct={riskThresholdPct} />
       ) : (
         <DndContext
           sensors={sensors}
@@ -1313,13 +1308,14 @@ export function KanbanClient({ projects: initial }: { projects: KanbanProject[] 
                   projects={filtered.filter((p) => col.displayStatuses.includes(p.status as never))}
                   isOver={overId === col.id}
                   onCardClick={setSelected}
+                  riskThresholdPct={riskThresholdPct}
                 />
               ))}
             </div>
           </div>
 
           <DragOverlay dropAnimation={{ duration: 180, easing: "cubic-bezier(0.22,1,0.36,1)" }}>
-            {activeProject && <ProjectCard project={activeProject} isDragOverlay />}
+            {activeProject && <ProjectCard project={activeProject} isDragOverlay riskThresholdPct={riskThresholdPct} />}
           </DragOverlay>
         </DndContext>
       )}
