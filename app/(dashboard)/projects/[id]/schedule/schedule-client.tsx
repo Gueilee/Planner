@@ -50,20 +50,20 @@ const ROW_H   = 40
 const HDR_H   = 64
 const LEFT_W  = 600
 // List view — resizable column system
-type ColKey = 'eap' | 'name' | 'status' | 'responsible' | 'startDate' | 'endDate' | 'actualStart' | 'actualEnd' | 'estH' | 'realH' | 'pctEst' | 'pctReal' | 'predecessors' | 'budgeted' | 'actual'
+type ColKey = 'eap' | 'name' | 'status' | 'responsible' | 'startDate' | 'endDate' | 'actualStart' | 'actualEnd' | 'pctEst' | 'pctReal' | 'predecessors' | 'budgeted' | 'actual'
 const COL_DEFAULTS: Record<ColKey, number> = {
   eap: 56, name: 280, status: 130, responsible: 160,
   startDate: 88, endDate: 88, actualStart: 88, actualEnd: 88,
-  estH: 64, realH: 64, pctEst: 68, pctReal: 68,
+  pctEst: 68, pctReal: 68,
   predecessors: 100, budgeted: 84, actual: 84,
 }
 const COL_MIN: Record<ColKey, number> = {
   eap: 40, name: 140, status: 90, responsible: 110,
   startDate: 64, endDate: 64, actualStart: 64, actualEnd: 64,
-  estH: 40, realH: 40, pctEst: 40, pctReal: 40,
+  pctEst: 40, pctReal: 40,
   predecessors: 72, budgeted: 56, actual: 56,
 }
-const DEFAULT_COL_ORDER: ColKey[] = ['eap', 'name', 'status', 'responsible', 'startDate', 'endDate', 'actualStart', 'actualEnd', 'estH', 'realH', 'pctEst', 'pctReal', 'predecessors', 'budgeted', 'actual']
+const DEFAULT_COL_ORDER: ColKey[] = ['eap', 'name', 'status', 'responsible', 'startDate', 'endDate', 'actualStart', 'actualEnd', 'pctEst', 'pctReal', 'predecessors', 'budgeted', 'actual']
 const COL_HEADER_META: Record<ColKey, { label: string; cls: string }> = {
   eap:          { label: "EAP",               cls: "text-white/40 text-center" },
   name:         { label: "Nome da Atividade",  cls: "text-white/40 text-center" },
@@ -73,8 +73,6 @@ const COL_HEADER_META: Record<ColKey, { label: string; cls: string }> = {
   endDate:      { label: "Fim Plan.",         cls: "text-white/40 text-center" },
   actualStart:  { label: "Início Real",       cls: "text-emerald-400/60 text-center" },
   actualEnd:    { label: "Fim Real",          cls: "text-emerald-400/60 text-center" },
-  estH:         { label: "Est.h",             cls: "text-violet-400/70 text-center" },
-  realH:        { label: "Real h",            cls: "text-violet-400/70 text-center" },
   pctEst:       { label: "% Est.",            cls: "text-amber-400/70 text-center" },
   pctReal:      { label: "% Real",            cls: "text-white/40 text-center" },
   predecessors: { label: "Predecessoras",     cls: "text-indigo-400/70 text-center" },
@@ -1350,7 +1348,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [editTitle, setEditTitle] = useState<{ id: string; val: string } | null>(null)
-  const [editNum,   setEditNum]   = useState<{ id: string; field: "estimatedEffort" | "actualEffort" | "progress" | "budgetedCost" | "actualCost"; val: string } | null>(null)
+  const [editNum,   setEditNum]   = useState<{ id: string; field: "progress" | "budgetedCost" | "actualCost"; val: string } | null>(null)
   const [sortBy,    setSortBy]    = useState<"startDate" | "endDate" | null>(null)
   const [editPred,  setEditPred]  = useState<{ id: string; val: string } | null>(null)
   // ── Template modal state ─────────────────────────────────────────────────
@@ -2018,18 +2016,25 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
   const completedCount = tasks.filter((t) => t.status === "COMPLETED").length
 
   // ── Weighted project progress ──────────────────────────────────────────────
+  // Tarefas sem módulo (wbsAreaId nulo) entram como um balde "Sem Área" — do
+  // contrário, um projeto sem módulos cadastrados ficaria com 0% mesmo com
+  // tarefas concluídas, pois nenhum "area" bateria com elas.
   const { weightedProgress, totalWeight, hasCustomWeights } = useMemo(() => {
-    if (areas.length === 0) return { weightedProgress: 0, totalWeight: 0, hasCustomWeights: false }
+    const ungroupedTasks = tasks.filter((t) => !t.wbsAreaId)
+    const buckets: { weight: number | null; tasks: Task[] }[] = [
+      ...areas.map((a) => ({ weight: a.weight, tasks: tasks.filter((t) => t.wbsAreaId === a.id) })),
+      ...(ungroupedTasks.length > 0 ? [{ weight: null, tasks: ungroupedTasks }] : []),
+    ]
+    if (buckets.length === 0) return { weightedProgress: 0, totalWeight: 0, hasCustomWeights: false }
     const hasCustom = areas.some((a) => a.weight !== null && a.weight > 0)
-    const equalW    = 100 / areas.length
+    const equalW    = 100 / buckets.length
     let weighted = 0
     let total    = 0
-    for (const area of areas) {
-      const areaTasks = tasks.filter((t) => t.wbsAreaId === area.id)
-      if (areaTasks.length === 0) continue
-      const areaProgress = areaTasks.reduce((s, t) => s + (t.progress ?? 0), 0) / areaTasks.length
-      const w = hasCustom ? (area.weight ?? 0) : equalW
-      weighted += (w / 100) * areaProgress
+    for (const bucket of buckets) {
+      if (bucket.tasks.length === 0) continue
+      const bucketProgress = bucket.tasks.reduce((s, t) => s + (t.progress ?? 0), 0) / bucket.tasks.length
+      const w = hasCustom ? (bucket.weight ?? 0) : equalW
+      weighted += (w / 100) * bucketProgress
       total    += w
     }
     const normalized = total > 0 ? Math.round(Math.min(100, (weighted / total) * 100)) : 0
@@ -2458,8 +2463,6 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                           endDate:     <div style={{ width: colW.endDate,     flexShrink: 0 }} />,
                           actualStart: <div style={{ width: colW.actualStart, flexShrink: 0 }} />,
                           actualEnd:   <div style={{ width: colW.actualEnd,   flexShrink: 0 }} />,
-                          estH:        <div style={{ width: colW.estH,        flexShrink: 0 }} />,
-                          realH:       <div style={{ width: colW.realH,       flexShrink: 0 }} />,
                           pctEst:      <div style={{ width: colW.pctEst,      flexShrink: 0 }} />,
                           pctReal: <div style={{ width: colW.pctReal, flexShrink: 0 }} className="px-3">
                             {row.taskCount > 0 && (
@@ -2756,43 +2759,6 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
                         actualEnd: (
                           <div style={{ width: colW.actualEnd, flexShrink: 0 }} className="px-1">
                             <WorkingDayPicker compact value={t.actualEnd?.slice(0, 10) ?? ""} onChange={(v) => saveTaskField(t.id, { actualEnd: v || null })} placeholder="—" />
-                          </div>
-                        ),
-                        estH: (
-                          <div style={{ width: colW.estH, flexShrink: 0 }} className="text-center px-1">
-                            {editNum?.id === t.id && editNum.field === "estimatedEffort" ? (
-                              <input type="number" min={0} step={0.5} autoFocus value={editNum.val}
-                                onChange={(e) => setEditNum({ id: t.id, field: "estimatedEffort", val: e.target.value })}
-                                onBlur={() => { const val = editNum.val === "" ? null : Number(editNum.val); setEditNum(null); saveTaskField(t.id, { estimatedEffort: val }) }}
-                                onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") setEditNum(null) }}
-                                className="w-full text-[10px] text-center font-mono text-violet-600 rounded outline-none bg-white" style={{ border: "1.5px solid #7B2FBE" }} />
-                            ) : (
-                              <span className="text-[10px] font-mono text-violet-600 cursor-text block"
-                                onClick={() => setEditNum({ id: t.id, field: "estimatedEffort", val: String(t.estimatedEffort ?? "") })} title="Clique para editar">
-                                {t.estimatedEffort != null ? `${t.estimatedEffort}h` : "—"}
-                              </span>
-                            )}
-                          </div>
-                        ),
-                        realH: (
-                          <div style={{ width: colW.realH, flexShrink: 0 }} className="text-center px-1">
-                            {editNum?.id === t.id && editNum.field === "actualEffort" ? (
-                              <input type="number" min={0} step={0.5} autoFocus value={editNum.val}
-                                onChange={(e) => setEditNum({ id: t.id, field: "actualEffort", val: e.target.value })}
-                                onBlur={() => { const val = editNum.val === "" ? null : Number(editNum.val); setEditNum(null); saveTaskField(t.id, { actualEffort: val }) }}
-                                onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") setEditNum(null) }}
-                                className="w-full text-[10px] text-center font-mono text-violet-600 rounded outline-none bg-white" style={{ border: "1.5px solid #7B2FBE" }} />
-                            ) : (
-                              (() => {
-                                const over = t.estimatedEffort != null && t.actualEffort != null && t.actualEffort > t.estimatedEffort
-                                return (
-                                  <span className={`text-[10px] font-mono font-bold cursor-text block ${over ? "text-red-500" : t.actualEffort != null ? "text-violet-600" : "text-slate-300"}`}
-                                    onClick={() => setEditNum({ id: t.id, field: "actualEffort", val: String(t.actualEffort ?? "") })} title="Clique para editar">
-                                    {t.actualEffort != null ? `${t.actualEffort}h` : "—"}
-                                  </span>
-                                )
-                              })()
-                            )}
                           </div>
                         ),
                         pctEst: (
