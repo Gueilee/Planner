@@ -29,6 +29,8 @@ import { UserAvatar } from "@/components/ui/user-avatar"
 import { TaskStatus } from "@/lib/generated/prisma/enums"
 import type { KanbanProject } from "./kanban-client"
 
+export type ProjectTasksKanbanTarget = Pick<KanbanProject, "id" | "title">
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type TaskItem = {
@@ -968,7 +970,7 @@ export function ProjectTasksKanban({
   project,
   onClose,
 }: {
-  project: KanbanProject
+  project: ProjectTasksKanbanTarget
   onClose: () => void
 }) {
   const [tasks,        setTasks]        = useState<TaskItem[]>([])

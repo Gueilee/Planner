@@ -13,6 +13,7 @@ import {
   Rocket, FileDown, BookOpen, Shield, FileText, Gem,
 } from "lucide-react"
 import { DeleteProjectButton } from "./delete-project-button"
+import { ProjectKanbanButton } from "./project-kanban-button"
 import { SuggestedDatesPanel } from "./suggested-dates-panel"
 import { ReopenProjectButton } from "./reopen-project-button"
 import { ProjectLessonsTab } from "./project-lessons-tab"
@@ -378,6 +379,7 @@ export default async function ProjectDetailPage({
                         <CalendarDays className="w-3.5 h-3.5" />
                         Cronograma
                       </Link>
+                      <ProjectKanbanButton projectId={id} projectTitle={project.title} />
                       <Link
                         href={`/projects/${id}/indicators`}
                         className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.98]"
@@ -434,6 +436,7 @@ export default async function ProjectDetailPage({
                         <CalendarDays className="w-3.5 h-3.5" />
                         Cronograma
                       </Link>
+                      <ProjectKanbanButton projectId={id} projectTitle={project.title} />
                       <Link
                         href={`/projects/${id}/indicators`}
                         className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.98]"
@@ -481,6 +484,7 @@ export default async function ProjectDetailPage({
                         <CalendarDays className="w-3.5 h-3.5" />
                         Cronograma
                       </Link>
+                      <ProjectKanbanButton projectId={id} projectTitle={project.title} />
                       <Link
                         href={`/projects/${id}/indicators`}
                         className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.98]"
