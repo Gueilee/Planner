@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache"
 import bcrypt from "bcryptjs"
 import { deriveStatus, deriveProgress, type AncestorUpdate } from "@/lib/utils/task-progress"
 import { nextWorkingDay, addWorkingDays, workingDaysBetween } from "@/lib/working-days"
+import { differenceInDays } from "date-fns"
 
 export type TaskInput = {
   projectId: string
@@ -326,8 +327,38 @@ export async function updateTask(id: string, projectId: string, data: Partial<Ta
       ? await propagateSuccessorsDown(id, projectId)
       : []
 
+  // Aviso (não bloqueante) de divergência: a data planejada mudou em relação
+  // ao último baseline aprovado — sugere criar um novo baseline (replanejamento).
+  let baselineDivergence: {
+    baselineNumber: number; baselineName: string
+    plannedEnd: string; daysDeviation: number
+  } | null = null
+
+  if ((data.startDate !== undefined || computedEndDate !== undefined) && task.endDate) {
+    const latestBaseline = await db.projectBaseline.findFirst({
+      where:   { projectId, status: "APPROVED" },
+      orderBy: { number: "desc" },
+      select: {
+        number: true, name: true,
+        snaps: { where: { taskId: id }, select: { plannedEnd: true }, take: 1 },
+      },
+    })
+    const snap = latestBaseline?.snaps[0]
+    if (latestBaseline && snap) {
+      const daysDeviation = differenceInDays(task.endDate, snap.plannedEnd)
+      if (daysDeviation !== 0) {
+        baselineDivergence = {
+          baselineNumber: latestBaseline.number,
+          baselineName:   latestBaseline.name,
+          plannedEnd:     snap.plannedEnd.toISOString(),
+          daysDeviation,
+        }
+      }
+    }
+  }
+
   revalidatePath(`/projects/${projectId}/schedule`)
-  return { task: serialize(task), ancestors, successorUpdates }
+  return { task: serialize(task), ancestors, successorUpdates, baselineDivergence }
 }
 
 export async function deleteTask(id: string, projectId: string) {

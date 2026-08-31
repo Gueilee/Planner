@@ -280,7 +280,8 @@ model User {
   benefitAuditLogs        BenefitAuditLog[]
   createdMeasurements     BenefitMeasurement[]
   timeEntries             TimeEntry[]
-  baselines               ProjectBaseline[]
+  baselines               ProjectBaseline[] @relation("BaselineCreatedBy")
+  approvedBaselines       ProjectBaseline[] @relation("BaselineApprovedBy")
   createdInvitations      Invitation[]      @relation("InvitationCreator")
   passwordResetTokens     PasswordResetToken[]
   organizationAccess      UserOrganizationAccess[]
@@ -875,6 +876,11 @@ model BenefitAuditLog {
 // S-CURVE — Curva S / Baselines de Replanejamento
 // ─────────────────────────────────────────────
 
+enum BaselineStatus {
+  DRAFT
+  APPROVED
+}
+
 model ProjectBaseline {
   id          String   @id @default(cuid())
   projectId   String
@@ -885,9 +891,17 @@ model ProjectBaseline {
   createdById String?
   createdAt   DateTime @default(now())
 
-  project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdBy User?          @relation(fields: [createdById], references: [id])
-  snaps     BaselineSnap[]
+  // Aprovação formal: só perfis PM/Sponsor/Admin criam baseline hoje, então a
+  // criação já nasce aprovada — o status fica pronto para um fluxo de
+  // rascunho/aprovação separado no futuro, sem precisar de outra migration.
+  status       BaselineStatus @default(APPROVED)
+  approvedById String?
+  approvedAt   DateTime?
+
+  project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy  User?          @relation("BaselineCreatedBy",  fields: [createdById],  references: [id])
+  approvedBy User?          @relation("BaselineApprovedBy", fields: [approvedById], references: [id])
+  snaps      BaselineSnap[]
 
   @@unique([projectId, number])
 }

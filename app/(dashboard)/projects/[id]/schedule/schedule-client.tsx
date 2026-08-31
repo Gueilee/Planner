@@ -37,6 +37,13 @@ import { isHoliday, isWeekend as isWknd, getHolidayName, nextWorkingDay } from "
 import { WorkingDayPicker } from "@/components/working-day-picker"
 import { UserAvatar } from "@/components/ui/user-avatar"
 
+export type BaselineDivergence = {
+  baselineNumber: number
+  baselineName:   string
+  plannedEnd:     string
+  daysDeviation:  number
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const ROW_H   = 40
@@ -265,7 +272,7 @@ interface TaskFormProps {
   areas: Area[]
   members: Member[]
   allTasks: Task[]
-  onSave: (t: Task, ancestors?: AncestorUpdate[], successors?: SuccessorUpdate[]) => void
+  onSave: (t: Task, ancestors?: AncestorUpdate[], successors?: SuccessorUpdate[], baselineDivergence?: BaselineDivergence | null) => void
   onDelete?: () => void
   onClose: () => void
 }
@@ -341,16 +348,18 @@ function TaskForm({ mode, initial, areas, members, allTasks, onSave, onDelete, o
       let task: Task
       let ancestors: AncestorUpdate[] = []
       let successors: SuccessorUpdate[] = []
+      let baselineDivergence: BaselineDivergence | null | undefined
       if (mode === "edit" && initial.id) {
         const res = await updateTask(initial.id, initial.projectId, data)
         task = res.task as Task
         ancestors = res.ancestors
         successors = res.successorUpdates
+        baselineDivergence = res.baselineDivergence
       } else {
         task = await createTask(data) as Task
       }
 
-      onSave(task, ancestors, successors)
+      onSave(task, ancestors, successors, baselineDivergence)
     })
   }
 
@@ -1352,6 +1361,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
   const [tplStartDate,    setTplStartDate]    = useState<string>("")
   const [tplApplying,     setTplApplying]     = useState(false)
   const [cascadeInfo, setCascadeInfo] = useState<{ count: number; delta: number } | null>(null)
+  const [divergenceInfo, setDivergenceInfo] = useState<BaselineDivergence | null>(null)
 
   // ── Resizable columns ────────────────────────────────────────────────────
   const [colW, setColWState] = useState<Record<ColKey, number>>(() => {
@@ -1499,6 +1509,17 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
     const timer = setTimeout(() => setCascadeInfo(null), 4000)
     return () => clearTimeout(timer)
   }, [cascadeInfo])
+
+  useEffect(() => {
+    if (!divergenceInfo) return
+    const timer = setTimeout(() => setDivergenceInfo(null), 8000)
+    return () => clearTimeout(timer)
+  }, [divergenceInfo])
+
+  // Aviso não-bloqueante: a data planejada divergiu do último baseline aprovado
+  function checkBaselineDivergence(d: BaselineDivergence | null | undefined) {
+    if (d) setDivergenceInfo(d)
+  }
 
   useEffect(() => {
     if (!baselineToast) return
@@ -1781,7 +1802,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
     })
   }
 
-  function handleSaved(t: Task, ancestors: AncestorUpdate[] = [], successors: SuccessorUpdate[] = []) {
+  function handleSaved(t: Task, ancestors: AncestorUpdate[] = [], successors: SuccessorUpdate[] = [], baselineDivergence?: BaselineDivergence | null) {
     const latest = tasksRef.current
     const base = latest.some(x => x.id === t.id)
       ? latest.map(x => x.id === t.id ? t : x)
@@ -1796,6 +1817,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
     })
     setTasks(withSuccessors)
     if (successors.length > 0) setCascadeInfo({ count: successors.length, delta: 0 })
+    checkBaselineDivergence(baselineDivergence)
     if (t.parentId) {
       setExpandedTasks((prev) => { const s = new Set(prev); s.add(t.parentId!); return s })
       setExpandedGantt((prev) => { const s = new Set(prev); s.add(t.parentId!); return s })
@@ -1874,6 +1896,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
       const result = await updateTask(taskId, project.id, data as any)
       applyTaskUpdates(result.task as Task, result.ancestors, result.successorUpdates)
       if (result.successorUpdates.length > 0) setCascadeInfo({ count: result.successorUpdates.length, delta: 0 })
+      checkBaselineDivergence(result.baselineDivergence)
     })
   }
 
@@ -1903,6 +1926,7 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
       if (result.successorUpdates.length > 0) {
         setCascadeInfo({ count: result.successorUpdates.length, delta: 0 })
       }
+      checkBaselineDivergence(result.baselineDivergence)
     })
   }
 
@@ -3649,6 +3673,29 @@ export function ScheduleClient({ project, initialAreas, initialTasks, members: i
           style={{ background: "linear-gradient(135deg, #D97706, #F59E0B)", boxShadow: "0 8px 24px rgba(217,119,6,0.35)" }}>
           <Award className="w-4 h-4 shrink-0" />
           {baselineToast}
+        </div>
+      )}
+
+      {/* Baseline divergence warning — não bloqueia, só avisa */}
+      {divergenceInfo && (
+        <div className="fixed bottom-6 left-6 z-50 flex items-start gap-3 px-4 py-3 rounded-2xl text-sm text-white select-none max-w-sm"
+          style={{ background: "linear-gradient(135deg, #B45309, #DC2626)", boxShadow: "0 8px 24px rgba(220,38,38,0.35)" }}>
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold leading-snug">
+              Essa data diverge {Math.abs(divergenceInfo.daysDeviation)} dia{Math.abs(divergenceInfo.daysDeviation) !== 1 ? "s" : ""}{" "}
+              {divergenceInfo.daysDeviation > 0 ? "além" : "antes"} do baseline aprovado ({divergenceInfo.baselineName}).
+            </p>
+            <button
+              onClick={() => { setViewMode("curva-s"); setDivergenceInfo(null) }}
+              className="mt-1.5 text-xs font-bold underline underline-offset-2 hover:opacity-80"
+            >
+              Ver Curva S / criar novo baseline
+            </button>
+          </div>
+          <button onClick={() => setDivergenceInfo(null)} className="shrink-0 opacity-70 hover:opacity-100">
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
     </div>

@@ -4,6 +4,8 @@ import { auth } from "@/auth"
 
 export const dynamic = "force-dynamic"
 
+const CAN_MANAGE_BASELINE = new Set(["ADMIN", "PROJECT_MANAGER", "SPONSOR"])
+
 // GET /api/projects/[id]/baselines — list all baselines
 export async function GET(
   _req: NextRequest,
@@ -31,6 +33,12 @@ export async function POST(
 ) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!CAN_MANAGE_BASELINE.has(session.user.role ?? "")) {
+    return NextResponse.json(
+      { error: "Apenas Administradores, Gerentes de Projeto e Sponsors podem aprovar um baseline." },
+      { status: 403 }
+    )
+  }
 
   const { id } = await params
   const body = await req.json()
@@ -68,7 +76,8 @@ export async function POST(
   const nextNumber = (last?.number ?? -1) + 1
   const autoName   = name || (nextNumber === 0 ? "Baseline Original" : `Replanejamento ${nextNumber}`)
 
-  const userId = (session.user as { id?: string }).id
+  const userId = (session.user as { id?: string }).id ?? null
+  const now    = new Date()
 
   const baseline = await db.projectBaseline.create({
     data: {
@@ -77,7 +86,10 @@ export async function POST(
       name:        autoName,
       description: description ?? null,
       reason:      reason ?? null,
-      createdById: userId ?? null,
+      createdById:  userId,
+      status:       "APPROVED",
+      approvedById: userId,
+      approvedAt:   now,
       snaps: {
         create: leafTasks.map((t) => ({
           taskId:       t.id,

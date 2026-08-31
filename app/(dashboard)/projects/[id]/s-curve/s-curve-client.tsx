@@ -10,7 +10,7 @@ import { ptBR } from "date-fns/locale"
 import {
   Plus, RefreshCw, TrendingUp, TrendingDown, Minus, Clock, Calendar,
   Maximize2, Minimize2, X, ChevronRight, Info, Layers, AlertTriangle,
-  Rewind, BarChart3, Eye, EyeOff, Download, GitBranch, Zap,
+  Rewind, BarChart3, Eye, EyeOff, Download, GitBranch, Zap, Check,
 } from "lucide-react"
 import { createBaselineAction } from "@/lib/actions/s-curve"
 import type { SCurvePayload, BaselineInfo } from "@/lib/actions/s-curve"
@@ -311,7 +311,18 @@ function BaselinePanel({
                 <span className="text-[10px] font-black" style={{ color: BL_COLORS[i % BL_COLORS.length] }}>B{bl.number}</span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className={`text-xs font-black ${dark ? "text-white" : "text-slate-900"}`}>{bl.name}</p>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <p className={`text-xs font-black ${dark ? "text-white" : "text-slate-900"}`}>{bl.name}</p>
+                  {bl.approvedByName && (
+                    <span
+                      className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0"
+                      style={{ background: "#05966918", color: "#059669" }}
+                      title={`Aprovado por ${bl.approvedByName}${bl.approvedAt ? ` em ${fmtDateFull(bl.approvedAt)}` : ""}`}
+                    >
+                      <Check className="w-2.5 h-2.5" /> Aprovado
+                    </span>
+                  )}
+                </div>
                 <p className={`text-[10px] mt-0.5 ${dark ? "text-slate-500" : "text-slate-400"}`}>
                   {fmtDateFull(bl.createdAt)}
                   {bl.createdByName ? ` · ${bl.createdByName}` : ""}

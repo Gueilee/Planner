@@ -8,6 +8,8 @@ import {
   startOfMonth, addMonths, eachMonthOfInterval,
 } from "date-fns"
 
+const CAN_MANAGE_BASELINE = new Set(["ADMIN", "PROJECT_MANAGER", "SPONSOR"])
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type BaselineInfo = {
@@ -18,6 +20,8 @@ export type BaselineInfo = {
   reason: string | null
   createdAt: string
   createdByName: string | null
+  approvedByName: string | null
+  approvedAt: string | null
   taskCount: number
   latestEndDate: string | null  // max plannedEnd in snaps (for comparison)
 }
@@ -176,7 +180,8 @@ export async function getSCurveData(projectId: string): Promise<SCurvePayload | 
       orderBy: { number: "asc" },
       include: {
         snaps: true,
-        createdBy: { select: { name: true } },
+        createdBy:  { select: { name: true } },
+        approvedBy: { select: { name: true } },
       },
     }),
   ])
@@ -334,8 +339,10 @@ export async function getSCurveData(projectId: string): Promise<SCurvePayload | 
     name:          b.name,
     description:   b.description,
     reason:        b.reason,
-    createdAt:     b.createdAt.toISOString(),
-    createdByName: b.createdBy?.name ?? null,
+    createdAt:      b.createdAt.toISOString(),
+    createdByName:  b.createdBy?.name ?? null,
+    approvedByName: b.approvedBy?.name ?? null,
+    approvedAt:     b.approvedAt?.toISOString() ?? null,
     taskCount:     b.snaps.length,
     latestEndDate: b.snaps.length
       ? new Date(Math.max(...b.snaps.map((s) => s.plannedEnd.getTime()))).toISOString()
@@ -375,6 +382,9 @@ export async function createBaselineAction(
 ): Promise<{ error?: string; id?: string }> {
   const session = await auth()
   if (!session?.user) return { error: "Unauthorized" }
+  if (!CAN_MANAGE_BASELINE.has(session.user.role ?? "")) {
+    return { error: "Apenas Administradores, Gerentes de Projeto e Sponsors podem aprovar um baseline." }
+  }
 
   const tasks = await db.scheduleTask.findMany({
     where:  { projectId, endDate: { not: null } },
@@ -395,6 +405,9 @@ export async function createBaselineAction(
   const nextNumber = (last?.number ?? -1) + 1
   const autoName   = name || (nextNumber === 0 ? "Baseline Original" : `Replanejamento ${nextNumber}`)
 
+  const userId = (session.user as { id?: string }).id ?? null
+  const now    = new Date()
+
   const baseline = await db.projectBaseline.create({
     data: {
       projectId,
@@ -402,7 +415,10 @@ export async function createBaselineAction(
       name:        autoName,
       description: description ?? null,
       reason:      reason ?? null,
-      createdById: (session.user as { id?: string }).id ?? null,
+      createdById: userId,
+      status:      "APPROVED",
+      approvedById: userId,
+      approvedAt:   now,
       snaps: {
         create: leafTasks.map((t) => ({
           taskId:       t.id,
