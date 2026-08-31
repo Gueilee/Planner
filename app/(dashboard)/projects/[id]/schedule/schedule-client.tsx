@@ -49,20 +49,20 @@ const ROW_H   = 40
 const HDR_H   = 64
 const LEFT_W  = 600
 // List view — resizable column system
-type ColKey = 'eap' | 'name' | 'status' | 'responsible' | 'startDate' | 'endDate' | 'actualStart' | 'actualEnd' | 'pctReal' | 'predecessors' | 'budgeted' | 'actual'
+type ColKey = 'eap' | 'name' | 'status' | 'responsible' | 'startDate' | 'endDate' | 'durPlan' | 'actualStart' | 'actualEnd' | 'durReal' | 'pctReal' | 'predecessors' | 'budgeted' | 'actual'
 const COL_DEFAULTS: Record<ColKey, number> = {
   eap: 56, name: 280, status: 130, responsible: 160,
-  startDate: 88, endDate: 88, actualStart: 88, actualEnd: 88,
+  startDate: 88, endDate: 88, durPlan: 64, actualStart: 88, actualEnd: 88, durReal: 64,
   pctReal: 68,
   predecessors: 100, budgeted: 84, actual: 84,
 }
 const COL_MIN: Record<ColKey, number> = {
   eap: 40, name: 140, status: 90, responsible: 110,
-  startDate: 64, endDate: 64, actualStart: 64, actualEnd: 64,
+  startDate: 64, endDate: 64, durPlan: 48, actualStart: 64, actualEnd: 64, durReal: 48,
   pctReal: 40,
   predecessors: 72, budgeted: 56, actual: 56,
 }
-const DEFAULT_COL_ORDER: ColKey[] = ['eap', 'name', 'status', 'responsible', 'startDate', 'endDate', 'actualStart', 'actualEnd', 'pctReal', 'predecessors', 'budgeted', 'actual']
+const DEFAULT_COL_ORDER: ColKey[] = ['eap', 'name', 'status', 'responsible', 'startDate', 'endDate', 'durPlan', 'actualStart', 'actualEnd', 'durReal', 'pctReal', 'predecessors', 'budgeted', 'actual']
 const COL_HEADER_META: Record<ColKey, { label: string; cls: string }> = {
   eap:          { label: "EAP",               cls: "text-white/40 text-center" },
   name:         { label: "Nome da Atividade",  cls: "text-white/40 text-center" },
@@ -70,8 +70,10 @@ const COL_HEADER_META: Record<ColKey, { label: string; cls: string }> = {
   responsible:  { label: "Responsável",       cls: "text-white/40 text-center" },
   startDate:    { label: "Início Plan.",      cls: "text-white/40 text-center" },
   endDate:      { label: "Fim Plan.",         cls: "text-white/40 text-center" },
+  durPlan:      { label: "Dur. Plan.",        cls: "text-sky-400/70 text-center" },
   actualStart:  { label: "Início Real",       cls: "text-emerald-400/60 text-center" },
   actualEnd:    { label: "Fim Real",          cls: "text-emerald-400/60 text-center" },
+  durReal:      { label: "Dur. Real",         cls: "text-amber-400/70 text-center" },
   pctReal:      { label: "% Real",            cls: "text-white/40 text-center" },
   predecessors: { label: "Predecessoras",     cls: "text-indigo-400/70 text-center" },
   budgeted:     { label: "R$ Orç.",           cls: "text-emerald-400/80 text-center" },
@@ -140,6 +142,12 @@ function fmtDate(ds: string | null) {
 function calcEstimatedProgress(startDate: string | null, endDate: string | null): number | null {
   if (!startDate || !endDate) return null
   return computeExpectedPct(parseDateStr(startDate), parseDateStr(endDate))
+}
+
+// Duração em dias corridos: fim − início.
+function durationDays(startDate: string | null, endDate: string | null): number | null {
+  if (!startDate || !endDate) return null
+  return differenceInDays(parseDateStr(endDate), parseDateStr(startDate))
 }
 
 function flattenTasks(tasks: Task[], expanded: Set<string>): FlatTask[] {
@@ -2321,6 +2329,16 @@ export function ScheduleClient({ project, initialTasks, members: initialMembers,
                             <WorkingDayPicker compact value={t.endDate?.slice(0, 10) ?? ""} onChange={(v) => saveDateField(t.id, "endDate", v || null)} placeholder="—" />
                           </div>
                         ),
+                        durPlan: (
+                          <div style={{ width: colW.durPlan, flexShrink: 0 }} className="text-center">
+                            {(() => {
+                              const d = durationDays(t.startDate, t.endDate)
+                              return d !== null
+                                ? <span className="text-[10px] font-bold text-sky-600">{d}d</span>
+                                : <span className="text-[10px] text-slate-300">—</span>
+                            })()}
+                          </div>
+                        ),
                         actualStart: (
                           <div style={{ width: colW.actualStart, flexShrink: 0 }} className="px-1">
                             <WorkingDayPicker compact value={t.actualStart?.slice(0, 10) ?? ""} onChange={(v) => saveTaskField(t.id, { actualStart: v || null })} placeholder="—" />
@@ -2329,6 +2347,17 @@ export function ScheduleClient({ project, initialTasks, members: initialMembers,
                         actualEnd: (
                           <div style={{ width: colW.actualEnd, flexShrink: 0 }} className="px-1">
                             <WorkingDayPicker compact value={t.actualEnd?.slice(0, 10) ?? ""} onChange={(v) => saveTaskField(t.id, { actualEnd: v || null })} placeholder="—" />
+                          </div>
+                        ),
+                        durReal: (
+                          <div style={{ width: colW.durReal, flexShrink: 0 }} className="text-center">
+                            {(() => {
+                              const d = durationDays(t.actualStart, t.actualEnd)
+                              if (d === null) return <span className="text-[10px] text-slate-300">—</span>
+                              const dPlan = durationDays(t.startDate, t.endDate)
+                              const over  = dPlan !== null && d > dPlan
+                              return <span className={`text-[10px] font-bold ${over ? "text-red-500" : "text-amber-600"}`}>{d}d</span>
+                            })()}
                           </div>
                         ),
                         pctReal: (
