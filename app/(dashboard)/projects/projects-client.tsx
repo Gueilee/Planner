@@ -71,10 +71,6 @@ const STATUS_ORDER: Record<string, number> = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function avg(arr: number[]) {
-  return arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0
-}
-
 function projectProgress(p: ProjectRow): number {
   if (p.tasks.length === 0) {
     if (p.status === "COMPLETED") return 100
@@ -328,7 +324,7 @@ export function ProjectsClient({ projects }: { projects: ProjectRow[] }) {
               const tasksDone  = project.tasks.filter((t) => t.status === "COMPLETED").length
               const tasksTotal = project.tasks.length
               const progress   = tasksTotal > 0
-                ? avg(project.tasks.map((t) => t.progress))
+                ? computeProjectProgress(project.tasks)
                 : (project.status === "COMPLETED" ? 100 : project.status === "PLANNING" ? 0 : null)
 
               return (
