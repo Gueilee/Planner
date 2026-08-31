@@ -526,7 +526,7 @@ export function SCurveClient({ projectId, initialData }: SCurveClientProps) {
           <div>
             <h2 className="text-sm font-black" style={{ color: text }}>Curva S — Análise de Desempenho</h2>
             <p className="text-[10px]" style={{ color: tick }}>
-              Distribuição linear ponderada · {data?.series.length ?? 0} pontos de controle
+              Progresso real do Cronograma · {data?.series.length ?? 0} pontos de controle
               {timeMachineId && <span className="ml-2 px-1.5 py-0.5 rounded text-yellow-500 font-bold" style={{ background: "rgba(245,158,11,0.1)" }}>⏪ Time Machine ativo</span>}
             </p>
           </div>
@@ -802,7 +802,7 @@ export function SCurveClient({ projectId, initialData }: SCurveClientProps) {
               style={{ background: dark ? "rgba(59,130,246,0.08)" : "#EFF6FF", borderColor: dark ? "rgba(59,130,246,0.2)" : "#BFDBFE" }}>
               <Info className="w-4 h-4 mt-0.5 shrink-0 text-blue-400" />
               <p className="text-xs text-blue-300" style={{ color: dark ? "#93C5FD" : "#1D4ED8" }}>
-                <strong>Metodologia:</strong> A Curva S usa distribuição linear ponderada pelo custo orçado de cada atividade, distribuindo o avanço uniformemente entre início e fim planejados (não mais contagem binária por conclusão). A tendência é calculada com a velocidade média das últimas {data?.granularity === "month" ? "3 semanas" : "4 semanas"} de execução.
+                <strong>Metodologia:</strong> Planejado e Realizado são a média simples das atividades de topo do Cronograma — a mesma base usada em Detalhes do Projeto e Status Report, para o "Realizado Hoje" nunca divergir do progresso do projeto. O Planejado distribui o avanço uniformemente entre início e fim de cada atividade; o Realizado reconstrói, com as datas reais de início/conclusão, como o progresso de cada atividade evoluiu no tempo até chegar ao seu % atual. A tendência é calculada com a velocidade média das últimas {data?.granularity === "month" ? "3 semanas" : "4 semanas"} de execução.
               </p>
             </div>
 

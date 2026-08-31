@@ -7,6 +7,7 @@ import {
   isAfter, isBefore, differenceInDays,
   startOfMonth, addMonths, eachMonthOfInterval,
 } from "date-fns"
+import { computeProjectProgress } from "@/lib/utils/project-progress"
 
 const CAN_MANAGE_BASELINE = new Set(["ADMIN", "PROJECT_MANAGER", "SPONSOR"])
 
@@ -59,7 +60,12 @@ export type SCurvePayload = {
   granularity: "week" | "month"
 }
 
-// ─── Linear distribution algorithm ────────────────────────────────────────────
+// ─── Curve algorithm ──────────────────────────────────────────────────────────
+// Usa as mesmas tarefas de TOPO e a mesma média simples do Cronograma
+// (lib/utils/project-progress.ts::computeProjectProgress), para o ponto de
+// "hoje" da Curva S nunca divergir do % mostrado em Cronograma/Detalhes do
+// Projeto/Status Report — essa era a causa da Curva S mostrar um "Realizado
+// Hoje" diferente do progresso real do projeto.
 
 type RawTask = {
   id: string
@@ -70,7 +76,6 @@ type RawTask = {
   completedAt: Date | null
   status: string
   progress: number
-  budgetedCost: number | null
   subtaskCount: number
 }
 
@@ -82,72 +87,58 @@ function linearFraction(s: Date, e: Date, T: Date): number {
   return (T.getTime() - s.getTime()) / span
 }
 
-function computePlanned(leafTasks: RawTask[], timePoints: Date[]): number[] {
-  const totalWeight = leafTasks.reduce((s, t) => s + (t.budgetedCost ?? 1), 0)
-  if (totalWeight === 0) return timePoints.map(() => 0)
-
+// % esperado por tarefa (tempo decorrido ÷ duração) — mesma lógica de
+// computeExpectedPct (lib/utils/schedule-status.ts), aplicada a cada ponto da
+// série em vez de só "hoje".
+function computePlanned(tasks: RawTask[], timePoints: Date[]): number[] {
+  if (tasks.length === 0) return timePoints.map(() => 0)
   return timePoints.map((T) => {
-    let cum = 0
-    for (const t of leafTasks) {
-      if (!t.endDate) continue
-      const w = t.budgetedCost ?? 1
-      const s = t.startDate ?? t.endDate
-      cum += w * linearFraction(s, t.endDate, T)
-    }
-    return Math.round((cum / totalWeight) * 100)
+    const sum = tasks.reduce((s, t) => {
+      if (!t.endDate) return s
+      const start = t.startDate ?? t.endDate
+      return s + linearFraction(start, t.endDate, T) * 100
+    }, 0)
+    return Math.round(sum / tasks.length)
   })
 }
 
-function computeRealized(leafTasks: RawTask[], timePoints: Date[], today: Date): (number | null)[] {
-  const totalWeight = leafTasks.reduce((s, t) => s + (t.budgetedCost ?? 1), 0)
-  if (totalWeight === 0) return timePoints.map(() => 0)
+// % realizado por tarefa, reconstruído no tempo: 0 antes de começar, sobe
+// linearmente de 0 até o progresso ATUAL da tarefa entre o início real e a
+// conclusão (ou "hoje", se ainda em andamento) — por isso, no ponto "hoje",
+// o valor de cada tarefa é exatamente o seu progress atual, e a média das
+// tarefas de topo fecha exatamente com o % do Cronograma.
+function computeRealized(tasks: RawTask[], timePoints: Date[], today: Date): (number | null)[] {
+  if (tasks.length === 0) return timePoints.map(() => 0)
 
   return timePoints.map((T) => {
     if (isAfter(T, today)) return null
 
-    let cum = 0
-    for (const t of leafTasks) {
-      const w = t.budgetedCost ?? 1
+    const sum = tasks.reduce((s, t) => {
+      if (!t.actualStart || isAfter(t.actualStart, T)) return s
+      if (t.progress <= 0) return s
 
-      // Task completed before T
-      const completedDate = t.completedAt ?? t.actualEnd
-      if (completedDate && !isAfter(completedDate, T)) { cum += w; continue }
-      if (t.status === "COMPLETED" && t.endDate && !isAfter(t.endDate, T)) { cum += w; continue }
+      const rampEnd = t.completedAt ?? t.actualEnd ?? today
+      if (!isAfter(rampEnd, t.actualStart) || !isBefore(T, rampEnd)) return s + t.progress
 
-      // Task in progress
-      if (t.actualStart && !isAfter(t.actualStart, T) && t.progress > 0) {
-        const s = t.actualStart
-        const e = t.endDate ?? today
-        const span = e.getTime() - s.getTime()
-        let fraction: number
-        if (span <= 0 || !isAfter(e, T)) {
-          fraction = t.progress / 100
-        } else {
-          const elapsed = (T.getTime() - s.getTime()) / span
-          fraction = Math.min(t.progress / 100, elapsed * (t.progress / 100))
-        }
-        cum += w * fraction
-      }
-    }
-    return Math.round((cum / totalWeight) * 100)
+      const elapsed = (T.getTime() - t.actualStart.getTime()) / (rampEnd.getTime() - t.actualStart.getTime())
+      return s + t.progress * elapsed
+    }, 0)
+
+    return Math.round(sum / tasks.length)
   })
 }
 
 function computeBaselineCurve(
-  snaps: { plannedStart: Date | null; plannedEnd: Date; budgetedCost: number | null }[],
+  snaps: { plannedStart: Date | null; plannedEnd: Date }[],
   timePoints: Date[]
 ): number[] {
-  const totalWeight = snaps.reduce((s, snap) => s + (snap.budgetedCost ?? 1), 0)
-  if (totalWeight === 0 || snaps.length === 0) return timePoints.map(() => 0)
-
+  if (snaps.length === 0) return timePoints.map(() => 0)
   return timePoints.map((T) => {
-    let cum = 0
-    for (const snap of snaps) {
-      const w = snap.budgetedCost ?? 1
-      const s = snap.plannedStart ?? snap.plannedEnd
-      cum += w * linearFraction(s, snap.plannedEnd, T)
-    }
-    return Math.round((cum / totalWeight) * 100)
+    const sum = snaps.reduce((s, snap) => {
+      const start = snap.plannedStart ?? snap.plannedEnd
+      return s + linearFraction(start, snap.plannedEnd, T) * 100
+    }, 0)
+    return Math.round(sum / snaps.length)
   })
 }
 
@@ -166,11 +157,10 @@ export async function getSCurveData(projectId: string): Promise<SCurvePayload | 
         actualStart: true, actualEnd: true,
         tasks: {
           select: {
-            id: true,
+            id: true, parentId: true,
             startDate: true, endDate: true,
             actualStart: true, actualEnd: true, completedAt: true,
-            status: true, progress: true, budgetedCost: true,
-            _count: { select: { subtasks: true } },
+            status: true, progress: true,
           },
         },
       },
@@ -189,8 +179,18 @@ export async function getSCurveData(projectId: string): Promise<SCurvePayload | 
   if (!project) return null
 
   const today = startOfWeek(new Date(), { weekStartsOn: 1 })
-  const leafTasks: RawTask[] = project.tasks
-    .filter((t) => t._count.subtasks === 0 && t.endDate)
+  // Tarefas de TOPO (sem parentId) — mesma base do progresso canônico do
+  // projeto (computeProjectProgress). Cada uma já reflete, via propagação
+  // automática, a média das suas subtarefas.
+  //
+  // allTopLevelTasks: TODAS as tarefas de topo, com ou sem data — usada só
+  // para os KPIs "Planejado/Realizado Hoje", que precisam bater exatamente
+  // com o Cronograma (que não exige data para entrar na média).
+  // topLevelTasks: só as que têm data de fim — usada para desenhar a curva
+  // no tempo, já que uma tarefa sem data não tem onde ser plotada.
+  const allTopLevelTasks = project.tasks.filter((t) => !t.parentId)
+  const topLevelTasks: RawTask[] = project.tasks
+    .filter((t) => !t.parentId && t.endDate)
     .map((t) => ({
       id: t.id,
       startDate: t.startDate,
@@ -200,11 +200,13 @@ export async function getSCurveData(projectId: string): Promise<SCurvePayload | 
       completedAt: t.completedAt,
       status: t.status,
       progress: t.progress,
-      budgetedCost: t.budgetedCost,
-      subtaskCount: t._count.subtasks,
+      subtaskCount: 0,
     }))
 
-  if (leafTasks.length === 0) {
+  if (topLevelTasks.length === 0) {
+    const realizedNoDates = computeProjectProgress(
+      allTopLevelTasks.map((t) => ({ progress: t.progress, parentId: null })),
+    )
     return {
       project: {
         id: project.id,
@@ -216,7 +218,7 @@ export async function getSCurveData(projectId: string): Promise<SCurvePayload | 
       },
       baselines: [],
       series: [],
-      stats: { plannedToday: 0, realizedToday: 0, deviation: 0, projectedEndDate: null, originalEndDate: null, currentEndDate: project.expectedEnd?.toISOString() ?? null, daysDeviation: 0, velocity: 0 },
+      stats: { plannedToday: 0, realizedToday: realizedNoDates, deviation: 0 - realizedNoDates, projectedEndDate: null, originalEndDate: null, currentEndDate: project.expectedEnd?.toISOString() ?? null, daysDeviation: 0, velocity: 0 },
       granularity: "week",
     }
   }
@@ -225,8 +227,8 @@ export async function getSCurveData(projectId: string): Promise<SCurvePayload | 
   const allDates = [
     project.actualStart,
     project.expectedStart,
-    ...leafTasks.map((t) => t.startDate),
-    ...leafTasks.map((t) => t.endDate),
+    ...topLevelTasks.map((t) => t.startDate),
+    ...topLevelTasks.map((t) => t.endDate),
   ].filter(Boolean) as Date[]
 
   const rangeStart = startOfWeek(
@@ -235,9 +237,11 @@ export async function getSCurveData(projectId: string): Promise<SCurvePayload | 
   )
 
   const latestEnd = allDates.reduce((max, d) => isAfter(d, max) ? d : max, allDates[0])
-  const projectDays = differenceInDays(latestEnd, rangeStart)
-  // Use actual project end as range boundary — no artificial buffer
-  const rangeEnd = latestEnd
+  // O intervalo sempre cobre até hoje — um projeto com tarefas atrasadas
+  // (fim planejado no passado) não pode deixar "hoje" de fora da grade, senão
+  // Planejado/Realizado Hoje ficam sem ponto correspondente e caem para 0%.
+  const rangeEnd = isAfter(today, latestEnd) ? today : latestEnd
+  const projectDays = differenceInDays(rangeEnd, rangeStart)
 
   // Granularity: weekly for short projects, monthly for > 6 months
   const useMonthly = projectDays > 180
@@ -249,8 +253,8 @@ export async function getSCurveData(projectId: string): Promise<SCurvePayload | 
   const granularity: "week" | "month" = useMonthly ? "month" : "week"
 
   // ── Compute curves ────────────────────────────────────────────────────────
-  const plannedCurve  = computePlanned(leafTasks, timePoints)
-  const realizedCurve = computeRealized(leafTasks, timePoints, today)
+  const plannedCurve  = computePlanned(topLevelTasks, timePoints)
+  const realizedCurve = computeRealized(topLevelTasks, timePoints, today)
 
   // Baseline curves
   const baselineCurves: Map<string, number[]> = new Map()
@@ -260,7 +264,6 @@ export async function getSCurveData(projectId: string): Promise<SCurvePayload | 
       bl.snaps.map((s) => ({
         plannedStart: s.plannedStart,
         plannedEnd:   s.plannedEnd,
-        budgetedCost: s.budgetedCost,
       })),
       timePoints
     )
@@ -282,15 +285,26 @@ export async function getSCurveData(projectId: string): Promise<SCurvePayload | 
     velocity   = (curr - prev) / n  // % per period
   }
 
-  const realizedToday  = realPtsSoFar.length > 0 ? realPtsSoFar[realPtsSoFar.length - 1] : 0
-  const plannedToday   = todayIdx >= 0 ? plannedCurve[todayIdx] : 0
+  // Calculados direto em cima de "hoje" (não pelo índice mais próximo na
+  // grade semanal/mensal do gráfico), para bater exatamente com o Cronograma
+  // mesmo quando "hoje" cai entre dois pontos da grade (granularidade mensal).
+  const realizedToday = computeProjectProgress(
+    allTopLevelTasks.map((t) => ({ progress: t.progress, parentId: null })),
+  )
+  const plannedToday  = computePlanned(topLevelTasks, [today])[0] ?? 0
+
+  // Último ponto da grade com dado real (a semana/mês corrente) — forçado a
+  // bater com realizedToday, já que a grade pode não cair exatamente em
+  // "hoje" (granularidade mensal), mas o ponto mais recente do gráfico deve
+  // sempre mostrar o mesmo número do card e do Cronograma.
+  const lastRealIdx = timePoints.reduce((acc, _, i) => (realizedCurve[i] !== null ? i : acc), -1)
 
   // Build series with projection
   const series: SCurvePoint[] = timePoints.map((d, i) => {
     const pt: SCurvePoint = {
       date:     d.toISOString(),
       planned:  plannedCurve[i],
-      realized: realizedCurve[i],
+      realized: i === lastRealIdx ? realizedToday : realizedCurve[i],
     }
 
     // Projection: only future points, linear trend from last realized
