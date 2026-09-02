@@ -8,7 +8,7 @@ import type { ScheduleV2Payload, ItemV2 } from "@/lib/actions/schedule-v2"
 import { fmtDateLong } from "@/lib/date-utils"
 import {
   ChevronRight, ChevronDown, Plus, Trash2, IndentIncrease, IndentDecrease,
-  ArrowUp, ArrowDown, AlertTriangle, Milestone, Info, Lock,
+  ArrowUp, ArrowDown, AlertTriangle, Milestone, Info,
 } from "lucide-react"
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -314,12 +314,11 @@ function RowGroup({ item, depth, ...h }: { item: ItemV2; depth: number } & RowHa
 
 function Row({ item, depth, hasChildren, isOpen, ...h }: { item: ItemV2; depth: number; hasChildren: boolean; isOpen: boolean } & RowHandlers) {
   const conflict = h.conflictByItem.get(item.id)
-  // Regra §3.7 (CLAUDE.md): grupo não tem data própria — nunca editável.
-  // Um item-folha em modo automático com predecessor também não é
-  // editável diretamente: o vínculo é quem manda no início (igual ao
-  // Artia — só ganha caneta de edição quem realmente pode ser digitado).
-  const linkedAuto = !hasChildren && item.schedulingMode === "auto" && hasPredecessor(item.id, h.data)
-  const inicioEditable = !hasChildren && !linkedAuto
+  // Regra §3.7 (CLAUDE.md): grupo não tem data própria, e um item automático
+  // com predecessor tem a data ditada pelo vínculo — em ambos os casos o
+  // campo fica digitável (por decisão: melhor deixar tentar e o motor
+  // descartar/recalcular do que travar o campo), mas o valor sempre volta a
+  // ser o calculado assim que a tela atualizar após salvar.
 
   return (
     <div
@@ -371,25 +370,23 @@ function Row({ item, depth, hasChildren, isOpen, ...h }: { item: ItemV2; depth: 
 
       {/* Início */}
       <div style={{ width: 110 }} className="text-center">
-        {inicioEditable ? (
-          <input
-            key={`inicio:${item.id}:${item.inicioEstimado}`}
-            type="date"
-            defaultValue={item.inicioEstimado ?? ""}
-            onBlur={(e) => {
-              const v = e.target.value || null
-              if (v !== item.inicioEstimado) h.onUpdate(item.id, { inicioEstimado: v })
-            }}
-            className="bg-transparent outline-none text-[10px] text-slate-700 w-full text-center rounded focus:bg-violet-50"
-          />
-        ) : (
-          <span
-            className="inline-flex items-center gap-1 text-[10px] text-slate-400"
-            title={hasChildren ? "Data de grupo — calculada a partir dos filhos" : "Data controlada pelo predecessor — edite o vínculo ou mude para Manual"}
-          >
-            <Lock className="w-2.5 h-2.5" /> {fmtDateLong(item.inicioEstimado)}
-          </span>
-        )}
+        <input
+          key={`inicio:${item.id}:${item.inicioEstimado}`}
+          type="date"
+          defaultValue={item.inicioEstimado ?? ""}
+          title={
+            hasChildren
+              ? "Data de grupo — some as subatividades definem o período; um valor digitado aqui é descartado ao salvar"
+              : item.schedulingMode === "auto" && hasPredecessor(item.id, h.data)
+                ? "Data controlada pelo predecessor — um valor digitado aqui é descartado ao salvar, a menos que mude para Manual"
+                : undefined
+          }
+          onBlur={(e) => {
+            const v = e.target.value || null
+            if (v !== item.inicioEstimado) h.onUpdate(item.id, { inicioEstimado: v })
+          }}
+          className="bg-transparent outline-none text-[10px] text-slate-700 w-full text-center rounded focus:bg-violet-50"
+        />
       </div>
 
       {/* Término (sempre derivado) */}
