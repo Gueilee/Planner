@@ -43,6 +43,16 @@ function candidateStart(
   }
 }
 
+// regra 3: término = somar_duracao(início, duração) SEMPRE — mesmo para um
+// item âncora (sem predecessor) cujo início veio de edição direta, não só
+// para os que têm data derivada de um vínculo.
+function deriveTermino(item: SchedItem, cal: WorkCalendar): string | null {
+  if (item.inicioEstimado !== null && item.duracaoDiasUteis !== null) {
+    return somarDuracao(item.inicioEstimado, item.duracaoDiasUteis, cal)
+  }
+  return item.terminoEstimado
+}
+
 function agendarItem(
   item: SchedItem,
   deps: readonly Dependency[],
@@ -50,12 +60,13 @@ function agendarItem(
   cal: WorkCalendar
 ): ScheduleUpdate {
   if (deps.length === 0) {
-    // Sem predecessor — âncora ou item ainda não vinculado: mantém a data
-    // que já está no item de entrada (edição direta do usuário, ou null).
+    // Sem predecessor — âncora ou item ainda não vinculado: início vem do
+    // que já está no item de entrada (edição direta do usuário, ou null);
+    // término sempre recalculado a partir de início + duração.
     return {
       itemId: item.id,
       inicioEstimado: item.inicioEstimado,
-      terminoEstimado: item.terminoEstimado,
+      terminoEstimado: deriveTermino(item, cal),
       conflict: false,
     }
   }
@@ -68,7 +79,7 @@ function agendarItem(
     return {
       itemId: item.id,
       inicioEstimado: item.inicioEstimado,
-      terminoEstimado: item.terminoEstimado,
+      terminoEstimado: deriveTermino(item, cal),
       conflict: false,
     }
   }

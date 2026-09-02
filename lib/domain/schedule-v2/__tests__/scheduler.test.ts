@@ -228,6 +228,26 @@ describe("scheduler — regra §6 (modo manual não é movido pelo vínculo)", (
   })
 })
 
+describe("scheduler — regra 3 (término sempre derivado de início+duração, mesmo em âncora)", () => {
+  it("item sem predecessor recalcula término quando a duração muda", () => {
+    const items: SchedItem[] = [
+      { id: "A1", parentId: null, duracaoDiasUteis: 6, inicioEstimado: "2026-04-20", terminoEstimado: "2026-04-23", schedulingMode: "auto" },
+    ]
+    // duração antiga (4) gerava término 23/04; nova duração (6) deve mover
+    // o término, mesmo sem nenhum vínculo — a duração é a fonte da verdade.
+    const result = recalcular(items, [], CAL, ["A1"])
+    expect(updateOf(result, "A1").terminoEstimado).toBe("2026-04-27")
+  })
+
+  it("item sem duração definida mantém término como estava (não quebra)", () => {
+    const items: SchedItem[] = [
+      { id: "A1", parentId: null, duracaoDiasUteis: null, inicioEstimado: "2026-04-20", terminoEstimado: null, schedulingMode: "auto" },
+    ]
+    const result = recalcular(items, [], CAL, ["A1"])
+    expect(updateOf(result, "A1").terminoEstimado).toBeNull()
+  })
+})
+
 describe("scheduler — detecção defensiva de ciclo no recálculo", () => {
   it("itens presos num ciclo não travam o motor e voltam em cycleItemIds", () => {
     const items: SchedItem[] = [

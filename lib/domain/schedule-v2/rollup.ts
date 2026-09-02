@@ -67,3 +67,43 @@ export function projectEndDate(items: readonly SchedItem[]): string | null {
   const ends = items.map((i) => i.terminoEstimado).filter((d): d is string => d !== null)
   return ends.length > 0 ? ends.reduce((max, d) => (d > max ? d : max)) : null
 }
+
+export type ProgressItem = { id: string; parentId: string | null; percentualCompleto: number }
+
+/**
+ * Progresso de grupo = média simples dos filhos DIRETOS, recursivo
+ * bottom-up (mesmo padrão de propagateParentUp do motor atual — grupo sem
+ * filhos fica com o próprio valor, nunca 0 por padrão).
+ */
+export function rollupProgress(items: readonly ProgressItem[]): Map<string, number> {
+  const byId = new Map(items.map((i) => [i.id, i]))
+  const childrenOf = new Map<string, ProgressItem[]>()
+  for (const item of items) {
+    if (item.parentId === null) continue
+    const arr = childrenOf.get(item.parentId) ?? []
+    arr.push(item)
+    childrenOf.set(item.parentId, arr)
+  }
+
+  const result = new Map<string, number>()
+
+  function resolve(id: string): number {
+    const cached = result.get(id)
+    if (cached !== undefined) return cached
+
+    const children = childrenOf.get(id) ?? []
+    if (children.length === 0) {
+      const value = byId.get(id)?.percentualCompleto ?? 0
+      result.set(id, value)
+      return value
+    }
+
+    const childValues = children.map((c) => resolve(c.id))
+    const avg = Math.round(childValues.reduce((s, v) => s + v, 0) / childValues.length)
+    result.set(id, avg)
+    return avg
+  }
+
+  for (const item of items) resolve(item.id)
+  return result
+}

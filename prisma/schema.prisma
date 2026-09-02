@@ -958,6 +958,10 @@ model OrgConfig {
 model ScheduleV2Item {
   id        String  @id @default(cuid())
   projectId String
+  // Código curto exibido ("A1", "A2", ...) — estável, usado na sintaxe de
+  // predecessor (CLAUDE.md §8). Gerado sequencialmente por projeto; não
+  // renumera ao mover/reordenar linhas.
+  code      String
   parentId  String?
   order     Int     @default(0)
   title     String
@@ -989,6 +993,7 @@ model ScheduleV2Item {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([projectId, code])
   @@index([projectId])
   @@index([parentId])
 }
