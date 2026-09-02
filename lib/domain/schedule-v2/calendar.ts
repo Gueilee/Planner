@@ -8,6 +8,21 @@ import type { WorkCalendar } from "./types"
 
 const DEFAULT_DIAS_UTEIS = [1, 2, 3, 4, 5] // seg-sex
 
+// Trava de segurança para os laços dia-a-dia abaixo — nenhum cronograma
+// legítimo passa disso (~274 anos). Sem isto, uma data corrompida (ano com
+// dígitos a mais, digitado sem querer no <input type="date"> do navegador)
+// faz o laço rodar por uma distância astronômica e trava o servidor
+// inteiro (bug real que já aconteceu). As bordas de entrada já validam o
+// formato da data antes de chegar aqui — isto é só o último cinto de
+// segurança, para nunca mais travar mesmo que algo escape da validação.
+const MAX_ITERACOES_DIA_A_DIA = 100_000
+
+function assertDentroDoLimite(iteracoes: number, contexto: string): void {
+  if (iteracoes > MAX_ITERACOES_DIA_A_DIA) {
+    throw new Error(`${contexto}: intervalo de datas grande demais (mais de ${MAX_ITERACOES_DIA_A_DIA} dias) — data inválida?`)
+  }
+}
+
 function isoDayOfWeek(dt: Date): number {
   const jsDay = dt.getDay() // 0=dom..6=sáb
   return jsDay === 0 ? 7 : jsDay
@@ -41,7 +56,11 @@ export function isWorkingDay(dateStr: string, cal: WorkCalendar): boolean {
 /** Retorna o próximo dia útil APÓS a data informada (nunca a própria data). */
 export function nextWorkingDay(afterDateStr: string, cal: WorkCalendar): string {
   let dt = addDays(toDate(afterDateStr), 1)
-  while (!isWorkingDay(toStr(dt), cal)) dt = addDays(dt, 1)
+  let i = 0
+  while (!isWorkingDay(toStr(dt), cal)) {
+    dt = addDays(dt, 1)
+    assertDentroDoLimite(++i, "nextWorkingDay")
+  }
   return toStr(dt)
 }
 
@@ -55,12 +74,15 @@ export function nearestWorkingDay(dateStr: string, cal: WorkCalendar): string {
  * data de partida NÃO é contada. addWorkingDays(d, 0) retorna d.
  */
 export function addWorkingDays(fromDateStr: string, n: number, cal: WorkCalendar): string {
+  assertDentroDoLimite(Math.abs(n), "addWorkingDays")
   let dt = toDate(fromDateStr)
   const step = n >= 0 ? 1 : -1
   let remaining = Math.abs(n)
+  let i = 0
   while (remaining > 0) {
     dt = addDays(dt, step)
     if (isWorkingDay(toStr(dt), cal)) remaining--
+    assertDentroDoLimite(++i, "addWorkingDays")
   }
   return toStr(dt)
 }
@@ -70,10 +92,12 @@ export function workingDaysBetween(startStr: string, endStr: string, cal: WorkCa
   let dt = toDate(startStr)
   const end = toDate(endStr)
   let count = 0
+  let i = 0
   const forward = dt <= end
   while (forward ? dt < end : dt > end) {
     if (isWorkingDay(toStr(dt), cal)) count++
     dt = addDays(dt, forward ? 1 : -1)
+    assertDentroDoLimite(++i, "workingDaysBetween")
   }
   return forward ? count : -count
 }

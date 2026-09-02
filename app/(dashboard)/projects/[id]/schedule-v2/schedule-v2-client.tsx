@@ -7,7 +7,7 @@ import {
 } from "@/lib/actions/schedule-v2"
 import type { ScheduleV2Payload, ItemV2 } from "@/lib/actions/schedule-v2"
 import { updateProjectDetails } from "@/lib/actions/projects"
-import { fmtDateLong } from "@/lib/date-utils"
+import { fmtDateLong, isValidDateStr } from "@/lib/date-utils"
 import {
   ChevronRight, ChevronDown, Plus, IndentIncrease, IndentDecrease,
   ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, Milestone, Info,
@@ -80,6 +80,20 @@ function depsTextFor(itemId: string, data: ScheduleV2Payload): string {
 
 function hasPredecessor(itemId: string, data: ScheduleV2Payload): boolean {
   return data.dependencies.some((d) => d.successorId === itemId)
+}
+
+// Faixa de datas aceitável nos campos de data — o <input type="date"> do
+// navegador deixa digitar mais de 4 dígitos no ano (ex.: "092026"), o que
+// gera um valor que corrompe o registro e derruba a página inteira ao
+// formatar essa data (RangeError). min/max ajudam o seletor nativo; a
+// validação real é feita no blur, revertendo o campo se o valor for
+// inválido, antes mesmo de chamar o servidor.
+const DATE_MIN = "1900-01-01"
+const DATE_MAX = "2100-12-31"
+
+function isSaneDateInput(raw: string): boolean {
+  if (raw === "") return true // campo vazio = limpar a data, sempre válido
+  return isValidDateStr(raw) && raw >= DATE_MIN && raw <= DATE_MAX
 }
 
 // ─── Status ─────────────────────────────────────────────────────────────────
@@ -540,8 +554,14 @@ function EditableDateStat({ label, value, onChange }: {
       <input
         key={`projdate:${label}:${value}`}
         type="date"
+        min={DATE_MIN}
+        max={DATE_MAX}
         defaultValue={value ?? ""}
         onBlur={(e) => {
+          if (!isSaneDateInput(e.target.value)) {
+            e.target.value = value ?? "" // reverte — ano com formato inválido
+            return
+          }
           const v = e.target.value || null
           if (v !== value) onChange(v)
         }}
@@ -808,6 +828,8 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
         <input
           key={`inicio:${item.id}:${item.inicioEstimado}`}
           type="date"
+          min={DATE_MIN}
+          max={DATE_MAX}
           defaultValue={item.inicioEstimado ?? ""}
           title={
             hasChildren
@@ -817,6 +839,10 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
                 : undefined
           }
           onBlur={(e) => {
+            if (!isSaneDateInput(e.target.value)) {
+              e.target.value = item.inicioEstimado ?? "" // reverte — ano com formato inválido
+              return
+            }
             const v = e.target.value || null
             if (v !== item.inicioEstimado) h.onUpdate(item.id, { inicioEstimado: v })
           }}
@@ -829,9 +855,15 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
         <input
           key={`termino:${item.id}:${item.terminoEstimado}`}
           type="date"
+          min={DATE_MIN}
+          max={DATE_MAX}
           defaultValue={item.terminoEstimado ?? ""}
           title={hasChildren ? "Data de grupo — as subatividades definem o período; um valor digitado aqui é descartado ao salvar" : "Editar aqui recalcula a duração (início fica fixo)"}
           onBlur={(e) => {
+            if (!isSaneDateInput(e.target.value)) {
+              e.target.value = item.terminoEstimado ?? "" // reverte — ano com formato inválido
+              return
+            }
             const v = e.target.value || null
             if (v !== item.terminoEstimado) h.onUpdate(item.id, { terminoEstimado: v })
           }}

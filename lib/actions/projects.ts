@@ -5,6 +5,7 @@ import { auth } from "@/auth"
 import { revalidatePath } from "next/cache"
 import { ProjectStatus, TaskStatus, RiskLevel } from "@/lib/generated/prisma/enums"
 import { notifyProjectMembers } from "@/lib/notify"
+import { isValidDateStr } from "@/lib/date-utils"
 
 // ─── Project ───────────────────────────────────────────────────────────────
 
@@ -69,8 +70,12 @@ export async function updateProjectDetails(id: string, data: {
   const session = await auth()
   if (!session?.user) throw new Error("Não autorizado")
 
+  // Exige ano com exatamente 4 dígitos — <input type="date"> do navegador
+  // deixa digitar mais (ex.: "092026"), o que gera um Date cujo
+  // toISOString() lança RangeError e derruba qualquer tela que o formate
+  // (bug real: corrompeu Project.expectedStart e tirou o Cronograma do ar).
   const toDate = (v: string | null | undefined) =>
-    v === null ? null : v ? new Date(v) : undefined
+    v === null ? null : isValidDateStr(v) ? new Date(`${v}T00:00:00.000Z`) : undefined
 
   await db.project.update({
     where: { id },
@@ -115,7 +120,7 @@ export async function updateSuggestedDates(id: string, data: {
   const session = await auth()
   if (!session?.user) throw new Error("Não autorizado")
 
-  const toDate = (v: string | null) => v ? new Date(v) : null
+  const toDate = (v: string | null) => (v && isValidDateStr(v)) ? new Date(`${v}T00:00:00.000Z`) : null
 
   await db.project.update({
     where: { id },

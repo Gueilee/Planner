@@ -11,6 +11,7 @@ import { auth } from "@/auth"
 import { revalidatePath } from "next/cache"
 import { recalcular } from "@/lib/domain/schedule-v2/scheduler"
 import { workingDaysBetween } from "@/lib/domain/schedule-v2/calendar"
+import { isValidDateStr } from "@/lib/date-utils"
 import { rollupGroups, rollupProgress, projectEndDate as computeProjectEndDate } from "@/lib/domain/schedule-v2/rollup"
 import { parsePredecessors, dropUnknownCodes, wouldCreateCycle } from "@/lib/domain/schedule-v2/dependency-parser"
 import type { Dependency, LinkType, SchedItem, SchedulingMode, WorkCalendar } from "@/lib/domain/schedule-v2/types"
@@ -32,13 +33,23 @@ async function requireAccess() {
 }
 
 // ─── Datas: Date (Prisma) <-> string "yyyy-MM-dd" (domínio) ─────────────────
+// isValidDateStr (lib/date-utils.ts) exige ano com EXATAMENTE 4 dígitos —
+// <input type="date"> do navegador aceita digitar mais dígitos no ano, o
+// que corrompe o registro e derruba a página ao formatar (RangeError).
+// Qualquer valor fora do formato é ignorado (vira null) em vez de gravado.
 
 function dstr(d: Date | null | undefined): string | null {
-  return d ? d.toISOString().slice(0, 10) : null
+  if (!d) return null
+  try {
+    return d.toISOString().slice(0, 10)
+  } catch {
+    return null // defesa: uma data já corrompida no banco não derruba a leitura
+  }
 }
 
 function ddate(s: string | null | undefined): Date | null {
-  return s ? new Date(`${s}T00:00:00.000Z`) : null
+  if (!isValidDateStr(s)) return null
+  return new Date(`${s}T00:00:00.000Z`)
 }
 
 // ─── Tipos expostos à UI ──────────────────────────────────────────────────
@@ -593,15 +604,21 @@ export async function updateItemV2(
   if (!hasChildren && data.terminoEstimado !== undefined && data.duracaoDiasUteis === undefined) {
     if (data.terminoEstimado === null) {
       duracaoFromTermino = null // término apagado -> sem duração/data (§3.10)
-    } else {
+    } else if (isValidDateStr(data.terminoEstimado)) {
       const inicioEfetivo = data.inicioEstimado !== undefined ? data.inicioEstimado : dstr(current.inicioEstimado)
-      if (inicioEfetivo) {
+      // Ano fora do formato "yyyy-MM-dd" (4 dígitos) já foi barrado acima;
+      // aqui garante que início também é válido antes de contar dias úteis
+      // — um ano absurdo aqui faria addWorkingDays/workingDaysBetween
+      // percorrer dia a dia por uma distância astronômica e travar o
+      // servidor (o próprio bug que corrompeu o cronograma antes).
+      if (inicioEfetivo && isValidDateStr(inicioEfetivo)) {
         const cal = await loadCalendar(projectId)
         const dias = workingDaysBetween(inicioEfetivo, data.terminoEstimado, cal) + 1
         duracaoFromTermino = Math.max(1, dias)
       }
-      // sem início ainda: não há como derivar duração — ignora em silêncio
+      // sem início válido: não há como derivar duração — ignora em silêncio
     }
+    // término inválido (ano malformado): ignora em silêncio, não grava nada
   }
 
   await db.scheduleV2Item.update({

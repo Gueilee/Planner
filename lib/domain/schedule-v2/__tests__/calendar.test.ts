@@ -77,3 +77,23 @@ describe("calendar — dias úteis e feriados", () => {
     expect(subtrairDuracao(termino, 5, CAL)).toBe(inicio)
   })
 })
+
+// Bug real: <input type="date"> do navegador deixa digitar mais de 4
+// dígitos no ano (ex.: "092026"), o que gera uma data com uma distância
+// astronômica até hoje — sem trava, os laços dia-a-dia rodariam por uma
+// quantidade impraticável de iterações e travariam o servidor inteiro
+// (foi exatamente o que aconteceu, via workingDaysBetween). Estas travas
+// devem lançar rápido em vez de travar o processo.
+describe("calendar — trava de segurança contra data corrompida (ano com dígitos a mais)", () => {
+  it("workingDaysBetween lança para uma distância absurda entre datas", () => {
+    expect(() => workingDaysBetween("2026-01-01", "9999-01-01", CAL)).toThrow(/intervalo de datas grande demais/)
+  })
+
+  it("addWorkingDays lança para uma quantidade absurda de dias", () => {
+    expect(() => addWorkingDays("2026-01-01", 999_999_999, CAL)).toThrow(/intervalo de datas grande demais/)
+  })
+
+  it("addWorkingDays continua funcionando normalmente dentro do limite", () => {
+    expect(addWorkingDays("2026-04-20", 100, CAL)).not.toBe("")
+  })
+})

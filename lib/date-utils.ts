@@ -33,3 +33,19 @@ export function todayStr(): string {
     String(now.getDate()).padStart(2, "0"),
   ].join("-")
 }
+
+/**
+ * Valida "yyyy-MM-dd" com ano de EXATAMENTE 4 dígitos.
+ *
+ * Bug real encontrado: o <input type="date"> do navegador deixa digitar
+ * mais de 4 dígitos no campo do ano (ex.: "092026"), o que produz um Date
+ * válido só que com ano estendido — e Date.prototype.toISOString() nesse
+ * caso lança RangeError, derrubando qualquer página que tente formatar
+ * essa data (500 em produção). Usar isto em toda borda que recebe uma data
+ * digitada pelo usuário, antes de gravar — rejeita em vez de corromper.
+ */
+export function isValidDateStr(s: string | null | undefined): s is string {
+  if (!s) return false
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false
+  return !Number.isNaN(new Date(`${s}T00:00:00.000Z`).getTime())
+}
