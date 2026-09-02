@@ -416,7 +416,7 @@ model Project {
   baselines      ProjectBaseline[]
   scheduleV2Items    ScheduleV2Item[]
   scheduleV2Calendar WorkCalendarV2?
-  scheduleV2Snapshot ScheduleV2Snapshot?
+  scheduleV2Snapshots ScheduleV2Snapshot[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1052,9 +1052,15 @@ model HolidayV2 {
 // o snapshot (não é uma pilha profunda — 1 nível, por decisão de escopo).
 model ScheduleV2Snapshot {
   id        String   @id @default(cuid())
-  projectId String   @unique
+  projectId String
+  // "undo" | "redo" — Voltar/Avançar de 1 nível cada (não é uma pilha
+  // profunda). Uma mutação nova sempre grava em "undo" e apaga "redo"
+  // (edição nova invalida o avançar, igual Word/Excel).
+  kind      String
   payload   String // JSON: { items: [...], dependencies: [...] }
   createdAt DateTime @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, kind])
 }

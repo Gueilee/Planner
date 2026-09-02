@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react"
 import {
-  createItemV2, updateItemV2, deleteItemV2, reorderItemsV2, setDependenciesV2, getScheduleV2,
-  hasUndoV2, undoLastChangeV2,
+  createItemV2, updateItemV2, deleteItemV2, duplicateItemV2, reorderItemsV2, setDependenciesV2, getScheduleV2,
+  hasUndoV2, hasRedoV2, undoLastChangeV2, redoLastChangeV2,
 } from "@/lib/actions/schedule-v2"
 import type { ScheduleV2Payload, ItemV2 } from "@/lib/actions/schedule-v2"
 import { updateProjectDetails } from "@/lib/actions/projects"
@@ -11,7 +11,7 @@ import { fmtDateLong } from "@/lib/date-utils"
 import {
   ChevronRight, ChevronDown, Plus, IndentIncrease, IndentDecrease,
   ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, Milestone, Info,
-  Circle, CircleX, CirclePlus, Pencil, Undo2, GripVertical, GripHorizontal,
+  Circle, CircleX, CirclePlus, Pencil, Undo2, Redo2, GripVertical, GripHorizontal,
 } from "lucide-react"
 
 // ─── Helpers de árvore ──────────────────────────────────────────────────────
@@ -44,7 +44,6 @@ function sortValue(item: ItemV2, col: SortColumn): string | number {
     case "inicio": return item.inicioEstimado ?? ""
     case "termino": return item.terminoEstimado ?? ""
     case "pct": return item.percentualCompleto
-    case "modo": return item.schedulingMode
     case "responsavel": return (item.responsavel ?? "").toLowerCase()
     case "status": return statusLabel(item.status).label
     default: return 0
@@ -83,21 +82,7 @@ function hasPredecessor(itemId: string, data: ScheduleV2Payload): boolean {
   return data.dependencies.some((d) => d.successorId === itemId)
 }
 
-function dateRange(items: ItemV2[]): { min: string; max: string } | null {
-  const starts = items.map((i) => i.inicioEstimado).filter((d): d is string => d !== null)
-  const ends = items.map((i) => i.terminoEstimado).filter((d): d is string => d !== null)
-  if (starts.length === 0 || ends.length === 0) return null
-  return { min: starts.reduce((a, b) => (b < a ? b : a)), max: ends.reduce((a, b) => (b > a ? b : a)) }
-}
-
-function pct(date: string, range: { min: string; max: string }): number {
-  const toTs = (d: string) => new Date(`${d}T00:00:00Z`).getTime()
-  const span = toTs(range.max) - toTs(range.min)
-  if (span <= 0) return 0
-  return ((toTs(date) - toTs(range.min)) / span) * 100
-}
-
-// ─── Status (novo) ──────────────────────────────────────────────────────────
+// ─── Status ─────────────────────────────────────────────────────────────────
 
 const STATUS_OPTIONS = [
   { value: "A_INICIAR", label: "A iniciar", color: "#64748B", bg: "#F1F5F9" },
@@ -112,24 +97,24 @@ function statusLabel(status: string) {
 }
 
 // ─── Colunas configuráveis (redimensionar + reordenar, igual ao Excel) ──────
-// "Atividade" (título+hierarquia) e "Barra" ficam fixas nas pontas — todo o
-// resto é livre para o usuário reordenar e redimensionar.
+// "Atividade" (título+hierarquia) fica fixa à esquerda — todo o resto é
+// livre para o usuário reordenar e redimensionar.
 
-type ColKey = "duracao" | "inicio" | "termino" | "pct" | "predecessores" | "modo" | "responsavel" | "status"
+type ColKey = "duracao" | "inicio" | "termino" | "pct" | "predecessores" | "responsavel" | "status"
 
 const COL_LABELS: Record<ColKey, string> = {
   duracao: "Duração", inicio: "Início", termino: "Término", pct: "%",
-  predecessores: "Predecessores", modo: "Modo", responsavel: "Responsável", status: "Status",
+  predecessores: "Predecessores", responsavel: "Responsável", status: "Status",
 }
-const DEFAULT_COL_ORDER: ColKey[] = ["duracao", "inicio", "termino", "pct", "predecessores", "responsavel", "status", "modo"]
+const DEFAULT_COL_ORDER: ColKey[] = ["duracao", "inicio", "termino", "pct", "predecessores", "responsavel", "status"]
 const DEFAULT_COL_WIDTHS: Record<ColKey, number> = {
-  duracao: 70, inicio: 110, termino: 100, pct: 60, predecessores: 150, responsavel: 140, status: 130, modo: 80,
+  duracao: 70, inicio: 110, termino: 100, pct: 60, predecessores: 150, responsavel: 140, status: 130,
 }
 const COL_ALIGN: Record<ColKey, "center" | "left"> = {
   duracao: "center", inicio: "center", termino: "center", pct: "center",
-  predecessores: "left", modo: "center", responsavel: "left", status: "left",
+  predecessores: "left", responsavel: "left", status: "left",
 }
-const DEFAULT_TITLE_WIDTH = 300
+const DEFAULT_TITLE_WIDTH = 320
 const GUTTER_WIDTH = 112
 
 function colPrefsKey(projectId: string) { return `sv2-columns-${projectId}` }
@@ -144,12 +129,11 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates }: {
   const [data, setData] = useState<ScheduleV2Payload>(initial)
   const [expanded, setExpanded] = useState<Set<string>>(new Set(initial.items.filter((i) => i.isGroup).map((i) => i.id)))
   const [pending, startTransition] = useTransition()
-  const [newTitle, setNewTitle] = useState("")
-  const [addingUnder, setAddingUnder] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [sort, setSort] = useState<SortState>({ column: null, dir: "asc" })
   const [projectDates, setProjectDates] = useState(initialProjectDates)
   const [hasUndo, setHasUndo] = useState(false)
+  const [hasRedo, setHasRedo] = useState(false)
 
   // Layout de colunas (larguras + ordem) — preferência pessoal, salva no
   // navegador (não é dado do cronograma, é só a visão de quem está olhando).
@@ -163,11 +147,11 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates }: {
   const [dragRowId, setDragRowId] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<{ id: string; zone: "before" | "after" | "inside" } | null>(null)
 
-  const range = useMemo(() => dateRange(data.items), [data.items])
   const conflictByItem = useMemo(() => new Map(data.conflicts.map((c) => [c.itemId, c])), [data.conflicts])
 
   useEffect(() => {
     hasUndoV2(projectId).then(setHasUndo).catch(() => {})
+    hasRedoV2(projectId).then(setHasRedo).catch(() => {})
   }, [projectId])
 
   // Carrega preferências de coluna salvas (só no cliente — evita divergir da
@@ -190,11 +174,21 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates }: {
     try { localStorage.setItem(colPrefsKey(projectId), JSON.stringify({ widths: colWidths, order: colOrder, titleWidth })) } catch { /* noop */ }
   }, [colsLoaded, colWidths, colOrder, titleWidth, projectId])
 
-  function refresh() {
+  // `focusId`: depois de recarregar, foca e seleciona o título da linha nova
+  // (criada, duplicada) para o usuário já poder renomear direto.
+  function refresh(focusId?: string) {
     startTransition(async () => {
       const fresh = await getScheduleV2(projectId)
       setData(fresh)
       setHasUndo(true)
+      setHasRedo(false)
+      if (focusId) {
+        requestAnimationFrame(() => {
+          const el = document.getElementById(`sv2-title-${focusId}`) as HTMLInputElement | null
+          el?.focus()
+          el?.select()
+        })
+      }
     })
   }
 
@@ -204,8 +198,21 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates }: {
       if (result.ok) {
         const fresh = await getScheduleV2(projectId)
         setData(fresh)
+        setHasRedo(true)
       }
       setHasUndo(false)
+    })
+  }
+
+  function handleRedo() {
+    startTransition(async () => {
+      const result = await redoLastChangeV2(projectId)
+      if (result.ok) {
+        const fresh = await getScheduleV2(projectId)
+        setData(fresh)
+        setHasUndo(true)
+      }
+      setHasRedo(false)
     })
   }
 
@@ -243,17 +250,6 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates }: {
     })
   }
 
-  function handleCreate(parentId: string | null) {
-    const title = newTitle.trim()
-    if (!title) return
-    startTransition(async () => {
-      await createItemV2({ projectId, parentId, title })
-      setNewTitle("")
-      setAddingUnder(null)
-      refresh()
-    })
-  }
-
   function handleUpdate(id: string, patch: Parameters<typeof updateItemV2>[2]) {
     startTransition(async () => {
       await updateItemV2(id, projectId, patch)
@@ -277,20 +273,40 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates }: {
     })
   }
 
-  // "+" da linha (igual ao Artia): insere uma atividade nova logo depois
-  // desta, no mesmo nível — não dentro dela.
-  function handleAddSibling(item: ItemV2) {
+  // ── Menu do "+" da linha (igual ao Artia): duplicar, adicionar acima,
+  //    adicionar como última filha — qualquer linha pode ganhar filhas,
+  //    seja atividade, tarefa ou subtarefa. ─────────────────────────────
+
+  function handleDuplicate(item: ItemV2) {
+    startTransition(async () => {
+      const result = await duplicateItemV2(item.id, projectId)
+      refresh(result.newId)
+    })
+  }
+
+  function handleAddAbove(item: ItemV2) {
     startTransition(async () => {
       const created = await createItemV2({ projectId, parentId: item.parentId, title: "Nova atividade" })
       const sibs = siblingsOf(data.items, item.parentId)
       const idx = sibs.findIndex((s) => s.id === item.id)
-      const orderedIds = [
-        ...sibs.slice(0, idx + 1).map((s) => s.id),
-        created.id,
-        ...sibs.slice(idx + 1).map((s) => s.id),
-      ]
+      const orderedIds = [...sibs.slice(0, idx).map((s) => s.id), created.id, ...sibs.slice(idx).map((s) => s.id)]
       await reorderItemsV2(projectId, orderedIds)
-      refresh()
+      refresh(created.id)
+    })
+  }
+
+  function handleAddChild(item: ItemV2) {
+    startTransition(async () => {
+      const created = await createItemV2({ projectId, parentId: item.id, title: "Nova atividade" })
+      setExpanded((prev) => new Set(prev).add(item.id))
+      refresh(created.id)
+    })
+  }
+
+  function handleAddRoot() {
+    startTransition(async () => {
+      const created = await createItemV2({ projectId, parentId: null, title: "Nova atividade" })
+      refresh(created.id)
     })
   }
 
@@ -367,6 +383,7 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates }: {
           target.id
         )
         await reorderItemsV2(projectId, kidsAfter.map((k) => k.id))
+        setExpanded((prev) => new Set(prev).add(target.id))
       } else {
         const targetItem = data.items.find((i) => i.id === target.id)
         const newParentId = targetItem ? targetItem.parentId : null
@@ -394,9 +411,8 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates }: {
 
   const rowHandlers: RowHandlers = {
     data, expanded, onToggle: toggle, onUpdate: handleUpdate, onDeps: handleDeps, onDelete: handleDelete,
-    onAddSibling: handleAddSibling, onEditTitle: handleEditTitle,
-    selectedId, onSelect: setSelectedId, sort, range, conflictByItem,
-    addingUnder, setAddingUnder, newTitle, setNewTitle, onCreate: handleCreate,
+    onDuplicate: handleDuplicate, onAddAbove: handleAddAbove, onAddChild: handleAddChild, onEditTitle: handleEditTitle,
+    selectedId, onSelect: setSelectedId, sort, conflictByItem,
     colOrder, colWidths, titleWidth,
     dragRowId, dropTarget, onRowDragStart: handleRowDragStart, onRowDragOver: handleRowDragOver,
     onRowDrop: handleRowDrop, onRowDragEnd: handleRowDragEnd,
@@ -419,12 +435,15 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates }: {
       </div>
 
       {/* Barra de ações estruturais — agem sobre o item selecionado (círculo
-          cinza na frente da linha); "Voltar" desfaz a última alteração feita
-          (igual ao Ctrl+Z do Excel). Arrastar pela alcinha (⠿) também
-          reestrutura, direto na linha — veja abaixo. */}
+          cinza na frente da linha); "Voltar"/"Avançar" desfazem/refazem a
+          última alteração (igual Ctrl+Z / Ctrl+Y do Excel). Arrastar pela
+          alcinha (⠿) também reestrutura, direto na linha — veja abaixo. */}
       <div className="px-5 py-2 border-b border-slate-200 bg-white flex items-center gap-2">
         <ToolbarBtn wide disabled={!hasUndo} onClick={handleUndo} title="Voltar — desfaz a última alteração feita">
           <Undo2 className="w-3.5 h-3.5" /> Voltar
+        </ToolbarBtn>
+        <ToolbarBtn wide disabled={!hasRedo} onClick={handleRedo} title="Avançar — refaz a última alteração desfeita">
+          <Redo2 className="w-3.5 h-3.5" /> Avançar
         </ToolbarBtn>
         <div className="w-px h-5 bg-slate-200 mx-1" />
         <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mr-1">
@@ -476,32 +495,23 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates }: {
             <ColResizeHandle width={colWidths[col]} onResize={(w) => handleColResize(col, w)} />
           </div>
         ))}
-        <div className="flex-1">Barra</div>
       </div>
 
       {/* Rows */}
       <div className={`bg-white ${pending ? "opacity-60 pointer-events-none transition-opacity" : "transition-opacity"}`}>
-        {roots.map((item) => (
-          <RowGroup key={item.id} item={item} depth={0} {...rowHandlers} />
-        ))}
-      </div>
-
-      {/* Novo item de topo */}
-      <div className="px-4 py-3 border-t border-slate-200 bg-white">
-        {addingUnder === "__root__" ? (
-          <NewItemInput
-            value={newTitle}
-            onChange={setNewTitle}
-            onSubmit={() => handleCreate(null)}
-            onCancel={() => { setAddingUnder(null); setNewTitle("") }}
-          />
+        {roots.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <p className="text-sm font-semibold text-slate-400 mb-3">Nenhuma atividade ainda</p>
+            <button
+              onClick={handleAddRoot}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90"
+              style={{ background: "linear-gradient(135deg, #7B2FBE, #9333EA)" }}
+            >
+              <Plus className="w-4 h-4" /> Adicionar primeira atividade
+            </button>
+          </div>
         ) : (
-          <button
-            onClick={() => setAddingUnder("__root__")}
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-[#7B2FBE] hover:text-[#9333EA] transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" /> Nova atividade de topo
-          </button>
+          roots.map((item) => <RowGroup key={item.id} item={item} depth={0} {...rowHandlers} />)
         )}
       </div>
     </div>
@@ -605,24 +615,41 @@ function ColResizeHandle({ width, onResize }: { width: number; onResize: (w: num
   )
 }
 
-// ─── New item inline input ──────────────────────────────────────────────────
-
-function NewItemInput({ value, onChange, onSubmit, onCancel }: {
-  value: string; onChange: (v: string) => void; onSubmit: () => void; onCancel: () => void
+// Menu do botão "+" da linha — igual ao Artia: duplicar, adicionar acima,
+// adicionar como última filha (qualquer linha pode virar grupo).
+function AddMenuButton({ item, onDuplicate, onAddAbove, onAddChild }: {
+  item: ItemV2
+  onDuplicate: (item: ItemV2) => void
+  onAddAbove: (item: ItemV2) => void
+  onAddChild: (item: ItemV2) => void
 }) {
+  const [open, setOpen] = useState(false)
   return (
-    <div className="flex items-center gap-2">
-      <input
-        autoFocus
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter") onSubmit(); if (e.key === "Escape") onCancel() }}
-        placeholder="Título da atividade..."
-        className="px-2 py-1 rounded-lg bg-white border border-slate-200 text-sm text-slate-700 outline-none focus:border-[#7B2FBE] focus:ring-2 focus:ring-[#7B2FBE]/15 w-64"
-      />
-      <button onClick={onSubmit} className="text-xs font-bold text-[#7B2FBE] hover:text-[#9333EA]">Adicionar</button>
-      <button onClick={onCancel} className="text-xs text-slate-400 hover:text-slate-600">Cancelar</button>
+    <div className="relative">
+      <button onClick={() => setOpen((v) => !v)} title="Adicionar / duplicar">
+        <CirclePlus className="w-3.5 h-3.5 text-emerald-400 hover:text-emerald-600 transition-colors" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-5 z-50 w-64 bg-white rounded-xl border border-slate-200 py-1" style={{ boxShadow: "0 12px 32px rgba(15,23,42,0.14)" }}>
+            <MenuItem onClick={() => { setOpen(false); onDuplicate(item) }}>Duplicar linha</MenuItem>
+            <div className="h-px bg-slate-100 my-1 mx-2" />
+            <MenuItem onClick={() => { setOpen(false); onAddAbove(item) }}>Adicionar nova linha acima</MenuItem>
+            <div className="h-px bg-slate-100 my-1 mx-2" />
+            <MenuItem onClick={() => { setOpen(false); onAddChild(item) }}>Adicionar nova linha como última filha</MenuItem>
+          </div>
+        </>
+      )}
     </div>
+  )
+}
+
+function MenuItem({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="w-full text-left px-3.5 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors">
+      {children}
+    </button>
   )
 }
 
@@ -635,18 +662,14 @@ type RowHandlers = {
   onUpdate: (id: string, patch: Parameters<typeof updateItemV2>[2]) => void
   onDeps: (id: string, raw: string) => void
   onDelete: (id: string) => void
-  onAddSibling: (item: ItemV2) => void
+  onDuplicate: (item: ItemV2) => void
+  onAddAbove: (item: ItemV2) => void
+  onAddChild: (item: ItemV2) => void
   onEditTitle: (id: string) => void
   selectedId: string | null
   onSelect: (id: string | null) => void
   sort: SortState
-  range: { min: string; max: string } | null
   conflictByItem: Map<string, ScheduleV2Payload["conflicts"][number]>
-  addingUnder: string | null
-  setAddingUnder: (id: string | null) => void
-  newTitle: string
-  setNewTitle: (v: string) => void
-  onCreate: (parentId: string | null) => void
   colOrder: ColKey[]
   colWidths: Record<ColKey, number>
   titleWidth: number
@@ -669,26 +692,6 @@ function RowGroup({ item, depth, ...h }: { item: ItemV2; depth: number } & RowHa
         <div>
           {kids.map((c) => <RowGroup key={c.id} item={c} depth={depth + 1} {...h} />)}
         </div>
-      )}
-      {h.addingUnder === item.id ? (
-        <div className="py-1.5" style={{ paddingLeft: GUTTER_WIDTH + 16 + (depth + 1) * 20 }}>
-          <NewItemInput
-            value={h.newTitle}
-            onChange={h.setNewTitle}
-            onSubmit={() => h.onCreate(item.id)}
-            onCancel={() => { h.setAddingUnder(null); h.setNewTitle("") }}
-          />
-        </div>
-      ) : (
-        isOpen && (
-          <button
-            onClick={() => h.setAddingUnder(item.id)}
-            style={{ paddingLeft: GUTTER_WIDTH + 16 + (depth + 1) * 20 }}
-            className="flex items-center gap-1 py-1 text-[10px] font-bold text-slate-400 hover:text-[#7B2FBE] transition-colors"
-          >
-            <Plus className="w-3 h-3" /> Sub-item
-          </button>
-        )
       )}
     </div>
   )
@@ -719,7 +722,7 @@ function Row({ item, depth, hasChildren, isOpen, ...h }: { item: ItemV2; depth: 
         outlineOffset: dropHere === "inside" ? "-2px" : undefined,
       }}
     >
-      {/* Gutter fixo (igual ao Artia): arrastar, selecionar, excluir, adicionar, editar */}
+      {/* Gutter fixo (igual ao Artia): arrastar, selecionar, excluir, +, editar */}
       <div style={{ width: GUTTER_WIDTH }} className="flex items-center gap-1 shrink-0">
         <span
           draggable
@@ -736,9 +739,7 @@ function Row({ item, depth, hasChildren, isOpen, ...h }: { item: ItemV2; depth: 
         <button onClick={() => h.onDelete(item.id)} title="Excluir">
           <CircleX className="w-3.5 h-3.5 text-red-300 hover:text-red-500 transition-colors" />
         </button>
-        <button onClick={() => h.onAddSibling(item)} title="Adicionar atividade">
-          <CirclePlus className="w-3.5 h-3.5 text-emerald-400 hover:text-emerald-600 transition-colors" />
-        </button>
+        <AddMenuButton item={item} onDuplicate={h.onDuplicate} onAddAbove={h.onAddAbove} onAddChild={h.onAddChild} />
         {!hasChildren && (
           <button onClick={() => h.onEditTitle(item.id)} title="Editar título">
             <Pencil className="w-3 h-3 text-blue-300 hover:text-blue-500 transition-colors" />
@@ -780,22 +781,6 @@ function Row({ item, depth, hasChildren, isOpen, ...h }: { item: ItemV2; depth: 
           {renderCell(col, item, hasChildren, h)}
         </div>
       ))}
-
-      {/* Barra (coluna fixa, preenche o resto) */}
-      <div className="flex-1 pr-3">
-        {h.range && item.inicioEstimado && item.terminoEstimado && (
-          <div className="relative h-3 bg-slate-100 rounded-full overflow-hidden">
-            <div
-              className="absolute top-0 h-full rounded-full"
-              style={{
-                left: `${pct(item.inicioEstimado, h.range)}%`,
-                width: `${Math.max(1.5, pct(item.terminoEstimado, h.range) - pct(item.inicioEstimado, h.range))}%`,
-                background: conflict ? "#F59E0B" : hasChildren ? "#94A3B8" : "linear-gradient(90deg,#7B2FBE,#2463FF)",
-              }}
-            />
-          </div>
-        )}
-      </div>
     </div>
   )
 }
@@ -828,7 +813,7 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
             hasChildren
               ? "Data de grupo — as subatividades definem o período; um valor digitado aqui é descartado ao salvar"
               : item.schedulingMode === "auto" && hasPredecessor(item.id, h.data)
-                ? "Data controlada pelo predecessor — um valor digitado aqui é descartado ao salvar, a menos que mude para Manual"
+                ? "Data controlada pelo predecessor — um valor digitado aqui é descartado ao salvar"
                 : undefined
           }
           onBlur={(e) => {
@@ -880,19 +865,6 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
           placeholder="Ex.: A2; A3ss+1"
           className="w-full bg-transparent outline-none text-[10px] font-mono text-slate-700 placeholder-slate-300 rounded border-b border-transparent focus:border-[#7B2FBE] focus:bg-violet-50"
         />
-      ) : null
-
-    case "modo":
-      return !hasChildren ? (
-        <button
-          onClick={() => h.onUpdate(item.id, { schedulingMode: item.schedulingMode === "auto" ? "manual" : "auto" })}
-          className="text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full transition-colors"
-          style={item.schedulingMode === "manual"
-            ? { background: "#FFFBEB", color: "#D97706", border: "1px solid #FDE68A" }
-            : { background: "#F1F5F9", color: "#64748B", border: "1px solid #E2E8F0" }}
-        >
-          {item.schedulingMode === "manual" ? "Manual" : "Auto"}
-        </button>
       ) : null
 
     case "responsavel":

@@ -150,9 +150,9 @@ type ItemSnapshotRow = {
 type DepSnapshotRow = { id: string; successorId: string; predecessorId: string; type: string; lagDiasUteis: number }
 type SnapshotPayload = { items: ItemSnapshotRow[]; dependencies: DepSnapshotRow[] }
 
-async function saveSnapshot(projectId: string): Promise<void> {
+async function capturePayload(projectId: string): Promise<SnapshotPayload> {
   const { rows, deps } = await loadRows(projectId)
-  const payload: SnapshotPayload = {
+  return {
     items: rows.map((r) => ({
       id: r.id, code: r.code, parentId: r.parentId, order: r.order, title: r.title, status: r.status,
       responsavel: r.responsavel,
@@ -166,56 +166,111 @@ async function saveSnapshot(projectId: string): Promise<void> {
       id: d.id, successorId: d.successorId, predecessorId: d.predecessorId, type: d.type, lagDiasUteis: d.lagDiasUteis,
     })),
   }
+}
+
+async function writeSnapshot(projectId: string, kind: "undo" | "redo", payload: SnapshotPayload): Promise<void> {
   await db.scheduleV2Snapshot.upsert({
-    where: { projectId },
+    where: { projectId_kind: { projectId, kind } },
     update: { payload: JSON.stringify(payload) },
-    create: { projectId, payload: JSON.stringify(payload) },
+    create: { projectId, kind, payload: JSON.stringify(payload) },
   })
+}
+
+async function clearSnapshot(projectId: string, kind: "undo" | "redo"): Promise<void> {
+  await db.scheduleV2Snapshot.deleteMany({ where: { projectId, kind } })
+}
+
+// Chamado no início de toda ação que muda o cronograma: guarda o estado
+// ANTES da mutação como ponto de "Voltar", e descarta o "Avançar" que
+// estivesse pendente (uma edição nova invalida o redo, igual Word/Excel).
+async function saveSnapshot(projectId: string): Promise<void> {
+  const payload = await capturePayload(projectId)
+  await writeSnapshot(projectId, "undo", payload)
+  await clearSnapshot(projectId, "redo")
+}
+
+async function restorePayload(tx: Parameters<Parameters<typeof db.$transaction>[0]>[0], projectId: string, payload: SnapshotPayload): Promise<void> {
+  await tx.scheduleV2Dependency.deleteMany({ where: { successor: { projectId } } })
+  await tx.scheduleV2Item.deleteMany({ where: { projectId } })
+
+  // Passe 1: cria todos sem parentId — evita depender da ordem (um filho
+  // pode vir antes do pai no array serializado).
+  for (const it of payload.items) {
+    await tx.scheduleV2Item.create({
+      data: {
+        id: it.id, projectId, code: it.code, parentId: null, order: it.order, title: it.title, status: it.status,
+        responsavel: it.responsavel,
+        duracaoDiasUteis: it.duracaoDiasUteis,
+        inicioEstimado: ddate(it.inicioEstimado), terminoEstimado: ddate(it.terminoEstimado),
+        inicioReal: ddate(it.inicioReal), terminoReal: ddate(it.terminoReal),
+        esforcoEstimadoH: it.esforcoEstimadoH, esforcoRealH: it.esforcoRealH, percentualCompleto: it.percentualCompleto,
+        schedulingMode: it.schedulingMode, constraintType: it.constraintType, constraintDate: ddate(it.constraintDate),
+      },
+    })
+  }
+  // Passe 2: religa a hierarquia.
+  for (const it of payload.items) {
+    if (it.parentId) await tx.scheduleV2Item.update({ where: { id: it.id }, data: { parentId: it.parentId } })
+  }
+  for (const d of payload.dependencies) {
+    await tx.scheduleV2Dependency.create({
+      data: { id: d.id, successorId: d.successorId, predecessorId: d.predecessorId, type: d.type, lagDiasUteis: d.lagDiasUteis },
+    })
+  }
 }
 
 export async function hasUndoV2(projectId: string): Promise<boolean> {
   await requireAccess()
-  const snap = await db.scheduleV2Snapshot.findUnique({ where: { projectId }, select: { id: true } })
+  const snap = await db.scheduleV2Snapshot.findUnique({ where: { projectId_kind: { projectId, kind: "undo" } }, select: { id: true } })
+  return snap !== null
+}
+
+export async function hasRedoV2(projectId: string): Promise<boolean> {
+  await requireAccess()
+  const snap = await db.scheduleV2Snapshot.findUnique({ where: { projectId_kind: { projectId, kind: "redo" } }, select: { id: true } })
   return snap !== null
 }
 
 export async function undoLastChangeV2(projectId: string): Promise<{ ok: boolean; message?: string }> {
   await requireAccess()
 
-  const snap = await db.scheduleV2Snapshot.findUnique({ where: { projectId } })
+  const snap = await db.scheduleV2Snapshot.findUnique({ where: { projectId_kind: { projectId, kind: "undo" } } })
   if (!snap) return { ok: false, message: "Nada para desfazer." }
 
-  const payload = JSON.parse(snap.payload) as SnapshotPayload
+  const undoPayload = JSON.parse(snap.payload) as SnapshotPayload
+  const redoPayload = await capturePayload(projectId) // estado atual, antes de restaurar — vira o "Avançar"
 
   await db.$transaction(async (tx) => {
-    await tx.scheduleV2Dependency.deleteMany({ where: { successor: { projectId } } })
-    await tx.scheduleV2Item.deleteMany({ where: { projectId } })
+    await restorePayload(tx, projectId, undoPayload)
+    await tx.scheduleV2Snapshot.upsert({
+      where: { projectId_kind: { projectId, kind: "redo" } },
+      update: { payload: JSON.stringify(redoPayload) },
+      create: { projectId, kind: "redo", payload: JSON.stringify(redoPayload) },
+    })
+    await tx.scheduleV2Snapshot.deleteMany({ where: { projectId, kind: "undo" } })
+  })
 
-    // Passe 1: cria todos sem parentId — evita depender da ordem (um filho
-    // pode vir antes do pai no array serializado).
-    for (const it of payload.items) {
-      await tx.scheduleV2Item.create({
-        data: {
-          id: it.id, projectId, code: it.code, parentId: null, order: it.order, title: it.title, status: it.status,
-          responsavel: it.responsavel,
-          duracaoDiasUteis: it.duracaoDiasUteis,
-          inicioEstimado: ddate(it.inicioEstimado), terminoEstimado: ddate(it.terminoEstimado),
-          inicioReal: ddate(it.inicioReal), terminoReal: ddate(it.terminoReal),
-          esforcoEstimadoH: it.esforcoEstimadoH, esforcoRealH: it.esforcoRealH, percentualCompleto: it.percentualCompleto,
-          schedulingMode: it.schedulingMode, constraintType: it.constraintType, constraintDate: ddate(it.constraintDate),
-        },
-      })
-    }
-    // Passe 2: religa a hierarquia.
-    for (const it of payload.items) {
-      if (it.parentId) await tx.scheduleV2Item.update({ where: { id: it.id }, data: { parentId: it.parentId } })
-    }
-    for (const d of payload.dependencies) {
-      await tx.scheduleV2Dependency.create({
-        data: { id: d.id, successorId: d.successorId, predecessorId: d.predecessorId, type: d.type, lagDiasUteis: d.lagDiasUteis },
-      })
-    }
-    await tx.scheduleV2Snapshot.delete({ where: { projectId } })
+  revalidatePath(`/projects/${projectId}/schedule-v2`)
+  return { ok: true }
+}
+
+export async function redoLastChangeV2(projectId: string): Promise<{ ok: boolean; message?: string }> {
+  await requireAccess()
+
+  const snap = await db.scheduleV2Snapshot.findUnique({ where: { projectId_kind: { projectId, kind: "redo" } } })
+  if (!snap) return { ok: false, message: "Nada para avançar." }
+
+  const redoPayload = JSON.parse(snap.payload) as SnapshotPayload
+  const undoPayload = await capturePayload(projectId) // estado atual, antes de reaplicar — vira o "Voltar" de novo
+
+  await db.$transaction(async (tx) => {
+    await restorePayload(tx, projectId, redoPayload)
+    await tx.scheduleV2Snapshot.upsert({
+      where: { projectId_kind: { projectId, kind: "undo" } },
+      update: { payload: JSON.stringify(undoPayload) },
+      create: { projectId, kind: "undo", payload: JSON.stringify(undoPayload) },
+    })
+    await tx.scheduleV2Snapshot.deleteMany({ where: { projectId, kind: "redo" } })
   })
 
   revalidatePath(`/projects/${projectId}/schedule-v2`)
@@ -428,6 +483,63 @@ export async function createItemV2(input: CreateItemV2Input): Promise<ItemV2> {
     constraintType: row.constraintType, constraintDate: dstr(row.constraintDate),
     isGroup: false,
   }
+}
+
+// ─── Duplicar ─────────────────────────────────────────────────────────────
+// Clona só a linha em si (título, duração, esforço, % , responsável, status
+// e os predecessores DELA) — não duplica os filhos. Entra logo depois da
+// original, no mesmo nível.
+
+export async function duplicateItemV2(id: string, projectId: string): Promise<{ newId: string }> {
+  await requireAccess()
+  await saveSnapshot(projectId)
+
+  const [source, sourceDeps, code] = await Promise.all([
+    db.scheduleV2Item.findUnique({ where: { id } }),
+    db.scheduleV2Dependency.findMany({ where: { successorId: id } }),
+    nextCode(projectId),
+  ])
+  if (!source) throw new Error("Item não encontrado")
+
+  const created = await db.scheduleV2Item.create({
+    data: {
+      projectId,
+      code,
+      parentId: source.parentId,
+      title: `${source.title} (cópia)`,
+      status: source.status,
+      responsavel: source.responsavel,
+      duracaoDiasUteis: source.duracaoDiasUteis,
+      esforcoEstimadoH: source.esforcoEstimadoH,
+      esforcoRealH: source.esforcoRealH,
+      percentualCompleto: source.percentualCompleto,
+      schedulingMode: source.schedulingMode,
+      constraintType: source.constraintType,
+      constraintDate: source.constraintDate,
+      order: source.order, // provisório — reordenado logo abaixo
+    },
+  })
+
+  if (sourceDeps.length > 0) {
+    await db.scheduleV2Dependency.createMany({
+      data: sourceDeps.map((d) => ({ successorId: created.id, predecessorId: d.predecessorId, type: d.type, lagDiasUteis: d.lagDiasUteis })),
+    })
+  }
+
+  // Posiciona a cópia logo depois da original, dentro dos mesmos irmãos.
+  const siblings = await db.scheduleV2Item.findMany({
+    where: { projectId, parentId: source.parentId },
+    orderBy: { order: "asc" },
+    select: { id: true },
+  })
+  const withoutNew = siblings.filter((s) => s.id !== created.id)
+  const idx = withoutNew.findIndex((s) => s.id === source.id)
+  const orderedIds = [...withoutNew.slice(0, idx + 1).map((s) => s.id), created.id, ...withoutNew.slice(idx + 1).map((s) => s.id)]
+  await db.$transaction(orderedIds.map((sid, i) => db.scheduleV2Item.update({ where: { id: sid }, data: { order: i } })))
+
+  await recomputeAndPersist(projectId, [created.id])
+  revalidatePath(`/projects/${projectId}/schedule-v2`)
+  return { newId: created.id }
 }
 
 // ─── Atualizar ────────────────────────────────────────────────────────────
