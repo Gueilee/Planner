@@ -131,6 +131,93 @@ function groupIdSet(rows: ItemRow[]): Set<string> {
   return new Set([...childrenCount.entries()].filter(([, n]) => n > 0).map(([id]) => id))
 }
 
+// ─── Desfazer (1 nível, igual a Ctrl+Z) ─────────────────────────────────────
+// Guarda o estado completo (itens + dependências) de ANTES da mutação que
+// está prestes a acontecer. Cada ação mutante chama isto no início, antes
+// de qualquer escrita — sobrescreve o snapshot anterior (não é uma pilha
+// profunda, é "desfazer a última alteração", por decisão de escopo).
+
+type ItemSnapshotRow = {
+  id: string; code: string; parentId: string | null; order: number; title: string; status: string
+  duracaoDiasUteis: number | null
+  inicioEstimado: string | null; terminoEstimado: string | null
+  inicioReal: string | null; terminoReal: string | null
+  esforcoEstimadoH: number; esforcoRealH: number; percentualCompleto: number
+  schedulingMode: string; constraintType: string | null; constraintDate: string | null
+}
+type DepSnapshotRow = { id: string; successorId: string; predecessorId: string; type: string; lagDiasUteis: number }
+type SnapshotPayload = { items: ItemSnapshotRow[]; dependencies: DepSnapshotRow[] }
+
+async function saveSnapshot(projectId: string): Promise<void> {
+  const { rows, deps } = await loadRows(projectId)
+  const payload: SnapshotPayload = {
+    items: rows.map((r) => ({
+      id: r.id, code: r.code, parentId: r.parentId, order: r.order, title: r.title, status: r.status,
+      duracaoDiasUteis: r.duracaoDiasUteis,
+      inicioEstimado: dstr(r.inicioEstimado), terminoEstimado: dstr(r.terminoEstimado),
+      inicioReal: dstr(r.inicioReal), terminoReal: dstr(r.terminoReal),
+      esforcoEstimadoH: r.esforcoEstimadoH, esforcoRealH: r.esforcoRealH, percentualCompleto: r.percentualCompleto,
+      schedulingMode: r.schedulingMode, constraintType: r.constraintType, constraintDate: dstr(r.constraintDate),
+    })),
+    dependencies: deps.map((d) => ({
+      id: d.id, successorId: d.successorId, predecessorId: d.predecessorId, type: d.type, lagDiasUteis: d.lagDiasUteis,
+    })),
+  }
+  await db.scheduleV2Snapshot.upsert({
+    where: { projectId },
+    update: { payload: JSON.stringify(payload) },
+    create: { projectId, payload: JSON.stringify(payload) },
+  })
+}
+
+export async function hasUndoV2(projectId: string): Promise<boolean> {
+  await requireAccess()
+  const snap = await db.scheduleV2Snapshot.findUnique({ where: { projectId }, select: { id: true } })
+  return snap !== null
+}
+
+export async function undoLastChangeV2(projectId: string): Promise<{ ok: boolean; message?: string }> {
+  await requireAccess()
+
+  const snap = await db.scheduleV2Snapshot.findUnique({ where: { projectId } })
+  if (!snap) return { ok: false, message: "Nada para desfazer." }
+
+  const payload = JSON.parse(snap.payload) as SnapshotPayload
+
+  await db.$transaction(async (tx) => {
+    await tx.scheduleV2Dependency.deleteMany({ where: { successor: { projectId } } })
+    await tx.scheduleV2Item.deleteMany({ where: { projectId } })
+
+    // Passe 1: cria todos sem parentId — evita depender da ordem (um filho
+    // pode vir antes do pai no array serializado).
+    for (const it of payload.items) {
+      await tx.scheduleV2Item.create({
+        data: {
+          id: it.id, projectId, code: it.code, parentId: null, order: it.order, title: it.title, status: it.status,
+          duracaoDiasUteis: it.duracaoDiasUteis,
+          inicioEstimado: ddate(it.inicioEstimado), terminoEstimado: ddate(it.terminoEstimado),
+          inicioReal: ddate(it.inicioReal), terminoReal: ddate(it.terminoReal),
+          esforcoEstimadoH: it.esforcoEstimadoH, esforcoRealH: it.esforcoRealH, percentualCompleto: it.percentualCompleto,
+          schedulingMode: it.schedulingMode, constraintType: it.constraintType, constraintDate: ddate(it.constraintDate),
+        },
+      })
+    }
+    // Passe 2: religa a hierarquia.
+    for (const it of payload.items) {
+      if (it.parentId) await tx.scheduleV2Item.update({ where: { id: it.id }, data: { parentId: it.parentId } })
+    }
+    for (const d of payload.dependencies) {
+      await tx.scheduleV2Dependency.create({
+        data: { id: d.id, successorId: d.successorId, predecessorId: d.predecessorId, type: d.type, lagDiasUteis: d.lagDiasUteis },
+      })
+    }
+    await tx.scheduleV2Snapshot.delete({ where: { projectId } })
+  })
+
+  revalidatePath(`/projects/${projectId}/schedule-v2`)
+  return { ok: true }
+}
+
 async function nextCode(projectId: string): Promise<string> {
   const rows = await db.scheduleV2Item.findMany({ where: { projectId }, select: { code: true } })
   const max = rows.reduce((m, r) => {
@@ -294,6 +381,7 @@ export type CreateItemV2Input = {
 
 export async function createItemV2(input: CreateItemV2Input): Promise<ItemV2> {
   await requireAccess()
+  await saveSnapshot(input.projectId)
 
   const [maxOrder, code] = await Promise.all([
     db.scheduleV2Item.aggregate({ _max: { order: true }, where: { projectId: input.projectId, parentId: input.parentId ?? null } }),
@@ -363,6 +451,7 @@ export async function updateItemV2(
   data: UpdateItemV2Input
 ): Promise<{ conflicts: ConflictV2[]; cycleItemIds: string[] }> {
   await requireAccess()
+  await saveSnapshot(projectId)
 
   const current = await db.scheduleV2Item.findUnique({ where: { id }, select: { id: true, inicioEstimado: true } })
   if (!current) throw new Error("Item não encontrado")
@@ -423,6 +512,7 @@ export async function updateItemV2(
 
 export async function deleteItemV2(id: string, projectId: string): Promise<{ deletedIds: string[] }> {
   await requireAccess()
+  await saveSnapshot(projectId)
 
   // Sem CASCADE na auto-relação (mesmo motivo do ScheduleTask original:
   // Postgres não permite múltiplos caminhos de CASCADE ambíguos) — coleta
@@ -465,6 +555,7 @@ export async function deleteItemV2(id: string, projectId: string): Promise<{ del
 
 export async function reorderItemsV2(projectId: string, orderedIds: string[]): Promise<void> {
   await requireAccess()
+  await saveSnapshot(projectId)
   await db.$transaction(orderedIds.map((id, i) => db.scheduleV2Item.update({ where: { id }, data: { order: i } })))
   revalidatePath(`/projects/${projectId}/schedule-v2`)
 }
@@ -477,6 +568,7 @@ export async function setDependenciesV2(
   raw: string
 ): Promise<{ accepted: number; rejected: number; conflicts: ConflictV2[]; cycleItemIds: string[] }> {
   await requireAccess()
+  await saveSnapshot(projectId)
 
   const rows = await db.scheduleV2Item.findMany({ where: { projectId }, select: { id: true, code: true } })
   const idByCode = new Map(rows.map((r) => [r.code, r.id]))

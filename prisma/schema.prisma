@@ -416,6 +416,7 @@ model Project {
   baselines      ProjectBaseline[]
   scheduleV2Items    ScheduleV2Item[]
   scheduleV2Calendar WorkCalendarV2?
+  scheduleV2Snapshot ScheduleV2Snapshot?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1038,4 +1039,18 @@ model HolidayV2 {
 
   @@unique([calendarId, dia])
   @@index([calendarId])
+}
+
+// Desfazer de 1 nível ("Voltar", igual ao Ctrl+Z) — guarda o estado
+// completo (itens + dependências, serializado) de ANTES da última
+// mutação. Cada ação que muda o cronograma sobrescreve este snapshot
+// antes de aplicar a própria mudança; undoLastChangeV2 restaura e apaga
+// o snapshot (não é uma pilha profunda — 1 nível, por decisão de escopo).
+model ScheduleV2Snapshot {
+  id        String   @id @default(cuid())
+  projectId String   @unique
+  payload   String // JSON: { items: [...], dependencies: [...] }
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }

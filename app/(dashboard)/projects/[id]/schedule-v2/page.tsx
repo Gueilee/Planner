@@ -20,7 +20,7 @@ export default async function ScheduleV2Page({ params }: { params: Promise<{ id:
   if (!CAN_MANAGE_V2.has(session.user.role ?? "")) redirect(`/projects/${id}`)
 
   const [project, data] = await Promise.all([
-    db.project.findUnique({ where: { id }, select: { id: true, title: true } }),
+    db.project.findUnique({ where: { id }, select: { id: true, title: true, expectedStart: true, expectedEnd: true } }),
     getScheduleV2(id),
   ])
   if (!project) notFound()
@@ -43,7 +43,14 @@ export default async function ScheduleV2Page({ params }: { params: Promise<{ id:
       </div>
 
       <div className="flex-1">
-        <ScheduleV2Client projectId={id} initial={data} />
+        <ScheduleV2Client
+          projectId={id}
+          initial={data}
+          initialProjectDates={{
+            expectedStart: project.expectedStart?.toISOString().slice(0, 10) ?? null,
+            expectedEnd: project.expectedEnd?.toISOString().slice(0, 10) ?? null,
+          }}
+        />
       </div>
     </div>
   )

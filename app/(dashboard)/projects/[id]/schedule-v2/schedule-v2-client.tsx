@@ -1,15 +1,17 @@
 "use client"
 
-import { useMemo, useState, useTransition } from "react"
+import { useEffect, useMemo, useState, useTransition } from "react"
 import {
   createItemV2, updateItemV2, deleteItemV2, reorderItemsV2, setDependenciesV2, getScheduleV2,
+  hasUndoV2, undoLastChangeV2,
 } from "@/lib/actions/schedule-v2"
 import type { ScheduleV2Payload, ItemV2 } from "@/lib/actions/schedule-v2"
+import { updateProjectDetails } from "@/lib/actions/projects"
 import { fmtDateLong } from "@/lib/date-utils"
 import {
   ChevronRight, ChevronDown, Plus, IndentIncrease, IndentDecrease,
-  ArrowUp, ArrowDown, AlertTriangle, Milestone, Info,
-  Circle, CircleX, CirclePlus, Pencil,
+  ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, Milestone, Info,
+  Circle, CircleX, CirclePlus, Pencil, Undo2,
 } from "lucide-react"
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -18,8 +20,37 @@ function siblingsOf(items: ItemV2[], parentId: string | null): ItemV2[] {
   return items.filter((i) => i.parentId === parentId).sort((a, b) => a.order - b.order)
 }
 
-function childrenOf(items: ItemV2[], id: string): ItemV2[] {
-  return siblingsOf(items, id)
+// ─── Ordenação por coluna (só na exibição — não mexe no `order` persistido) ──
+
+type SortColumn = "title" | "duracao" | "inicio" | "termino" | "pct" | "modo" | null
+type SortState = { column: SortColumn; dir: "asc" | "desc" }
+
+function sortValue(item: ItemV2, col: SortColumn): string | number {
+  switch (col) {
+    case "title": return item.title.toLowerCase()
+    case "duracao": return item.duracaoDiasUteis ?? -1
+    case "inicio": return item.inicioEstimado ?? ""
+    case "termino": return item.terminoEstimado ?? ""
+    case "pct": return item.percentualCompleto
+    case "modo": return item.schedulingMode
+    default: return 0
+  }
+}
+
+// Ordena os irmãos de um mesmo pai pelo valor da coluna ativa — a hierarquia
+// (quem é filho de quem) nunca muda, só a sequência dentro de cada nível.
+function sortedSiblingsOf(items: ItemV2[], parentId: string | null, sort: SortState): ItemV2[] {
+  const base = siblingsOf(items, parentId)
+  if (!sort.column) return base
+  const factor = sort.dir === "asc" ? 1 : -1
+  const col = sort.column
+  return [...base].sort((a, b) => {
+    const va = sortValue(a, col)
+    const vb = sortValue(b, col)
+    if (va < vb) return -1 * factor
+    if (va > vb) return 1 * factor
+    return 0
+  })
 }
 
 function depsTextFor(itemId: string, data: ScheduleV2Payload): string {
@@ -54,22 +85,56 @@ function pct(date: string, range: { min: string; max: string }): number {
 
 // ─── Main ─────────────────────────────────────────────────────────────────
 
-export function ScheduleV2Client({ projectId, initial }: { projectId: string; initial: ScheduleV2Payload }) {
+export function ScheduleV2Client({ projectId, initial, initialProjectDates }: {
+  projectId: string
+  initial: ScheduleV2Payload
+  initialProjectDates: { expectedStart: string | null; expectedEnd: string | null }
+}) {
   const [data, setData] = useState<ScheduleV2Payload>(initial)
   const [expanded, setExpanded] = useState<Set<string>>(new Set(initial.items.filter((i) => i.isGroup).map((i) => i.id)))
   const [pending, startTransition] = useTransition()
   const [newTitle, setNewTitle] = useState("")
   const [addingUnder, setAddingUnder] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [sort, setSort] = useState<SortState>({ column: null, dir: "asc" })
+  const [projectDates, setProjectDates] = useState(initialProjectDates)
+  const [hasUndo, setHasUndo] = useState(false)
 
   const range = useMemo(() => dateRange(data.items), [data.items])
   const conflictByItem = useMemo(() => new Map(data.conflicts.map((c) => [c.itemId, c])), [data.conflicts])
+
+  useEffect(() => {
+    hasUndoV2(projectId).then(setHasUndo).catch(() => {})
+  }, [projectId])
 
   function refresh() {
     startTransition(async () => {
       const fresh = await getScheduleV2(projectId)
       setData(fresh)
+      setHasUndo(true)
     })
+  }
+
+  function handleUndo() {
+    startTransition(async () => {
+      const result = await undoLastChangeV2(projectId)
+      if (result.ok) {
+        const fresh = await getScheduleV2(projectId)
+        setData(fresh)
+      }
+      setHasUndo(false)
+    })
+  }
+
+  function handleProjectDate(field: "expectedStart" | "expectedEnd", value: string | null) {
+    setProjectDates((prev) => ({ ...prev, [field]: value }))
+    startTransition(async () => {
+      await updateProjectDetails(projectId, { [field]: value })
+    })
+  }
+
+  function toggleSort(column: Exclude<SortColumn, null>) {
+    setSort((prev) => prev.column === column ? { column, dir: prev.dir === "asc" ? "desc" : "asc" } : { column, dir: "asc" })
   }
 
   function toggle(id: string) {
@@ -171,44 +236,65 @@ export function ScheduleV2Client({ projectId, initial }: { projectId: string; in
     })
   }
 
-  const roots = siblingsOf(data.items, null)
+  const roots = sortedSiblingsOf(data.items, null, sort)
   const selectedItem = selectedId ? data.items.find((i) => i.id === selectedId) ?? null : null
 
   return (
     <div className="min-h-full text-slate-700" style={{ background: "#F8F9FC" }}>
-      {/* Header stats */}
-      <div className="px-5 py-4 border-b border-slate-200 bg-white flex items-center gap-6">
+      {/* Header stats — Início/Término do projeto ficam editáveis desde a
+          abertura do cronograma (igual ao "Data de início/término" do
+          Artia), independente de já existir alguma atividade lançada. */}
+      <div className="px-5 py-4 border-b border-slate-200 bg-white flex items-center gap-6 flex-wrap">
         <Stat label="Itens" value={data.items.length} />
-        <Stat label="Início" value={data.items.length ? fmtDateLong(range?.min) : "—"} />
-        <Stat label="Término" value={fmtDateLong(data.projectEndDate)} />
+        <EditableDateStat
+          label="Início"
+          value={projectDates.expectedStart}
+          onChange={(v) => handleProjectDate("expectedStart", v)}
+        />
+        <EditableDateStat
+          label="Término"
+          value={projectDates.expectedEnd}
+          onChange={(v) => handleProjectDate("expectedEnd", v)}
+        />
         <Stat label="Conflitos" value={data.conflicts.length} color={data.conflicts.length > 0 ? "#D97706" : undefined} />
-        <div className="ml-auto flex items-center gap-2 text-[11px] text-slate-400 max-w-sm">
+        <div className="ml-auto flex items-center gap-2 text-[11px] text-slate-400 max-w-xs">
           <Info className="w-3.5 h-3.5 shrink-0" />
           Predecessores usam a sintaxe do Artia (ex.: <code className="text-slate-600 font-mono">A2</code>, <code className="text-slate-600 font-mono">A2fs</code>).
         </div>
       </div>
 
-      {/* Barra de ações estruturais — agem sobre o item selecionado (círculo cinza na frente da linha) */}
+      {/* Barra de ações estruturais — agem sobre o item selecionado (círculo
+          cinza na frente da linha); "Voltar" desfaz a última alteração feita
+          (igual ao Ctrl+Z do Excel). */}
       <div className="px-5 py-2 border-b border-slate-200 bg-white flex items-center gap-2">
+        <ToolbarBtn wide disabled={!hasUndo} onClick={handleUndo} title="Voltar — desfaz a última alteração feita">
+          <Undo2 className="w-3.5 h-3.5" /> Voltar
+        </ToolbarBtn>
+        <div className="w-px h-5 bg-slate-200 mx-1" />
         <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mr-1">
           {selectedItem ? <>Selecionado: <span className="text-slate-600 normal-case">{selectedItem.title}</span></> : "Selecione uma linha para mover/indentar"}
         </span>
-        <ToolbarBtn disabled={!selectedItem} onClick={() => selectedItem && handleMove(selectedItem, -1)} title="Mover para cima"><ArrowUp className="w-3.5 h-3.5" /></ToolbarBtn>
-        <ToolbarBtn disabled={!selectedItem} onClick={() => selectedItem && handleMove(selectedItem, 1)} title="Mover para baixo"><ArrowDown className="w-3.5 h-3.5" /></ToolbarBtn>
-        <ToolbarBtn disabled={!selectedItem} onClick={() => selectedItem && handleIndent(selectedItem)} title="Indentar (virar filho do anterior)"><IndentIncrease className="w-3.5 h-3.5" /></ToolbarBtn>
-        <ToolbarBtn disabled={!selectedItem || selectedItem.parentId === null} onClick={() => selectedItem && handleOutdent(selectedItem)} title="Promover (sair do grupo)"><IndentDecrease className="w-3.5 h-3.5" /></ToolbarBtn>
+        <ToolbarBtn disabled={!selectedItem || sort.column !== null} onClick={() => selectedItem && handleMove(selectedItem, -1)} title={sort.column ? "Limpe a ordenação da coluna para reestruturar manualmente" : "Mover para cima"}><ArrowUp className="w-3.5 h-3.5" /></ToolbarBtn>
+        <ToolbarBtn disabled={!selectedItem || sort.column !== null} onClick={() => selectedItem && handleMove(selectedItem, 1)} title={sort.column ? "Limpe a ordenação da coluna para reestruturar manualmente" : "Mover para baixo"}><ArrowDown className="w-3.5 h-3.5" /></ToolbarBtn>
+        <ToolbarBtn disabled={!selectedItem || sort.column !== null} onClick={() => selectedItem && handleIndent(selectedItem)} title={sort.column ? "Limpe a ordenação da coluna para reestruturar manualmente" : "Indentar (virar filho do anterior)"}><IndentIncrease className="w-3.5 h-3.5" /></ToolbarBtn>
+        <ToolbarBtn disabled={!selectedItem || selectedItem.parentId === null || sort.column !== null} onClick={() => selectedItem && handleOutdent(selectedItem)} title={sort.column ? "Limpe a ordenação da coluna para reestruturar manualmente" : "Promover (sair do grupo)"}><IndentDecrease className="w-3.5 h-3.5" /></ToolbarBtn>
+        {sort.column && (
+          <button onClick={() => setSort({ column: null, dir: "asc" })} className="text-[10px] font-bold text-slate-400 hover:text-[#7B2FBE] ml-1">
+            Limpar ordenação
+          </button>
+        )}
       </div>
 
-      {/* Column headers */}
+      {/* Column headers — clique ordena os irmãos daquele nível pela coluna */}
       <div className="flex items-center px-4 py-2 border-b border-slate-200 bg-slate-50 text-[9px] font-black uppercase tracking-widest text-slate-400">
         <div style={{ width: 92 }} />
-        <div style={{ width: 300 }}>Atividade</div>
-        <div style={{ width: 60 }} className="text-center">Duração</div>
-        <div style={{ width: 110 }} className="text-center">Início</div>
-        <div style={{ width: 90 }} className="text-center">Término</div>
-        <div style={{ width: 70 }} className="text-center">%</div>
+        <SortableHeader width={300} label="Atividade" column="title" sort={sort} onSort={toggleSort} />
+        <SortableHeader width={60} center label="Duração" column="duracao" sort={sort} onSort={toggleSort} />
+        <SortableHeader width={110} center label="Início" column="inicio" sort={sort} onSort={toggleSort} />
+        <SortableHeader width={90} center label="Término" column="termino" sort={sort} onSort={toggleSort} />
+        <SortableHeader width={70} center label="%" column="pct" sort={sort} onSort={toggleSort} />
         <div style={{ width: 150 }}>Predecessores</div>
-        <div style={{ width: 80 }} className="text-center">Modo</div>
+        <SortableHeader width={80} center label="Modo" column="modo" sort={sort} onSort={toggleSort} />
         <div className="flex-1">Barra</div>
       </div>
 
@@ -229,6 +315,7 @@ export function ScheduleV2Client({ projectId, initial }: { projectId: string; in
             onEditTitle={handleEditTitle}
             selectedId={selectedId}
             onSelect={setSelectedId}
+            sort={sort}
             range={range}
             conflictByItem={conflictByItem}
             addingUnder={addingUnder}
@@ -273,17 +360,61 @@ function Stat({ label, value, color }: { label: string; value: string | number; 
   )
 }
 
-function ToolbarBtn({ children, onClick, title, disabled }: {
-  children: React.ReactNode; onClick: () => void; title: string; disabled?: boolean
+// Início/Término do projeto — editável desde a abertura do cronograma
+// (Project.expectedStart/expectedEnd), igual ao "Data de início/término"
+// do topo do Artia. Independe de já haver alguma atividade lançada.
+function EditableDateStat({ label, value, onChange }: {
+  label: string; value: string | null; onChange: (v: string | null) => void
+}) {
+  return (
+    <div>
+      <input
+        key={`projdate:${label}:${value}`}
+        type="date"
+        defaultValue={value ?? ""}
+        onBlur={(e) => {
+          const v = e.target.value || null
+          if (v !== value) onChange(v)
+        }}
+        className="text-lg font-black bg-transparent outline-none rounded -mx-1 px-1 focus:bg-violet-50"
+        style={{ color: "#1E293B" }}
+      />
+      <p className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">{label}</p>
+    </div>
+  )
+}
+
+function ToolbarBtn({ children, onClick, title, disabled, wide }: {
+  children: React.ReactNode; onClick: () => void; title: string; disabled?: boolean; wide?: boolean
 }) {
   return (
     <button
       onClick={onClick}
       title={title}
       disabled={disabled}
-      className="w-7 h-7 rounded-lg flex items-center justify-center border border-slate-200 text-slate-500 bg-white transition-colors hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white"
+      className={`${wide ? "px-2.5 gap-1.5 text-xs font-bold" : "w-7 justify-center"} h-7 rounded-lg flex items-center border border-slate-200 text-slate-500 bg-white transition-colors hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white`}
     >
       {children}
+    </button>
+  )
+}
+
+// Cabeçalho de coluna clicável — ordena os irmãos do nível pelo valor da
+// coluna (não mexe na hierarquia nem no `order` persistido no banco).
+function SortableHeader({ label, column, sort, onSort, width, center }: {
+  label: string; column: Exclude<SortColumn, null>; sort: SortState; onSort: (c: Exclude<SortColumn, null>) => void
+  width: number; center?: boolean
+}) {
+  const active = sort.column === column
+  return (
+    <button
+      onClick={() => onSort(column)}
+      style={{ width }}
+      className={`group flex items-center gap-0.5 hover:text-slate-600 transition-colors ${center ? "justify-center" : ""} ${active ? "text-[#7B2FBE]" : ""}`}
+    >
+      {label}
+      {active && (sort.dir === "asc" ? <ArrowUp className="w-2.5 h-2.5" /> : <ArrowDown className="w-2.5 h-2.5" />)}
+      {!active && <ArrowUpDown className="w-2.5 h-2.5 opacity-0 group-hover:opacity-40" />}
     </button>
   )
 }
@@ -322,6 +453,7 @@ type RowHandlers = {
   onEditTitle: (id: string) => void
   selectedId: string | null
   onSelect: (id: string | null) => void
+  sort: SortState
   range: { min: string; max: string } | null
   conflictByItem: Map<string, ScheduleV2Payload["conflicts"][number]>
   addingUnder: string | null
@@ -332,7 +464,7 @@ type RowHandlers = {
 }
 
 function RowGroup({ item, depth, ...h }: { item: ItemV2; depth: number } & RowHandlers) {
-  const kids = childrenOf(h.data.items, item.id)
+  const kids = sortedSiblingsOf(h.data.items, item.id, h.sort)
   const isOpen = h.expanded.has(item.id)
 
   return (
