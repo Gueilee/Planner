@@ -10,7 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
   ArrowLeft, Users, Calendar, AlertTriangle, CheckCircle2,
   Clock, BarChart3, Layers, TrendingUp, Play, Timer, CalendarDays, RefreshCw,
-  Rocket, FileDown, BookOpen, Shield, FileText, Gem,
+  Rocket, FileDown, BookOpen, Shield, FileText, Gem, FlaskConical,
 } from "lucide-react"
 import { DeleteProjectButton } from "./delete-project-button"
 import { ProjectKanbanButton } from "./project-kanban-button"
@@ -380,6 +380,17 @@ export default async function ProjectDetailPage({
                         <CalendarDays className="w-3.5 h-3.5" />
                         Cronograma
                       </Link>
+                      {["ADMIN", "PROJECT_MANAGER"].includes(userRole) && (
+                        <Link
+                          href={`/projects/${id}/schedule-v2`}
+                          title="Motor de Cronograma em teste — não afeta o Cronograma normal deste projeto"
+                          className="inline-flex items-center gap-1.5 px-3 h-9 text-xs font-bold rounded-xl border transition-all hover:opacity-90 active:scale-[0.98]"
+                          style={{ borderColor: "rgba(245,158,11,0.35)", color: "#D97706", background: "rgba(245,158,11,0.08)" }}
+                        >
+                          <FlaskConical className="w-3.5 h-3.5" />
+                          Beta
+                        </Link>
+                      )}
                       <ProjectKanbanButton projectId={id} projectTitle={project.title} />
                       <Link
                         href={`/projects/${id}/indicators`}
@@ -437,6 +448,17 @@ export default async function ProjectDetailPage({
                         <CalendarDays className="w-3.5 h-3.5" />
                         Cronograma
                       </Link>
+                      {["ADMIN", "PROJECT_MANAGER"].includes(userRole) && (
+                        <Link
+                          href={`/projects/${id}/schedule-v2`}
+                          title="Motor de Cronograma em teste — não afeta o Cronograma normal deste projeto"
+                          className="inline-flex items-center gap-1.5 px-3 h-9 text-xs font-bold rounded-xl border transition-all hover:opacity-90 active:scale-[0.98]"
+                          style={{ borderColor: "rgba(245,158,11,0.35)", color: "#D97706", background: "rgba(245,158,11,0.08)" }}
+                        >
+                          <FlaskConical className="w-3.5 h-3.5" />
+                          Beta
+                        </Link>
+                      )}
                       <ProjectKanbanButton projectId={id} projectTitle={project.title} />
                       <Link
                         href={`/projects/${id}/indicators`}
@@ -487,6 +509,17 @@ export default async function ProjectDetailPage({
                         <CalendarDays className="w-3.5 h-3.5" />
                         Cronograma
                       </Link>
+                      {["ADMIN", "PROJECT_MANAGER"].includes(userRole) && (
+                        <Link
+                          href={`/projects/${id}/schedule-v2`}
+                          title="Motor de Cronograma em teste — não afeta o Cronograma normal deste projeto"
+                          className="inline-flex items-center gap-1.5 px-3 h-9 text-xs font-bold rounded-xl border transition-all hover:opacity-90 active:scale-[0.98]"
+                          style={{ borderColor: "rgba(245,158,11,0.35)", color: "#D97706", background: "rgba(245,158,11,0.08)" }}
+                        >
+                          <FlaskConical className="w-3.5 h-3.5" />
+                          Beta
+                        </Link>
+                      )}
                       <ProjectKanbanButton projectId={id} projectTitle={project.title} />
                       <Link
                         href={`/projects/${id}/indicators`}
