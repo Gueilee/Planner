@@ -26,18 +26,18 @@ export default async function ScheduleV2Page({ params }: { params: Promise<{ id:
   if (!project) notFound()
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#0F172A]">
+    <div className="flex flex-col min-h-screen" style={{ background: "#F8F9FC" }}>
       {/* Topbar */}
-      <div className="flex items-center gap-3 px-5 py-3 border-b border-[#334155] bg-[#0F172A]/95 sticky top-0 z-20 backdrop-blur">
+      <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-200 bg-white sticky top-0 z-20">
         <Link href={`/projects/${id}`}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-400 hover:text-white transition-colors">
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors">
           <ArrowLeft className="w-4 h-4" /> Voltar
         </Link>
-        <div className="w-px h-5 bg-[#334155]" />
-        <FlaskConical className="w-4 h-4 text-amber-400 shrink-0" />
-        <span className="text-sm font-black text-white truncate">{project.title}</span>
-        <span className="text-xs text-slate-500 shrink-0">— Cronograma</span>
-        <span className="ml-1 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-400/10 text-amber-400 border border-amber-400/30">
+        <div className="w-px h-5 bg-slate-200" />
+        <FlaskConical className="w-4 h-4 text-amber-500 shrink-0" />
+        <span className="text-sm font-black text-slate-800 truncate">{project.title}</span>
+        <span className="text-xs text-slate-400 shrink-0">— Cronograma</span>
+        <span className="ml-1 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200">
           Beta
         </span>
       </div>

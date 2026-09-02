@@ -8,7 +8,7 @@ import type { ScheduleV2Payload, ItemV2 } from "@/lib/actions/schedule-v2"
 import { fmtDateLong } from "@/lib/date-utils"
 import {
   ChevronRight, ChevronDown, Plus, Trash2, IndentIncrease, IndentDecrease,
-  ArrowUp, ArrowDown, AlertTriangle, Milestone, Info,
+  ArrowUp, ArrowDown, AlertTriangle, Milestone, Info, Lock,
 } from "lucide-react"
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -31,6 +31,10 @@ function depsTextFor(itemId: string, data: ScheduleV2Payload): string {
       return code + suffix
     })
     .join("; ")
+}
+
+function hasPredecessor(itemId: string, data: ScheduleV2Payload): boolean {
+  return data.dependencies.some((d) => d.successorId === itemId)
 }
 
 function dateRange(items: ItemV2[]): { min: string; max: string } | null {
@@ -144,21 +148,21 @@ export function ScheduleV2Client({ projectId, initial }: { projectId: string; in
   const roots = siblingsOf(data.items, null)
 
   return (
-    <div className="min-h-full text-slate-200">
+    <div className="min-h-full text-slate-700" style={{ background: "#F8F9FC" }}>
       {/* Header stats */}
-      <div className="px-5 py-4 border-b border-[#1E293B] flex items-center gap-6">
+      <div className="px-5 py-4 border-b border-slate-200 bg-white flex items-center gap-6">
         <Stat label="Itens" value={data.items.length} />
         <Stat label="Início" value={data.items.length ? fmtDateLong(range?.min) : "—"} />
         <Stat label="Término" value={fmtDateLong(data.projectEndDate)} />
-        <Stat label="Conflitos" value={data.conflicts.length} color={data.conflicts.length > 0 ? "#F59E0B" : undefined} />
-        <div className="ml-auto flex items-center gap-2 text-[11px] text-slate-500">
-          <Info className="w-3.5 h-3.5" />
-          Ambiente de teste do novo motor — duração é a fonte da verdade da barra; predecessores usam a sintaxe do Artia (ex.: <code className="text-slate-300">A2</code>, <code className="text-slate-300">A2fs</code>, <code className="text-slate-300">A2ss+1</code>).
+        <Stat label="Conflitos" value={data.conflicts.length} color={data.conflicts.length > 0 ? "#D97706" : undefined} />
+        <div className="ml-auto flex items-center gap-2 text-[11px] text-slate-400 max-w-md">
+          <Info className="w-3.5 h-3.5 shrink-0" />
+          Duração é a fonte da verdade da barra; predecessores usam a sintaxe do Artia (ex.: <code className="text-slate-600 font-mono">A2</code>, <code className="text-slate-600 font-mono">A2fs</code>, <code className="text-slate-600 font-mono">A2ss+1</code>). Grupos (com sub-itens) têm data calculada, não editável.
         </div>
       </div>
 
       {/* Column headers */}
-      <div className="flex items-center px-4 py-2 border-b border-[#1E293B] bg-[#111827] text-[9px] font-black uppercase tracking-widest text-slate-500">
+      <div className="flex items-center px-4 py-2 border-b border-slate-200 bg-slate-50 text-[9px] font-black uppercase tracking-widest text-slate-400">
         <div style={{ width: 340 }}>Atividade</div>
         <div style={{ width: 60 }} className="text-center">Duração</div>
         <div style={{ width: 110 }} className="text-center">Início</div>
@@ -171,7 +175,7 @@ export function ScheduleV2Client({ projectId, initial }: { projectId: string; in
       </div>
 
       {/* Rows */}
-      <div className={pending ? "opacity-60 pointer-events-none transition-opacity" : "transition-opacity"}>
+      <div className={`bg-white ${pending ? "opacity-60 pointer-events-none transition-opacity" : "transition-opacity"}`}>
         {roots.map((item) => (
           <RowGroup
             key={item.id}
@@ -198,7 +202,7 @@ export function ScheduleV2Client({ projectId, initial }: { projectId: string; in
       </div>
 
       {/* Novo item de topo */}
-      <div className="px-4 py-3 border-t border-[#1E293B]">
+      <div className="px-4 py-3 border-t border-slate-200 bg-white">
         {addingUnder === "__root__" ? (
           <NewItemInput
             value={newTitle}
@@ -209,7 +213,7 @@ export function ScheduleV2Client({ projectId, initial }: { projectId: string; in
         ) : (
           <button
             onClick={() => setAddingUnder("__root__")}
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-violet-400 hover:text-violet-300 transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-[#7B2FBE] hover:text-[#9333EA] transition-colors"
           >
             <Plus className="w-3.5 h-3.5" /> Nova atividade de topo
           </button>
@@ -224,8 +228,8 @@ export function ScheduleV2Client({ projectId, initial }: { projectId: string; in
 function Stat({ label, value, color }: { label: string; value: string | number; color?: string }) {
   return (
     <div>
-      <p className="text-lg font-black" style={{ color: color ?? "#E2E8F0" }}>{value}</p>
-      <p className="text-[9px] uppercase tracking-widest text-slate-500 font-bold">{label}</p>
+      <p className="text-lg font-black" style={{ color: color ?? "#1E293B" }}>{value}</p>
+      <p className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">{label}</p>
     </div>
   )
 }
@@ -243,10 +247,10 @@ function NewItemInput({ value, onChange, onSubmit, onCancel }: {
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter") onSubmit(); if (e.key === "Escape") onCancel() }}
         placeholder="Título da atividade..."
-        className="px-2 py-1 rounded-lg bg-[#1E293B] border border-[#334155] text-sm text-slate-100 outline-none focus:border-violet-500 w-64"
+        className="px-2 py-1 rounded-lg bg-white border border-slate-200 text-sm text-slate-700 outline-none focus:border-[#7B2FBE] focus:ring-2 focus:ring-[#7B2FBE]/15 w-64"
       />
-      <button onClick={onSubmit} className="text-xs font-bold text-violet-400 hover:text-violet-300">Adicionar</button>
-      <button onClick={onCancel} className="text-xs text-slate-500 hover:text-slate-300">Cancelar</button>
+      <button onClick={onSubmit} className="text-xs font-bold text-[#7B2FBE] hover:text-[#9333EA]">Adicionar</button>
+      <button onClick={onCancel} className="text-xs text-slate-400 hover:text-slate-600">Cancelar</button>
     </div>
   )
 }
@@ -285,7 +289,7 @@ function RowGroup({ item, depth, ...h }: { item: ItemV2; depth: number } & RowHa
         </div>
       )}
       {h.addingUnder === item.id ? (
-        <div className="pl-4 py-1.5" style={{ paddingLeft: 16 + (depth + 1) * 20 }}>
+        <div className="py-1.5" style={{ paddingLeft: 16 + (depth + 1) * 20 }}>
           <NewItemInput
             value={h.newTitle}
             onChange={h.setNewTitle}
@@ -298,7 +302,7 @@ function RowGroup({ item, depth, ...h }: { item: ItemV2; depth: number } & RowHa
           <button
             onClick={() => h.setAddingUnder(item.id)}
             style={{ paddingLeft: 16 + (depth + 1) * 20 }}
-            className="flex items-center gap-1 py-1 text-[10px] font-bold text-slate-600 hover:text-violet-400 transition-colors"
+            className="flex items-center gap-1 py-1 text-[10px] font-bold text-slate-400 hover:text-[#7B2FBE] transition-colors"
           >
             <Plus className="w-3 h-3" /> Sub-item
           </button>
@@ -309,35 +313,42 @@ function RowGroup({ item, depth, ...h }: { item: ItemV2; depth: number } & RowHa
 }
 
 function Row({ item, depth, hasChildren, isOpen, ...h }: { item: ItemV2; depth: number; hasChildren: boolean; isOpen: boolean } & RowHandlers) {
-  const [title, setTitle] = useState(item.title)
-  const [depsText, setDepsText] = useState(() => depsTextFor(item.id, h.data))
   const conflict = h.conflictByItem.get(item.id)
+  // Regra §3.7 (CLAUDE.md): grupo não tem data própria — nunca editável.
+  // Um item-folha em modo automático com predecessor também não é
+  // editável diretamente: o vínculo é quem manda no início (igual ao
+  // Artia — só ganha caneta de edição quem realmente pode ser digitado).
+  const linkedAuto = !hasChildren && item.schedulingMode === "auto" && hasPredecessor(item.id, h.data)
+  const inicioEditable = !hasChildren && !linkedAuto
 
   return (
     <div
-      className="flex items-center px-4 py-1.5 border-b border-[#1E293B]/60 hover:bg-[#111827] group"
+      className="flex items-center px-4 py-1.5 border-b border-slate-100 hover:bg-slate-50 group"
       style={{ background: conflict ? "rgba(245,158,11,0.06)" : undefined }}
     >
       {/* Título + hierarquia */}
       <div className="flex items-center gap-1.5" style={{ width: 340, paddingLeft: depth * 20 }}>
         <button onClick={() => hasChildren && h.onToggle(item.id)} className="w-4 h-4 flex items-center justify-center shrink-0">
           {hasChildren
-            ? (isOpen ? <ChevronDown className="w-3 h-3 text-slate-500" /> : <ChevronRight className="w-3 h-3 text-slate-500" />)
+            ? (isOpen ? <ChevronDown className="w-3 h-3 text-slate-400" /> : <ChevronRight className="w-3 h-3 text-slate-400" />)
             : item.duracaoDiasUteis === 0
-              ? <Milestone className="w-3 h-3 text-amber-400" />
-              : <span className="w-1 h-1 rounded-full bg-slate-600 mx-auto" />
+              ? <Milestone className="w-3 h-3 text-amber-500" />
+              : <span className="w-1 h-1 rounded-full bg-slate-300 mx-auto" />
           }
         </button>
-        <span className="text-[9px] font-mono font-bold text-slate-600 shrink-0 w-8">{item.code}</span>
+        <span className="text-[9px] font-mono font-bold text-slate-400 shrink-0 w-8">{item.code}</span>
         <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onBlur={() => title !== item.title && h.onUpdate(item.id, { title })}
-          className={`bg-transparent outline-none text-sm flex-1 min-w-0 truncate ${hasChildren ? "font-bold text-slate-100" : "text-slate-300"} focus:text-white`}
+          key={`title:${item.id}:${item.title}`}
+          defaultValue={item.title}
+          onBlur={(e) => {
+            const v = e.target.value.trim()
+            if (v && v !== item.title) h.onUpdate(item.id, { title: v })
+          }}
+          className={`bg-transparent outline-none text-sm flex-1 min-w-0 truncate rounded px-1 -mx-1 focus:bg-violet-50 ${hasChildren ? "font-bold text-slate-800" : "text-slate-700"}`}
         />
         {conflict && (
-          <span title={`Vínculo sugere ${conflict.suggestedInicio ?? "?"} — item está em modo manual`}>
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+          <span title={`Vínculo sugere ${fmtDateLong(conflict.suggestedInicio)} — item está em modo manual`}>
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
           </span>
         )}
       </div>
@@ -346,35 +357,43 @@ function Row({ item, depth, hasChildren, isOpen, ...h }: { item: ItemV2; depth: 
       <div style={{ width: 60 }} className="text-center">
         {!hasChildren ? (
           <input
+            key={`dur:${item.id}:${item.duracaoDiasUteis}`}
             type="number" min={0}
             defaultValue={item.duracaoDiasUteis ?? ""}
             onBlur={(e) => {
               const v = e.target.value === "" ? null : parseInt(e.target.value, 10)
               if (v !== item.duracaoDiasUteis) h.onUpdate(item.id, { duracaoDiasUteis: v })
             }}
-            className="w-10 text-center bg-transparent outline-none text-xs text-slate-300 focus:text-white border-b border-transparent focus:border-violet-500"
+            className="w-10 text-center bg-transparent outline-none text-xs text-slate-700 rounded border-b border-transparent focus:border-[#7B2FBE] focus:bg-violet-50"
           />
-        ) : <span className="text-[10px] text-slate-600">—</span>}
+        ) : <span className="text-[10px] text-slate-300">—</span>}
       </div>
 
       {/* Início */}
       <div style={{ width: 110 }} className="text-center">
-        {!hasChildren ? (
+        {inicioEditable ? (
           <input
+            key={`inicio:${item.id}:${item.inicioEstimado}`}
             type="date"
             defaultValue={item.inicioEstimado ?? ""}
             onBlur={(e) => {
               const v = e.target.value || null
               if (v !== item.inicioEstimado) h.onUpdate(item.id, { inicioEstimado: v })
             }}
-            className="bg-transparent outline-none text-[10px] text-slate-300 focus:text-white w-full text-center"
-            style={{ colorScheme: "dark" }}
+            className="bg-transparent outline-none text-[10px] text-slate-700 w-full text-center rounded focus:bg-violet-50"
           />
-        ) : <span className="text-[10px] text-slate-500">{fmtDateLong(item.inicioEstimado)}</span>}
+        ) : (
+          <span
+            className="inline-flex items-center gap-1 text-[10px] text-slate-400"
+            title={hasChildren ? "Data de grupo — calculada a partir dos filhos" : "Data controlada pelo predecessor — edite o vínculo ou mude para Manual"}
+          >
+            <Lock className="w-2.5 h-2.5" /> {fmtDateLong(item.inicioEstimado)}
+          </span>
+        )}
       </div>
 
       {/* Término (sempre derivado) */}
-      <div style={{ width: 90 }} className="text-center text-[10px] text-slate-500">
+      <div style={{ width: 90 }} className="text-center text-[10px] text-slate-400">
         {fmtDateLong(item.terminoEstimado)}
       </div>
 
@@ -382,26 +401,30 @@ function Row({ item, depth, hasChildren, isOpen, ...h }: { item: ItemV2; depth: 
       <div style={{ width: 70 }} className="text-center">
         {!hasChildren ? (
           <input
+            key={`pct:${item.id}:${item.percentualCompleto}`}
             type="number" min={0} max={100}
             defaultValue={item.percentualCompleto}
             onBlur={(e) => {
               const v = Math.max(0, Math.min(100, parseInt(e.target.value || "0", 10)))
               if (v !== item.percentualCompleto) h.onUpdate(item.id, { percentualCompleto: v })
             }}
-            className="w-10 text-center bg-transparent outline-none text-xs text-slate-300 focus:text-white border-b border-transparent focus:border-violet-500"
+            className="w-10 text-center bg-transparent outline-none text-xs text-slate-700 rounded border-b border-transparent focus:border-[#7B2FBE] focus:bg-violet-50"
           />
-        ) : <span className="text-xs font-bold text-violet-400">{item.percentualCompleto}%</span>}
+        ) : <span className="text-xs font-bold text-[#7B2FBE]">{item.percentualCompleto}%</span>}
       </div>
 
       {/* Predecessores */}
       <div style={{ width: 150 }}>
         {!hasChildren && (
           <input
-            value={depsText}
-            onChange={(e) => setDepsText(e.target.value)}
-            onBlur={() => depsText !== depsTextFor(item.id, h.data) && h.onDeps(item.id, depsText)}
+            key={`deps:${item.id}:${depsTextFor(item.id, h.data)}`}
+            defaultValue={depsTextFor(item.id, h.data)}
+            onBlur={(e) => {
+              const v = e.target.value
+              if (v !== depsTextFor(item.id, h.data)) h.onDeps(item.id, v)
+            }}
             placeholder="Ex.: A2; A3ss+1"
-            className="w-full bg-transparent outline-none text-[10px] font-mono text-slate-300 placeholder-slate-700 focus:text-white border-b border-transparent focus:border-violet-500"
+            className="w-full bg-transparent outline-none text-[10px] font-mono text-slate-700 placeholder-slate-300 rounded border-b border-transparent focus:border-[#7B2FBE] focus:bg-violet-50"
           />
         )}
       </div>
@@ -413,8 +436,8 @@ function Row({ item, depth, hasChildren, isOpen, ...h }: { item: ItemV2; depth: 
             onClick={() => h.onUpdate(item.id, { schedulingMode: item.schedulingMode === "auto" ? "manual" : "auto" })}
             className="text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full transition-colors"
             style={item.schedulingMode === "manual"
-              ? { background: "rgba(245,158,11,0.15)", color: "#F59E0B" }
-              : { background: "rgba(148,163,184,0.12)", color: "#94A3B8" }}
+              ? { background: "#FFFBEB", color: "#D97706", border: "1px solid #FDE68A" }
+              : { background: "#F1F5F9", color: "#64748B", border: "1px solid #E2E8F0" }}
           >
             {item.schedulingMode === "manual" ? "Manual" : "Auto"}
           </button>
@@ -424,13 +447,13 @@ function Row({ item, depth, hasChildren, isOpen, ...h }: { item: ItemV2; depth: 
       {/* Barra */}
       <div className="flex-1 pr-3">
         {h.range && item.inicioEstimado && item.terminoEstimado && (
-          <div className="relative h-3 bg-[#1E293B] rounded-full overflow-hidden">
+          <div className="relative h-3 bg-slate-100 rounded-full overflow-hidden">
             <div
               className="absolute top-0 h-full rounded-full"
               style={{
                 left: `${pct(item.inicioEstimado, h.range)}%`,
                 width: `${Math.max(1.5, pct(item.terminoEstimado, h.range) - pct(item.inicioEstimado, h.range))}%`,
-                background: conflict ? "#F59E0B" : hasChildren ? "#475569" : "linear-gradient(90deg,#7B2FBE,#2463FF)",
+                background: conflict ? "#F59E0B" : hasChildren ? "#94A3B8" : "linear-gradient(90deg,#7B2FBE,#2463FF)",
               }}
             />
           </div>
@@ -458,7 +481,7 @@ function IconBtn({ children, onClick, title, danger, disabled }: {
       title={title}
       disabled={disabled}
       className={`w-5 h-5 rounded flex items-center justify-center transition-colors disabled:opacity-20 disabled:cursor-not-allowed ${
-        danger ? "text-slate-500 hover:text-red-400 hover:bg-red-500/10" : "text-slate-500 hover:text-white hover:bg-white/10"
+        danger ? "text-slate-400 hover:text-red-500 hover:bg-red-50" : "text-slate-400 hover:text-slate-700 hover:bg-slate-200"
       }`}
     >
       {children}
