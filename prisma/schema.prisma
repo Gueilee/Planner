@@ -414,6 +414,8 @@ model Project {
   attachments    Attachment[]
   benefits       ProjectBenefit[]
   baselines      ProjectBaseline[]
+  scheduleV2Items    ScheduleV2Item[]
+  scheduleV2Calendar WorkCalendarV2?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -940,4 +942,95 @@ model OrgConfig {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// SCHEDULE V2 — Motor de Cronograma em teste (isolado de ScheduleTask)
+//
+// Tabelas próprias, sem relação com ScheduleTask/WbsArea — nenhum dos
+// consumidores existentes do cronograma (Kanban, Status Report, Curva S,
+// Priorização, Histórico, Indicadores, Checkpoint, Encerramento, Go-Live,
+// Analytics, Dashboard, Templates, Baselines, alocação, apontamento de
+// horas) lê ou escreve aqui. Ver CLAUDE.md (regras §3) e o plano de
+// implementação do motor v2.
+// ─────────────────────────────────────────────
+
+model ScheduleV2Item {
+  id        String  @id @default(cuid())
+  projectId String
+  parentId  String?
+  order     Int     @default(0)
+  title     String
+  status    String  @default("pendente")
+
+  // Fonte da verdade da barra — null = não agendado; 0 = marco (CLAUDE.md §3.3).
+  duracaoDiasUteis Int?
+  inicioEstimado   DateTime? @db.Date
+  terminoEstimado  DateTime? @db.Date
+  inicioReal       DateTime? @db.Date
+  terminoReal      DateTime? @db.Date
+
+  // Esforço em horas — NÃO participa do cálculo de datas (CLAUDE.md §3.2).
+  esforcoEstimadoH   Float @default(0)
+  esforcoRealH       Float @default(0)
+  percentualCompleto Int   @default(0)
+
+  schedulingMode String    @default("auto") // "auto" | "manual" (CLAUDE.md §6)
+  constraintType String?
+  constraintDate DateTime? @db.Date
+
+  project  Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent   ScheduleV2Item?  @relation("ScheduleV2Hierarchy", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  children ScheduleV2Item[] @relation("ScheduleV2Hierarchy")
+
+  predecessorOf ScheduleV2Dependency[] @relation("ScheduleV2DepSuccessor")
+  successorOf   ScheduleV2Dependency[] @relation("ScheduleV2DepPredecessor")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([parentId])
+}
+
+model ScheduleV2Dependency {
+  id            String @id @default(cuid())
+  successorId   String
+  predecessorId String
+  type          String @default("FS") // FS | SS | FF (SF fica para a 2ª etapa do motor)
+  lagDiasUteis  Int    @default(0)
+
+  successor   ScheduleV2Item @relation("ScheduleV2DepSuccessor", fields: [successorId], references: [id], onDelete: Cascade)
+  predecessor ScheduleV2Item @relation("ScheduleV2DepPredecessor", fields: [predecessorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([successorId, predecessorId])
+  @@index([successorId])
+  @@index([predecessorId])
+}
+
+model WorkCalendarV2 {
+  id        String @id @default(cuid())
+  projectId String @unique
+  // ISO: 1=segunda .. 7=domingo. Default: seg-sex.
+  diasUteis Int[]  @default([1, 2, 3, 4, 5])
+
+  project  Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  holidays HolidayV2[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model HolidayV2 {
+  id         String   @id @default(cuid())
+  calendarId String
+  dia        DateTime @db.Date
+  descricao  String?
+
+  calendar WorkCalendarV2 @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+
+  @@unique([calendarId, dia])
+  @@index([calendarId])
 }
