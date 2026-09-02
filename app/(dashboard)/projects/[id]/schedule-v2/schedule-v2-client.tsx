@@ -7,8 +7,9 @@ import {
 import type { ScheduleV2Payload, ItemV2 } from "@/lib/actions/schedule-v2"
 import { fmtDateLong } from "@/lib/date-utils"
 import {
-  ChevronRight, ChevronDown, Plus, Trash2, IndentIncrease, IndentDecrease,
+  ChevronRight, ChevronDown, Plus, IndentIncrease, IndentDecrease,
   ArrowUp, ArrowDown, AlertTriangle, Milestone, Info,
+  Circle, CircleX, CirclePlus, Pencil,
 } from "lucide-react"
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -59,6 +60,7 @@ export function ScheduleV2Client({ projectId, initial }: { projectId: string; in
   const [pending, startTransition] = useTransition()
   const [newTitle, setNewTitle] = useState("")
   const [addingUnder, setAddingUnder] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const range = useMemo(() => dateRange(data.items), [data.items])
   const conflictByItem = useMemo(() => new Map(data.conflicts.map((c) => [c.itemId, c])), [data.conflicts])
@@ -105,10 +107,34 @@ export function ScheduleV2Client({ projectId, initial }: { projectId: string; in
 
   function handleDelete(id: string) {
     if (!confirm("Excluir este item e todos os seus filhos?")) return
+    if (selectedId === id) setSelectedId(null)
     startTransition(async () => {
       await deleteItemV2(id, projectId)
       refresh()
     })
+  }
+
+  // "+" da linha (igual ao Artia): insere uma atividade nova logo depois
+  // desta, no mesmo nível — não dentro dela.
+  function handleAddSibling(item: ItemV2) {
+    startTransition(async () => {
+      const created = await createItemV2({ projectId, parentId: item.parentId, title: "Nova atividade" })
+      const sibs = siblingsOf(data.items, item.parentId)
+      const idx = sibs.findIndex((s) => s.id === item.id)
+      const orderedIds = [
+        ...sibs.slice(0, idx + 1).map((s) => s.id),
+        created.id,
+        ...sibs.slice(idx + 1).map((s) => s.id),
+      ]
+      await reorderItemsV2(projectId, orderedIds)
+      refresh()
+    })
+  }
+
+  function handleEditTitle(id: string) {
+    const el = document.getElementById(`sv2-title-${id}`) as HTMLInputElement | null
+    el?.focus()
+    el?.select()
   }
 
   function handleMove(item: ItemV2, dir: -1 | 1) {
@@ -146,6 +172,7 @@ export function ScheduleV2Client({ projectId, initial }: { projectId: string; in
   }
 
   const roots = siblingsOf(data.items, null)
+  const selectedItem = selectedId ? data.items.find((i) => i.id === selectedId) ?? null : null
 
   return (
     <div className="min-h-full text-slate-700" style={{ background: "#F8F9FC" }}>
@@ -155,15 +182,27 @@ export function ScheduleV2Client({ projectId, initial }: { projectId: string; in
         <Stat label="Início" value={data.items.length ? fmtDateLong(range?.min) : "—"} />
         <Stat label="Término" value={fmtDateLong(data.projectEndDate)} />
         <Stat label="Conflitos" value={data.conflicts.length} color={data.conflicts.length > 0 ? "#D97706" : undefined} />
-        <div className="ml-auto flex items-center gap-2 text-[11px] text-slate-400 max-w-md">
+        <div className="ml-auto flex items-center gap-2 text-[11px] text-slate-400 max-w-sm">
           <Info className="w-3.5 h-3.5 shrink-0" />
-          Duração é a fonte da verdade da barra; predecessores usam a sintaxe do Artia (ex.: <code className="text-slate-600 font-mono">A2</code>, <code className="text-slate-600 font-mono">A2fs</code>, <code className="text-slate-600 font-mono">A2ss+1</code>). Grupos (com sub-itens) têm data calculada, não editável.
+          Predecessores usam a sintaxe do Artia (ex.: <code className="text-slate-600 font-mono">A2</code>, <code className="text-slate-600 font-mono">A2fs</code>).
         </div>
+      </div>
+
+      {/* Barra de ações estruturais — agem sobre o item selecionado (círculo cinza na frente da linha) */}
+      <div className="px-5 py-2 border-b border-slate-200 bg-white flex items-center gap-2">
+        <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mr-1">
+          {selectedItem ? <>Selecionado: <span className="text-slate-600 normal-case">{selectedItem.title}</span></> : "Selecione uma linha para mover/indentar"}
+        </span>
+        <ToolbarBtn disabled={!selectedItem} onClick={() => selectedItem && handleMove(selectedItem, -1)} title="Mover para cima"><ArrowUp className="w-3.5 h-3.5" /></ToolbarBtn>
+        <ToolbarBtn disabled={!selectedItem} onClick={() => selectedItem && handleMove(selectedItem, 1)} title="Mover para baixo"><ArrowDown className="w-3.5 h-3.5" /></ToolbarBtn>
+        <ToolbarBtn disabled={!selectedItem} onClick={() => selectedItem && handleIndent(selectedItem)} title="Indentar (virar filho do anterior)"><IndentIncrease className="w-3.5 h-3.5" /></ToolbarBtn>
+        <ToolbarBtn disabled={!selectedItem || selectedItem.parentId === null} onClick={() => selectedItem && handleOutdent(selectedItem)} title="Promover (sair do grupo)"><IndentDecrease className="w-3.5 h-3.5" /></ToolbarBtn>
       </div>
 
       {/* Column headers */}
       <div className="flex items-center px-4 py-2 border-b border-slate-200 bg-slate-50 text-[9px] font-black uppercase tracking-widest text-slate-400">
-        <div style={{ width: 340 }}>Atividade</div>
+        <div style={{ width: 92 }} />
+        <div style={{ width: 300 }}>Atividade</div>
         <div style={{ width: 60 }} className="text-center">Duração</div>
         <div style={{ width: 110 }} className="text-center">Início</div>
         <div style={{ width: 90 }} className="text-center">Término</div>
@@ -171,7 +210,6 @@ export function ScheduleV2Client({ projectId, initial }: { projectId: string; in
         <div style={{ width: 150 }}>Predecessores</div>
         <div style={{ width: 80 }} className="text-center">Modo</div>
         <div className="flex-1">Barra</div>
-        <div style={{ width: 130 }} className="text-center">Ações</div>
       </div>
 
       {/* Rows */}
@@ -187,9 +225,10 @@ export function ScheduleV2Client({ projectId, initial }: { projectId: string; in
             onUpdate={handleUpdate}
             onDeps={handleDeps}
             onDelete={handleDelete}
-            onMove={handleMove}
-            onIndent={handleIndent}
-            onOutdent={handleOutdent}
+            onAddSibling={handleAddSibling}
+            onEditTitle={handleEditTitle}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
             range={range}
             conflictByItem={conflictByItem}
             addingUnder={addingUnder}
@@ -234,6 +273,21 @@ function Stat({ label, value, color }: { label: string; value: string | number; 
   )
 }
 
+function ToolbarBtn({ children, onClick, title, disabled }: {
+  children: React.ReactNode; onClick: () => void; title: string; disabled?: boolean
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      disabled={disabled}
+      className="w-7 h-7 rounded-lg flex items-center justify-center border border-slate-200 text-slate-500 bg-white transition-colors hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white"
+    >
+      {children}
+    </button>
+  )
+}
+
 // ─── New item inline input ──────────────────────────────────────────────────
 
 function NewItemInput({ value, onChange, onSubmit, onCancel }: {
@@ -264,9 +318,10 @@ type RowHandlers = {
   onUpdate: (id: string, patch: Parameters<typeof updateItemV2>[2]) => void
   onDeps: (id: string, raw: string) => void
   onDelete: (id: string) => void
-  onMove: (item: ItemV2, dir: -1 | 1) => void
-  onIndent: (item: ItemV2) => void
-  onOutdent: (item: ItemV2) => void
+  onAddSibling: (item: ItemV2) => void
+  onEditTitle: (id: string) => void
+  selectedId: string | null
+  onSelect: (id: string | null) => void
   range: { min: string; max: string } | null
   conflictByItem: Map<string, ScheduleV2Payload["conflicts"][number]>
   addingUnder: string | null
@@ -289,7 +344,7 @@ function RowGroup({ item, depth, ...h }: { item: ItemV2; depth: number } & RowHa
         </div>
       )}
       {h.addingUnder === item.id ? (
-        <div className="py-1.5" style={{ paddingLeft: 16 + (depth + 1) * 20 }}>
+        <div className="py-1.5" style={{ paddingLeft: 92 + 16 + (depth + 1) * 20 }}>
           <NewItemInput
             value={h.newTitle}
             onChange={h.setNewTitle}
@@ -301,7 +356,7 @@ function RowGroup({ item, depth, ...h }: { item: ItemV2; depth: number } & RowHa
         isOpen && (
           <button
             onClick={() => h.setAddingUnder(item.id)}
-            style={{ paddingLeft: 16 + (depth + 1) * 20 }}
+            style={{ paddingLeft: 92 + 16 + (depth + 1) * 20 }}
             className="flex items-center gap-1 py-1 text-[10px] font-bold text-slate-400 hover:text-[#7B2FBE] transition-colors"
           >
             <Plus className="w-3 h-3" /> Sub-item
@@ -320,13 +375,33 @@ function Row({ item, depth, hasChildren, isOpen, ...h }: { item: ItemV2; depth: 
   // descartar/recalcular do que travar o campo), mas o valor sempre volta a
   // ser o calculado assim que a tela atualizar após salvar.
 
+  const selected = h.selectedId === item.id
+
   return (
     <div
       className="flex items-center px-4 py-1.5 border-b border-slate-100 hover:bg-slate-50 group"
-      style={{ background: conflict ? "rgba(245,158,11,0.06)" : undefined }}
+      style={{ background: selected ? "rgba(123,47,190,0.05)" : conflict ? "rgba(245,158,11,0.06)" : undefined }}
     >
+      {/* Gutter fixo (igual ao Artia): selecionar, excluir, adicionar, editar */}
+      <div style={{ width: 92 }} className="flex items-center gap-1 shrink-0">
+        <button onClick={() => h.onSelect(selected ? null : item.id)} title="Selecionar (para mover/indentar)">
+          <Circle className={`w-3.5 h-3.5 transition-colors ${selected ? "text-[#7B2FBE] fill-[#7B2FBE]/25" : "text-slate-300 hover:text-slate-400"}`} />
+        </button>
+        <button onClick={() => h.onDelete(item.id)} title="Excluir">
+          <CircleX className="w-3.5 h-3.5 text-red-300 hover:text-red-500 transition-colors" />
+        </button>
+        <button onClick={() => h.onAddSibling(item)} title="Adicionar atividade">
+          <CirclePlus className="w-3.5 h-3.5 text-emerald-400 hover:text-emerald-600 transition-colors" />
+        </button>
+        {!hasChildren && (
+          <button onClick={() => h.onEditTitle(item.id)} title="Editar título">
+            <Pencil className="w-3 h-3 text-blue-300 hover:text-blue-500 transition-colors" />
+          </button>
+        )}
+      </div>
+
       {/* Título + hierarquia */}
-      <div className="flex items-center gap-1.5" style={{ width: 340, paddingLeft: depth * 20 }}>
+      <div className="flex items-center gap-1.5" style={{ width: 300, paddingLeft: depth * 20 }}>
         <button onClick={() => hasChildren && h.onToggle(item.id)} className="w-4 h-4 flex items-center justify-center shrink-0">
           {hasChildren
             ? (isOpen ? <ChevronDown className="w-3 h-3 text-slate-400" /> : <ChevronRight className="w-3 h-3 text-slate-400" />)
@@ -337,6 +412,7 @@ function Row({ item, depth, hasChildren, isOpen, ...h }: { item: ItemV2; depth: 
         </button>
         <span className="text-[9px] font-mono font-bold text-slate-400 shrink-0 w-8">{item.code}</span>
         <input
+          id={`sv2-title-${item.id}`}
           key={`title:${item.id}:${item.title}`}
           defaultValue={item.title}
           onBlur={(e) => {
@@ -472,31 +548,6 @@ function Row({ item, depth, hasChildren, isOpen, ...h }: { item: ItemV2; depth: 
         )}
       </div>
 
-      {/* Ações */}
-      <div style={{ width: 130 }} className="flex items-center justify-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-        <IconBtn onClick={() => h.onMove(item, -1)} title="Mover para cima"><ArrowUp className="w-3 h-3" /></IconBtn>
-        <IconBtn onClick={() => h.onMove(item, 1)} title="Mover para baixo"><ArrowDown className="w-3 h-3" /></IconBtn>
-        <IconBtn onClick={() => h.onIndent(item)} title="Indentar (virar filho do anterior)"><IndentIncrease className="w-3 h-3" /></IconBtn>
-        <IconBtn onClick={() => h.onOutdent(item)} title="Promover (sair do grupo)" disabled={item.parentId === null}><IndentDecrease className="w-3 h-3" /></IconBtn>
-        <IconBtn onClick={() => h.onDelete(item.id)} title="Excluir" danger><Trash2 className="w-3 h-3" /></IconBtn>
-      </div>
     </div>
-  )
-}
-
-function IconBtn({ children, onClick, title, danger, disabled }: {
-  children: React.ReactNode; onClick: () => void; title: string; danger?: boolean; disabled?: boolean
-}) {
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      disabled={disabled}
-      className={`w-5 h-5 rounded flex items-center justify-center transition-colors disabled:opacity-20 disabled:cursor-not-allowed ${
-        danger ? "text-slate-400 hover:text-red-500 hover:bg-red-50" : "text-slate-400 hover:text-slate-700 hover:bg-slate-200"
-      }`}
-    >
-      {children}
-    </button>
   )
 }
