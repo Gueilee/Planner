@@ -389,9 +389,24 @@ function Row({ item, depth, hasChildren, isOpen, ...h }: { item: ItemV2; depth: 
         />
       </div>
 
-      {/* Término (sempre derivado) */}
-      <div style={{ width: 90 }} className="text-center text-[10px] text-slate-400">
-        {fmtDateLong(item.terminoEstimado)}
+      {/* Término — editar aqui recalcula a duração (§3.3), igual a
+          arrastar o fim da barra no Artia; não é uma data solta. */}
+      <div style={{ width: 90 }} className="text-center">
+        <input
+          key={`termino:${item.id}:${item.terminoEstimado}`}
+          type="date"
+          defaultValue={item.terminoEstimado ?? ""}
+          title={
+            hasChildren
+              ? "Data de grupo — as subatividades definem o período; um valor digitado aqui é descartado ao salvar"
+              : "Editar aqui recalcula a duração (início fica fixo)"
+          }
+          onBlur={(e) => {
+            const v = e.target.value || null
+            if (v !== item.terminoEstimado) h.onUpdate(item.id, { terminoEstimado: v })
+          }}
+          className="bg-transparent outline-none text-[10px] text-slate-700 w-full text-center rounded focus:bg-violet-50"
+        />
       </div>
 
       {/* % completo */}

@@ -10,6 +10,7 @@ import { db } from "@/lib/db"
 import { auth } from "@/auth"
 import { revalidatePath } from "next/cache"
 import { recalcular } from "@/lib/domain/schedule-v2/scheduler"
+import { workingDaysBetween } from "@/lib/domain/schedule-v2/calendar"
 import { rollupGroups, rollupProgress, projectEndDate as computeProjectEndDate } from "@/lib/domain/schedule-v2/rollup"
 import { parsePredecessors, dropUnknownCodes, wouldCreateCycle } from "@/lib/domain/schedule-v2/dependency-parser"
 import type { Dependency, LinkType, SchedItem, SchedulingMode, WorkCalendar } from "@/lib/domain/schedule-v2/types"
@@ -338,6 +339,11 @@ export type UpdateItemV2Input = Partial<{
   title: string
   duracaoDiasUteis: number | null
   inicioEstimado: string | null
+  // Sem coluna própria — regra §3.3, término é sempre derivado de
+  // início+duração. Editar este campo direto na UI é traduzido aqui para
+  // uma nova `duracaoDiasUteis` (mesmo efeito de arrastar o fim da barra
+  // no Artia), não para uma escrita direta na data.
+  terminoEstimado: string | null
   inicioReal: string | null
   terminoReal: string | null
   esforcoEstimadoH: number
@@ -358,7 +364,7 @@ export async function updateItemV2(
 ): Promise<{ conflicts: ConflictV2[]; cycleItemIds: string[] }> {
   await requireAccess()
 
-  const current = await db.scheduleV2Item.findUnique({ where: { id }, select: { id: true } })
+  const current = await db.scheduleV2Item.findUnique({ where: { id }, select: { id: true, inicioEstimado: true } })
   if (!current) throw new Error("Item não encontrado")
 
   const hasChildren = (await db.scheduleV2Item.count({ where: { parentId: id } })) > 0
@@ -366,11 +372,33 @@ export async function updateItemV2(
   // ignorada silenciosamente em vez de dar erro (evita travar a UI por um
   // clique num campo desabilitado).
 
+  // Término não tem coluna própria (regra §3.3) — editar o campo na UI
+  // vira uma nova duração, calculada a partir do início EFETIVO (o que o
+  // usuário acabou de digitar nesta mesma chamada, se for o caso) e do
+  // calendário de dias úteis do projeto (igual a "arrastar o fim da
+  // barra" no Artia). Só se aplica a item-folha; num grupo, o cálculo é
+  // descartado do mesmo jeito que início/duração diretos (rollup manda).
+  let duracaoFromTermino: number | null | undefined
+  if (!hasChildren && data.terminoEstimado !== undefined && data.duracaoDiasUteis === undefined) {
+    if (data.terminoEstimado === null) {
+      duracaoFromTermino = null // término apagado -> sem duração/data (§3.10)
+    } else {
+      const inicioEfetivo = data.inicioEstimado !== undefined ? data.inicioEstimado : dstr(current.inicioEstimado)
+      if (inicioEfetivo) {
+        const cal = await loadCalendar(projectId)
+        const dias = workingDaysBetween(inicioEfetivo, data.terminoEstimado, cal) + 1
+        duracaoFromTermino = Math.max(1, dias)
+      }
+      // sem início ainda: não há como derivar duração — ignora em silêncio
+    }
+  }
+
   await db.scheduleV2Item.update({
     where: { id },
     data: {
       ...(data.title !== undefined && { title: data.title }),
       ...(!hasChildren && data.duracaoDiasUteis !== undefined && { duracaoDiasUteis: data.duracaoDiasUteis }),
+      ...(!hasChildren && duracaoFromTermino !== undefined && { duracaoDiasUteis: duracaoFromTermino }),
       ...(!hasChildren && data.inicioEstimado !== undefined && { inicioEstimado: ddate(data.inicioEstimado) }),
       ...(data.inicioReal !== undefined && { inicioReal: ddate(data.inicioReal) }),
       ...(data.terminoReal !== undefined && { terminoReal: ddate(data.terminoReal) }),
