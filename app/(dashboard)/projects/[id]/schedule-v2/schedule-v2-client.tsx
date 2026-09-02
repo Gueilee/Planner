@@ -11,18 +11,30 @@ import { fmtDateLong } from "@/lib/date-utils"
 import {
   ChevronRight, ChevronDown, Plus, IndentIncrease, IndentDecrease,
   ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, Milestone, Info,
-  Circle, CircleX, CirclePlus, Pencil, Undo2,
+  Circle, CircleX, CirclePlus, Pencil, Undo2, GripVertical, GripHorizontal,
 } from "lucide-react"
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ─── Helpers de árvore ──────────────────────────────────────────────────────
 
 function siblingsOf(items: ItemV2[], parentId: string | null): ItemV2[] {
   return items.filter((i) => i.parentId === parentId).sort((a, b) => a.order - b.order)
 }
 
+// true se `targetId` é o próprio `ofId` ou está dentro da subárvore dele —
+// usado para impedir que um item vire filho de um descendente seu (ciclo).
+function isSelfOrDescendant(items: ItemV2[], targetId: string, ofId: string): boolean {
+  if (targetId === ofId) return true
+  let cur = items.find((i) => i.id === targetId)
+  while (cur?.parentId) {
+    if (cur.parentId === ofId) return true
+    cur = items.find((i) => i.id === cur!.parentId)
+  }
+  return false
+}
+
 // ─── Ordenação por coluna (só na exibição — não mexe no `order` persistido) ──
 
-type SortColumn = "title" | "duracao" | "inicio" | "termino" | "pct" | "modo" | null
+type SortColumn = ColKey | "title" | null
 type SortState = { column: SortColumn; dir: "asc" | "desc" }
 
 function sortValue(item: ItemV2, col: SortColumn): string | number {
@@ -33,6 +45,8 @@ function sortValue(item: ItemV2, col: SortColumn): string | number {
     case "termino": return item.terminoEstimado ?? ""
     case "pct": return item.percentualCompleto
     case "modo": return item.schedulingMode
+    case "responsavel": return (item.responsavel ?? "").toLowerCase()
+    case "status": return statusLabel(item.status).label
     default: return 0
   }
 }
@@ -83,6 +97,43 @@ function pct(date: string, range: { min: string; max: string }): number {
   return ((toTs(date) - toTs(range.min)) / span) * 100
 }
 
+// ─── Status (novo) ──────────────────────────────────────────────────────────
+
+const STATUS_OPTIONS = [
+  { value: "A_INICIAR", label: "A iniciar", color: "#64748B", bg: "#F1F5F9" },
+  { value: "EM_ANDAMENTO", label: "Em Andamento", color: "#2563EB", bg: "#EFF6FF" },
+  { value: "CONCLUIDO", label: "Concluído", color: "#059669", bg: "#ECFDF5" },
+  { value: "ATRASADO", label: "Atrasado", color: "#DC2626", bg: "#FEF2F2" },
+] as const
+
+function statusLabel(status: string) {
+  if (status === "pendente") return STATUS_OPTIONS[0] // valor legado do default antigo
+  return STATUS_OPTIONS.find((o) => o.value === status) ?? STATUS_OPTIONS[0]
+}
+
+// ─── Colunas configuráveis (redimensionar + reordenar, igual ao Excel) ──────
+// "Atividade" (título+hierarquia) e "Barra" ficam fixas nas pontas — todo o
+// resto é livre para o usuário reordenar e redimensionar.
+
+type ColKey = "duracao" | "inicio" | "termino" | "pct" | "predecessores" | "modo" | "responsavel" | "status"
+
+const COL_LABELS: Record<ColKey, string> = {
+  duracao: "Duração", inicio: "Início", termino: "Término", pct: "%",
+  predecessores: "Predecessores", modo: "Modo", responsavel: "Responsável", status: "Status",
+}
+const DEFAULT_COL_ORDER: ColKey[] = ["duracao", "inicio", "termino", "pct", "predecessores", "responsavel", "status", "modo"]
+const DEFAULT_COL_WIDTHS: Record<ColKey, number> = {
+  duracao: 70, inicio: 110, termino: 100, pct: 60, predecessores: 150, responsavel: 140, status: 130, modo: 80,
+}
+const COL_ALIGN: Record<ColKey, "center" | "left"> = {
+  duracao: "center", inicio: "center", termino: "center", pct: "center",
+  predecessores: "left", modo: "center", responsavel: "left", status: "left",
+}
+const DEFAULT_TITLE_WIDTH = 300
+const GUTTER_WIDTH = 112
+
+function colPrefsKey(projectId: string) { return `sv2-columns-${projectId}` }
+
 // ─── Main ─────────────────────────────────────────────────────────────────
 
 export function ScheduleV2Client({ projectId, initial, initialProjectDates }: {
@@ -100,12 +151,44 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates }: {
   const [projectDates, setProjectDates] = useState(initialProjectDates)
   const [hasUndo, setHasUndo] = useState(false)
 
+  // Layout de colunas (larguras + ordem) — preferência pessoal, salva no
+  // navegador (não é dado do cronograma, é só a visão de quem está olhando).
+  const [colWidths, setColWidths] = useState<Record<ColKey, number>>(DEFAULT_COL_WIDTHS)
+  const [colOrder, setColOrder] = useState<ColKey[]>(DEFAULT_COL_ORDER)
+  const [titleWidth, setTitleWidth] = useState(DEFAULT_TITLE_WIDTH)
+  const [colsLoaded, setColsLoaded] = useState(false)
+  const [dragCol, setDragCol] = useState<ColKey | null>(null)
+
+  // Arrastar linha (encaixar antes/depois/dentro) — igual ao Artia.
+  const [dragRowId, setDragRowId] = useState<string | null>(null)
+  const [dropTarget, setDropTarget] = useState<{ id: string; zone: "before" | "after" | "inside" } | null>(null)
+
   const range = useMemo(() => dateRange(data.items), [data.items])
   const conflictByItem = useMemo(() => new Map(data.conflicts.map((c) => [c.itemId, c])), [data.conflicts])
 
   useEffect(() => {
     hasUndoV2(projectId).then(setHasUndo).catch(() => {})
   }, [projectId])
+
+  // Carrega preferências de coluna salvas (só no cliente — evita divergir da
+  // renderização do servidor). Só grava de volta depois de já ter lido.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(colPrefsKey(projectId))
+      if (raw) {
+        const parsed = JSON.parse(raw) as { widths?: Partial<Record<ColKey, number>>; order?: ColKey[]; titleWidth?: number }
+        if (parsed.widths) setColWidths((w) => ({ ...w, ...parsed.widths }))
+        if (Array.isArray(parsed.order) && parsed.order.length === DEFAULT_COL_ORDER.length) setColOrder(parsed.order)
+        if (typeof parsed.titleWidth === "number") setTitleWidth(parsed.titleWidth)
+      }
+    } catch { /* localStorage indisponível — segue com o padrão */ }
+    setColsLoaded(true)
+  }, [projectId])
+
+  useEffect(() => {
+    if (!colsLoaded) return
+    try { localStorage.setItem(colPrefsKey(projectId), JSON.stringify({ widths: colWidths, order: colOrder, titleWidth })) } catch { /* noop */ }
+  }, [colsLoaded, colWidths, colOrder, titleWidth, projectId])
 
   function refresh() {
     startTransition(async () => {
@@ -135,6 +218,21 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates }: {
 
   function toggleSort(column: Exclude<SortColumn, null>) {
     setSort((prev) => prev.column === column ? { column, dir: prev.dir === "asc" ? "desc" : "asc" } : { column, dir: "asc" })
+  }
+
+  function handleColResize(col: ColKey, width: number) {
+    setColWidths((prev) => ({ ...prev, [col]: width }))
+  }
+
+  function handleColDrop(targetCol: ColKey) {
+    setColOrder((prev) => {
+      if (!dragCol || dragCol === targetCol) return prev
+      const next = prev.filter((c) => c !== dragCol)
+      const idx = next.indexOf(targetCol)
+      next.splice(idx, 0, dragCol)
+      return next
+    })
+    setDragCol(null)
   }
 
   function toggle(id: string) {
@@ -236,8 +334,73 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates }: {
     })
   }
 
+  // ── Arrastar linha para encaixar (antes/depois/dentro) — igual ao Artia ──
+
+  function handleRowDragStart(id: string) {
+    setDragRowId(id)
+  }
+
+  function handleRowDragOver(e: React.DragEvent, targetId: string) {
+    if (!dragRowId || dragRowId === targetId || isSelfOrDescendant(data.items, targetId, dragRowId)) {
+      setDropTarget(null)
+      return
+    }
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const ratio = (e.clientY - rect.top) / rect.height
+    const zone: "before" | "after" | "inside" = ratio < 0.28 ? "before" : ratio > 0.72 ? "after" : "inside"
+    setDropTarget({ id: targetId, zone })
+  }
+
+  function handleRowDrop(targetId: string) {
+    const sourceId = dragRowId
+    const target = dropTarget?.id === targetId ? dropTarget : null
+    setDragRowId(null)
+    setDropTarget(null)
+    if (!sourceId || !target) return
+    if (isSelfOrDescendant(data.items, target.id, sourceId)) return
+
+    startTransition(async () => {
+      if (target.zone === "inside") {
+        await updateItemV2(sourceId, projectId, { parentId: target.id })
+        const kidsAfter = siblingsOf(
+          data.items.map((i) => (i.id === sourceId ? { ...i, parentId: target.id } : i)),
+          target.id
+        )
+        await reorderItemsV2(projectId, kidsAfter.map((k) => k.id))
+      } else {
+        const targetItem = data.items.find((i) => i.id === target.id)
+        const newParentId = targetItem ? targetItem.parentId : null
+        await updateItemV2(sourceId, projectId, { parentId: newParentId })
+        const projected = data.items
+          .map((i) => (i.id === sourceId ? { ...i, parentId: newParentId } : i))
+          .filter((i) => i.id !== sourceId)
+        const sibs = siblingsOf(projected, newParentId)
+        const idx = sibs.findIndex((s) => s.id === target.id)
+        const insertAt = target.zone === "before" ? idx : idx + 1
+        const finalIds = [...sibs.slice(0, insertAt).map((s) => s.id), sourceId, ...sibs.slice(insertAt).map((s) => s.id)]
+        await reorderItemsV2(projectId, finalIds)
+      }
+      refresh()
+    })
+  }
+
+  function handleRowDragEnd() {
+    setDragRowId(null)
+    setDropTarget(null)
+  }
+
   const roots = sortedSiblingsOf(data.items, null, sort)
   const selectedItem = selectedId ? data.items.find((i) => i.id === selectedId) ?? null : null
+
+  const rowHandlers: RowHandlers = {
+    data, expanded, onToggle: toggle, onUpdate: handleUpdate, onDeps: handleDeps, onDelete: handleDelete,
+    onAddSibling: handleAddSibling, onEditTitle: handleEditTitle,
+    selectedId, onSelect: setSelectedId, sort, range, conflictByItem,
+    addingUnder, setAddingUnder, newTitle, setNewTitle, onCreate: handleCreate,
+    colOrder, colWidths, titleWidth,
+    dragRowId, dropTarget, onRowDragStart: handleRowDragStart, onRowDragOver: handleRowDragOver,
+    onRowDrop: handleRowDrop, onRowDragEnd: handleRowDragEnd,
+  }
 
   return (
     <div className="min-h-full text-slate-700" style={{ background: "#F8F9FC" }}>
@@ -246,16 +409,8 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates }: {
           Artia), independente de já existir alguma atividade lançada. */}
       <div className="px-5 py-4 border-b border-slate-200 bg-white flex items-center gap-6 flex-wrap">
         <Stat label="Itens" value={data.items.length} />
-        <EditableDateStat
-          label="Início"
-          value={projectDates.expectedStart}
-          onChange={(v) => handleProjectDate("expectedStart", v)}
-        />
-        <EditableDateStat
-          label="Término"
-          value={projectDates.expectedEnd}
-          onChange={(v) => handleProjectDate("expectedEnd", v)}
-        />
+        <EditableDateStat label="Início" value={projectDates.expectedStart} onChange={(v) => handleProjectDate("expectedStart", v)} />
+        <EditableDateStat label="Término" value={projectDates.expectedEnd} onChange={(v) => handleProjectDate("expectedEnd", v)} />
         <Stat label="Conflitos" value={data.conflicts.length} color={data.conflicts.length > 0 ? "#D97706" : undefined} />
         <div className="ml-auto flex items-center gap-2 text-[11px] text-slate-400 max-w-xs">
           <Info className="w-3.5 h-3.5 shrink-0" />
@@ -265,14 +420,15 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates }: {
 
       {/* Barra de ações estruturais — agem sobre o item selecionado (círculo
           cinza na frente da linha); "Voltar" desfaz a última alteração feita
-          (igual ao Ctrl+Z do Excel). */}
+          (igual ao Ctrl+Z do Excel). Arrastar pela alcinha (⠿) também
+          reestrutura, direto na linha — veja abaixo. */}
       <div className="px-5 py-2 border-b border-slate-200 bg-white flex items-center gap-2">
         <ToolbarBtn wide disabled={!hasUndo} onClick={handleUndo} title="Voltar — desfaz a última alteração feita">
           <Undo2 className="w-3.5 h-3.5" /> Voltar
         </ToolbarBtn>
         <div className="w-px h-5 bg-slate-200 mx-1" />
         <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mr-1">
-          {selectedItem ? <>Selecionado: <span className="text-slate-600 normal-case">{selectedItem.title}</span></> : "Selecione uma linha para mover/indentar"}
+          {selectedItem ? <>Selecionado: <span className="text-slate-600 normal-case">{selectedItem.title}</span></> : "Selecione uma linha (círculo) ou arraste pela alcinha ⠿"}
         </span>
         <ToolbarBtn disabled={!selectedItem || sort.column !== null} onClick={() => selectedItem && handleMove(selectedItem, -1)} title={sort.column ? "Limpe a ordenação da coluna para reestruturar manualmente" : "Mover para cima"}><ArrowUp className="w-3.5 h-3.5" /></ToolbarBtn>
         <ToolbarBtn disabled={!selectedItem || sort.column !== null} onClick={() => selectedItem && handleMove(selectedItem, 1)} title={sort.column ? "Limpe a ordenação da coluna para reestruturar manualmente" : "Mover para baixo"}><ArrowDown className="w-3.5 h-3.5" /></ToolbarBtn>
@@ -285,45 +441,48 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates }: {
         )}
       </div>
 
-      {/* Column headers — clique ordena os irmãos daquele nível pela coluna */}
+      {/* Column headers — clique ordena; arraste a mãozinha (✥) para
+          reordenar a coluna; arraste a borda direita para redimensionar. */}
       <div className="flex items-center px-4 py-2 border-b border-slate-200 bg-slate-50 text-[9px] font-black uppercase tracking-widest text-slate-400">
-        <div style={{ width: 92 }} />
-        <SortableHeader width={300} label="Atividade" column="title" sort={sort} onSort={toggleSort} />
-        <SortableHeader width={60} center label="Duração" column="duracao" sort={sort} onSort={toggleSort} />
-        <SortableHeader width={110} center label="Início" column="inicio" sort={sort} onSort={toggleSort} />
-        <SortableHeader width={90} center label="Término" column="termino" sort={sort} onSort={toggleSort} />
-        <SortableHeader width={70} center label="%" column="pct" sort={sort} onSort={toggleSort} />
-        <div style={{ width: 150 }}>Predecessores</div>
-        <SortableHeader width={80} center label="Modo" column="modo" sort={sort} onSort={toggleSort} />
+        <div style={{ width: GUTTER_WIDTH }} />
+        <div className="relative" style={{ width: titleWidth }}>
+          <SortableHeaderLabel label="Atividade" column="title" sort={sort} onSort={toggleSort} />
+          <ColResizeHandle width={titleWidth} onResize={(w) => setTitleWidth(w)} />
+        </div>
+        {colOrder.map((col) => (
+          <div
+            key={col}
+            className="relative flex items-center gap-1 group/col"
+            style={{ width: colWidths[col] }}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => { e.preventDefault(); handleColDrop(col) }}
+          >
+            <span
+              draggable
+              onDragStart={() => setDragCol(col)}
+              onDragEnd={() => setDragCol(null)}
+              title="Arrastar para reordenar a coluna"
+              className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 opacity-0 group-hover/col:opacity-100 transition-opacity shrink-0"
+            >
+              <GripHorizontal className="w-3 h-3" />
+            </span>
+            <SortableHeaderLabel
+              label={COL_LABELS[col]}
+              column={col}
+              sort={sort}
+              onSort={toggleSort}
+              center={COL_ALIGN[col] === "center"}
+            />
+            <ColResizeHandle width={colWidths[col]} onResize={(w) => handleColResize(col, w)} />
+          </div>
+        ))}
         <div className="flex-1">Barra</div>
       </div>
 
       {/* Rows */}
       <div className={`bg-white ${pending ? "opacity-60 pointer-events-none transition-opacity" : "transition-opacity"}`}>
         {roots.map((item) => (
-          <RowGroup
-            key={item.id}
-            item={item}
-            depth={0}
-            data={data}
-            expanded={expanded}
-            onToggle={toggle}
-            onUpdate={handleUpdate}
-            onDeps={handleDeps}
-            onDelete={handleDelete}
-            onAddSibling={handleAddSibling}
-            onEditTitle={handleEditTitle}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            sort={sort}
-            range={range}
-            conflictByItem={conflictByItem}
-            addingUnder={addingUnder}
-            setAddingUnder={setAddingUnder}
-            newTitle={newTitle}
-            setNewTitle={setNewTitle}
-            onCreate={handleCreate}
-          />
+          <RowGroup key={item.id} item={item} depth={0} {...rowHandlers} />
         ))}
       </div>
 
@@ -399,23 +558,50 @@ function ToolbarBtn({ children, onClick, title, disabled, wide }: {
   )
 }
 
-// Cabeçalho de coluna clicável — ordena os irmãos do nível pelo valor da
+// Rótulo de cabeçalho clicável — ordena os irmãos do nível pelo valor da
 // coluna (não mexe na hierarquia nem no `order` persistido no banco).
-function SortableHeader({ label, column, sort, onSort, width, center }: {
+function SortableHeaderLabel({ label, column, sort, onSort, center }: {
   label: string; column: Exclude<SortColumn, null>; sort: SortState; onSort: (c: Exclude<SortColumn, null>) => void
-  width: number; center?: boolean
+  center?: boolean
 }) {
   const active = sort.column === column
   return (
     <button
       onClick={() => onSort(column)}
-      style={{ width }}
-      className={`group flex items-center gap-0.5 hover:text-slate-600 transition-colors ${center ? "justify-center" : ""} ${active ? "text-[#7B2FBE]" : ""}`}
+      className={`group flex items-center gap-0.5 hover:text-slate-600 transition-colors flex-1 min-w-0 ${center ? "justify-center" : ""} ${active ? "text-[#7B2FBE]" : ""}`}
     >
-      {label}
-      {active && (sort.dir === "asc" ? <ArrowUp className="w-2.5 h-2.5" /> : <ArrowDown className="w-2.5 h-2.5" />)}
-      {!active && <ArrowUpDown className="w-2.5 h-2.5 opacity-0 group-hover:opacity-40" />}
+      <span className="truncate">{label}</span>
+      {active && (sort.dir === "asc" ? <ArrowUp className="w-2.5 h-2.5 shrink-0" /> : <ArrowDown className="w-2.5 h-2.5 shrink-0" />)}
+      {!active && <ArrowUpDown className="w-2.5 h-2.5 shrink-0 opacity-0 group-hover:opacity-40" />}
     </button>
+  )
+}
+
+// Alça de redimensionar coluna (arrastar a borda direita), igual ao Excel.
+function ColResizeHandle({ width, onResize }: { width: number; onResize: (w: number) => void }) {
+  function onMouseDown(e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    const startX = e.clientX
+    const startWidth = width
+    function onMove(ev: MouseEvent) {
+      onResize(Math.max(40, startWidth + (ev.clientX - startX)))
+    }
+    function onUp() {
+      window.removeEventListener("mousemove", onMove)
+      window.removeEventListener("mouseup", onUp)
+    }
+    window.addEventListener("mousemove", onMove)
+    window.addEventListener("mouseup", onUp)
+  }
+  return (
+    <div
+      onMouseDown={onMouseDown}
+      title="Arrastar para redimensionar"
+      className="absolute -right-1 top-0 h-full w-2 cursor-col-resize z-10 group/resize flex justify-center"
+    >
+      <div className="w-px h-full bg-transparent group-hover/resize:bg-[#7B2FBE]/50 transition-colors" />
+    </div>
   )
 }
 
@@ -461,6 +647,15 @@ type RowHandlers = {
   newTitle: string
   setNewTitle: (v: string) => void
   onCreate: (parentId: string | null) => void
+  colOrder: ColKey[]
+  colWidths: Record<ColKey, number>
+  titleWidth: number
+  dragRowId: string | null
+  dropTarget: { id: string; zone: "before" | "after" | "inside" } | null
+  onRowDragStart: (id: string) => void
+  onRowDragOver: (e: React.DragEvent, targetId: string) => void
+  onRowDrop: (targetId: string) => void
+  onRowDragEnd: () => void
 }
 
 function RowGroup({ item, depth, ...h }: { item: ItemV2; depth: number } & RowHandlers) {
@@ -476,7 +671,7 @@ function RowGroup({ item, depth, ...h }: { item: ItemV2; depth: number } & RowHa
         </div>
       )}
       {h.addingUnder === item.id ? (
-        <div className="py-1.5" style={{ paddingLeft: 92 + 16 + (depth + 1) * 20 }}>
+        <div className="py-1.5" style={{ paddingLeft: GUTTER_WIDTH + 16 + (depth + 1) * 20 }}>
           <NewItemInput
             value={h.newTitle}
             onChange={h.setNewTitle}
@@ -488,7 +683,7 @@ function RowGroup({ item, depth, ...h }: { item: ItemV2; depth: number } & RowHa
         isOpen && (
           <button
             onClick={() => h.setAddingUnder(item.id)}
-            style={{ paddingLeft: 92 + 16 + (depth + 1) * 20 }}
+            style={{ paddingLeft: GUTTER_WIDTH + 16 + (depth + 1) * 20 }}
             className="flex items-center gap-1 py-1 text-[10px] font-bold text-slate-400 hover:text-[#7B2FBE] transition-colors"
           >
             <Plus className="w-3 h-3" /> Sub-item
@@ -501,21 +696,40 @@ function RowGroup({ item, depth, ...h }: { item: ItemV2; depth: number } & RowHa
 
 function Row({ item, depth, hasChildren, isOpen, ...h }: { item: ItemV2; depth: number; hasChildren: boolean; isOpen: boolean } & RowHandlers) {
   const conflict = h.conflictByItem.get(item.id)
-  // Regra §3.7 (CLAUDE.md): grupo não tem data própria, e um item automático
-  // com predecessor tem a data ditada pelo vínculo — em ambos os casos o
-  // campo fica digitável (por decisão: melhor deixar tentar e o motor
-  // descartar/recalcular do que travar o campo), mas o valor sempre volta a
-  // ser o calculado assim que a tela atualizar após salvar.
-
   const selected = h.selectedId === item.id
+  const isDragging = h.dragRowId === item.id
+  const dropHere = h.dropTarget?.id === item.id ? h.dropTarget.zone : null
+
+  const rowBg = dropHere === "inside"
+    ? "rgba(123,47,190,0.10)"
+    : selected ? "rgba(123,47,190,0.05)" : conflict ? "rgba(245,158,11,0.06)" : undefined
 
   return (
     <div
-      className="flex items-center px-4 py-1.5 border-b border-slate-100 hover:bg-slate-50 group"
-      style={{ background: selected ? "rgba(123,47,190,0.05)" : conflict ? "rgba(245,158,11,0.06)" : undefined }}
+      onDragOver={(e) => { e.preventDefault(); h.onRowDragOver(e, item.id) }}
+      onDrop={(e) => { e.preventDefault(); h.onRowDrop(item.id) }}
+      onDragEnd={h.onRowDragEnd}
+      className="flex items-center px-4 py-1.5 border-b border-slate-100 hover:bg-slate-50 group transition-colors"
+      style={{
+        background: rowBg,
+        opacity: isDragging ? 0.4 : 1,
+        borderTop: dropHere === "before" ? "2px solid #7B2FBE" : "2px solid transparent",
+        borderBottom: dropHere === "after" ? "2px solid #7B2FBE" : undefined,
+        outline: dropHere === "inside" ? "2px dashed #7B2FBE" : undefined,
+        outlineOffset: dropHere === "inside" ? "-2px" : undefined,
+      }}
     >
-      {/* Gutter fixo (igual ao Artia): selecionar, excluir, adicionar, editar */}
-      <div style={{ width: 92 }} className="flex items-center gap-1 shrink-0">
+      {/* Gutter fixo (igual ao Artia): arrastar, selecionar, excluir, adicionar, editar */}
+      <div style={{ width: GUTTER_WIDTH }} className="flex items-center gap-1 shrink-0">
+        <span
+          draggable
+          onDragStart={(e) => { e.stopPropagation(); h.onRowDragStart(item.id) }}
+          onDragEnd={h.onRowDragEnd}
+          title="Arrastar para mover, indentar ou encaixar em outra atividade"
+          className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 transition-colors"
+        >
+          <GripVertical className="w-3.5 h-3.5" />
+        </span>
         <button onClick={() => h.onSelect(selected ? null : item.id)} title="Selecionar (para mover/indentar)">
           <Circle className={`w-3.5 h-3.5 transition-colors ${selected ? "text-[#7B2FBE] fill-[#7B2FBE]/25" : "text-slate-300 hover:text-slate-400"}`} />
         </button>
@@ -532,8 +746,8 @@ function Row({ item, depth, hasChildren, isOpen, ...h }: { item: ItemV2; depth: 
         )}
       </div>
 
-      {/* Título + hierarquia */}
-      <div className="flex items-center gap-1.5" style={{ width: 300, paddingLeft: depth * 20 }}>
+      {/* Título + hierarquia (coluna fixa) */}
+      <div className="flex items-center gap-1.5" style={{ width: h.titleWidth, paddingLeft: depth * 20 }}>
         <button onClick={() => hasChildren && h.onToggle(item.id)} className="w-4 h-4 flex items-center justify-center shrink-0">
           {hasChildren
             ? (isOpen ? <ChevronDown className="w-3 h-3 text-slate-400" /> : <ChevronRight className="w-3 h-3 text-slate-400" />)
@@ -560,111 +774,14 @@ function Row({ item, depth, hasChildren, isOpen, ...h }: { item: ItemV2; depth: 
         )}
       </div>
 
-      {/* Duração */}
-      <div style={{ width: 60 }} className="text-center">
-        {!hasChildren ? (
-          <input
-            key={`dur:${item.id}:${item.duracaoDiasUteis}`}
-            type="number" min={0}
-            defaultValue={item.duracaoDiasUteis ?? ""}
-            onBlur={(e) => {
-              const v = e.target.value === "" ? null : parseInt(e.target.value, 10)
-              if (v !== item.duracaoDiasUteis) h.onUpdate(item.id, { duracaoDiasUteis: v })
-            }}
-            className="w-10 text-center bg-transparent outline-none text-xs text-slate-700 rounded border-b border-transparent focus:border-[#7B2FBE] focus:bg-violet-50"
-          />
-        ) : <span className="text-[10px] text-slate-300">—</span>}
-      </div>
+      {/* Colunas configuráveis (ordem e largura vêm do estado do cliente) */}
+      {h.colOrder.map((col) => (
+        <div key={col} style={{ width: h.colWidths[col] }} className={COL_ALIGN[col] === "center" ? "text-center" : ""}>
+          {renderCell(col, item, hasChildren, h)}
+        </div>
+      ))}
 
-      {/* Início */}
-      <div style={{ width: 110 }} className="text-center">
-        <input
-          key={`inicio:${item.id}:${item.inicioEstimado}`}
-          type="date"
-          defaultValue={item.inicioEstimado ?? ""}
-          title={
-            hasChildren
-              ? "Data de grupo — some as subatividades definem o período; um valor digitado aqui é descartado ao salvar"
-              : item.schedulingMode === "auto" && hasPredecessor(item.id, h.data)
-                ? "Data controlada pelo predecessor — um valor digitado aqui é descartado ao salvar, a menos que mude para Manual"
-                : undefined
-          }
-          onBlur={(e) => {
-            const v = e.target.value || null
-            if (v !== item.inicioEstimado) h.onUpdate(item.id, { inicioEstimado: v })
-          }}
-          className="bg-transparent outline-none text-[10px] text-slate-700 w-full text-center rounded focus:bg-violet-50"
-        />
-      </div>
-
-      {/* Término — editar aqui recalcula a duração (§3.3), igual a
-          arrastar o fim da barra no Artia; não é uma data solta. */}
-      <div style={{ width: 90 }} className="text-center">
-        <input
-          key={`termino:${item.id}:${item.terminoEstimado}`}
-          type="date"
-          defaultValue={item.terminoEstimado ?? ""}
-          title={
-            hasChildren
-              ? "Data de grupo — as subatividades definem o período; um valor digitado aqui é descartado ao salvar"
-              : "Editar aqui recalcula a duração (início fica fixo)"
-          }
-          onBlur={(e) => {
-            const v = e.target.value || null
-            if (v !== item.terminoEstimado) h.onUpdate(item.id, { terminoEstimado: v })
-          }}
-          className="bg-transparent outline-none text-[10px] text-slate-700 w-full text-center rounded focus:bg-violet-50"
-        />
-      </div>
-
-      {/* % completo */}
-      <div style={{ width: 70 }} className="text-center">
-        {!hasChildren ? (
-          <input
-            key={`pct:${item.id}:${item.percentualCompleto}`}
-            type="number" min={0} max={100}
-            defaultValue={item.percentualCompleto}
-            onBlur={(e) => {
-              const v = Math.max(0, Math.min(100, parseInt(e.target.value || "0", 10)))
-              if (v !== item.percentualCompleto) h.onUpdate(item.id, { percentualCompleto: v })
-            }}
-            className="w-10 text-center bg-transparent outline-none text-xs text-slate-700 rounded border-b border-transparent focus:border-[#7B2FBE] focus:bg-violet-50"
-          />
-        ) : <span className="text-xs font-bold text-[#7B2FBE]">{item.percentualCompleto}%</span>}
-      </div>
-
-      {/* Predecessores */}
-      <div style={{ width: 150 }}>
-        {!hasChildren && (
-          <input
-            key={`deps:${item.id}:${depsTextFor(item.id, h.data)}`}
-            defaultValue={depsTextFor(item.id, h.data)}
-            onBlur={(e) => {
-              const v = e.target.value
-              if (v !== depsTextFor(item.id, h.data)) h.onDeps(item.id, v)
-            }}
-            placeholder="Ex.: A2; A3ss+1"
-            className="w-full bg-transparent outline-none text-[10px] font-mono text-slate-700 placeholder-slate-300 rounded border-b border-transparent focus:border-[#7B2FBE] focus:bg-violet-50"
-          />
-        )}
-      </div>
-
-      {/* Modo */}
-      <div style={{ width: 80 }} className="text-center">
-        {!hasChildren && (
-          <button
-            onClick={() => h.onUpdate(item.id, { schedulingMode: item.schedulingMode === "auto" ? "manual" : "auto" })}
-            className="text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full transition-colors"
-            style={item.schedulingMode === "manual"
-              ? { background: "#FFFBEB", color: "#D97706", border: "1px solid #FDE68A" }
-              : { background: "#F1F5F9", color: "#64748B", border: "1px solid #E2E8F0" }}
-          >
-            {item.schedulingMode === "manual" ? "Manual" : "Auto"}
-          </button>
-        )}
-      </div>
-
-      {/* Barra */}
+      {/* Barra (coluna fixa, preenche o resto) */}
       <div className="flex-1 pr-3">
         {h.range && item.inicioEstimado && item.terminoEstimado && (
           <div className="relative h-3 bg-slate-100 rounded-full overflow-hidden">
@@ -679,7 +796,134 @@ function Row({ item, depth, hasChildren, isOpen, ...h }: { item: ItemV2; depth: 
           </div>
         )}
       </div>
-
     </div>
   )
+}
+
+// Conteúdo de cada coluna configurável — separado da estrutura da linha para
+// poder ser reordenado livremente (h.colOrder) sem duplicar JSX.
+function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandlers): React.ReactNode {
+  switch (col) {
+    case "duracao":
+      return !hasChildren ? (
+        <input
+          key={`dur:${item.id}:${item.duracaoDiasUteis}`}
+          type="number" min={0}
+          defaultValue={item.duracaoDiasUteis ?? ""}
+          onBlur={(e) => {
+            const v = e.target.value === "" ? null : parseInt(e.target.value, 10)
+            if (v !== item.duracaoDiasUteis) h.onUpdate(item.id, { duracaoDiasUteis: v })
+          }}
+          className="w-10 text-center bg-transparent outline-none text-xs text-slate-700 rounded border-b border-transparent focus:border-[#7B2FBE] focus:bg-violet-50"
+        />
+      ) : <span className="text-[10px] text-slate-300">—</span>
+
+    case "inicio":
+      return (
+        <input
+          key={`inicio:${item.id}:${item.inicioEstimado}`}
+          type="date"
+          defaultValue={item.inicioEstimado ?? ""}
+          title={
+            hasChildren
+              ? "Data de grupo — as subatividades definem o período; um valor digitado aqui é descartado ao salvar"
+              : item.schedulingMode === "auto" && hasPredecessor(item.id, h.data)
+                ? "Data controlada pelo predecessor — um valor digitado aqui é descartado ao salvar, a menos que mude para Manual"
+                : undefined
+          }
+          onBlur={(e) => {
+            const v = e.target.value || null
+            if (v !== item.inicioEstimado) h.onUpdate(item.id, { inicioEstimado: v })
+          }}
+          className="bg-transparent outline-none text-[10px] text-slate-700 w-full text-center rounded focus:bg-violet-50"
+        />
+      )
+
+    case "termino":
+      return (
+        <input
+          key={`termino:${item.id}:${item.terminoEstimado}`}
+          type="date"
+          defaultValue={item.terminoEstimado ?? ""}
+          title={hasChildren ? "Data de grupo — as subatividades definem o período; um valor digitado aqui é descartado ao salvar" : "Editar aqui recalcula a duração (início fica fixo)"}
+          onBlur={(e) => {
+            const v = e.target.value || null
+            if (v !== item.terminoEstimado) h.onUpdate(item.id, { terminoEstimado: v })
+          }}
+          className="bg-transparent outline-none text-[10px] text-slate-700 w-full text-center rounded focus:bg-violet-50"
+        />
+      )
+
+    case "pct":
+      return !hasChildren ? (
+        <input
+          key={`pct:${item.id}:${item.percentualCompleto}`}
+          type="number" min={0} max={100}
+          defaultValue={item.percentualCompleto}
+          onBlur={(e) => {
+            const v = Math.max(0, Math.min(100, parseInt(e.target.value || "0", 10)))
+            if (v !== item.percentualCompleto) h.onUpdate(item.id, { percentualCompleto: v })
+          }}
+          className="w-10 text-center bg-transparent outline-none text-xs text-slate-700 rounded border-b border-transparent focus:border-[#7B2FBE] focus:bg-violet-50"
+        />
+      ) : <span className="text-xs font-bold text-[#7B2FBE]">{item.percentualCompleto}%</span>
+
+    case "predecessores":
+      return !hasChildren ? (
+        <input
+          key={`deps:${item.id}:${depsTextFor(item.id, h.data)}`}
+          defaultValue={depsTextFor(item.id, h.data)}
+          onBlur={(e) => {
+            const v = e.target.value
+            if (v !== depsTextFor(item.id, h.data)) h.onDeps(item.id, v)
+          }}
+          placeholder="Ex.: A2; A3ss+1"
+          className="w-full bg-transparent outline-none text-[10px] font-mono text-slate-700 placeholder-slate-300 rounded border-b border-transparent focus:border-[#7B2FBE] focus:bg-violet-50"
+        />
+      ) : null
+
+    case "modo":
+      return !hasChildren ? (
+        <button
+          onClick={() => h.onUpdate(item.id, { schedulingMode: item.schedulingMode === "auto" ? "manual" : "auto" })}
+          className="text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full transition-colors"
+          style={item.schedulingMode === "manual"
+            ? { background: "#FFFBEB", color: "#D97706", border: "1px solid #FDE68A" }
+            : { background: "#F1F5F9", color: "#64748B", border: "1px solid #E2E8F0" }}
+        >
+          {item.schedulingMode === "manual" ? "Manual" : "Auto"}
+        </button>
+      ) : null
+
+    case "responsavel":
+      return (
+        <input
+          key={`resp:${item.id}:${item.responsavel}`}
+          defaultValue={item.responsavel ?? ""}
+          onBlur={(e) => {
+            const v = e.target.value.trim() || null
+            if (v !== item.responsavel) h.onUpdate(item.id, { responsavel: v })
+          }}
+          placeholder="Sem responsável"
+          className="w-full bg-transparent outline-none text-xs text-slate-700 placeholder-slate-300 rounded border-b border-transparent focus:border-[#7B2FBE] focus:bg-violet-50"
+        />
+      )
+
+    case "status": {
+      const st = statusLabel(item.status)
+      return (
+        <select
+          value={st.value}
+          onChange={(e) => h.onUpdate(item.id, { status: e.target.value })}
+          className="text-[10px] font-bold px-1.5 py-0.5 rounded-full outline-none cursor-pointer appearance-none text-center"
+          style={{ background: st.bg, color: st.color, border: `1px solid ${st.color}33` }}
+        >
+          {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      )
+    }
+
+    default:
+      return null
+  }
 }

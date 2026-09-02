@@ -51,6 +51,7 @@ export type ItemV2 = {
   order: number
   title: string
   status: string
+  responsavel: string | null
   duracaoDiasUteis: number | null
   inicioEstimado: string | null
   terminoEstimado: string | null
@@ -139,6 +140,7 @@ function groupIdSet(rows: ItemRow[]): Set<string> {
 
 type ItemSnapshotRow = {
   id: string; code: string; parentId: string | null; order: number; title: string; status: string
+  responsavel: string | null
   duracaoDiasUteis: number | null
   inicioEstimado: string | null; terminoEstimado: string | null
   inicioReal: string | null; terminoReal: string | null
@@ -153,6 +155,7 @@ async function saveSnapshot(projectId: string): Promise<void> {
   const payload: SnapshotPayload = {
     items: rows.map((r) => ({
       id: r.id, code: r.code, parentId: r.parentId, order: r.order, title: r.title, status: r.status,
+      responsavel: r.responsavel,
       duracaoDiasUteis: r.duracaoDiasUteis,
       inicioEstimado: dstr(r.inicioEstimado), terminoEstimado: dstr(r.terminoEstimado),
       inicioReal: dstr(r.inicioReal), terminoReal: dstr(r.terminoReal),
@@ -194,6 +197,7 @@ export async function undoLastChangeV2(projectId: string): Promise<{ ok: boolean
       await tx.scheduleV2Item.create({
         data: {
           id: it.id, projectId, code: it.code, parentId: null, order: it.order, title: it.title, status: it.status,
+          responsavel: it.responsavel,
           duracaoDiasUteis: it.duracaoDiasUteis,
           inicioEstimado: ddate(it.inicioEstimado), terminoEstimado: ddate(it.terminoEstimado),
           inicioReal: ddate(it.inicioReal), terminoReal: ddate(it.terminoReal),
@@ -341,6 +345,7 @@ export async function getScheduleV2(projectId: string): Promise<ScheduleV2Payloa
     order: r.order,
     title: r.title,
     status: r.status,
+    responsavel: r.responsavel,
     duracaoDiasUteis: r.duracaoDiasUteis,
     inicioEstimado: dstr(r.inicioEstimado),
     terminoEstimado: dstr(r.terminoEstimado),
@@ -377,6 +382,8 @@ export type CreateItemV2Input = {
   schedulingMode?: SchedulingMode
   constraintType?: string | null
   constraintDate?: string | null
+  status?: string
+  responsavel?: string | null
 }
 
 export async function createItemV2(input: CreateItemV2Input): Promise<ItemV2> {
@@ -401,6 +408,8 @@ export async function createItemV2(input: CreateItemV2Input): Promise<ItemV2> {
       schedulingMode: input.schedulingMode ?? "auto",
       constraintType: input.constraintType ?? null,
       constraintDate: ddate(input.constraintDate),
+      status: input.status ?? "A_INICIAR",
+      responsavel: input.responsavel ?? null,
       order: (maxOrder._max.order ?? -1) + 1,
     },
   })
@@ -412,7 +421,7 @@ export async function createItemV2(input: CreateItemV2Input): Promise<ItemV2> {
 
   return {
     id: row.id, code: row.code, projectId: row.projectId, parentId: row.parentId, order: row.order,
-    title: row.title, status: row.status, duracaoDiasUteis: row.duracaoDiasUteis,
+    title: row.title, status: row.status, responsavel: row.responsavel, duracaoDiasUteis: row.duracaoDiasUteis,
     inicioEstimado: null, terminoEstimado: null, inicioReal: null, terminoReal: null,
     esforcoEstimadoH: row.esforcoEstimadoH, esforcoRealH: row.esforcoRealH,
     percentualCompleto: row.percentualCompleto, schedulingMode: row.schedulingMode as SchedulingMode,
@@ -438,6 +447,7 @@ export type UpdateItemV2Input = Partial<{
   esforcoRealH: number
   percentualCompleto: number
   status: string
+  responsavel: string | null
   schedulingMode: SchedulingMode
   constraintType: string | null
   constraintDate: string | null
@@ -495,6 +505,7 @@ export async function updateItemV2(
       ...(data.esforcoRealH !== undefined && { esforcoRealH: data.esforcoRealH }),
       ...(!hasChildren && data.percentualCompleto !== undefined && { percentualCompleto: data.percentualCompleto }),
       ...(data.status !== undefined && { status: data.status }),
+      ...(data.responsavel !== undefined && { responsavel: data.responsavel }),
       ...(data.schedulingMode !== undefined && { schedulingMode: data.schedulingMode }),
       ...(data.constraintType !== undefined && { constraintType: data.constraintType }),
       ...(data.constraintDate !== undefined && { constraintDate: ddate(data.constraintDate) }),

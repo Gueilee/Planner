@@ -966,7 +966,11 @@ model ScheduleV2Item {
   parentId  String?
   order     Int     @default(0)
   title     String
-  status    String  @default("pendente")
+  // "A_INICIAR" | "EM_ANDAMENTO" | "CONCLUIDO" | "ATRASADO" — texto livre
+  // na coluna (sem enum no banco) para não travar em migração se a lista
+  // mudar; a UI que garante os 4 valores.
+  status       String  @default("A_INICIAR")
+  responsavel  String?
 
   // Fonte da verdade da barra — null = não agendado; 0 = marco (CLAUDE.md §3.3).
   duracaoDiasUteis Int?
