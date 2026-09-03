@@ -1,8 +1,7 @@
 "use client"
 
 import { useState, useMemo, useRef } from "react"
-import { saveCheckpoint, type CheckpointFrequency, type TaskAttachmentInput } from "@/lib/actions/checkpoint"
-import { updateTask as updateScheduleTask } from "@/lib/actions/schedule"
+import { saveCheckpoint, updateTaskScheduleFromCheckpoint, type CheckpointFrequency, type TaskAttachmentInput } from "@/lib/actions/checkpoint"
 import { deriveStatus, deriveProgress } from "@/lib/utils/task-progress"
 import { format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -506,7 +505,7 @@ function TaskDetailPanel({
       const dateChanged = localStartDate !== (task.startDate ?? "") || localEndDate !== (task.endDate ?? "")
       const costChanged = bc !== (task.budgetedCost ?? null) || ac !== (task.actualCost ?? null)
       if (dateChanged || costChanged) {
-        await updateScheduleTask(task.id, projectId, {
+        await updateTaskScheduleFromCheckpoint(task.id, projectId, {
           ...(dateChanged && { startDate: localStartDate || null, endDate: localEndDate || null }),
           ...(costChanged && { budgetedCost: bc, actualCost: ac }),
         })

@@ -3,6 +3,7 @@
 import { useState, useTransition, useCallback } from "react"
 import { getProjectFullHistory, deleteMeeting, deleteAttachment } from "@/lib/actions/history"
 import { computeProjectProgress } from "@/lib/utils/project-progress"
+import { toLegacyLikeTasks, areasFromV2 } from "@/lib/utils/schedule-v2-adapter"
 import { format, differenceInDays, formatDistanceToNow } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { fmtDateLong } from "@/lib/date-utils"
@@ -399,7 +400,9 @@ function ProjectHistoryView({ data, del }: { data: NonNullable<FullHistory>; del
   const p   = data
   const cfg = STATUS_CFG[p.status] ?? STATUS_CFG.PLANNING
 
-  const tasks       = p.tasks
+  const tasks       = toLegacyLikeTasks(p.scheduleV2Items)
+  const areas       = areasFromV2(p.scheduleV2Items)
+  const groupIds    = new Set(p.scheduleV2Items.filter((i) => i.parentId).map((i) => i.parentId as string))
   const total       = tasks.length
   const done        = tasks.filter((t) => t.status === "COMPLETED").length
   const inProg      = tasks.filter((t) => t.status === "IN_PROGRESS").length
@@ -712,15 +715,17 @@ function ProjectHistoryView({ data, del }: { data: NonNullable<FullHistory>; del
           </div>
         </section>
 
-        {/* 3. WBS */}
-        {p.wbsAreas.length > 0 && (
+        {/* 3. WBS — "área" v2 = item de topo da árvore */}
+        {areas.length > 0 && (
           <section>
             <SectionTitle icon={Layers} title="Escopo e Cronograma (WBS)" />
             <div className="mt-4 space-y-3">
-              {p.wbsAreas.map((area) => {
-                const aTotal = area.tasks.length
-                const aDone  = area.tasks.filter((t) => t.status === "COMPLETED").length
+              {areas.map((area) => {
+                const areaTasks = tasks.filter((t) => !groupIds.has(t.id) && t.wbsAreaId === area.id)
+                const aTotal = areaTasks.length
+                const aDone  = areaTasks.filter((t) => t.status === "COMPLETED").length
                 const aPct   = aTotal > 0 ? Math.round((aDone / aTotal) * 100) : 0
+                if (aTotal === 0) return null
                 return (
                   <div key={area.id} className="rounded-2xl overflow-hidden bg-white border border-gray-100 shadow-sm">
                     <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-50">
@@ -731,15 +736,15 @@ function ProjectHistoryView({ data, del }: { data: NonNullable<FullHistory>; del
                         <span className="font-black" style={{ color: area.color ?? "#64748B" }}>{aPct}%</span>
                       </div>
                     </div>
-                    {area.tasks.slice(0, 6).map((task, i) => {
+                    {areaTasks.slice(0, 6).map((task, i) => {
                       const tcfg = TASK_STATUS_CFG[task.status] ?? TASK_STATUS_CFG.PLANNING
                       return (
                         <div key={task.id} className="flex items-center gap-3 px-4 py-2.5"
-                          style={{ borderBottom: i < Math.min(area.tasks.length, 6) - 1 ? "1px solid #F9FAFB" : "none" }}>
+                          style={{ borderBottom: i < Math.min(areaTasks.length, 6) - 1 ? "1px solid #F9FAFB" : "none" }}>
                           <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: tcfg.color }} />
                           <span className="text-xs flex-1 truncate text-gray-700">{task.title}</span>
-                          {task.responsible && (
-                            <span className="text-[9px] hidden lg:block text-gray-400">{task.responsible.name}</span>
+                          {task.responsibleName && (
+                            <span className="text-[9px] hidden lg:block text-gray-400">{task.responsibleName}</span>
                           )}
                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md shrink-0 border"
                             style={{ background: tcfg.bg, color: tcfg.color, borderColor: tcfg.color + "30" }}>{tcfg.label}</span>
@@ -747,8 +752,8 @@ function ProjectHistoryView({ data, del }: { data: NonNullable<FullHistory>; del
                         </div>
                       )
                     })}
-                    {area.tasks.length > 6 && (
-                      <div className="px-4 py-2 text-[10px] text-gray-400">+{area.tasks.length - 6} tarefas adicionais</div>
+                    {areaTasks.length > 6 && (
+                      <div className="px-4 py-2 text-[10px] text-gray-400">+{areaTasks.length - 6} tarefas adicionais</div>
                     )}
                   </div>
                 )
@@ -811,9 +816,9 @@ function ProjectHistoryView({ data, del }: { data: NonNullable<FullHistory>; del
         {/* 6. Controle Orçamentário */}
         {(() => {
           const budget       = p.budget ?? 0
-          const totalOrc     = p.tasks.reduce((s, t) => s + (t.budgetedCost ?? 0), 0)
-          const totalReal    = p.tasks.reduce((s, t) => s + (t.actualCost   ?? 0), 0)
-          const ve           = p.tasks.reduce((s, t) => s + ((t.budgetedCost ?? 0) * (t.progress / 100)), 0)
+          const totalOrc     = tasks.reduce((s, t) => s + (t.budgetedCost ?? 0), 0)
+          const totalReal    = tasks.reduce((s, t) => s + (t.actualCost   ?? 0), 0)
+          const ve           = tasks.reduce((s, t) => s + ((t.budgetedCost ?? 0) * (t.progress / 100)), 0)
           const idc          = totalReal > 0 ? ve / totalReal : null
           const hasData      = budget > 0 || totalOrc > 0 || totalReal > 0
           if (!hasData) return null
@@ -958,7 +963,7 @@ function ProjectHistoryView({ data, del }: { data: NonNullable<FullHistory>; del
                     ? `${(att.fileSize / 1024).toFixed(1)} KB`
                     : `${(att.fileSize / (1024 * 1024)).toFixed(1)} MB`
                   : ""
-                const taskTitle = "task" in att && att.task ? (att.task as { title: string }).title : null
+                const taskTitle = att.task?.title ?? att.scheduleV2Item?.title ?? null
                 const isConfirming = confirmingAtt === att.id
                 return (
                   <div key={att.id} className="group rounded-xl border bg-white shadow-sm transition-all hover:shadow-md"

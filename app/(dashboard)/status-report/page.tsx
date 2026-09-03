@@ -3,6 +3,7 @@ import { requireScreenView } from "@/lib/permissions-guard"
 import { differenceInDays, startOfWeek, eachWeekOfInterval, isAfter, isBefore, addWeeks } from "date-fns"
 import { computeProjectProgress } from "@/lib/utils/project-progress"
 import { computePlanned, computeRealized, type RawTask } from "@/lib/utils/s-curve-math"
+import { toLegacyLikeTasks, areasFromV2 } from "@/lib/utils/schedule-v2-adapter"
 import { ProjectStatus } from "@/lib/generated/prisma/enums"
 import { ReportClient, type ProjectSlideData } from "./report-client"
 
@@ -25,26 +26,19 @@ export default async function StatusReportPage() {
     include: {
       sponsor:  { select: { name: true } },
       members:  { select: { role: true, user: { select: { name: true, image: true } } } },
-      tasks: {
-        select: {
-          id: true, title: true, status: true, progress: true,
-          startDate: true, endDate: true,
-          budgetedCost: true, actualCost: true,
-          completedAt: true, wbsAreaId: true, parentId: true,
-          actualStart: true, actualEnd: true,
-          responsible: { select: { name: true, image: true } },
-          _count: { select: { subtasks: true } },
-        },
+      scheduleV2Items: {
         orderBy: { order: "asc" },
+        select: {
+          id: true, parentId: true, title: true, status: true, percentualCompleto: true,
+          inicioEstimado: true, terminoEstimado: true, inicioReal: true, terminoReal: true,
+          esforcoEstimadoH: true, esforcoRealH: true, budgetedCost: true, actualCost: true,
+          responsavelId: true, responsavel: { select: { id: true, name: true, image: true } },
+        },
       },
       risks: {
         select: { status: true, description: true, mitigation: true, owner: true },
         orderBy: { status: "asc" },
         take: 8,
-      },
-      wbsAreas: {
-        orderBy: { order: "asc" },
-        include: { tasks: { select: { status: true, title: true } } },
       },
       meetings: {
         orderBy: { date: "desc" },
@@ -58,9 +52,11 @@ export default async function StatusReportPage() {
   today.setHours(0, 0, 0, 0)
 
   const slides: ProjectSlideData[] = projects.map((p) => {
-    const tasks     = p.tasks
+    const tasks = toLegacyLikeTasks(p.scheduleV2Items)
+    const areas = areasFromV2(p.scheduleV2Items)
     // Apenas tarefas folha (sem filhos) para listas de atividades e progresso
-    const leafTasks = tasks.filter((t) => t._count.subtasks === 0)
+    const groupIds  = new Set(p.scheduleV2Items.filter((i) => i.parentId).map((i) => i.parentId as string))
+    const leafTasks = tasks.filter((t) => !groupIds.has(t.id))
     const total     = leafTasks.length
 
     const completed  = leafTasks.filter((t) => t.status === "COMPLETED")
@@ -102,7 +98,7 @@ export default async function StatusReportPage() {
     // At-risk tasks — usa apenas tarefas folha
     const atRiskTasks: ProjectSlideData["atRiskTasks"] = []
     for (const t of leafTasks) {
-      const responsible = t.responsible?.name ?? null
+      const responsible = t.responsibleName ?? null
       const startDate   = t.startDate?.toISOString() ?? null
       const endDate     = t.endDate?.toISOString()   ?? null
       if (t.status === "PLANNING" && t.startDate) {
@@ -126,7 +122,7 @@ export default async function StatusReportPage() {
       recentlyCompleted: completed.slice(-5).map((t) => ({ title: t.title })),
       inProgress: inProgress.slice(0, 6).map((t) => ({
         title: t.title,
-        responsible: t.responsible?.name ?? null,
+        responsible: t.responsibleName ?? null,
         startDate: t.startDate?.toISOString() ?? null,
         endDate:   t.endDate?.toISOString()   ?? null,
       })),
@@ -134,7 +130,7 @@ export default async function StatusReportPage() {
         const ref = t.endDate ?? t.startDate
         return {
           title:       t.title,
-          responsible: t.responsible?.name ?? null,
+          responsible: t.responsibleName ?? null,
           startDate:   t.startDate?.toISOString() ?? null,
           endDate:     ref?.toISOString() ?? null,
           daysLate:    ref ? Math.max(0, differenceInDays(today, new Date(ref))) : 0,
@@ -146,7 +142,7 @@ export default async function StatusReportPage() {
         .slice(0, 5)
         .map((t) => ({
           title:       t.title,
-          responsible: t.responsible?.name ?? null,
+          responsible: t.responsibleName ?? null,
           daysUntil:   t.endDate ? differenceInDays(new Date(t.endDate), today) : 0,
           startDate:   t.startDate?.toISOString() ?? null,
           endDate:     t.endDate?.toISOString()   ?? null,
@@ -171,7 +167,13 @@ export default async function StatusReportPage() {
     const nextSteps = rawSteps
       ?.split("\n").map((l) => l.replace(/^[-•*\d.]\s*/, "").trim()).filter(Boolean).slice(0, 5) ?? []
 
-    const wbsSummary = p.wbsAreas
+    const leafTasksByArea = new Map<string, typeof leafTasks>()
+    for (const t of leafTasks) {
+      const key = t.wbsAreaId ?? "__none__"
+      leafTasksByArea.set(key, [...(leafTasksByArea.get(key) ?? []), t])
+    }
+    const wbsSummary = areas
+      .map((a) => ({ ...a, tasks: leafTasksByArea.get(a.id) ?? [] }))
       .filter((a) => a.tasks.length > 0)
       .map((a) => ({
         name: a.name, color: a.color,
@@ -235,9 +237,8 @@ export default async function StatusReportPage() {
         const scheduleExtra = [
           ...new Map(
             tasks
-              .map((t) => t.responsible)
-              .filter((r): r is { name: string; image: string | null } => Boolean(r) && !formalNames.has(r!.name))
-              .map((r) => [r.name, r] as const)
+              .filter((t) => t.responsibleName && !formalNames.has(t.responsibleName))
+              .map((t) => [t.responsibleName!, { name: t.responsibleName!, image: t.responsibleImage }] as const)
           ).values(),
         ].map((r) => ({ name: r.name, role: null as string | null, image: r.image }))
         const fullTeam = [...formalMembers, ...scheduleExtra]

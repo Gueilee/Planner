@@ -3,7 +3,7 @@
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
 import { revalidatePath } from "next/cache"
-import { ProjectStatus, TaskStatus, RiskLevel } from "@/lib/generated/prisma/enums"
+import { ProjectStatus } from "@/lib/generated/prisma/enums"
 import { notifyProjectMembers } from "@/lib/notify"
 import { isValidDateStr } from "@/lib/date-utils"
 
@@ -164,77 +164,10 @@ export async function deleteWbsArea(id: string) {
   if (area) revalidatePath(`/projects/${area.projectId}`)
 }
 
-// ─── Tasks ─────────────────────────────────────────────────────────────────
-
-export async function createTask(data: {
-  projectId: string
-  wbsAreaId?: string
-  title: string
-  description?: string
-  responsibleId?: string
-  startDate?: string
-  endDate?: string
-  status?: TaskStatus
-  riskStatus?: RiskLevel
-  progress?: number
-}) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
-
-  const max = await db.scheduleTask.aggregate({ where: { projectId: data.projectId }, _max: { order: true } })
-  await db.scheduleTask.create({
-    data: {
-      projectId:     data.projectId,
-      wbsAreaId:     data.wbsAreaId,
-      title:         data.title,
-      description:   data.description,
-      responsibleId: data.responsibleId,
-      startDate:     data.startDate ? new Date(data.startDate) : null,
-      endDate:       data.endDate   ? new Date(data.endDate)   : null,
-      status:        data.status      ?? TaskStatus.PLANNING,
-      riskStatus:    data.riskStatus  ?? RiskLevel.LOW,
-      progress:      data.progress    ?? 0,
-      order:         (max._max.order ?? 0) + 1,
-    },
-  })
-  revalidatePath(`/projects/${data.projectId}`)
-}
-
-export async function updateTask(id: string, data: {
-  title?: string
-  description?: string
-  responsibleId?: string
-  startDate?: string
-  endDate?: string
-  status?: TaskStatus
-  riskStatus?: RiskLevel
-  progress?: number
-  wbsAreaId?: string
-}) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
-
-  const task = await db.scheduleTask.findUnique({ where: { id }, select: { projectId: true } })
-  await db.scheduleTask.update({
-    where: { id },
-    data: {
-      ...data,
-      startDate: data.startDate ? new Date(data.startDate) : undefined,
-      endDate:   data.endDate   ? new Date(data.endDate)   : undefined,
-      completedAt: data.status === "COMPLETED" ? new Date() : undefined,
-    },
-  })
-  if (task) revalidatePath(`/projects/${task.projectId}`)
-}
-
-export async function deleteTask(id: string) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
-
-  const task = await db.scheduleTask.findUnique({ where: { id }, select: { projectId: true } })
-  await db.scheduleTask.delete({ where: { id } })
-  if (task) revalidatePath(`/projects/${task.projectId}`)
-}
+// createTask/updateTask/deleteTask (ScheduleTask legado) foram removidas na
+// Fase 7 — sem nenhum chamador na UI desde o corte do Cronograma (Fase 6)
+// para o motor v2 (lib/actions/schedule-v2.ts). ScheduleTask fica congelada
+// (arquivo histórico, nunca mais escrita) — ver CLAUDE.md do plano de migração.
 
 // ─── Team Members ──────────────────────────────────────────────────────────
 

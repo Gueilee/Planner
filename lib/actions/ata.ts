@@ -110,11 +110,15 @@ async function buildCheckpointATA(
   let actSection = "_Nenhuma atividade atualizada neste checkpoint_"
   if (comments.length > 0) {
     const header = "| Atividade | Área | Status | % | Observação |\n|-----------|------|--------|---|:----------|\n"
-    const rows   = comments.map((c) => {
+    // A query já filtra por `task: { projectId }`, então toda linha retornada
+    // tem `task` preenchido — mas o campo virou opcional no schema (Comment
+    // agora também pode apontar para ScheduleV2Item), daí o filtro de tipo.
+    const rows   = comments.filter((c) => c.task !== null).map((c) => {
+      const task = c.task!
       const obs = c.content.replace(`[Checkpoint ${dateStr}]`, "").trim()
-      const area = c.task.wbsArea?.name ?? "—"
-      const status = STATUS_LABELS[c.task.status] ?? c.task.status
-      return `| ${c.task.title} | ${area} | ${status} | ${c.task.progress}% | ${obs || "—"} |`
+      const area = task.wbsArea?.name ?? "—"
+      const status = STATUS_LABELS[task.status] ?? task.status
+      return `| ${task.title} | ${area} | ${status} | ${task.progress}% | ${obs || "—"} |`
     }).join("\n")
     actSection = header + rows
   }

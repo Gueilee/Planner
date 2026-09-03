@@ -20,7 +20,6 @@ enum UserRole {
   CLIENT
 }
 
-
 enum ProjectStatus {
   PENDING_GO_NO_GO
   PLANNING
@@ -209,16 +208,16 @@ enum ImpactLevel {
 // ─────────────────────────────────────────────
 
 model Organization {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
-  logoUrl   String?
-  active    Boolean  @default(true)
+  id               String   @id @default(cuid())
+  name             String
+  slug             String   @unique
+  logoUrl          String?
+  active           Boolean  @default(true)
   // Limite de risco de cronograma (em pontos percentuais) usado para classificar
   // projetos/tarefas como "on track"/"at risk"/"delayed" (ver lib/utils/schedule-status.ts).
-  riskThresholdPct Int @default(10)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  riskThresholdPct Int      @default(10)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   users          User[]
   projects       Project[]
@@ -264,30 +263,31 @@ model User {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  projectMemberships   ProjectMember[]
-  sponsoredProjects    Project[]         @relation("ProjectSponsor")
-  assignedTasks        ScheduleTask[]    @relation("TaskResponsible")
-  comments             Comment[]
-  createdMeetings      Meeting[]         @relation("MeetingCreator")
-  meetingParticipations MeetingParticipant[]
-  createdReports       StatusReport[]
-  createdDocuments     ProjectDocument[]
-  notifications           Notification[]
-  notificationPreference  NotificationPreference?
-  lessonsLearned          LessonLearned[]
-  scheduleTemplates       ScheduleTemplate[]
-  createdBenefits         ProjectBenefit[]        @relation("BenefitCreator")
-  responsibleBenefits     ProjectBenefit[]        @relation("BenefitResponsible")
-  benefitAuditLogs        BenefitAuditLog[]
-  createdMeasurements     BenefitMeasurement[]
-  timeEntries             TimeEntry[]
-  baselines               ProjectBaseline[] @relation("BaselineCreatedBy")
-  approvedBaselines       ProjectBaseline[] @relation("BaselineApprovedBy")
-  createdInvitations      Invitation[]      @relation("InvitationCreator")
-  passwordResetTokens     PasswordResetToken[]
-  organizationAccess      UserOrganizationAccess[]
-  profileId               String?
-  accessProfile           AccessProfile?    @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  projectMemberships     ProjectMember[]
+  sponsoredProjects      Project[]                @relation("ProjectSponsor")
+  assignedTasks          ScheduleTask[]           @relation("TaskResponsible")
+  assignedTasksV2        ScheduleV2Item[]         @relation("ScheduleV2Responsavel")
+  comments               Comment[]
+  createdMeetings        Meeting[]                @relation("MeetingCreator")
+  meetingParticipations  MeetingParticipant[]
+  createdReports         StatusReport[]
+  createdDocuments       ProjectDocument[]
+  notifications          Notification[]
+  notificationPreference NotificationPreference?
+  lessonsLearned         LessonLearned[]
+  scheduleTemplates      ScheduleTemplate[]
+  createdBenefits        ProjectBenefit[]         @relation("BenefitCreator")
+  responsibleBenefits    ProjectBenefit[]         @relation("BenefitResponsible")
+  benefitAuditLogs       BenefitAuditLog[]
+  createdMeasurements    BenefitMeasurement[]
+  timeEntries            TimeEntry[]
+  baselines              ProjectBaseline[]        @relation("BaselineCreatedBy")
+  approvedBaselines      ProjectBaseline[]        @relation("BaselineApprovedBy")
+  createdInvitations     Invitation[]             @relation("InvitationCreator")
+  passwordResetTokens    PasswordResetToken[]
+  organizationAccess     UserOrganizationAccess[]
+  profileId              String?
+  accessProfile          AccessProfile?           @relation(fields: [profileId], references: [id], onDelete: SetNull)
 }
 
 model Invitation {
@@ -303,17 +303,17 @@ model Invitation {
   createdById    String
   createdAt      DateTime  @default(now())
 
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  createdBy      User         @relation("InvitationCreator", fields: [createdById], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+  createdBy    User         @relation("InvitationCreator", fields: [createdById], references: [id])
 }
 
 model UserOrganizationAccess {
-  id             String       @id @default(cuid())
+  id             String   @id @default(cuid())
   userId         String
   organizationId String
-  createdAt      DateTime     @default(now())
+  createdAt      DateTime @default(now())
 
-  user         User         @relation(fields: [userId],         references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([userId, organizationId])
@@ -336,16 +336,16 @@ model PasswordResetToken {
 // ─────────────────────────────────────────────
 
 model Project {
-  id           String        @id @default(cuid())
-  title        String
-  description  String?
-  status       ProjectStatus @default(PLANNING)
-  projectArea  ProjectArea   @default(TECNOLOGIA)
+  id          String        @id @default(cuid())
+  title       String
+  description String?
+  status      ProjectStatus @default(PLANNING)
+  projectArea ProjectArea   @default(TECNOLOGIA)
 
   // Planning / intake fields (previously on Initiative)
   origin         String?
-  proposalNumber String?   // Nº proposta comercial aprovada (projetos CLIENT)
-  contractNumber String?   // Nº do contrato ou pedido de venda (projetos CLIENT)
+  proposalNumber String? // Nº proposta comercial aprovada (projetos CLIENT)
+  contractNumber String? // Nº do contrato ou pedido de venda (projetos CLIENT)
   scope          String?
   asIs           String?
   toBe           String?
@@ -402,20 +402,20 @@ model Project {
   // When true the user has manually overridden the auto-computed status — skip auto-overwrite
   reportStatusManual    Boolean @default(false)
 
-  members        ProjectMember[]
-  wbsAreas       WbsArea[]
-  tasks          ScheduleTask[]
-  meetings       Meeting[]
-  risks          Risk[]
-  statusReports  StatusReport[]
-  documents      ProjectDocument[]
-  postGoLiveItems PostGoLiveItem[]
-  lessonsLearned LessonLearned[]
-  attachments    Attachment[]
-  benefits       ProjectBenefit[]
-  baselines      ProjectBaseline[]
-  scheduleV2Items    ScheduleV2Item[]
-  scheduleV2Calendar WorkCalendarV2?
+  members             ProjectMember[]
+  wbsAreas            WbsArea[]
+  tasks               ScheduleTask[]
+  meetings            Meeting[]
+  risks               Risk[]
+  statusReports       StatusReport[]
+  documents           ProjectDocument[]
+  postGoLiveItems     PostGoLiveItem[]
+  lessonsLearned      LessonLearned[]
+  attachments         Attachment[]
+  benefits            ProjectBenefit[]
+  baselines           ProjectBaseline[]
+  scheduleV2Items     ScheduleV2Item[]
+  scheduleV2Calendar  WorkCalendarV2?
   scheduleV2Snapshots ScheduleV2Snapshot[]
 
   createdAt DateTime @default(now())
@@ -425,7 +425,7 @@ model Project {
 }
 
 model ProjectMember {
-  id        String  @id @default(cuid())
+  id        String @id @default(cuid())
   projectId String
   userId    String
   role      String
@@ -449,7 +449,7 @@ model WbsArea {
   description String?
   color       String?
   order       Int     @default(0)
-  weight      Float?  // 0-100 — peso do módulo no progresso ponderado do projeto
+  weight      Float? // 0-100 — peso do módulo no progresso ponderado do projeto
 
   project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   tasks   ScheduleTask[]
@@ -462,7 +462,7 @@ model WbsArea {
 // ─────────────────────────────────────────────
 
 model ScheduleTask {
-  id          String    @id @default(cuid())
+  id          String  @id @default(cuid())
   projectId   String
   wbsAreaId   String?
   parentId    String?
@@ -476,10 +476,10 @@ model ScheduleTask {
   actualEnd     DateTime?
   completedAt   DateTime?
 
-  estimatedEffort Float?   // horas estimadas pelo analista
-  actualEffort    Float?   // horas realizadas pelo responsável
-  budgetedCost    Float?   // R$ orçado para esta atividade
-  actualCost      Float?   // R$ real gasto nesta atividade
+  estimatedEffort Float? // horas estimadas pelo analista
+  actualEffort    Float? // horas realizadas pelo responsável
+  budgetedCost    Float? // R$ orçado para esta atividade
+  actualCost      Float? // R$ real gasto nesta atividade
 
   status     TaskStatus @default(PLANNING)
   riskStatus RiskLevel  @default(LOW)
@@ -489,11 +489,11 @@ model ScheduleTask {
   // Dependency IDs as JSON array
   dependencies String?
 
-  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  wbsArea     WbsArea?      @relation(fields: [wbsAreaId], references: [id])
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  wbsArea     WbsArea?       @relation(fields: [wbsAreaId], references: [id])
   parent      ScheduleTask?  @relation("TaskHierarchy", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   subtasks    ScheduleTask[] @relation("TaskHierarchy")
-  responsible User?         @relation("TaskResponsible", fields: [responsibleId], references: [id])
+  responsible User?          @relation("TaskResponsible", fields: [responsibleId], references: [id])
 
   comments    Comment[]
   attachments Attachment[]
@@ -508,18 +508,24 @@ model ScheduleTask {
 // ─────────────────────────────────────────────
 
 model TimeEntry {
-  id        String       @id @default(cuid())
-  taskId    String
-  userId    String
-  hours     Float
-  date      DateTime     @default(now())
-  note      String?
-  createdAt DateTime     @default(now())
+  id               String   @id @default(cuid())
+  // Opcionais e independentes — uma linha aponta para o cronograma legado
+  // OU para o v2, nunca os dois. taskId nunca é apagado numa migração (só
+  // ganha scheduleV2ItemId ao lado, lib/actions do v2 gravam só o novo).
+  taskId           String?
+  scheduleV2ItemId String?
+  userId           String
+  hours            Float
+  date             DateTime @default(now())
+  note             String?
+  createdAt        DateTime @default(now())
 
-  task ScheduleTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user User         @relation(fields: [userId], references: [id])
+  task           ScheduleTask?   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  scheduleV2Item ScheduleV2Item? @relation(fields: [scheduleV2ItemId], references: [id], onDelete: Cascade)
+  user           User            @relation(fields: [userId], references: [id])
 
   @@index([taskId])
+  @@index([scheduleV2ItemId])
   @@index([userId])
 }
 
@@ -548,12 +554,12 @@ model Risk {
 // ─────────────────────────────────────────────
 
 model Meeting {
-  id          String      @id @default(cuid())
-  projectId   String
-  type        MeetingType
-  title       String
-  date        DateTime
-  location    String?
+  id           String      @id @default(cuid())
+  projectId    String
+  type         MeetingType
+  title        String
+  date         DateTime
+  location     String?
   content      String?
   decisions    String?
   nextActions  String?
@@ -597,10 +603,10 @@ model StatusReport {
   nextSteps     String?
   overallStatus String  @default("GREEN")
 
-  tasksTotal     Int   @default(0)
-  tasksCompleted Int   @default(0)
-  tasksPending   Int   @default(0)
-  tasksDelayed   Int   @default(0)
+  tasksTotal     Int    @default(0)
+  tasksCompleted Int    @default(0)
+  tasksPending   Int    @default(0)
+  tasksDelayed   Int    @default(0)
   budgetUsed     Float?
 
   pdfUrl String?
@@ -685,41 +691,51 @@ model LessonLearned {
 // ─────────────────────────────────────────────
 
 model Comment {
-  id        String   @id @default(cuid())
-  taskId    String
-  userId    String
-  content   String
+  id               String  @id @default(cuid())
+  // Opcionais e independentes — mesma lógica de TimeEntry.taskId/scheduleV2ItemId acima.
+  taskId           String?
+  scheduleV2ItemId String?
+  userId           String
+  content          String
 
-  task        ScheduleTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user        User         @relation(fields: [userId], references: [id])
-  attachments Attachment[]
+  task           ScheduleTask?   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  scheduleV2Item ScheduleV2Item? @relation(fields: [scheduleV2ItemId], references: [id], onDelete: Cascade)
+  user           User            @relation(fields: [userId], references: [id])
+  attachments    Attachment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([taskId])
+  @@index([scheduleV2ItemId])
 }
 
 model Attachment {
-  id        String  @id @default(cuid())
-  fileName  String
-  fileUrl   String
-  fileType  String
-  fileSize  Int?
-  blobData  String? // base64-encoded file content (stored in DB when no external storage)
-  mimeType  String? // MIME type for serving via /api/files/[id]
+  id       String  @id @default(cuid())
+  fileName String
+  fileUrl  String
+  fileType String
+  fileSize Int?
+  blobData String? // base64-encoded file content (stored in DB when no external storage)
+  mimeType String? // MIME type for serving via /api/files/[id]
 
-  taskId    String?
-  commentId String?
-  meetingId String?
-  projectId String?
-  benefitId String?
+  taskId           String?
+  scheduleV2ItemId String?
+  commentId        String?
+  meetingId        String?
+  projectId        String?
+  benefitId        String?
 
-  task    ScheduleTask?   @relation(fields: [taskId],    references: [id], onDelete: Cascade)
-  comment Comment?        @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  meeting Meeting?        @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  project Project?        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  benefit ProjectBenefit? @relation(fields: [benefitId], references: [id], onDelete: Cascade)
+  task           ScheduleTask?   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  scheduleV2Item ScheduleV2Item? @relation(fields: [scheduleV2ItemId], references: [id], onDelete: Cascade)
+  comment        Comment?        @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  meeting        Meeting?        @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  project        Project?        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  benefit        ProjectBenefit? @relation(fields: [benefitId], references: [id], onDelete: Cascade)
 
   uploadedAt DateTime @default(now())
+
+  @@index([scheduleV2ItemId])
 }
 
 // ─────────────────────────────────────────────
@@ -745,23 +761,23 @@ model NotificationPreference {
   userId String @unique
 
   // Eventos de projeto
-  projectDeadline  Boolean @default(true)   // prazo se aproximando (7 dias)
-  projectOnHold    Boolean @default(true)   // projeto pausado
-  projectCompleted Boolean @default(false)  // projeto concluído
+  projectDeadline  Boolean @default(true) // prazo se aproximando (7 dias)
+  projectOnHold    Boolean @default(true) // projeto pausado
+  projectCompleted Boolean @default(false) // projeto concluído
 
   // Eventos de atividade
-  taskOverdue      Boolean @default(true)   // tarefa atrasada
-  taskAssigned     Boolean @default(true)   // tarefa atribuída a mim
+  taskOverdue  Boolean @default(true) // tarefa atrasada
+  taskAssigned Boolean @default(true) // tarefa atribuída a mim
 
   // Eventos de reunião
-  checkpointAdded  Boolean @default(true)   // checkpoint registrado no projeto
-  meetingAdded     Boolean @default(false)  // qualquer reunião registrada
+  checkpointAdded Boolean @default(true) // checkpoint registrado no projeto
+  meetingAdded    Boolean @default(false) // qualquer reunião registrada
 
   // Riscos
-  criticalRisk     Boolean @default(true)   // risco crítico identificado
+  criticalRisk Boolean @default(true) // risco crítico identificado
 
   // Financeiro
-  budgetExceeded   Boolean @default(true)   // Capex/custo real ultrapassou o orçamento aprovado
+  budgetExceeded Boolean @default(true) // Capex/custo real ultrapassou o orçamento aprovado
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -777,11 +793,11 @@ model ScheduleTemplate {
   id          String  @id @default(cuid())
   name        String
   description String?
-  projectType String  // "AUTOMACAO" | "QUALIDADE" | "CERTIFICACAO" | "EXTERNO" | "ARMAZEM" | "CUSTOM"
+  projectType String // "AUTOMACAO" | "QUALIDADE" | "CERTIFICACAO" | "EXTERNO" | "ARMAZEM" | "CUSTOM"
   color       String?
   isBuiltIn   Boolean @default(false)
 
-  tasks       ScheduleTemplateTask[]
+  tasks ScheduleTemplateTask[]
 
   createdById String
   createdBy   User   @relation(fields: [createdById], references: [id])
@@ -793,7 +809,7 @@ model ScheduleTemplate {
 model ScheduleTemplateTask {
   id               String  @id @default(cuid())
   templateId       String
-  wbsCode          String  // "1", "1.1", "1.1.1"
+  wbsCode          String // "1", "1.1", "1.1.1"
   parentCode       String? // wbsCode do pai (null = raiz)
   title            String
   estimatedEffort  Float?
@@ -810,44 +826,44 @@ model ScheduleTemplateTask {
 // ─────────────────────────────────────────────
 
 model ProjectBenefit {
-  id              String             @id @default(cuid())
-  projectId       String
-  category        BenefitCategory
-  type            BenefitType
-  name            String             @default("")
-  description     String
-  indicator       String?
-  formula         String?
-  unit            String             @default("R$")
-  plannedValue    Float              @default(0)
-  realizedValue   Float              @default(0)
-  frequency       BenefitFrequency   @default(ONCE)
-  periodicity     BenefitPeriodicity @default(MONTHLY)
-  monitoringMonths Int               @default(12)
-  baselineDate    DateTime?
-  targetDate      DateTime?
-  realizationDate DateTime?
-  evidence        String?
-  notes           String?
-  status          BenefitStatus      @default(PLANNED)
-  customTypeName  String?
-  responsibleId   String?
+  id                 String             @id @default(cuid())
+  projectId          String
+  category           BenefitCategory
+  type               BenefitType
+  name               String             @default("")
+  description        String
+  indicator          String?
+  formula            String?
+  unit               String             @default("R$")
+  plannedValue       Float              @default(0)
+  realizedValue      Float              @default(0)
+  frequency          BenefitFrequency   @default(ONCE)
+  periodicity        BenefitPeriodicity @default(MONTHLY)
+  monitoringMonths   Int                @default(12)
+  baselineDate       DateTime?
+  targetDate         DateTime?
+  realizationDate    DateTime?
+  evidence           String?
+  notes              String?
+  status             BenefitStatus      @default(PLANNED)
+  customTypeName     String?
+  responsibleId      String?
   // Operational time calculation helpers
   timeBeforeMinutes  Float?
   timeAfterMinutes   Float?
   executionsPerMonth Float?
   hourlyRate         Float?
   // Strategic weight (0–100) for IVG scoring
-  strategicWeight Float              @default(0)
+  strategicWeight    Float              @default(0)
   // Impact level — drives plannedValue and strategicWeight derivation
-  impactLevel     ImpactLevel?
-  createdById     String
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  impactLevel        ImpactLevel?
+  createdById        String
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
-  project      Project              @relation(fields: [projectId],   references: [id], onDelete: Cascade)
-  createdBy    User                 @relation("BenefitCreator",      fields: [createdById],   references: [id])
-  responsible  User?                @relation("BenefitResponsible",  fields: [responsibleId], references: [id])
+  project      Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy    User                 @relation("BenefitCreator", fields: [createdById], references: [id])
+  responsible  User?                @relation("BenefitResponsible", fields: [responsibleId], references: [id])
   measurements BenefitMeasurement[]
   auditLogs    BenefitAuditLog[]
   attachments  Attachment[]
@@ -862,24 +878,24 @@ model BenefitMeasurement {
   createdById   String
   createdAt     DateTime @default(now())
 
-  benefit   ProjectBenefit @relation(fields: [benefitId],   references: [id], onDelete: Cascade)
+  benefit   ProjectBenefit @relation(fields: [benefitId], references: [id], onDelete: Cascade)
   createdBy User           @relation(fields: [createdById], references: [id])
 }
 
 model BenefitAuditLog {
-  id          String   @id @default(cuid())
-  benefitId   String
-  userId      String
-  action      String
-  fieldName   String?
-  oldValue    String?
-  newValue    String?
-  reason      String?
-  comment     String?
-  createdAt   DateTime @default(now())
+  id        String   @id @default(cuid())
+  benefitId String
+  userId    String
+  action    String
+  fieldName String?
+  oldValue  String?
+  newValue  String?
+  reason    String?
+  comment   String?
+  createdAt DateTime @default(now())
 
   benefit ProjectBenefit @relation(fields: [benefitId], references: [id], onDelete: Cascade)
-  user    User           @relation(fields: [userId],    references: [id])
+  user    User           @relation(fields: [userId], references: [id])
 }
 
 // ─────────────────────────────────────────────
@@ -894,10 +910,10 @@ enum BaselineStatus {
 model ProjectBaseline {
   id          String   @id @default(cuid())
   projectId   String
-  number      Int      // 0 = original, 1 = 1º replanejamento, etc.
+  number      Int // 0 = original, 1 = 1º replanejamento, etc.
   name        String
   description String?
-  reason      String?  // motivo do replanejamento
+  reason      String? // motivo do replanejamento
   createdById String?
   createdAt   DateTime @default(now())
 
@@ -909,7 +925,7 @@ model ProjectBaseline {
   approvedAt   DateTime?
 
   project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdBy  User?          @relation("BaselineCreatedBy",  fields: [createdById],  references: [id])
+  createdBy  User?          @relation("BaselineCreatedBy", fields: [createdById], references: [id])
   approvedBy User?          @relation("BaselineApprovedBy", fields: [approvedById], references: [id])
   snaps      BaselineSnap[]
 
@@ -957,20 +973,23 @@ model OrgConfig {
 // ─────────────────────────────────────────────
 
 model ScheduleV2Item {
-  id        String  @id @default(cuid())
-  projectId String
+  id            String  @id @default(cuid())
+  projectId     String
   // Código curto exibido ("A1", "A2", ...) — estável, usado na sintaxe de
   // predecessor (CLAUDE.md §8). Gerado sequencialmente por projeto; não
   // renumera ao mover/reordenar linhas.
-  code      String
-  parentId  String?
-  order     Int     @default(0)
-  title     String
+  code          String
+  parentId      String?
+  order         Int     @default(0)
+  title         String
   // "A_INICIAR" | "EM_ANDAMENTO" | "CONCLUIDO" | "ATRASADO" — texto livre
   // na coluna (sem enum no banco) para não travar em migração se a lista
   // mudar; a UI que garante os 4 valores.
-  status       String  @default("A_INICIAR")
-  responsavel  String?
+  status        String  @default("A_INICIAR")
+  // FK de verdade (não texto livre) — precisa ser um User real para a
+  // Alocação de Recursos (lib/actions/allocation.ts) poder filtrar por
+  // pessoa, igual ao ScheduleTask.responsibleId legado.
+  responsavelId String?
 
   // Fonte da verdade da barra — null = não agendado; 0 = marco (CLAUDE.md §3.3).
   duracaoDiasUteis Int?
@@ -984,16 +1003,30 @@ model ScheduleV2Item {
   esforcoRealH       Float @default(0)
   percentualCompleto Int   @default(0)
 
+  // Paridade com ScheduleTask.budgetedCost/actualCost — alimenta o IDC
+  // (Status Report, Analytics, Encerramento). Preenchido pela migração de
+  // dados (Fase 2) e, dali em diante, editável na tela.
+  budgetedCost Float?
+  actualCost   Float?
+
   schedulingMode String    @default("auto") // "auto" | "manual" (CLAUDE.md §6)
   constraintType String?
   constraintDate DateTime? @db.Date
 
-  project  Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parent   ScheduleV2Item?  @relation("ScheduleV2Hierarchy", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  children ScheduleV2Item[] @relation("ScheduleV2Hierarchy")
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent      ScheduleV2Item?  @relation("ScheduleV2Hierarchy", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  children    ScheduleV2Item[] @relation("ScheduleV2Hierarchy")
+  responsavel User?            @relation("ScheduleV2Responsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
 
   predecessorOf ScheduleV2Dependency[] @relation("ScheduleV2DepSuccessor")
   successorOf   ScheduleV2Dependency[] @relation("ScheduleV2DepPredecessor")
+
+  // Comentários/anexos/apontamento de horas migrados do ScheduleTask legado
+  // (ver TimeEntry/Comment/Attachment — FK adicional opcional, o legado não
+  // é apagado) mais os criados diretamente aqui dali em diante.
+  comments    Comment[]
+  attachments Attachment[]
+  timeEntries TimeEntry[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1001,6 +1034,7 @@ model ScheduleV2Item {
   @@unique([projectId, code])
   @@index([projectId])
   @@index([parentId])
+  @@index([responsavelId])
 }
 
 model ScheduleV2Dependency {
@@ -1063,4 +1097,21 @@ model ScheduleV2Snapshot {
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, kind])
+}
+
+// Auditoria/rollback da migração ScheduleTask -> ScheduleV2Item (Fase 2 do
+// plano de adoção do v2). Só registro — não é FK forte para ScheduleTask
+// (o legado nunca é apagado, mas não queremos travar a exclusão de uma
+// linha antiga por causa deste mapa). Alimenta a Fase 3 (repontar
+// TimeEntry/Comment/Attachment para o item novo correspondente).
+model ScheduleV2MigrationMap {
+  id           String   @id @default(cuid())
+  projectId    String
+  legacyTaskId String
+  newItemId    String
+  migratedAt   DateTime @default(now())
+
+  @@unique([legacyTaskId])
+  @@unique([newItemId])
+  @@index([projectId])
 }

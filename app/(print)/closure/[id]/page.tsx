@@ -2,6 +2,7 @@ import { auth } from "@/auth"
 import { redirect, notFound } from "next/navigation"
 import { getProjectForClosure } from "@/lib/actions/golive"
 import { computeProjectProgress } from "@/lib/utils/project-progress"
+import { toLegacyLikeTasks, areasFromV2 } from "@/lib/utils/schedule-v2-adapter"
 import { format, differenceInDays } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import Image from "next/image"
@@ -365,7 +366,16 @@ export default async function ClosurePage({ params }: { params: Promise<{ id: st
   const project = await getProjectForClosure(id)
   if (!project) notFound()
 
-  const tasks       = project.tasks
+  const legacyTasks = toLegacyLikeTasks(project.scheduleV2Items)
+  const areas       = areasFromV2(project.scheduleV2Items)
+  const groupIds    = new Set(project.scheduleV2Items.filter((i) => i.parentId).map((i) => i.parentId as string))
+  // "Área" v2 = item de topo da árvore (ver lib/utils/schedule-v2-adapter.ts);
+  // só as folhas entram nas listas de tarefas do relatório.
+  const wbsAreas = areas.map((area) => ({
+    ...area,
+    tasks: legacyTasks.filter((t) => !groupIds.has(t.id) && t.wbsAreaId === area.id),
+  }))
+  const tasks       = legacyTasks.filter((t) => !groupIds.has(t.id))
   const totalTasks  = tasks.length
   const doneTasks   = tasks.filter((t) => t.status === "COMPLETED").length
   const avgProgress = totalTasks > 0
@@ -608,7 +618,7 @@ export default async function ClosurePage({ params }: { params: Promise<{ id: st
             </div>
 
             {/* WBS Areas */}
-            {project.wbsAreas.length > 0 && (
+            {wbsAreas.length > 0 && (
               <div>
                 <div className="section-title">Estrutura Analítica do Projeto (EAP)</div>
                 <table>
@@ -622,7 +632,7 @@ export default async function ClosurePage({ params }: { params: Promise<{ id: st
                     </tr>
                   </thead>
                   <tbody>
-                    {project.wbsAreas.map((area) => {
+                    {wbsAreas.map((area) => {
                       const aTotal = area.tasks.length
                       const aDone  = area.tasks.filter((t) => t.status === "COMPLETED").length
                       const aPct   = aTotal > 0 ? Math.round((aDone / aTotal) * 100) : 0
@@ -660,7 +670,7 @@ export default async function ClosurePage({ params }: { params: Promise<{ id: st
         <div className="page page-content">
           <ContentHeader title="Cronograma e Tarefas" subtitle={docTitle} />
           <div className="content-body" style={{ paddingBottom: "16mm" }}>
-            {project.wbsAreas.map((area) => {
+            {wbsAreas.map((area) => {
               if (area.tasks.length === 0) return null
               return (
                 <div key={area.id} style={{ marginBottom: "5mm" }}>
@@ -686,7 +696,7 @@ export default async function ClosurePage({ params }: { params: Promise<{ id: st
                             {task.parentId && <span style={{ color: "#D1D5DB", marginRight: "2mm" }}>└</span>}
                             {task.title}
                           </td>
-                          <td style={{ color: "#6B7280" }}>{task.responsible?.name ?? "—"}</td>
+                          <td style={{ color: "#6B7280" }}>{task.responsibleName ?? "—"}</td>
                           <td style={{ color: "#6B7280" }}>{fmt(task.startDate)}</td>
                           <td style={{ color: "#6B7280" }}>{fmt(task.endDate)}</td>
                           <td>

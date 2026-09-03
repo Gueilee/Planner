@@ -10,7 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
   ArrowLeft, Users, Calendar, AlertTriangle, CheckCircle2,
   Clock, BarChart3, Layers, TrendingUp, Play, Timer, CalendarDays, RefreshCw,
-  Rocket, FileDown, BookOpen, Shield, FileText, Gem, FlaskConical,
+  Rocket, FileDown, BookOpen, Shield, FileText, Gem,
 } from "lucide-react"
 import { DeleteProjectButton } from "./delete-project-button"
 import { ProjectKanbanButton } from "./project-kanban-button"
@@ -23,6 +23,7 @@ import { format, differenceInDays } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { computeReportStatus } from "@/lib/utils/report-status"
 import { computeProjectProgress } from "@/lib/utils/project-progress"
+import { toLegacyLikeTasks, areasFromV2 } from "@/lib/utils/schedule-v2-adapter"
 import { SCurveTab } from "./s-curve/s-curve-tab"
 
 const RISK_COLORS: Record<string, string> = {
@@ -68,20 +69,13 @@ export default async function ProjectDetailPage({
     where: { id, organizationId: session?.user?.organizationId },
     include: {
       members: { include: { user: { select: { id: true, name: true, email: true, role: true, department: true, image: true } } } },
-      wbsAreas: {
+      scheduleV2Items: {
         orderBy: { order: "asc" },
-        include: {
-          tasks: {
-            orderBy: { order: "asc" },
-            include: { responsible: { select: { name: true } } },
-          },
-        },
-      },
-      tasks: {
-        orderBy: { order: "asc" },
-        include: {
-          wbsArea: { select: { name: true, color: true } },
-          responsible: { select: { name: true } },
+        select: {
+          id: true, parentId: true, title: true, status: true, percentualCompleto: true,
+          inicioEstimado: true, terminoEstimado: true, inicioReal: true, terminoReal: true,
+          esforcoEstimadoH: true, esforcoRealH: true, budgetedCost: true, actualCost: true,
+          responsavelId: true, responsavel: { select: { id: true, name: true } },
         },
       },
       risks: { orderBy: { createdAt: "asc" } },
@@ -134,6 +128,18 @@ export default async function ProjectDetailPage({
 
   if (!project) notFound()
 
+  // Cronograma v2 — item de topo da árvore = "área" (não existe mais WbsArea
+  // como entidade separada; ver lib/utils/schedule-v2-adapter.ts).
+  const legacyTasks = toLegacyLikeTasks(project.scheduleV2Items)
+  const topAreas    = areasFromV2(project.scheduleV2Items)
+  const groupIds     = new Set(project.scheduleV2Items.filter((i) => i.parentId).map((i) => i.parentId as string))
+  const leafTasks    = legacyTasks.filter((t) => !groupIds.has(t.id))
+  const leafTasksByArea = new Map<string, typeof leafTasks>()
+  for (const t of leafTasks) {
+    const key = t.wbsAreaId ?? "__none__"
+    leafTasksByArea.set(key, [...(leafTasksByArea.get(key) ?? []), t])
+  }
+
   // Auto-compute report status from project data and persist to DB
   const autoStatus = computeReportStatus({
     budget:         project.budget,
@@ -141,7 +147,7 @@ export default async function ProjectDetailPage({
     status:         project.status,
     expectedStart:  project.expectedStart,
     expectedEnd:    project.expectedEnd,
-    tasks:          project.tasks.map(t => ({
+    tasks:          legacyTasks.map(t => ({
       id:           t.id,
       status:       t.status,
       progress:     t.progress,
@@ -152,7 +158,7 @@ export default async function ProjectDetailPage({
       budgetedCost: t.budgetedCost,
       actualCost:   t.actualCost,
     })),
-    wbsAreas: project.wbsAreas.map(a => ({ id: a.id, weight: a.weight })),
+    wbsAreas: topAreas.map(a => ({ id: a.id, weight: a.weight })),
     risks: project.risks.map(r => ({ status: r.status })),
   }, org?.riskThresholdPct)
 
@@ -178,9 +184,9 @@ export default async function ProjectDetailPage({
   }
 
   const userRole   = session?.user?.role ?? ""
-  const tasksDone  = project.tasks.filter((t) => t.status === "COMPLETED").length
-  const tasksTotal = project.tasks.length
-  const progress   = tasksTotal > 0 ? computeProjectProgress(project.tasks) : (project.status === "COMPLETED" ? 100 : 0)
+  const tasksDone  = legacyTasks.filter((t) => t.status === "COMPLETED").length
+  const tasksTotal = legacyTasks.length
+  const progress   = tasksTotal > 0 ? computeProjectProgress(legacyTasks) : (project.status === "COMPLETED" ? 100 : 0)
   const highRisks  = project.risks.filter((r) => ["HIGH", "CRITICAL"].includes(r.status)).length
   const daysLeft   = project.expectedEnd
     ? differenceInDays(project.expectedEnd, new Date())
@@ -188,10 +194,10 @@ export default async function ProjectDetailPage({
 
   // Financial aggregates
   // ── Earned Value Management ────────────────────────────────────────────────
-  const totalBudgetedCost = project.tasks.reduce((s, t) => s + (t.budgetedCost ?? 0), 0)
-  const totalActualCost   = project.tasks.reduce((s, t) => s + (t.actualCost   ?? 0), 0)
+  const totalBudgetedCost = legacyTasks.reduce((s, t) => s + (t.budgetedCost ?? 0), 0)
+  const totalActualCost   = legacyTasks.reduce((s, t) => s + (t.actualCost   ?? 0), 0)
   // VE — Valor Agregado (Earned Value): quanto do orçado já foi efetivamente realizado
-  const earnedValue = project.tasks.reduce(
+  const earnedValue = legacyTasks.reduce(
     (s, t) => s + ((t.budgetedCost ?? 0) * (t.progress / 100)), 0
   )
   // VP — Valor Planejado (Planned Value): quanto deveria ter sido realizado até hoje pela linha do tempo
@@ -380,17 +386,6 @@ export default async function ProjectDetailPage({
                         <CalendarDays className="w-3.5 h-3.5" />
                         Cronograma
                       </Link>
-                      {["ADMIN", "PROJECT_MANAGER"].includes(userRole) && (
-                        <Link
-                          href={`/projects/${id}/schedule-v2`}
-                          title="Motor de Cronograma em teste — não afeta o Cronograma normal deste projeto"
-                          className="inline-flex items-center gap-1.5 px-3 h-9 text-xs font-bold rounded-xl border transition-all hover:opacity-90 active:scale-[0.98]"
-                          style={{ borderColor: "rgba(245,158,11,0.35)", color: "#D97706", background: "rgba(245,158,11,0.08)" }}
-                        >
-                          <FlaskConical className="w-3.5 h-3.5" />
-                          Beta
-                        </Link>
-                      )}
                       <ProjectKanbanButton projectId={id} projectTitle={project.title} />
                       <Link
                         href={`/projects/${id}/indicators`}
@@ -448,17 +443,6 @@ export default async function ProjectDetailPage({
                         <CalendarDays className="w-3.5 h-3.5" />
                         Cronograma
                       </Link>
-                      {["ADMIN", "PROJECT_MANAGER"].includes(userRole) && (
-                        <Link
-                          href={`/projects/${id}/schedule-v2`}
-                          title="Motor de Cronograma em teste — não afeta o Cronograma normal deste projeto"
-                          className="inline-flex items-center gap-1.5 px-3 h-9 text-xs font-bold rounded-xl border transition-all hover:opacity-90 active:scale-[0.98]"
-                          style={{ borderColor: "rgba(245,158,11,0.35)", color: "#D97706", background: "rgba(245,158,11,0.08)" }}
-                        >
-                          <FlaskConical className="w-3.5 h-3.5" />
-                          Beta
-                        </Link>
-                      )}
                       <ProjectKanbanButton projectId={id} projectTitle={project.title} />
                       <Link
                         href={`/projects/${id}/indicators`}
@@ -509,17 +493,6 @@ export default async function ProjectDetailPage({
                         <CalendarDays className="w-3.5 h-3.5" />
                         Cronograma
                       </Link>
-                      {["ADMIN", "PROJECT_MANAGER"].includes(userRole) && (
-                        <Link
-                          href={`/projects/${id}/schedule-v2`}
-                          title="Motor de Cronograma em teste — não afeta o Cronograma normal deste projeto"
-                          className="inline-flex items-center gap-1.5 px-3 h-9 text-xs font-bold rounded-xl border transition-all hover:opacity-90 active:scale-[0.98]"
-                          style={{ borderColor: "rgba(245,158,11,0.35)", color: "#D97706", background: "rgba(245,158,11,0.08)" }}
-                        >
-                          <FlaskConical className="w-3.5 h-3.5" />
-                          Beta
-                        </Link>
-                      )}
                       <ProjectKanbanButton projectId={id} projectTitle={project.title} />
                       <Link
                         href={`/projects/${id}/indicators`}
@@ -900,26 +873,27 @@ export default async function ProjectDetailPage({
                 />
               )}
 
-              {/* WBS summary */}
-              {project.wbsAreas.length > 0 && (
+              {/* WBS summary — "área" v2 = item de topo da árvore */}
+              {topAreas.length > 0 && (
                 <div
                   className="bg-white rounded-2xl p-5"
                   style={{ border: "1px solid #E2E8F0", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}
                 >
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-4">Áreas WBS</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-4">Áreas do Cronograma</p>
                   <div className="space-y-3">
-                    {project.wbsAreas.map((area) => {
-                      const areaTasks    = area.tasks.length
-                      const areaDone     = area.tasks.filter((t) => t.status === "COMPLETED").length
+                    {topAreas.map((area) => {
+                      const areaLeafTasks = leafTasksByArea.get(area.id) ?? []
+                      const areaTasks    = areaLeafTasks.length
+                      const areaDone     = areaLeafTasks.filter((t) => t.status === "COMPLETED").length
                       const areaProgress = areaTasks > 0 ? Math.round((areaDone / areaTasks) * 100) : 0
                       return (
                         <div key={area.id} className="flex items-center gap-3">
-                          <div className="w-3 h-3 rounded-full shrink-0" style={{ background: area.color ?? "#6B7280" }} />
+                          <div className="w-3 h-3 rounded-full shrink-0" style={{ background: "#6B7280" }} />
                           <span className="text-sm font-semibold text-[#0F172A] w-36 truncate">{area.name}</span>
                           <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
                             <div
                               className="h-full rounded-full transition-all duration-500"
-                              style={{ width: `${areaProgress}%`, background: area.color ?? "#6B7280" }}
+                              style={{ width: `${areaProgress}%`, background: "#6B7280" }}
                             />
                           </div>
                           <span className="text-[10px] text-slate-400 w-20 text-right font-medium">
@@ -1070,8 +1044,10 @@ export default async function ProjectDetailPage({
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {project.wbsAreas.length > 0 ? (
-                    project.wbsAreas.map((area) => (
+                  {topAreas.length > 0 ? (
+                    topAreas.map((area) => {
+                      const areaLeafTasks = leafTasksByArea.get(area.id) ?? []
+                      return (
                       <div
                         key={area.id}
                         className="bg-white rounded-2xl overflow-hidden"
@@ -1081,17 +1057,17 @@ export default async function ProjectDetailPage({
                           className="flex items-center gap-3 px-5 py-3.5"
                           style={{ borderBottom: "1px solid #F1F5F9", background: "#FAFBFC" }}
                         >
-                          <div className="w-3 h-3 rounded-full" style={{ background: area.color ?? "#6B7280" }} />
+                          <div className="w-3 h-3 rounded-full" style={{ background: "#6B7280" }} />
                           <span className="text-sm font-bold text-[#0F172A]">{area.name}</span>
-                          <span className="ml-auto text-xs text-slate-400 font-medium">{area.tasks.length} tarefas</span>
+                          <span className="ml-auto text-xs text-slate-400 font-medium">{areaLeafTasks.length} tarefas</span>
                         </div>
                         <div className="divide-y divide-slate-50">
-                          {area.tasks.map((task) => (
+                          {areaLeafTasks.map((task) => (
                             <div key={task.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50/50 transition-colors">
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-semibold text-[#0F172A] truncate">{task.title}</p>
-                                {task.responsible && (
-                                  <p className="text-xs text-slate-400 mt-0.5">{task.responsible.name}</p>
+                                {task.responsibleName && (
+                                  <p className="text-xs text-slate-400 mt-0.5">{task.responsibleName}</p>
                                 )}
                               </div>
                               {task.endDate && (
@@ -1120,9 +1096,10 @@ export default async function ProjectDetailPage({
                           ))}
                         </div>
                       </div>
-                    ))
+                      )
+                    })
                   ) : (
-                    project.tasks.map((task) => (
+                    leafTasks.map((task) => (
                       <div
                         key={task.id}
                         className="bg-white rounded-xl p-4 flex items-center gap-4"
@@ -1130,7 +1107,7 @@ export default async function ProjectDetailPage({
                       >
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-[#0F172A]">{task.title}</p>
-                          {task.responsible && <p className="text-xs text-slate-400 mt-0.5">{task.responsible.name}</p>}
+                          {task.responsibleName && <p className="text-xs text-slate-400 mt-0.5">{task.responsibleName}</p>}
                         </div>
                         <span className={`px-2.5 py-1 text-[10px] font-bold rounded-full ${TASK_STATUS_COLORS[task.status]}`}>
                           {TASK_STATUS_LABELS[task.status]}

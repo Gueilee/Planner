@@ -25,10 +25,10 @@ export default async function PriorityPage() {
         expectedEnd:      p.expectedEnd?.toISOString() ?? null,
         economy:          p.economy,
         teamSize:         p.members.length,
-        tasksDone:        p.tasks.filter((t) => t.status === "COMPLETED").length,
-        tasksTotal:       p.tasks.length,
+        tasksDone:        p.scheduleV2Items.filter((t) => t.status === "CONCLUIDO").length,
+        tasksTotal:       p.scheduleV2Items.length,
         progress:         computeProjectProgress(
-          p.tasks.map((t) => ({ id: t.id, progress: t.progress, parentId: t.parentId, startDate: t.startDate, endDate: t.endDate })),
+          p.scheduleV2Items.map((t) => ({ id: t.id, progress: t.percentualCompleto, parentId: t.parentId })),
         ),
       }))}
     />

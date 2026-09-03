@@ -8,6 +8,8 @@ import { ptBR } from "date-fns/locale"
 import { generateCheckpointATADirect } from "@/lib/actions/ata"
 import { deriveStatus, deriveProgress } from "@/lib/utils/task-progress"
 import { detectScheduleStatusWorsening, DEFAULT_RISK_THRESHOLD_PCT } from "@/lib/utils/schedule-status"
+import { LEGACY_STATUS_TO_V2 } from "@/lib/utils/schedule-v2-adapter"
+import { applyItemUpdatesV2 } from "@/lib/actions/schedule-v2"
 import { notifyUser, notifyProjectMembers } from "@/lib/notify"
 
 export type CheckpointFrequency = "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY"
@@ -76,6 +78,21 @@ export async function saveCheckpoint(data: CheckpointInput) {
       })
     : []
 
+  // Deriva status/progresso final ANTES de gravar (mesma lógica de sempre —
+  // vocabulário rico do legado, PLANNING..DELAYED/ON_HOLD/VALIDATION — só na
+  // hora de gravar no motor v2 é que traduzimos para os 4 baldes dele).
+  const derivedByTaskId = new Map<string, { status: string; progress: number }>()
+  for (const upd of data.taskUpdates) {
+    let finalStatus   = upd.status
+    let finalProgress = upd.progress
+    if (upd.status !== upd.oldStatus && upd.progress === upd.oldProgress) {
+      finalProgress = deriveProgress(finalStatus, upd.oldProgress)
+    } else if (upd.progress !== upd.oldProgress && upd.status === upd.oldStatus) {
+      finalStatus = deriveStatus(finalProgress, upd.oldStatus)
+    }
+    derivedByTaskId.set(upd.taskId, { status: finalStatus, progress: finalProgress })
+  }
+
   const meetingId = await db.$transaction(async (tx) => {
     // 1. Create meeting record
     const meeting = await tx.meeting.create({
@@ -98,34 +115,15 @@ export async function saveCheckpoint(data: CheckpointInput) {
       await tx.meetingParticipant.create({ data: { meetingId: meeting.id, userId } }).catch(() => {})
     }
 
-    // 3. Update tasks with auto-derivation + add comments + attachments
+    // 3. Comentários + anexos (o status/progresso do cronograma é gravado
+    // à parte, via applyItemUpdatesV2 — motor v2 tem sua própria
+    // transação/rollup, não dá pra aninhar dentro desta).
     for (const upd of data.taskUpdates) {
-      // Apply auto-derivation: if only status changed, derive progress; if both provided use as-is
-      let finalStatus   = upd.status
-      let finalProgress = upd.progress
-
-      if (upd.status !== upd.oldStatus && upd.progress === upd.oldProgress) {
-        // Status changed — derive new progress
-        finalProgress = deriveProgress(finalStatus, upd.oldProgress)
-      } else if (upd.progress !== upd.oldProgress && upd.status === upd.oldStatus) {
-        // Progress changed — derive new status
-        finalStatus = deriveStatus(finalProgress, upd.oldStatus)
-      }
-
-      await tx.scheduleTask.update({
-        where: { id: upd.taskId },
-        data: {
-          status:      finalStatus as never,
-          progress:    finalProgress,
-          ...(finalStatus === "COMPLETED" && { completedAt: new Date() }),
-        },
-      })
-
       let commentId: string | null = null
       if (upd.comment?.trim()) {
         const comment = await tx.comment.create({
           data: {
-            taskId:  upd.taskId,
+            scheduleV2ItemId: upd.taskId,
             userId:  session.user.id,
             content: `[Checkpoint ${format(meetingDate, "dd/MM")}] ${upd.comment.trim()}`,
           },
@@ -137,7 +135,7 @@ export async function saveCheckpoint(data: CheckpointInput) {
         for (const att of upd.attachments) {
           await tx.attachment.create({
             data: {
-              taskId:    upd.taskId,
+              scheduleV2ItemId: upd.taskId,
               commentId: commentId ?? undefined,
               fileName:  att.fileName,
               fileUrl:   att.fileUrl,
@@ -151,6 +149,22 @@ export async function saveCheckpoint(data: CheckpointInput) {
 
     return meeting.id
   })
+
+  // Atualiza o cronograma v2 (status/progresso de cada item + rollup de
+  // grupo) — fora da transação acima, própria do motor (saveSnapshot p/
+  // undo + recomputeAndPersist).
+  await applyItemUpdatesV2(
+    data.projectId,
+    data.taskUpdates.map((upd) => {
+      const derived = derivedByTaskId.get(upd.taskId)!
+      return {
+        itemId: upd.taskId,
+        status: LEGACY_STATUS_TO_V2[derived.status] ?? "A_INICIAR",
+        percentualCompleto: derived.progress,
+        ...(derived.status === "COMPLETED" && { terminoReal: new Date().toISOString().slice(0, 10) }),
+      }
+    })
+  )
 
   revalidatePath(`/projects/${data.projectId}`)
   revalidatePath(`/projects/${data.projectId}/schedule`)
@@ -177,8 +191,8 @@ export async function saveCheckpoint(data: CheckpointInput) {
     const taskIds   = data.taskUpdates.map((u) => u.taskId)
     const respById  = taskIds.length
       ? new Map(
-          (await db.scheduleTask.findMany({ where: { id: { in: taskIds } }, select: { id: true, responsibleId: true } }))
-            .map((t) => [t.id, t.responsibleId] as const)
+          (await db.scheduleV2Item.findMany({ where: { id: { in: taskIds } }, select: { id: true, responsavelId: true } }))
+            .map((t) => [t.id, t.responsavelId] as const)
         )
       : new Map<string, string | null>()
 
@@ -227,6 +241,35 @@ export async function saveCheckpoint(data: CheckpointInput) {
   } catch { /* ATA generation is best-effort */ }
 
   return { success: true, meetingId, ataContent }
+}
+
+// Painel de detalhe da tarefa dentro do Checkpoint (checkpoint-client.tsx) —
+// edição pontual de datas planejadas/custo, fora do lote principal de
+// status/progresso salvo em saveCheckpoint. Antes apontava para o
+// ScheduleTask legado (lib/actions/schedule.ts::updateTask); migrado junto
+// com o resto do Checkpoint (Fase 4.6) para o motor v2.
+export async function updateTaskScheduleFromCheckpoint(
+  taskId: string,
+  projectId: string,
+  data: {
+    startDate?:     string | null
+    endDate?:       string | null
+    budgetedCost?:  number | null
+    actualCost?:    number | null
+  },
+) {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+
+  await applyItemUpdatesV2(projectId, [{
+    itemId: taskId,
+    ...(data.startDate !== undefined && data.endDate !== undefined && {
+      inicioEstimado: data.startDate,
+      terminoEstimado: data.endDate,
+    }),
+    ...(data.budgetedCost !== undefined && { budgetedCost: data.budgetedCost }),
+    ...(data.actualCost   !== undefined && { actualCost:   data.actualCost }),
+  }])
 }
 
 export async function getCheckpointHistory(projectId: string) {

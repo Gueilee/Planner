@@ -48,17 +48,14 @@ export async function POST(
     reason?: string
   }
 
-  // Only snapshot leaf tasks (no subtasks) with an endDate
-  const tasks = await db.scheduleTask.findMany({
-    where:  { projectId: id, endDate: { not: null } },
-    select: {
-      id: true, title: true,
-      startDate: true, endDate: true, budgetedCost: true,
-      _count: { select: { subtasks: true } },
-    },
+  // Only snapshot leaf items (no children) with a término estimado
+  const items = await db.scheduleV2Item.findMany({
+    where:  { projectId: id, terminoEstimado: { not: null } },
+    select: { id: true, parentId: true, title: true, inicioEstimado: true, terminoEstimado: true, budgetedCost: true },
   })
 
-  const leafTasks = tasks.filter((t) => t._count.subtasks === 0)
+  const groupIds = new Set(items.map((t) => t.parentId).filter((gid): gid is string => gid !== null))
+  const leafTasks = items.filter((t) => !groupIds.has(t.id))
 
   if (leafTasks.length === 0) {
     return NextResponse.json(
@@ -94,8 +91,8 @@ export async function POST(
         create: leafTasks.map((t) => ({
           taskId:       t.id,
           taskTitle:    t.title,
-          plannedStart: t.startDate ?? null,
-          plannedEnd:   t.endDate!,
+          plannedStart: t.inicioEstimado ?? null,
+          plannedEnd:   t.terminoEstimado!,
           budgetedCost: t.budgetedCost ?? null,
         })),
       },

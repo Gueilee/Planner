@@ -23,8 +23,8 @@ export default async function EncerramentoPage() {
         goLiveDate:   p.goLiveDate?.toISOString() ?? null,
         sponsorName:  p.sponsor?.name ?? null,
         memberCount:  p.members.length,
-        tasksTotal:   p.tasks.length,
-        tasksDone:    p.tasks.filter((t) => t.status === "COMPLETED").length,
+        tasksTotal:   p.scheduleV2Items.length,
+        tasksDone:    p.scheduleV2Items.filter((t) => t.status === "CONCLUIDO").length,
       }))}
     />
   )

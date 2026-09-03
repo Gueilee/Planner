@@ -3,15 +3,17 @@
 import { useEffect, useMemo, useState, useTransition } from "react"
 import {
   createItemV2, updateItemV2, deleteItemV2, duplicateItemV2, reorderItemsV2, setDependenciesV2, getScheduleV2,
-  hasUndoV2, hasRedoV2, undoLastChangeV2, redoLastChangeV2,
+  hasUndoV2, hasRedoV2, undoLastChangeV2, redoLastChangeV2, applyTemplateV2,
 } from "@/lib/actions/schedule-v2"
 import type { ScheduleV2Payload, ItemV2 } from "@/lib/actions/schedule-v2"
 import { updateProjectDetails } from "@/lib/actions/projects"
+import { getTemplates } from "@/lib/actions/templates"
+import type { Template } from "@/lib/actions/templates"
 import { fmtDateLong, isValidDateStr } from "@/lib/date-utils"
 import {
   ChevronRight, ChevronDown, Plus, IndentIncrease, IndentDecrease,
   ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, Milestone, Info,
-  Circle, CircleX, CirclePlus, Pencil, Undo2, Redo2, GripVertical, GripHorizontal,
+  Circle, CircleX, CirclePlus, Pencil, Undo2, Redo2, GripVertical, GripHorizontal, LayoutTemplate,
 } from "lucide-react"
 
 // ─── Helpers de árvore ──────────────────────────────────────────────────────
@@ -37,14 +39,14 @@ function isSelfOrDescendant(items: ItemV2[], targetId: string, ofId: string): bo
 type SortColumn = ColKey | "title" | null
 type SortState = { column: SortColumn; dir: "asc" | "desc" }
 
-function sortValue(item: ItemV2, col: SortColumn): string | number {
+function sortValue(item: ItemV2, col: SortColumn, membersById?: Map<string, string>): string | number {
   switch (col) {
     case "title": return item.title.toLowerCase()
     case "duracao": return item.duracaoDiasUteis ?? -1
     case "inicio": return item.inicioEstimado ?? ""
     case "termino": return item.terminoEstimado ?? ""
     case "pct": return item.percentualCompleto
-    case "responsavel": return (item.responsavel ?? "").toLowerCase()
+    case "responsavel": return (membersById?.get(item.responsavelId ?? "") ?? "").toLowerCase()
     case "status": return statusLabel(item.status).label
     default: return 0
   }
@@ -52,14 +54,14 @@ function sortValue(item: ItemV2, col: SortColumn): string | number {
 
 // Ordena os irmãos de um mesmo pai pelo valor da coluna ativa — a hierarquia
 // (quem é filho de quem) nunca muda, só a sequência dentro de cada nível.
-function sortedSiblingsOf(items: ItemV2[], parentId: string | null, sort: SortState): ItemV2[] {
+function sortedSiblingsOf(items: ItemV2[], parentId: string | null, sort: SortState, membersById?: Map<string, string>): ItemV2[] {
   const base = siblingsOf(items, parentId)
   if (!sort.column) return base
   const factor = sort.dir === "asc" ? 1 : -1
   const col = sort.column
   return [...base].sort((a, b) => {
-    const va = sortValue(a, col)
-    const vb = sortValue(b, col)
+    const va = sortValue(a, col, membersById)
+    const vb = sortValue(b, col, membersById)
     if (va < vb) return -1 * factor
     if (va > vb) return 1 * factor
     return 0
@@ -101,7 +103,9 @@ function isSaneDateInput(raw: string): boolean {
 const STATUS_OPTIONS = [
   { value: "A_INICIAR", label: "A iniciar", color: "#64748B", bg: "#F1F5F9" },
   { value: "EM_ANDAMENTO", label: "Em Andamento", color: "#2563EB", bg: "#EFF6FF" },
+  { value: "VALIDACAO", label: "Em Validação", color: "#7C3AED", bg: "#F5F3FF" },
   { value: "CONCLUIDO", label: "Concluído", color: "#059669", bg: "#ECFDF5" },
+  { value: "PAUSADO", label: "Pausado", color: "#D97706", bg: "#FFFBEB" },
   { value: "ATRASADO", label: "Atrasado", color: "#DC2626", bg: "#FEF2F2" },
 ] as const
 
@@ -135,11 +139,13 @@ function colPrefsKey(projectId: string) { return `sv2-columns-${projectId}` }
 
 // ─── Main ─────────────────────────────────────────────────────────────────
 
-export function ScheduleV2Client({ projectId, initial, initialProjectDates }: {
+export function ScheduleV2Client({ projectId, initial, initialProjectDates, members }: {
   projectId: string
   initial: ScheduleV2Payload
   initialProjectDates: { expectedStart: string | null; expectedEnd: string | null }
+  members: { id: string; name: string }[]
 }) {
+  const membersById = useMemo(() => new Map(members.map((m) => [m.id, m.name])), [members])
   const [data, setData] = useState<ScheduleV2Payload>(initial)
   const [expanded, setExpanded] = useState<Set<string>>(new Set(initial.items.filter((i) => i.isGroup).map((i) => i.id)))
   const [pending, startTransition] = useTransition()
@@ -148,6 +154,14 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates }: {
   const [projectDates, setProjectDates] = useState(initialProjectDates)
   const [hasUndo, setHasUndo] = useState(false)
   const [hasRedo, setHasRedo] = useState(false)
+
+  // "Aplicar modelo" — reaproveita os modelos de cronograma já cadastrados
+  // (/templates), mas cria a árvore direto no motor v2 (dias úteis reais,
+  // não addDays corrido — ver applyTemplateV2 em lib/actions/schedule-v2.ts).
+  const [templates, setTemplates] = useState<Template[]>([])
+  const [tplModalOpen, setTplModalOpen] = useState(false)
+  const [tplSelected, setTplSelected] = useState<string>("")
+  const [tplStartDate, setTplStartDate] = useState<string>(() => new Date().toISOString().slice(0, 10))
 
   // Layout de colunas (larguras + ordem) — preferência pessoal, salva no
   // navegador (não é dado do cronograma, é só a visão de quem está olhando).
@@ -166,6 +180,7 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates }: {
   useEffect(() => {
     hasUndoV2(projectId).then(setHasUndo).catch(() => {})
     hasRedoV2(projectId).then(setHasRedo).catch(() => {})
+    getTemplates().then(setTemplates).catch(() => {})
   }, [projectId])
 
   // Carrega preferências de coluna salvas (só no cliente — evita divergir da
@@ -324,6 +339,16 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates }: {
     })
   }
 
+  function handleApplyTemplate() {
+    if (!tplSelected || !isSaneDateInput(tplStartDate) || tplStartDate === "") return
+    startTransition(async () => {
+      await applyTemplateV2(projectId, tplSelected, tplStartDate)
+      setTplModalOpen(false)
+      setTplSelected("")
+      refresh()
+    })
+  }
+
   function handleEditTitle(id: string) {
     const el = document.getElementById(`sv2-title-${id}`) as HTMLInputElement | null
     el?.focus()
@@ -420,14 +445,14 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates }: {
     setDropTarget(null)
   }
 
-  const roots = sortedSiblingsOf(data.items, null, sort)
+  const roots = sortedSiblingsOf(data.items, null, sort, membersById)
   const selectedItem = selectedId ? data.items.find((i) => i.id === selectedId) ?? null : null
 
   const rowHandlers: RowHandlers = {
     data, expanded, onToggle: toggle, onUpdate: handleUpdate, onDeps: handleDeps, onDelete: handleDelete,
     onDuplicate: handleDuplicate, onAddAbove: handleAddAbove, onAddChild: handleAddChild, onEditTitle: handleEditTitle,
     selectedId, onSelect: setSelectedId, sort, conflictByItem,
-    colOrder, colWidths, titleWidth,
+    colOrder, colWidths, titleWidth, members, membersById,
     dragRowId, dropTarget, onRowDragStart: handleRowDragStart, onRowDragOver: handleRowDragOver,
     onRowDrop: handleRowDrop, onRowDragEnd: handleRowDragEnd,
   }
@@ -458,6 +483,10 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates }: {
         </ToolbarBtn>
         <ToolbarBtn wide disabled={!hasRedo} onClick={handleRedo} title="Avançar — refaz a última alteração desfeita">
           <Redo2 className="w-3.5 h-3.5" /> Avançar
+        </ToolbarBtn>
+        <div className="w-px h-5 bg-slate-200 mx-1" />
+        <ToolbarBtn wide disabled={templates.length === 0} onClick={() => setTplModalOpen(true)} title="Aplicar um modelo de cronograma pronto a este projeto">
+          <LayoutTemplate className="w-3.5 h-3.5" /> Aplicar modelo
         </ToolbarBtn>
         <div className="w-px h-5 bg-slate-200 mx-1" />
         <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mr-1">
@@ -527,6 +556,80 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates }: {
         ) : (
           roots.map((item) => <RowGroup key={item.id} item={item} depth={0} {...rowHandlers} />)
         )}
+      </div>
+
+      {tplModalOpen && (
+        <ApplyTemplateModal
+          templates={templates}
+          selected={tplSelected}
+          onSelect={setTplSelected}
+          startDate={tplStartDate}
+          onStartDate={setTplStartDate}
+          onApply={handleApplyTemplate}
+          onClose={() => setTplModalOpen(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Modal "Aplicar modelo" ───────────────────────────────────────────────
+function ApplyTemplateModal({ templates, selected, onSelect, startDate, onStartDate, onApply, onClose }: {
+  templates: Template[]
+  selected: string
+  onSelect: (id: string) => void
+  startDate: string
+  onStartDate: (v: string) => void
+  onApply: () => void
+  onClose: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4" onClick={onClose}>
+      <div
+        className="w-full max-w-md rounded-2xl bg-white shadow-xl border border-slate-200 p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2 mb-1">
+          <LayoutTemplate className="w-4 h-4 text-[#7B2FBE]" />
+          <h3 className="text-sm font-black text-slate-800">Aplicar modelo de cronograma</h3>
+        </div>
+        <p className="text-xs text-slate-400 mb-4">
+          Cria a estrutura do modelo neste projeto. As datas são calculadas a partir do início escolhido, respeitando dias úteis e feriados.
+        </p>
+
+        <label className="block text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">Modelo</label>
+        <select
+          value={selected}
+          onChange={(e) => onSelect(e.target.value)}
+          className="w-full mb-3 px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 outline-none focus:border-[#7B2FBE]"
+        >
+          <option value="">Selecione um modelo…</option>
+          {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
+
+        <label className="block text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">Início</label>
+        <input
+          type="date"
+          min={DATE_MIN}
+          max={DATE_MAX}
+          value={startDate}
+          onChange={(e) => onStartDate(e.target.value)}
+          className="w-full mb-5 px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 outline-none focus:border-[#7B2FBE]"
+        />
+
+        <div className="flex items-center justify-end gap-2">
+          <button onClick={onClose} className="px-3.5 py-2 rounded-lg text-xs font-bold text-slate-500 hover:bg-slate-100 transition-colors">
+            Cancelar
+          </button>
+          <button
+            onClick={onApply}
+            disabled={!selected || !isSaneDateInput(startDate) || startDate === ""}
+            className="px-3.5 py-2 rounded-lg text-xs font-bold text-white transition-all hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ background: "linear-gradient(135deg, #7B2FBE, #9333EA)" }}
+          >
+            Aplicar modelo
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -693,6 +796,8 @@ type RowHandlers = {
   colOrder: ColKey[]
   colWidths: Record<ColKey, number>
   titleWidth: number
+  members: { id: string; name: string }[]
+  membersById: Map<string, string>
   dragRowId: string | null
   dropTarget: { id: string; zone: "before" | "after" | "inside" } | null
   onRowDragStart: (id: string) => void
@@ -702,7 +807,7 @@ type RowHandlers = {
 }
 
 function RowGroup({ item, depth, ...h }: { item: ItemV2; depth: number } & RowHandlers) {
-  const kids = sortedSiblingsOf(h.data.items, item.id, h.sort)
+  const kids = sortedSiblingsOf(h.data.items, item.id, h.sort, h.membersById)
   const isOpen = h.expanded.has(item.id)
 
   return (
@@ -901,16 +1006,17 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
 
     case "responsavel":
       return (
-        <input
-          key={`resp:${item.id}:${item.responsavel}`}
-          defaultValue={item.responsavel ?? ""}
-          onBlur={(e) => {
-            const v = e.target.value.trim() || null
-            if (v !== item.responsavel) h.onUpdate(item.id, { responsavel: v })
+        <select
+          value={item.responsavelId ?? ""}
+          onChange={(e) => {
+            const v = e.target.value || null
+            if (v !== item.responsavelId) h.onUpdate(item.id, { responsavelId: v })
           }}
-          placeholder="Sem responsável"
-          className="w-full bg-transparent outline-none text-xs text-slate-700 placeholder-slate-300 rounded border-b border-transparent focus:border-[#7B2FBE] focus:bg-violet-50"
-        />
+          className="w-full bg-transparent outline-none text-xs text-slate-700 rounded border-b border-transparent focus:border-[#7B2FBE] focus:bg-violet-50 cursor-pointer"
+        >
+          <option value="">Sem responsável</option>
+          {h.members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+        </select>
       )
 
     case "status": {

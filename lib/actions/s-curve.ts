@@ -9,6 +9,7 @@ import {
 } from "date-fns"
 import { computeProjectProgress } from "@/lib/utils/project-progress"
 import { computePlanned, computeRealized, computeBaselineCurve, type RawTask } from "@/lib/utils/s-curve-math"
+import { toLegacyLikeTasks } from "@/lib/utils/schedule-v2-adapter"
 
 const CAN_MANAGE_BASELINE = new Set(["ADMIN", "PROJECT_MANAGER", "SPONSOR"])
 
@@ -84,12 +85,12 @@ export async function getSCurveData(projectId: string): Promise<SCurvePayload | 
         id: true, title: true,
         expectedStart: true, expectedEnd: true,
         actualStart: true, actualEnd: true,
-        tasks: {
+        scheduleV2Items: {
           select: {
-            id: true, parentId: true,
-            startDate: true, endDate: true,
-            actualStart: true, actualEnd: true, completedAt: true,
-            status: true, progress: true,
+            id: true, parentId: true, title: true, status: true, percentualCompleto: true,
+            inicioEstimado: true, terminoEstimado: true, inicioReal: true, terminoReal: true,
+            esforcoEstimadoH: true, esforcoRealH: true, budgetedCost: true, actualCost: true,
+            responsavelId: true,
           },
         },
       },
@@ -116,20 +117,10 @@ export async function getSCurveData(projectId: string): Promise<SCurvePayload | 
   // Cronograma (que não exige data para entrar na média).
   // leafTasks: só as que têm data de fim — usada para desenhar a curva no
   // tempo, já que uma tarefa sem data não tem onde ser plotada.
-  const parentIds  = new Set(project.tasks.map((t) => t.parentId).filter((id): id is string => id !== null))
-  const allLeafTasks = project.tasks.filter((t) => !parentIds.has(t.id))
-  const leafTasks: RawTask[] = allLeafTasks
-    .filter((t) => t.endDate)
-    .map((t) => ({
-      id: t.id,
-      startDate: t.startDate,
-      endDate: t.endDate,
-      actualStart: t.actualStart,
-      actualEnd: t.actualEnd,
-      completedAt: t.completedAt,
-      status: t.status,
-      progress: t.progress,
-    }))
+  const legacyTasks   = toLegacyLikeTasks(project.scheduleV2Items)
+  const parentIds     = new Set(project.scheduleV2Items.map((t) => t.parentId).filter((id): id is string => id !== null))
+  const allLeafTasks  = legacyTasks.filter((t) => !parentIds.has(t.id))
+  const leafTasks: RawTask[] = allLeafTasks.filter((t) => t.endDate)
 
   if (leafTasks.length === 0) {
     const realizedNoDates = computeProjectProgress(
@@ -328,12 +319,13 @@ export async function createBaselineAction(
     return { error: "Apenas Administradores, Gerentes de Projeto e Sponsors podem aprovar um baseline." }
   }
 
-  const tasks = await db.scheduleTask.findMany({
-    where:  { projectId, endDate: { not: null } },
-    select: { id: true, title: true, startDate: true, endDate: true, budgetedCost: true, _count: { select: { subtasks: true } } },
+  const items = await db.scheduleV2Item.findMany({
+    where:  { projectId, terminoEstimado: { not: null } },
+    select: { id: true, parentId: true, title: true, inicioEstimado: true, terminoEstimado: true, budgetedCost: true },
   })
 
-  const leafTasks = tasks.filter((t) => t._count.subtasks === 0)
+  const groupIds = new Set(items.map((t) => t.parentId).filter((id): id is string => id !== null))
+  const leafTasks = items.filter((t) => !groupIds.has(t.id))
 
   if (leafTasks.length === 0) {
     return { error: "O projeto não possui atividades folha com data de término definida." }
@@ -365,8 +357,8 @@ export async function createBaselineAction(
         create: leafTasks.map((t) => ({
           taskId:       t.id,
           taskTitle:    t.title,
-          plannedStart: t.startDate ?? null,
-          plannedEnd:   t.endDate!,
+          plannedStart: t.inicioEstimado ?? null,
+          plannedEnd:   t.terminoEstimado!,
           budgetedCost: t.budgetedCost ?? null,
         })),
       },

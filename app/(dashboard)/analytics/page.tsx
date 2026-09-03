@@ -3,6 +3,7 @@ import { requireScreenView } from "@/lib/permissions-guard"
 import { computeProjectProgress } from "@/lib/utils/project-progress"
 import { DEFAULT_RISK_THRESHOLD_PCT, type ScheduleStatus } from "@/lib/utils/schedule-status"
 import { computeScheduleCascade } from "@/lib/utils/schedule-cascade"
+import { toLegacyLikeTasks, areasFromV2 } from "@/lib/utils/schedule-v2-adapter"
 import { ProjectStatus } from "@/lib/generated/prisma/enums"
 import { AnalyticsClient } from "./analytics-client"
 
@@ -98,32 +99,15 @@ export default async function AnalyticsPage() {
       orderBy: { createdAt: "asc" },
       include: {
         sponsor: { select: { name: true } },
-        tasks: {
+        scheduleV2Items: {
           select: {
-            id: true,
-            title: true,
-            wbsAreaId: true,
-            parentId: true,
-            status: true,
-            progress: true,
-            startDate: true,
-            endDate: true,
-            actualStart: true,
-            actualEnd: true,
-            completedAt: true,
-            budgetedCost: true,
-            actualCost: true,
-            estimatedEffort: true,
-            actualEffort: true,
-            riskStatus: true,
-            responsible: { select: { id: true, name: true } },
+            id: true, parentId: true, title: true, status: true, percentualCompleto: true,
+            inicioEstimado: true, terminoEstimado: true, inicioReal: true, terminoReal: true,
+            esforcoEstimadoH: true, esforcoRealH: true, budgetedCost: true, actualCost: true,
+            responsavelId: true, responsavel: { select: { id: true, name: true } },
           },
         },
-        risks:    { select: { status: true } },
-        wbsAreas: {
-          select: { id: true, name: true, color: true, weight: true },
-          orderBy: { order: "asc" },
-        },
+        risks: { select: { status: true } },
       },
     }),
     db.user.findMany({
@@ -140,7 +124,8 @@ export default async function AnalyticsPage() {
   const riskThresholdPct = org?.riskThresholdPct ?? DEFAULT_RISK_THRESHOLD_PCT
 
   const data: ProjectIndicator[] = projectsRaw.map((p) => {
-    const tasks   = p.tasks
+    const tasks   = toLegacyLikeTasks(p.scheduleV2Items)
+    const areas   = areasFromV2(p.scheduleV2Items)
     const skipKpi = SKIP_KPI_STATUSES.has(p.status)
 
     const progress =
@@ -152,7 +137,7 @@ export default async function AnalyticsPage() {
     // Cascata Tarefa → Módulo → Projeto (lib/utils/schedule-cascade.ts): cada
     // tarefa tem seu próprio % esperado pelo calendário, agregado em cascata —
     // em vez de comparar só a data de início/fim do projeto como um todo.
-    const cascade = computeScheduleCascade(tasks, p.wbsAreas, riskThresholdPct, today)
+    const cascade = computeScheduleCascade(tasks, areas, riskThresholdPct, today)
     const cascadeByTask = new Map(cascade.tasks.map((t) => [t.id, t]))
     const cascadeByArea = new Map(cascade.areas.map((a) => [a.id, a]))
 
@@ -195,7 +180,7 @@ export default async function AnalyticsPage() {
     }
 
     const taskResponsibles = [
-      ...new Set(tasks.map((t) => t.responsible?.name).filter((n): n is string => Boolean(n)))
+      ...new Set(tasks.map((t) => t.responsibleName).filter((n): n is string => Boolean(n)))
     ]
 
     // ── Serialização de tarefas ───────────────────────────────────────────────
@@ -216,18 +201,18 @@ export default async function AnalyticsPage() {
       estimatedEffort:  t.estimatedEffort ?? null,
       actualEffort:     t.actualEffort ?? null,
       riskStatus:       t.riskStatus,
-      responsibleName:  t.responsible?.name ?? null,
-      responsibleId:    t.responsible?.id ?? null,
+      responsibleName:  t.responsibleName ?? null,
+      responsibleId:    t.responsibleId ?? null,
       expectedPct:      cascadeByTask.get(t.id)?.expectedPct ?? null,
       scheduleStatus:   cascadeByTask.get(t.id)?.scheduleStatus ?? "ND",
     }))
 
-    // ── Serialização de áreas WBS ─────────────────────────────────────────────
-    const serializedAreas: AreaDashData[] = p.wbsAreas.map((a) => ({
+    // ── Serialização de áreas ("área" v2 = item de topo, ver adapter) ─────────
+    const serializedAreas: AreaDashData[] = areas.map((a) => ({
       id:     a.id,
       name:   a.name,
-      color:  a.color ?? null,
-      weight: a.weight ?? null,
+      color:  a.color,
+      weight: a.weight,
       actualPct:      cascadeByArea.get(a.id)?.actualPct ?? null,
       expectedPct:    cascadeByArea.get(a.id)?.expectedPct ?? null,
       scheduleStatus: cascadeByArea.get(a.id)?.scheduleStatus ?? null,

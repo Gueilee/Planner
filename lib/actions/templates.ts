@@ -3,7 +3,6 @@
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
 import { revalidatePath } from "next/cache"
-import { addDays } from "date-fns"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -449,91 +448,7 @@ export async function deleteTemplateTask(id: string): Promise<void> {
   revalidatePath("/templates")
 }
 
-// ─── Apply template to project ────────────────────────────────────────────────
-
-export async function applyTemplate(projectId: string, templateId: string, startDate: Date): Promise<{ count: number }> {
-  const session = await auth()
-  if (!session?.user?.id) throw new Error("Não autenticado")
-
-  const template = await db.scheduleTemplate.findUnique({
-    where: { id: templateId },
-    include: { tasks: { orderBy: { order: "asc" } } },
-  })
-  if (!template) throw new Error("Modelo não encontrado")
-
-  const tasks = template.tasks
-  const allCodes = new Set(tasks.map((t) => t.wbsCode))
-  const parentCodes = new Set(tasks.map((t) => t.parentCode).filter(Boolean) as string[])
-  const leafTasks = tasks.filter((t) => !parentCodes.has(t.wbsCode))
-
-  // ── Calculate dates for leaf tasks using FS predecessor rule ─────
-  const leafByCode = new Map(leafTasks.map((t) => [t.wbsCode, t]))
-  const computed = new Map<string, { start: Date; end: Date }>()
-  const visiting = new Set<string>()
-
-  function calcDate(code: string): { start: Date; end: Date } {
-    if (computed.has(code)) return computed.get(code)!
-    if (visiting.has(code)) return { start: startDate, end: startDate }
-    visiting.add(code)
-
-    const task = leafByCode.get(code)
-    if (!task) return { start: startDate, end: startDate }
-
-    const preds: string[] = task.predecessorCodes ? (JSON.parse(task.predecessorCodes) as string[]) : []
-    const validPreds = preds.filter((p) => allCodes.has(p))
-
-    let taskStart = startDate
-    if (validPreds.length > 0) {
-      const predDates = validPreds.map((p) => calcDate(p))
-      const maxEnd = predDates.reduce((a, b) => (a.end > b.end ? a : b)).end
-      taskStart = addDays(maxEnd, 1)
-    }
-
-    const taskEnd = addDays(taskStart, Math.max(0, task.durationDays - 1))
-    const result = { start: taskStart, end: taskEnd }
-    computed.set(code, result)
-    return result
-  }
-
-  for (const t of leafTasks) calcDate(t.wbsCode)
-
-  // ── Create tasks in order (parents first) ────────────────────────
-  const codeToId = new Map<string, string>()
-
-  for (const task of tasks) {
-    const dates = computed.get(task.wbsCode)
-    const parentId = task.parentCode ? (codeToId.get(task.parentCode) ?? null) : null
-
-    const created = await db.scheduleTask.create({
-      data: {
-        projectId,
-        parentId,
-        title:           task.title,
-        estimatedEffort: task.estimatedEffort,
-        startDate:       dates?.start ?? null,
-        endDate:         dates?.end   ?? null,
-        status:          "PLANNING",
-        progress:        0,
-        order:           task.order,
-      },
-    })
-    codeToId.set(task.wbsCode, created.id)
-  }
-
-  // Set dependencies (by mapping wbsCode predecessors to task IDs)
-  for (const task of leafTasks) {
-    const taskId = codeToId.get(task.wbsCode)
-    if (!taskId) continue
-    const preds: string[] = task.predecessorCodes ? JSON.parse(task.predecessorCodes) : []
-    const depIds = preds.map((p) => codeToId.get(p)).filter(Boolean) as string[]
-    if (depIds.length > 0) {
-      await db.scheduleTask.update({
-        where: { id: taskId },
-        data: { dependencies: JSON.stringify(depIds) },
-      })
-    }
-  }
-
-  revalidatePath(`/projects/${projectId}/schedule`)
-  return { count: tasks.length }
-}
+// A antiga "aplicar modelo" (dias corridos, gravava em ScheduleTask) foi
+// removida na Fase 6 — o Cronograma agora usa applyTemplateV2
+// (lib/actions/schedule-v2.ts), que delega o cálculo de datas ao motor de
+// dias úteis. O CRUD de modelos acima continua o mesmo.

@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
+import { V2_STATUS_TO_LEGACY } from "@/lib/utils/schedule-v2-adapter"
 
 export type AllocationTask = {
   id: string
@@ -33,32 +34,32 @@ export async function getPersonAllocation(
     startDate && endDate
       ? {
           OR: [
-            // tarefa sobrepõe o período: começa antes do fim E termina depois do início
+            // item sobrepõe o período: começa antes do fim E termina depois do início
             {
-              startDate: { lte: new Date(endDate) },
-              endDate:   { gte: new Date(startDate) },
+              inicioEstimado: { lte: new Date(endDate) },
+              terminoEstimado: { gte: new Date(startDate) },
             },
-            // tarefa começa dentro do período mas sem data de fim
+            // item começa dentro do período mas sem data de fim
             {
-              startDate: { gte: new Date(startDate), lte: new Date(endDate) },
-              endDate: null,
+              inicioEstimado: { gte: new Date(startDate), lte: new Date(endDate) },
+              terminoEstimado: null,
             },
             // sem datas — inclui sempre para não ocultar trabalho real
-            { startDate: null },
+            { inicioEstimado: null },
           ],
         }
       : {}
 
-  const tasks = await db.scheduleTask.findMany({
-    where: { responsibleId: userId, ...dateFilter },
+  const items = await db.scheduleV2Item.findMany({
+    where: { responsavelId: userId, ...dateFilter },
     select: {
-      id: true, title: true, status: true, progress: true,
-      startDate: true, endDate: true,
+      id: true, title: true, status: true, percentualCompleto: true,
+      inicioEstimado: true, terminoEstimado: true,
       project: {
         select: { id: true, title: true, projectArea: true, status: true },
       },
     },
-    orderBy: [{ project: { title: "asc" } }, { startDate: "asc" }],
+    orderBy: [{ project: { title: "asc" } }, { inicioEstimado: "asc" }],
   })
 
   const user = await db.user.findUnique({
@@ -68,13 +69,13 @@ export async function getPersonAllocation(
 
   return {
     userName: user?.name ?? null,
-    tasks: tasks.map((t) => ({
+    tasks: items.map((t) => ({
       id:            t.id,
       title:         t.title,
-      status:        t.status,
-      progress:      t.progress,
-      startDate:     t.startDate?.toISOString() ?? null,
-      endDate:       t.endDate?.toISOString()   ?? null,
+      status:        V2_STATUS_TO_LEGACY[t.status] ?? "PLANNING",
+      progress:      t.percentualCompleto,
+      startDate:     t.inicioEstimado?.toISOString() ?? null,
+      endDate:       t.terminoEstimado?.toISOString() ?? null,
       projectId:     t.project.id,
       projectTitle:  t.project.title,
       projectArea:   t.project.projectArea,

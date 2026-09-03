@@ -2,6 +2,7 @@ import { auth } from "@/auth"
 import { notFound, redirect } from "next/navigation"
 import { getProjectClosureData } from "@/lib/actions/encerramento"
 import { getProjectParticipants, getAllActiveUsers } from "@/lib/actions/meeting-participants"
+import { toLegacyLikeTasks, areasFromV2 } from "@/lib/utils/schedule-v2-adapter"
 import { EncerramentoMeetingClient } from "./encerramento-client"
 
 export const metadata = { title: "Reunião de Encerramento" }
@@ -25,19 +26,27 @@ export default async function EncerramentoMeetingPage({ params }: { params: Prom
     role:       m.role,
   }))
 
-  const wbsAreas = project.wbsAreas.map((area) => ({
+  // "Área" v2 = item de topo da árvore (ver lib/utils/schedule-v2-adapter.ts)
+  const legacyTasks = toLegacyLikeTasks(project.scheduleV2Items)
+  const topAreas    = areasFromV2(project.scheduleV2Items)
+  const groupIds     = new Set(project.scheduleV2Items.filter((i) => i.parentId).map((i) => i.parentId as string))
+  const leafTasks    = legacyTasks.filter((t) => !groupIds.has(t.id))
+
+  const wbsAreas = topAreas.map((area) => ({
     id:   area.id,
     name: area.name,
     color: area.color,
-    tasks: area.tasks.map((t) => ({
-      id:          t.id,
-      title:       t.title,
-      status:      t.status as string,
-      progress:    t.progress,
-      responsible: t.responsible?.name ?? null,
-      startDate:   t.startDate?.toISOString() ?? null,
-      endDate:     t.endDate?.toISOString() ?? null,
-    })),
+    tasks: leafTasks
+      .filter((t) => t.wbsAreaId === area.id)
+      .map((t) => ({
+        id:          t.id,
+        title:       t.title,
+        status:      t.status,
+        progress:    t.progress,
+        responsible: t.responsibleName,
+        startDate:   t.startDate?.toISOString() ?? null,
+        endDate:     t.endDate?.toISOString() ?? null,
+      })),
   }))
 
   const risks = project.risks.map((r) => ({
@@ -70,10 +79,8 @@ export default async function EncerramentoMeetingPage({ params }: { params: Prom
     createdBy:   l.createdBy.name,
   }))
 
-  const tasks = project.tasks
-
-  const tasksDone  = tasks.filter((t) => t.status === "COMPLETED").length
-  const tasksTotal = tasks.filter((t) => !t.parentId).length
+  const tasksDone  = leafTasks.filter((t) => t.status === "COMPLETED").length
+  const tasksTotal = leafTasks.length
 
   return (
     <EncerramentoMeetingClient

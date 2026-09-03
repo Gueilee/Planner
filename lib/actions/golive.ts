@@ -114,16 +114,15 @@ export async function getProjectForClosure(projectId: string) {
           user: { select: { id: true, name: true, email: true, department: true, role: true } },
         },
       },
-      wbsAreas: {
+      scheduleV2Items: {
         orderBy: { order: "asc" },
-        include: {
-          tasks: {
-            orderBy: { order: "asc" },
-            include: { responsible: { select: { name: true } } },
-          },
+        select: {
+          id: true, parentId: true, title: true, status: true, percentualCompleto: true,
+          inicioEstimado: true, terminoEstimado: true, inicioReal: true, terminoReal: true,
+          esforcoEstimadoH: true, esforcoRealH: true, budgetedCost: true, actualCost: true,
+          responsavelId: true, responsavel: { select: { id: true, name: true, image: true } },
         },
       },
-      tasks: { orderBy: { order: "asc" }, select: { id: true, status: true, progress: true, parentId: true, startDate: true, endDate: true } },
       risks: { orderBy: { createdAt: "asc" } },
       meetings: {
         orderBy: { date: "asc" },

@@ -4,76 +4,96 @@ import { db } from "@/lib/db"
 import { auth } from "@/auth"
 import { revalidatePath } from "next/cache"
 import { ProjectStatus, TaskStatus } from "@/lib/generated/prisma/enums"
+import { V2_STATUS_TO_LEGACY, LEGACY_STATUS_TO_V2, topLevelAncestorId } from "@/lib/utils/schedule-v2-adapter"
+import { applyItemUpdatesV2 } from "@/lib/actions/schedule-v2"
+
+// Fase 5 — Kanban unificado: os cards SÃO os itens do motor v2
+// (ScheduleV2Item), a mesma árvore do Cronograma. "Área" v2 = ancestral de
+// topo (ver lib/utils/schedule-v2-adapter.ts) — não existe mais WbsArea
+// separada. O board continua com o vocabulário rico de 6 status (Fase 5,
+// decisão do time) — V2_STATUS_TO_LEGACY/LEGACY_STATUS_TO_V2 traduzem nas
+// duas pontas para o Kanban (e o resto do app) não precisar mudar de
+// vocabulário.
 
 export async function getProjectTasksForKanban(projectId: string) {
-  const tasks = await db.scheduleTask.findMany({
+  const items = await db.scheduleV2Item.findMany({
     where:   { projectId },
     orderBy: [{ order: "asc" }],
-    include: {
-      wbsArea:     { select: { name: true, color: true } },
-      responsible: { select: { id: true, name: true, image: true } },
-      _count:      { select: { subtasks: true, comments: true, attachments: true } },
+    select: {
+      id: true, parentId: true, title: true, status: true, percentualCompleto: true,
+      inicioEstimado: true, terminoEstimado: true,
+      responsavelId: true, responsavel: { select: { id: true, name: true, image: true } },
+      _count: { select: { comments: true, attachments: true } },
     },
   })
-  return tasks.map((t) => ({
-    id:             t.id,
-    title:          t.title,
-    status:         t.status as string,
-    progress:       t.progress,
-    startDate:      t.startDate?.toISOString()  ?? null,
-    endDate:        t.endDate?.toISOString()    ?? null,
-    wbsArea:        t.wbsArea  ?? null,
-    responsible:    t.responsible ?? null,
-    parentId:       t.parentId   ?? null,
-    childCount:     t._count.subtasks,
-    commentCount:   t._count.comments,
-    attachmentCount: t._count.attachments,
-  }))
+
+  const childCount = new Map<string, number>()
+  for (const it of items) if (it.parentId) childCount.set(it.parentId, (childCount.get(it.parentId) ?? 0) + 1)
+  const parentById = new Map(items.map((i) => [i.id, i.parentId]))
+  const titleById   = new Map(items.map((i) => [i.id, i.title]))
+
+  return items.map((t) => {
+    const areaId = topLevelAncestorId(t.id, parentById)
+    return {
+      id:             t.id,
+      title:          t.title,
+      status:         V2_STATUS_TO_LEGACY[t.status] ?? "PLANNING",
+      progress:       t.percentualCompleto,
+      startDate:      t.inicioEstimado?.toISOString()  ?? null,
+      endDate:        t.terminoEstimado?.toISOString() ?? null,
+      wbsArea:        areaId !== t.id ? { name: titleById.get(areaId) ?? "", color: null } : null,
+      responsible:    t.responsavel ?? null,
+      parentId:       t.parentId ?? null,
+      childCount:     childCount.get(t.id) ?? 0,
+      commentCount:   t._count.comments,
+      attachmentCount: t._count.attachments,
+    }
+  })
 }
 
 export async function updateTaskStatusKanban(taskId: string, status: TaskStatus) {
   const session = await auth()
   if (!session?.user) throw new Error("Não autorizado")
 
-  const task = await db.scheduleTask.findUnique({
+  const item = await db.scheduleV2Item.findUnique({
     where:  { id: taskId },
     select: { projectId: true, parentId: true },
   })
+  if (!item) return
 
-  await db.scheduleTask.update({
-    where: { id: taskId },
-    data: {
-      status,
-      progress:    status === "COMPLETED" ? 100 : undefined,
-      completedAt: status === "COMPLETED" ? new Date() : undefined,
-    },
-  })
+  const v2Status = LEGACY_STATUS_TO_V2[status] ?? "A_INICIAR"
+  await applyItemUpdatesV2(item.projectId, [{
+    itemId: taskId,
+    status: v2Status,
+    ...(v2Status === "CONCLUIDO" && { percentualCompleto: 100, terminoReal: new Date().toISOString().slice(0, 10) }),
+  }])
 
-  // Auto-complete parent when all its children are COMPLETED
-  if (status === "COMPLETED" && task?.parentId) {
-    const siblings = await db.scheduleTask.findMany({
-      where:  { parentId: task.parentId },
+  // Auto-completa o pai quando todos os irmãos ficam concluídos (mesmo
+  // comportamento do legado — só 1 nível, não recursivo).
+  if (v2Status === "CONCLUIDO" && item.parentId) {
+    const siblings = await db.scheduleV2Item.findMany({
+      where:  { parentId: item.parentId },
       select: { status: true },
     })
-    if (siblings.every((s) => s.status === "COMPLETED")) {
-      await db.scheduleTask.update({
-        where: { id: task.parentId },
-        data:  { status: TaskStatus.COMPLETED, progress: 100, completedAt: new Date() },
-      })
+    if (siblings.every((s) => s.status === "CONCLUIDO")) {
+      await applyItemUpdatesV2(item.projectId, [{
+        itemId: item.parentId,
+        status: "CONCLUIDO",
+        terminoReal: new Date().toISOString().slice(0, 10),
+      }])
     }
   }
 
-  if (task) {
-    revalidatePath(`/projects/${task.projectId}`)
-    revalidatePath("/kanban")
-  }
+  revalidatePath(`/projects/${item.projectId}`)
+  revalidatePath(`/projects/${item.projectId}/schedule`)
+  revalidatePath("/kanban")
 }
 
 export async function getAllProjectsForKanban() {
   const session = await auth()
   if (!session?.user) throw new Error("Não autorizado")
 
-  return db.project.findMany({
+  const projects = await db.project.findMany({
     where: {
       organizationId: session.user.organizationId,
       status: {
@@ -99,21 +119,40 @@ export async function getAllProjectsForKanban() {
       sponsor:  { select: { name: true, department: true } },
       members:  { take: 5, include: { user: { select: { id: true, name: true, image: true } } } },
       _count:   { select: { members: true } },
-      tasks:    { select: { id: true, status: true, progress: true, parentId: true, startDate: true, endDate: true, _count: { select: { subtasks: true } } } },
+      scheduleV2Items: {
+        select: { id: true, parentId: true, status: true, percentualCompleto: true, inicioEstimado: true, terminoEstimado: true },
+      },
       risks:    { select: { status: true } },
     },
+  })
+
+  return projects.map((p) => {
+    const childCount = new Map<string, number>()
+    for (const it of p.scheduleV2Items) if (it.parentId) childCount.set(it.parentId, (childCount.get(it.parentId) ?? 0) + 1)
+    return {
+      ...p,
+      tasks: p.scheduleV2Items.map((t) => ({
+        id:        t.id,
+        status:    V2_STATUS_TO_LEGACY[t.status] ?? "PLANNING",
+        progress:  t.percentualCompleto,
+        parentId:  t.parentId,
+        startDate: t.inicioEstimado,
+        endDate:   t.terminoEstimado,
+        _count:    { subtasks: childCount.get(t.id) ?? 0 },
+      })),
+    }
   })
 }
 
 export async function getTaskDetail(taskId: string) {
-  const task = await db.scheduleTask.findUnique({
+  const item = await db.scheduleV2Item.findUnique({
     where: { id: taskId },
     select: {
-      id:          true,
-      actualStart: true,
-      actualEnd:   true,
-      progress:    true,
-      status:      true,
+      id:                 true,
+      inicioReal:         true,
+      terminoReal:        true,
+      percentualCompleto: true,
+      status:             true,
       comments: {
         orderBy: { createdAt: "asc" },
         select: {
@@ -131,13 +170,17 @@ export async function getTaskDetail(taskId: string) {
       actualCost:   true,
     },
   })
-  if (!task) return null
+  if (!item) return null
   return {
-    ...task,
-    status:      task.status as string,
-    actualStart: task.actualStart?.toISOString() ?? null,
-    actualEnd:   task.actualEnd?.toISOString()   ?? null,
-    comments:    task.comments.map((c) => ({ ...c, createdAt: c.createdAt.toISOString() })),
+    id:           item.id,
+    actualStart:  item.inicioReal?.toISOString()  ?? null,
+    actualEnd:    item.terminoReal?.toISOString() ?? null,
+    progress:     item.percentualCompleto,
+    status:       V2_STATUS_TO_LEGACY[item.status] ?? "PLANNING",
+    comments:     item.comments.map((c) => ({ ...c, createdAt: c.createdAt.toISOString() })),
+    attachments:  item.attachments,
+    budgetedCost: item.budgetedCost,
+    actualCost:   item.actualCost,
   }
 }
 
@@ -156,21 +199,21 @@ export async function updateTaskKanban(
   const session = await auth()
   if (!session?.user) throw new Error("Não autorizado")
 
-  await db.scheduleTask.update({
-    where: { id: taskId },
-    data: {
-      ...(data.progress     !== undefined && { progress:     data.progress }),
-      ...(data.actualStart  !== undefined && { actualStart:  data.actualStart  ? new Date(data.actualStart)  : null }),
-      ...(data.actualEnd    !== undefined && { actualEnd:    data.actualEnd    ? new Date(data.actualEnd)    : null }),
-      ...(data.budgetedCost !== undefined && { budgetedCost: data.budgetedCost }),
-      ...(data.actualCost   !== undefined && { actualCost:   data.actualCost }),
-      ...(data.status !== undefined && {
-        status: data.status as never,
-        ...(data.status === "COMPLETED" && { completedAt: new Date(), progress: 100 }),
-        ...(data.status === "IN_PROGRESS" && { completedAt: null }),
-      }),
-    },
-  })
+  const v2Status = data.status !== undefined ? (LEGACY_STATUS_TO_V2[data.status] ?? "A_INICIAR") : undefined
+
+  await applyItemUpdatesV2(projectId, [{
+    itemId: taskId,
+    ...(data.progress     !== undefined && { percentualCompleto: data.progress }),
+    ...(data.actualStart  !== undefined && { inicioReal:  data.actualStart }),
+    ...(data.actualEnd    !== undefined && { terminoReal: data.actualEnd }),
+    ...(data.budgetedCost !== undefined && { budgetedCost: data.budgetedCost }),
+    ...(data.actualCost   !== undefined && { actualCost:   data.actualCost }),
+    ...(v2Status !== undefined && {
+      status: v2Status,
+      ...(v2Status === "CONCLUIDO"   && { percentualCompleto: 100, terminoReal: new Date().toISOString().slice(0, 10) }),
+      ...(v2Status === "EM_ANDAMENTO" && { terminoReal: null }),
+    }),
+  }])
 
   revalidatePath(`/projects/${projectId}/schedule`)
   revalidatePath("/kanban")
@@ -187,7 +230,7 @@ export async function addTaskComment(taskId: string, projectId: string, content:
   if (!user) throw new Error("Usuário não encontrado")
 
   const comment = await db.comment.create({
-    data: { taskId, userId: user.id, content },
+    data: { scheduleV2ItemId: taskId, userId: user.id, content },
     select: {
       id:        true,
       content:   true,
@@ -209,7 +252,7 @@ export async function addTaskAttachmentKanban(
   if (!session?.user) throw new Error("Não autorizado")
 
   const att = await db.attachment.create({
-    data: { taskId, projectId, fileName: attachment.fileName, fileUrl: attachment.fileUrl, fileType: attachment.fileType, fileSize: attachment.fileSize },
+    data: { scheduleV2ItemId: taskId, projectId, fileName: attachment.fileName, fileUrl: attachment.fileUrl, fileType: attachment.fileType, fileSize: attachment.fileSize },
     select: { id: true, fileName: true, fileUrl: true, fileType: true, fileSize: true },
   })
 

@@ -66,7 +66,7 @@ export async function getProjectsForPriority() {
       projectArea:  true,
       sponsor:     { select: { name: true } },
       members:     { select: { id: true } },
-      tasks:       { select: { id: true, status: true, progress: true, parentId: true, startDate: true, endDate: true } },
+      scheduleV2Items: { select: { id: true, status: true, percentualCompleto: true, parentId: true } },
       economy:     true,
       expectedEnd: true,
     },

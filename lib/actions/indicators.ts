@@ -2,12 +2,13 @@
 
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
+import { toLegacyLikeTasks, areasFromV2, dependenciesById } from "@/lib/utils/schedule-v2-adapter"
 
 export async function getIndicatorsData(projectId: string) {
   const session = await auth()
   if (!session?.user) return null
 
-  const [project, areas] = await Promise.all([
+  const [project, deps] = await Promise.all([
     db.project.findUnique({
       where: { id: projectId },
       select: {
@@ -15,36 +16,35 @@ export async function getIndicatorsData(projectId: string) {
         expectedStart: true, expectedEnd: true,
         actualStart: true, actualEnd: true,
         budget: true, estimatedCosts: true, economy: true,
-        tasks: {
+        scheduleV2Items: {
           orderBy: { order: "asc" },
           select: {
-            id: true, title: true, status: true, progress: true, riskStatus: true,
-            startDate: true, endDate: true, actualStart: true, actualEnd: true, completedAt: true,
-            estimatedEffort: true, actualEffort: true,
-            budgetedCost: true, actualCost: true,
-            parentId: true, wbsAreaId: true, responsibleId: true, order: true,
-            dependencies: true,
-            responsible: { select: { id: true, name: true } },
-            wbsArea:     { select: { id: true, name: true, color: true } },
+            id: true, parentId: true, title: true, status: true, percentualCompleto: true,
+            inicioEstimado: true, terminoEstimado: true, inicioReal: true, terminoReal: true,
+            esforcoEstimadoH: true, esforcoRealH: true, budgetedCost: true, actualCost: true,
+            responsavelId: true, responsavel: { select: { id: true, name: true } },
           },
         },
       },
     }),
-    db.wbsArea.findMany({
-      where: { projectId },
-      orderBy: { order: "asc" },
-      select: { id: true, name: true, color: true, order: true },
+    db.scheduleV2Dependency.findMany({
+      where: { successor: { projectId } },
+      select: { successorId: true, predecessorId: true },
     }),
   ])
 
   if (!project) return null
 
-  const tasks = project.tasks.map((t) => ({
+  const legacyTasks = toLegacyLikeTasks(project.scheduleV2Items)
+  const areas = areasFromV2(project.scheduleV2Items)
+  const depsByTask = dependenciesById(deps)
+
+  const tasks = legacyTasks.map((t) => ({
     id:               t.id,
     title:            t.title,
-    status:           t.status as string,
+    status:           t.status,
     progress:         t.progress,
-    riskStatus:       t.riskStatus as string,
+    riskStatus:       t.riskStatus,
     startDate:        t.startDate?.toISOString() ?? null,
     endDate:          t.endDate?.toISOString() ?? null,
     actualStart:      t.actualStart?.toISOString() ?? null,
@@ -57,10 +57,10 @@ export async function getIndicatorsData(projectId: string) {
     parentId:         t.parentId,
     wbsAreaId:        t.wbsAreaId,
     responsibleId:    t.responsibleId,
-    responsibleName:  t.responsible?.name ?? null,
-    wbsAreaName:      t.wbsArea?.name ?? null,
-    wbsAreaColor:     t.wbsArea?.color ?? null,
-    dependencies:     (() => { try { return JSON.parse(t.dependencies ?? "[]") as string[] } catch { return [] } })(),
+    responsibleName:  t.responsibleName,
+    wbsAreaName:      t.wbsAreaName,
+    wbsAreaColor:     t.wbsAreaColor,
+    dependencies:     depsByTask.get(t.id) ?? [],
     order:            t.order,
   }))
 
@@ -79,7 +79,7 @@ export async function getIndicatorsData(projectId: string) {
       economy:        project.economy,
     },
     tasks,
-    areas: areas.map((a) => ({ id: a.id, name: a.name, color: a.color, order: a.order })),
+    areas: areas.map((a, i) => ({ id: a.id, name: a.name, color: a.color, order: i })),
   }
 }
 
