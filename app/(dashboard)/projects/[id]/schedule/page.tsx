@@ -39,9 +39,9 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
   if (!project) notFound()
 
   return (
-    <div className="flex flex-col min-h-screen" style={{ background: "#F8F9FC" }}>
+    <div className="flex flex-col h-full" style={{ background: "#F8F9FC" }}>
       {/* Topbar */}
-      <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-200 bg-white sticky top-0 z-20">
+      <div className="shrink-0 flex items-center gap-3 px-5 py-3 border-b border-slate-200 bg-white z-20">
         <Link href={`/projects/${id}`}
           className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors">
           <ArrowLeft className="w-4 h-4" /> Voltar
@@ -51,7 +51,11 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
         <span className="text-xs text-slate-400 shrink-0">— Cronograma</span>
       </div>
 
-      <div className="flex-1">
+      {/* Corpo com rolagem própria — o layout do dashboard é h-screen
+          overflow-hidden, então quem faz scroll é este container, não a
+          página inteira (senão o conteúdo mais comprido que a tela fica
+          cortado sem barra de rolagem nenhuma). */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
         <ScheduleV2Client
           projectId={id}
           initial={data}

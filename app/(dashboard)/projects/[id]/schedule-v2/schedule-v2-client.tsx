@@ -45,6 +45,8 @@ function sortValue(item: ItemV2, col: SortColumn, membersById?: Map<string, stri
     case "duracao": return item.duracaoDiasUteis ?? -1
     case "inicio": return item.inicioEstimado ?? ""
     case "termino": return item.terminoEstimado ?? ""
+    case "inicioReal": return item.inicioReal ?? ""
+    case "terminoReal": return item.terminoReal ?? ""
     case "pct": return item.percentualCompleto
     case "responsavel": return (membersById?.get(item.responsavelId ?? "") ?? "").toLowerCase()
     case "status": return statusLabel(item.status).label
@@ -118,18 +120,19 @@ function statusLabel(status: string) {
 // "Atividade" (título+hierarquia) fica fixa à esquerda — todo o resto é
 // livre para o usuário reordenar e redimensionar.
 
-type ColKey = "duracao" | "inicio" | "termino" | "pct" | "predecessores" | "responsavel" | "status"
+type ColKey = "duracao" | "inicio" | "termino" | "inicioReal" | "terminoReal" | "pct" | "predecessores" | "responsavel" | "status"
 
 const COL_LABELS: Record<ColKey, string> = {
-  duracao: "Duração", inicio: "Início", termino: "Término", pct: "%",
+  duracao: "Duração", inicio: "Início", termino: "Término",
+  inicioReal: "Início Real", terminoReal: "Término Real", pct: "%",
   predecessores: "Predecessores", responsavel: "Responsável", status: "Status",
 }
-const DEFAULT_COL_ORDER: ColKey[] = ["duracao", "inicio", "termino", "pct", "predecessores", "responsavel", "status"]
+const DEFAULT_COL_ORDER: ColKey[] = ["duracao", "inicio", "termino", "inicioReal", "terminoReal", "pct", "predecessores", "responsavel", "status"]
 const DEFAULT_COL_WIDTHS: Record<ColKey, number> = {
-  duracao: 70, inicio: 110, termino: 100, pct: 60, predecessores: 150, responsavel: 140, status: 130,
+  duracao: 70, inicio: 110, termino: 100, inicioReal: 110, terminoReal: 110, pct: 60, predecessores: 150, responsavel: 140, status: 130,
 }
 const COL_ALIGN: Record<ColKey, "center" | "left"> = {
-  duracao: "center", inicio: "center", termino: "center", pct: "center",
+  duracao: "center", inicio: "center", termino: "center", inicioReal: "center", terminoReal: "center", pct: "center",
   predecessores: "left", responsavel: "left", status: "left",
 }
 const DEFAULT_TITLE_WIDTH = 320
@@ -971,6 +974,48 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
             }
             const v = e.target.value || null
             if (v !== item.terminoEstimado) h.onUpdate(item.id, { terminoEstimado: v })
+          }}
+          className="bg-transparent outline-none text-[10px] text-slate-700 w-full text-center rounded focus:bg-violet-50"
+        />
+      )
+
+    case "inicioReal":
+      return (
+        <input
+          key={`inicioReal:${item.id}:${item.inicioReal}`}
+          type="date"
+          min={DATE_MIN}
+          max={DATE_MAX}
+          defaultValue={item.inicioReal ?? ""}
+          title="Data em que a atividade realmente começou"
+          onBlur={(e) => {
+            if (!isSaneDateInput(e.target.value)) {
+              e.target.value = item.inicioReal ?? "" // reverte — ano com formato inválido
+              return
+            }
+            const v = e.target.value || null
+            if (v !== item.inicioReal) h.onUpdate(item.id, { inicioReal: v })
+          }}
+          className="bg-transparent outline-none text-[10px] text-slate-700 w-full text-center rounded focus:bg-violet-50"
+        />
+      )
+
+    case "terminoReal":
+      return (
+        <input
+          key={`terminoReal:${item.id}:${item.terminoReal}`}
+          type="date"
+          min={DATE_MIN}
+          max={DATE_MAX}
+          defaultValue={item.terminoReal ?? ""}
+          title="Data em que a atividade realmente terminou"
+          onBlur={(e) => {
+            if (!isSaneDateInput(e.target.value)) {
+              e.target.value = item.terminoReal ?? "" // reverte — ano com formato inválido
+              return
+            }
+            const v = e.target.value || null
+            if (v !== item.terminoReal) h.onUpdate(item.id, { terminoReal: v })
           }}
           className="bg-transparent outline-none text-[10px] text-slate-700 w-full text-center rounded focus:bg-violet-50"
         />
