@@ -7,12 +7,13 @@ import {
 } from "@/lib/actions/schedule-v2"
 import type { ScheduleV2Payload, ItemV2 } from "@/lib/actions/schedule-v2"
 import { updateProjectDetails } from "@/lib/actions/projects"
+import { computeProjectProgress } from "@/lib/utils/project-progress"
 import { getTemplates } from "@/lib/actions/templates"
 import type { Template } from "@/lib/actions/templates"
 import { fmtDateLong, isValidDateStr } from "@/lib/date-utils"
 import {
   ChevronRight, ChevronDown, Plus, IndentIncrease, IndentDecrease,
-  ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, Milestone, Info,
+  ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, Milestone,
   Circle, CircleX, CirclePlus, Pencil, Undo2, Redo2, GripVertical, GripHorizontal, LayoutTemplate,
 } from "lucide-react"
 
@@ -179,6 +180,14 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates, memb
   const [dropTarget, setDropTarget] = useState<{ id: string; zone: "before" | "after" | "inside" } | null>(null)
 
   const conflictByItem = useMemo(() => new Map(data.conflicts.map((c) => [c.itemId, c])), [data.conflicts])
+
+  // Progresso do projeto — mesma função canônica usada em Analytics,
+  // Status Report, Dashboard etc. (lib/utils/project-progress.ts), para
+  // nunca divergir do que já é mostrado nas outras telas.
+  const projectProgress = useMemo(
+    () => computeProjectProgress(data.items.map((i) => ({ id: i.id, progress: i.percentualCompleto, parentId: i.parentId }))),
+    [data.items]
+  )
 
   useEffect(() => {
     hasUndoV2(projectId).then(setHasUndo).catch(() => {})
@@ -470,9 +479,19 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates, memb
         <EditableDateStat label="Início" value={projectDates.expectedStart} onChange={(v) => handleProjectDate("expectedStart", v)} />
         <EditableDateStat label="Término" value={projectDates.expectedEnd} onChange={(v) => handleProjectDate("expectedEnd", v)} />
         <Stat label="Conflitos" value={data.conflicts.length} color={data.conflicts.length > 0 ? "#D97706" : undefined} />
-        <div className="ml-auto flex items-center gap-2 text-[11px] text-slate-400 max-w-xs">
-          <Info className="w-3.5 h-3.5 shrink-0" />
-          Predecessores usam a sintaxe do Artia (ex.: <code className="text-slate-600 font-mono">A2</code>, <code className="text-slate-600 font-mono">A2fs</code>).
+        <div className="ml-auto flex items-center gap-3">
+          <div className="w-36">
+            <div className="flex justify-between text-[9px] mb-1">
+              <span className="text-slate-400 uppercase tracking-widest font-bold">Progresso do Projeto</span>
+              <span className="font-black" style={{ color: "#7B2FBE" }}>{projectProgress}%</span>
+            </div>
+            <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{ width: `${projectProgress}%`, background: "linear-gradient(90deg, #7B2FBE, #2463FF)" }}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -987,14 +1006,21 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
           min={DATE_MIN}
           max={DATE_MAX}
           defaultValue={item.inicioReal ?? ""}
-          title="Data em que a atividade realmente começou"
+          title="Data em que a atividade realmente começou — preencher muda o Status para Em Andamento"
           onBlur={(e) => {
             if (!isSaneDateInput(e.target.value)) {
               e.target.value = item.inicioReal ?? "" // reverte — ano com formato inválido
               return
             }
             const v = e.target.value || null
-            if (v !== item.inicioReal) h.onUpdate(item.id, { inicioReal: v })
+            if (v !== item.inicioReal) {
+              h.onUpdate(item.id, {
+                inicioReal: v,
+                // Preencher o início real é o mesmo sinal de "começou de
+                // verdade" — muda o Status automaticamente (pedido do time).
+                ...(v !== null && { status: "EM_ANDAMENTO" }),
+              })
+            }
           }}
           className="bg-transparent outline-none text-[10px] text-slate-700 w-full text-center rounded focus:bg-violet-50"
         />
@@ -1008,14 +1034,21 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
           min={DATE_MIN}
           max={DATE_MAX}
           defaultValue={item.terminoReal ?? ""}
-          title="Data em que a atividade realmente terminou"
+          title="Data em que a atividade realmente terminou — preencher muda o Status para Concluído e o % para 100"
           onBlur={(e) => {
             if (!isSaneDateInput(e.target.value)) {
               e.target.value = item.terminoReal ?? "" // reverte — ano com formato inválido
               return
             }
             const v = e.target.value || null
-            if (v !== item.terminoReal) h.onUpdate(item.id, { terminoReal: v })
+            if (v !== item.terminoReal) {
+              h.onUpdate(item.id, {
+                terminoReal: v,
+                // Preencher o término real é o mesmo sinal de "terminou de
+                // verdade" — muda Status e % automaticamente (pedido do time).
+                ...(v !== null && { status: "CONCLUIDO", percentualCompleto: 100 }),
+              })
+            }
           }}
           className="bg-transparent outline-none text-[10px] text-slate-700 w-full text-center rounded focus:bg-violet-50"
         />
