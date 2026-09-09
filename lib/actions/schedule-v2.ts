@@ -61,6 +61,10 @@ export type ItemV2 = {
   title: string
   status: string
   responsavelId: string | null
+  // Nome digitado livremente quando a pessoa ainda não é um usuário
+  // cadastrado no sistema — nunca coexiste com responsavelId (ver
+  // updateItemV2/createItemV2: gravar um sempre limpa o outro).
+  responsavelNome: string | null
   duracaoDiasUteis: number | null
   inicioEstimado: string | null
   terminoEstimado: string | null
@@ -170,6 +174,7 @@ function groupIdSet(rows: ItemRow[]): Set<string> {
 type ItemSnapshotRow = {
   id: string; code: string; parentId: string | null; order: number; title: string; status: string
   responsavelId: string | null
+  responsavelNome: string | null
   duracaoDiasUteis: number | null
   inicioEstimado: string | null; terminoEstimado: string | null
   inicioReal: string | null; terminoReal: string | null
@@ -184,7 +189,7 @@ async function capturePayload(projectId: string): Promise<SnapshotPayload> {
   return {
     items: rows.map((r) => ({
       id: r.id, code: r.code, parentId: r.parentId, order: r.order, title: r.title, status: r.status,
-      responsavelId: r.responsavelId,
+      responsavelId: r.responsavelId, responsavelNome: r.responsavelNome,
       duracaoDiasUteis: r.duracaoDiasUteis,
       inicioEstimado: dstr(r.inicioEstimado), terminoEstimado: dstr(r.terminoEstimado),
       inicioReal: dstr(r.inicioReal), terminoReal: dstr(r.terminoReal),
@@ -228,7 +233,7 @@ async function restorePayload(tx: Parameters<Parameters<typeof db.$transaction>[
     await tx.scheduleV2Item.create({
       data: {
         id: it.id, projectId, code: it.code, parentId: null, order: it.order, title: it.title, status: it.status,
-        responsavelId: it.responsavelId,
+        responsavelId: it.responsavelId, responsavelNome: it.responsavelNome,
         duracaoDiasUteis: it.duracaoDiasUteis,
         inicioEstimado: ddate(it.inicioEstimado), terminoEstimado: ddate(it.terminoEstimado),
         inicioReal: ddate(it.inicioReal), terminoReal: ddate(it.terminoReal),
@@ -445,6 +450,7 @@ export async function getScheduleV2(projectId: string): Promise<ScheduleV2Payloa
     title: r.title,
     status: r.status,
     responsavelId: r.responsavelId,
+    responsavelNome: r.responsavelNome,
     duracaoDiasUteis: r.duracaoDiasUteis,
     inicioEstimado: dstr(r.inicioEstimado),
     terminoEstimado: dstr(r.terminoEstimado),
@@ -483,6 +489,7 @@ export type CreateItemV2Input = {
   constraintDate?: string | null
   status?: string
   responsavelId?: string | null
+  responsavelNome?: string | null
 }
 
 export async function createItemV2(input: CreateItemV2Input): Promise<ItemV2> {
@@ -509,6 +516,7 @@ export async function createItemV2(input: CreateItemV2Input): Promise<ItemV2> {
       constraintDate: ddate(input.constraintDate),
       status: input.status ?? "A_INICIAR",
       responsavelId: input.responsavelId ?? null,
+      responsavelNome: input.responsavelNome ?? null,
       order: (maxOrder._max.order ?? -1) + 1,
     },
   })
@@ -520,7 +528,7 @@ export async function createItemV2(input: CreateItemV2Input): Promise<ItemV2> {
 
   return {
     id: row.id, code: row.code, projectId: row.projectId, parentId: row.parentId, order: row.order,
-    title: row.title, status: row.status, responsavelId: row.responsavelId, duracaoDiasUteis: row.duracaoDiasUteis,
+    title: row.title, status: row.status, responsavelId: row.responsavelId, responsavelNome: row.responsavelNome, duracaoDiasUteis: row.duracaoDiasUteis,
     inicioEstimado: null, terminoEstimado: null, inicioReal: null, terminoReal: null,
     esforcoEstimadoH: row.esforcoEstimadoH, esforcoRealH: row.esforcoRealH,
     percentualCompleto: row.percentualCompleto, schedulingMode: row.schedulingMode as SchedulingMode,
@@ -553,6 +561,7 @@ export async function duplicateItemV2(id: string, projectId: string): Promise<{ 
       title: `${source.title} (cópia)`,
       status: source.status,
       responsavelId: source.responsavelId,
+      responsavelNome: source.responsavelNome,
       duracaoDiasUteis: source.duracaoDiasUteis,
       esforcoEstimadoH: source.esforcoEstimadoH,
       esforcoRealH: source.esforcoRealH,
@@ -604,6 +613,7 @@ export type UpdateItemV2Input = Partial<{
   percentualCompleto: number
   status: string
   responsavelId: string | null
+  responsavelNome: string | null
   schedulingMode: SchedulingMode
   constraintType: string | null
   constraintDate: string | null
@@ -654,6 +664,19 @@ export async function updateItemV2(
     // término inválido (ano malformado): ignora em silêncio, não grava nada
   }
 
+  // Responsável — FK (usuário cadastrado) e nome livre nunca coexistem:
+  // escolher um sempre limpa o outro (o time pode digitar qualquer nome,
+  // mesmo de alguém que ainda não é usuário do sistema).
+  let responsavelIdUpdate: string | null | undefined
+  let responsavelNomeUpdate: string | null | undefined
+  if (data.responsavelId !== undefined) {
+    responsavelIdUpdate = data.responsavelId
+    responsavelNomeUpdate = null
+  } else if (data.responsavelNome !== undefined) {
+    responsavelNomeUpdate = data.responsavelNome
+    responsavelIdUpdate = null
+  }
+
   await db.scheduleV2Item.update({
     where: { id },
     data: {
@@ -667,7 +690,8 @@ export async function updateItemV2(
       ...(data.esforcoRealH !== undefined && { esforcoRealH: data.esforcoRealH }),
       ...(!hasChildren && data.percentualCompleto !== undefined && { percentualCompleto: data.percentualCompleto }),
       ...(data.status !== undefined && { status: data.status }),
-      ...(data.responsavelId !== undefined && { responsavelId: data.responsavelId }),
+      ...(responsavelIdUpdate !== undefined && { responsavelId: responsavelIdUpdate }),
+      ...(responsavelNomeUpdate !== undefined && { responsavelNome: responsavelNomeUpdate }),
       ...(data.schedulingMode !== undefined && { schedulingMode: data.schedulingMode }),
       ...(data.constraintType !== undefined && { constraintType: data.constraintType }),
       ...(data.constraintDate !== undefined && { constraintDate: ddate(data.constraintDate) }),

@@ -23,7 +23,7 @@ export default async function CheckpointPage({ params }: { params: Promise<{ id:
       select: {
         id: true, parentId: true, title: true, status: true, percentualCompleto: true,
         inicioEstimado: true, terminoEstimado: true, budgetedCost: true, actualCost: true,
-        responsavelId: true, responsavel: { select: { id: true, name: true } },
+        responsavelId: true, responsavelNome: true, responsavel: { select: { id: true, name: true } },
         comments: {
           orderBy: { createdAt: "asc" },
           select: { id: true, content: true, createdAt: true, user: { select: { name: true } } },
@@ -63,7 +63,7 @@ export default async function CheckpointPage({ params }: { params: Promise<{ id:
           endDate:     t.terminoEstimado?.toISOString().slice(0, 10) ?? null,
           wbsAreaId:   area?.id ?? null,
           wbsArea:     area ? { id: area.id, name: area.name, color: area.color } : null,
-          responsible: t.responsavel,
+          responsible: t.responsavel ?? (t.responsavelNome ? { id: "", name: t.responsavelNome } : null),
           parentId:     t.parentId ?? null,
           parentTitle:  t.parentId ? (taskTitleMap.get(t.parentId) ?? null) : null,
           budgetedCost:    t.budgetedCost ?? null,

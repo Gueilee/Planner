@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation"
 import { db } from "@/lib/db"
 import { getScheduleV2 } from "@/lib/actions/schedule-v2"
 import { ScheduleV2Client } from "../schedule-v2/schedule-v2-client"
+import { DEFAULT_RISK_THRESHOLD_PCT } from "@/lib/utils/schedule-status"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 
@@ -27,7 +28,7 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
   const session = await auth()
   if (!session?.user) redirect("/login")
 
-  const [project, data, members] = await Promise.all([
+  const [project, data, members, org] = await Promise.all([
     db.project.findUnique({ where: { id }, select: { id: true, title: true, expectedStart: true, expectedEnd: true } }),
     getScheduleV2(id),
     db.user.findMany({
@@ -35,6 +36,7 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
+    db.organization.findUnique({ where: { id: session.user.organizationId }, select: { riskThresholdPct: true } }),
   ])
   if (!project) notFound()
 
@@ -58,12 +60,14 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
       <div className="flex-1 min-h-0 overflow-y-auto">
         <ScheduleV2Client
           projectId={id}
+          projectTitle={project.title}
           initial={data}
           initialProjectDates={{
             expectedStart: safeDateStr(project.expectedStart),
             expectedEnd: safeDateStr(project.expectedEnd),
           }}
           members={members}
+          riskThresholdPct={org?.riskThresholdPct ?? DEFAULT_RISK_THRESHOLD_PCT}
         />
       </div>
     </div>

@@ -8,13 +8,15 @@ import {
 import type { ScheduleV2Payload, ItemV2 } from "@/lib/actions/schedule-v2"
 import { updateProjectDetails } from "@/lib/actions/projects"
 import { computeProjectProgress } from "@/lib/utils/project-progress"
+import { computeExpectedPct, computeScheduleStatus, DEFAULT_RISK_THRESHOLD_PCT, type ScheduleStatus } from "@/lib/utils/schedule-status"
+import { exportScheduleToExcel } from "@/lib/export-schedule"
 import { getTemplates } from "@/lib/actions/templates"
 import type { Template } from "@/lib/actions/templates"
 import { fmtDateLong, isValidDateStr } from "@/lib/date-utils"
 import {
   ChevronRight, ChevronDown, Plus, IndentIncrease, IndentDecrease,
   ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, Milestone,
-  Circle, CircleX, CirclePlus, Pencil, Undo2, Redo2, GripVertical, GripHorizontal, LayoutTemplate,
+  Circle, CircleX, CirclePlus, Pencil, Undo2, Redo2, GripVertical, GripHorizontal, LayoutTemplate, FileSpreadsheet,
 } from "lucide-react"
 
 // ─── Helpers de árvore ──────────────────────────────────────────────────────
@@ -49,7 +51,7 @@ function sortValue(item: ItemV2, col: SortColumn, membersById?: Map<string, stri
     case "inicioReal": return item.inicioReal ?? ""
     case "terminoReal": return item.terminoReal ?? ""
     case "pct": return item.percentualCompleto
-    case "responsavel": return (membersById?.get(item.responsavelId ?? "") ?? "").toLowerCase()
+    case "responsavel": return ((item.responsavelId ? membersById?.get(item.responsavelId) : item.responsavelNome) ?? "").toLowerCase()
     case "status": return statusLabel(item.status).label
     default: return 0
   }
@@ -112,6 +114,15 @@ const STATUS_OPTIONS = [
   { value: "ATRASADO", label: "Atrasado", color: "#DC2626", bg: "#FEF2F2" },
 ] as const
 
+// Real vs. esperado (comparação do cabeçalho) — mesmas 3 faixas usadas em
+// Analytics/Status Report (lib/utils/schedule-status.ts).
+const SCHEDULE_STATUS_STYLE: Record<ScheduleStatus, { label: string; color: string; bg: string }> = {
+  ON_TIME: { label: "No Prazo", color: "#059669", bg: "#ECFDF5" },
+  AT_RISK: { label: "Em Risco", color: "#D97706", bg: "#FFFBEB" },
+  DELAYED: { label: "Atrasado", color: "#DC2626", bg: "#FEF2F2" },
+  ND: { label: "Sem datas", color: "#94A3B8", bg: "#F1F5F9" },
+}
+
 function statusLabel(status: string) {
   if (status === "pendente") return STATUS_OPTIONS[0] // valor legado do default antigo
   return STATUS_OPTIONS.find((o) => o.value === status) ?? STATUS_OPTIONS[0]
@@ -143,11 +154,13 @@ function colPrefsKey(projectId: string) { return `sv2-columns-${projectId}` }
 
 // ─── Main ─────────────────────────────────────────────────────────────────
 
-export function ScheduleV2Client({ projectId, initial, initialProjectDates, members }: {
+export function ScheduleV2Client({ projectId, projectTitle, initial, initialProjectDates, members, riskThresholdPct = DEFAULT_RISK_THRESHOLD_PCT }: {
   projectId: string
+  projectTitle: string
   initial: ScheduleV2Payload
   initialProjectDates: { expectedStart: string | null; expectedEnd: string | null }
   members: { id: string; name: string }[]
+  riskThresholdPct?: number
 }) {
   const membersById = useMemo(() => new Map(members.map((m) => [m.id, m.name])), [members])
   const [data, setData] = useState<ScheduleV2Payload>(initial)
@@ -166,6 +179,7 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates, memb
   const [tplModalOpen, setTplModalOpen] = useState(false)
   const [tplSelected, setTplSelected] = useState<string>("")
   const [tplStartDate, setTplStartDate] = useState<string>(() => new Date().toISOString().slice(0, 10))
+  const [exporting, setExporting] = useState(false)
 
   // Layout de colunas (larguras + ordem) — preferência pessoal, salva no
   // navegador (não é dado do cronograma, é só a visão de quem está olhando).
@@ -187,6 +201,22 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates, memb
   const projectProgress = useMemo(
     () => computeProjectProgress(data.items.map((i) => ({ id: i.id, progress: i.percentualCompleto, parentId: i.parentId }))),
     [data.items]
+  )
+
+  // Progresso esperado ("quanto deveria estar hoje") — mesma conta canônica
+  // usada em Analytics/Status Report (lib/utils/schedule-status.ts): tempo
+  // decorrido ÷ duração total do período planejado do projeto. Comparado
+  // com o progresso real acima para saber se está adiantado ou atrasado.
+  const plannedPct = useMemo(
+    () => computeExpectedPct(
+      projectDates.expectedStart ? new Date(`${projectDates.expectedStart}T00:00:00.000Z`) : null,
+      projectDates.expectedEnd ? new Date(`${projectDates.expectedEnd}T00:00:00.000Z`) : null,
+    ),
+    [projectDates.expectedStart, projectDates.expectedEnd]
+  )
+  const scheduleStatus: ScheduleStatus = useMemo(
+    () => computeScheduleStatus(projectProgress, plannedPct, riskThresholdPct),
+    [projectProgress, plannedPct, riskThresholdPct]
   )
 
   useEffect(() => {
@@ -361,6 +391,12 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates, memb
     })
   }
 
+  function handleExportExcel() {
+    setExporting(true)
+    exportScheduleToExcel(projectTitle, data.items, data.dependencies, membersById)
+      .finally(() => setExporting(false))
+  }
+
   function handleEditTitle(id: string) {
     const el = document.getElementById(`sv2-title-${id}`) as HTMLInputElement | null
     el?.focus()
@@ -471,6 +507,13 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates, memb
 
   return (
     <div className="min-h-full text-slate-700" style={{ background: "#F8F9FC" }}>
+      {/* Sugestões do campo Responsável (célula "responsavel" abaixo) —
+          declarada uma única vez para todas as linhas, não trava a
+          digitação a esta lista (ver renderCell). */}
+      <datalist id="sv2-members-list">
+        {members.map((m) => <option key={m.id} value={m.name} />)}
+      </datalist>
+
       {/* Header stats — Início/Término do projeto ficam editáveis desde a
           abertura do cronograma (igual ao "Data de início/término" do
           Artia), independente de já existir alguma atividade lançada. */}
@@ -479,10 +522,10 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates, memb
         <EditableDateStat label="Início" value={projectDates.expectedStart} onChange={(v) => handleProjectDate("expectedStart", v)} />
         <EditableDateStat label="Término" value={projectDates.expectedEnd} onChange={(v) => handleProjectDate("expectedEnd", v)} />
         <Stat label="Conflitos" value={data.conflicts.length} color={data.conflicts.length > 0 ? "#D97706" : undefined} />
-        <div className="ml-auto flex items-center gap-3">
-          <div className="w-36">
+        <div className="ml-auto flex items-center gap-4">
+          <div className="w-32">
             <div className="flex justify-between text-[9px] mb-1">
-              <span className="text-slate-400 uppercase tracking-widest font-bold">Progresso do Projeto</span>
+              <span className="text-slate-400 uppercase tracking-widest font-bold">Real</span>
               <span className="font-black" style={{ color: "#7B2FBE" }}>{projectProgress}%</span>
             </div>
             <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
@@ -491,6 +534,32 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates, memb
                 style={{ width: `${projectProgress}%`, background: "linear-gradient(90deg, #7B2FBE, #2463FF)" }}
               />
             </div>
+          </div>
+          <div className="w-32">
+            <div className="flex justify-between text-[9px] mb-1">
+              <span className="text-slate-400 uppercase tracking-widest font-bold">Esperado</span>
+              <span className="font-black text-slate-500">{plannedPct !== null ? `${plannedPct}%` : "—"}</span>
+            </div>
+            <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{ width: `${plannedPct ?? 0}%`, background: "#94A3B8" }}
+              />
+            </div>
+          </div>
+          <div
+            className="flex flex-col items-center px-3 py-1 rounded-xl shrink-0"
+            style={{ background: SCHEDULE_STATUS_STYLE[scheduleStatus].bg, border: `1px solid ${SCHEDULE_STATUS_STYLE[scheduleStatus].color}33` }}
+            title="Real menos esperado — quanto o projeto está adiantado (positivo) ou atrasado (negativo) em relação ao período planejado"
+          >
+            <span className="text-[9px] font-black uppercase tracking-wide" style={{ color: SCHEDULE_STATUS_STYLE[scheduleStatus].color }}>
+              {SCHEDULE_STATUS_STYLE[scheduleStatus].label}
+            </span>
+            {plannedPct !== null && (
+              <span className="text-[10px] font-bold" style={{ color: SCHEDULE_STATUS_STYLE[scheduleStatus].color }}>
+                {projectProgress - plannedPct > 0 ? "+" : ""}{projectProgress - plannedPct} pp
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -509,6 +578,9 @@ export function ScheduleV2Client({ projectId, initial, initialProjectDates, memb
         <div className="w-px h-5 bg-slate-200 mx-1" />
         <ToolbarBtn wide disabled={templates.length === 0} onClick={() => setTplModalOpen(true)} title="Aplicar um modelo de cronograma pronto a este projeto">
           <LayoutTemplate className="w-3.5 h-3.5" /> Aplicar modelo
+        </ToolbarBtn>
+        <ToolbarBtn wide disabled={exporting || data.items.length === 0} onClick={handleExportExcel} title="Exportar este cronograma para uma planilha Excel formatada">
+          <FileSpreadsheet className="w-3.5 h-3.5" /> {exporting ? "Exportando…" : "Exportar Excel"}
         </ToolbarBtn>
         <div className="w-px h-5 bg-slate-200 mx-1" />
         <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mr-1">
@@ -1082,20 +1154,35 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
         />
       ) : null
 
-    case "responsavel":
+    case "responsavel": {
+      // Campo livre — aceita qualquer nome digitado, mesmo de quem ainda não
+      // é usuário do sistema (ex.: Millena). Sugere os membros cadastrados
+      // via <datalist> (id="sv2-members-list", declarada uma única vez no
+      // topo do componente), mas não trava a digitação a essa lista. Quando
+      // o texto digitado bate com um nome cadastrado, salva a FK
+      // (responsavelId) — senão salva o texto solto (responsavelNome).
+      const currentName = item.responsavelId ? (h.membersById.get(item.responsavelId) ?? "") : (item.responsavelNome ?? "")
       return (
-        <select
-          value={item.responsavelId ?? ""}
-          onChange={(e) => {
-            const v = e.target.value || null
-            if (v !== item.responsavelId) h.onUpdate(item.id, { responsavelId: v })
+        <input
+          key={`resp:${item.id}:${item.responsavelId}:${item.responsavelNome}`}
+          list="sv2-members-list"
+          defaultValue={currentName}
+          placeholder="Sem responsável"
+          onBlur={(e) => {
+            const typed = e.target.value.trim()
+            if (typed === currentName) return
+            if (typed === "") {
+              h.onUpdate(item.id, { responsavelId: null })
+              return
+            }
+            const match = h.members.find((m) => m.name.toLowerCase() === typed.toLowerCase())
+            if (match) h.onUpdate(item.id, { responsavelId: match.id })
+            else h.onUpdate(item.id, { responsavelNome: typed })
           }}
-          className="w-full bg-transparent outline-none text-xs text-slate-700 rounded border-b border-transparent focus:border-[#7B2FBE] focus:bg-violet-50 cursor-pointer"
-        >
-          <option value="">Sem responsável</option>
-          {h.members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-        </select>
+          className="w-full bg-transparent outline-none text-xs text-slate-700 placeholder-slate-300 rounded border-b border-transparent focus:border-[#7B2FBE] focus:bg-violet-50"
+        />
       )
+    }
 
     case "status": {
       const st = statusLabel(item.status)

@@ -72,6 +72,10 @@ export type V2ItemRow = {
   actualCost: number | null
   responsavelId: string | null
   responsavel?: { id: string; name: string; image?: string | null } | null
+  // Nome digitado livremente quando a pessoa não é um usuário cadastrado
+  // (ex.: alguém de fora, ou o cadastro ainda não foi feito) — nunca
+  // coexiste com responsavelId/responsavel.
+  responsavelNome?: string | null
 }
 
 export type LegacyLikeTask = {
@@ -143,7 +147,7 @@ export function toLegacyLikeTasks(rows: V2ItemRow[]): LegacyLikeTask[] {
       budgetedCost: r.budgetedCost,
       actualCost: r.actualCost,
       responsibleId: r.responsavelId,
-      responsibleName: r.responsavel?.name ?? null,
+      responsibleName: r.responsavel?.name ?? r.responsavelNome ?? null,
       responsibleImage: r.responsavel?.image ?? null,
       order: i,
     }

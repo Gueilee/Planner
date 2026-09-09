@@ -45,7 +45,7 @@ export async function getProjectFullHistory(projectId: string) {
           id: true, parentId: true, title: true, status: true, percentualCompleto: true,
           inicioEstimado: true, terminoEstimado: true, inicioReal: true, terminoReal: true,
           esforcoEstimadoH: true, esforcoRealH: true, budgetedCost: true, actualCost: true,
-          responsavelId: true, responsavel: { select: { id: true, name: true, image: true } },
+          responsavelId: true, responsavelNome: true, responsavel: { select: { id: true, name: true, image: true } },
         },
       },
       risks: { orderBy: { createdAt: "asc" } },

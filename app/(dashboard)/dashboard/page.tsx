@@ -73,8 +73,9 @@ export default async function DashboardPage() {
 
   const itemSel = {
     id: true, parentId: true, title: true, terminoEstimado: true, status: true,
-    project:     { select: { id: true, title: true } },
-    responsavel: { select: { name: true } },
+    project:        { select: { id: true, title: true } },
+    responsavel:    { select: { name: true } },
+    responsavelNome: true,
   } as const
 
   const [
@@ -184,14 +185,14 @@ export default async function DashboardPage() {
             id: t.id, title: t.title, status: V2_STATUS_TO_LEGACY[t.status] ?? "PLANNING",
             endDate:     toISO(t.terminoEstimado),
             project:     t.project,
-            responsible: t.responsavel,
+            responsible: t.responsavel ?? (t.responsavelNome ? { name: t.responsavelNome } : null),
             wbsArea:     overdueAreas[i] ? { name: overdueAreas[i]!, color: null } : null,
           }))}
           upcomingTasks={upcomingTasks.map((t, i) => ({
             id: t.id, title: t.title, status: V2_STATUS_TO_LEGACY[t.status] ?? "PLANNING",
             endDate:     toISO(t.terminoEstimado),
             project:     t.project,
-            responsible: t.responsavel,
+            responsible: t.responsavel ?? (t.responsavelNome ? { name: t.responsavelNome } : null),
             wbsArea:     upcomingAreas[i] ? { name: upcomingAreas[i]!, color: null } : null,
           }))}
           onHoldProjects={onHoldProjects.map((p) => ({

@@ -22,7 +22,7 @@ export async function getProjectTasksForKanban(projectId: string) {
     select: {
       id: true, parentId: true, title: true, status: true, percentualCompleto: true,
       inicioEstimado: true, terminoEstimado: true,
-      responsavelId: true, responsavel: { select: { id: true, name: true, image: true } },
+      responsavelId: true, responsavelNome: true, responsavel: { select: { id: true, name: true, image: true } },
       _count: { select: { comments: true, attachments: true } },
     },
   })
@@ -42,7 +42,9 @@ export async function getProjectTasksForKanban(projectId: string) {
       startDate:      t.inicioEstimado?.toISOString()  ?? null,
       endDate:        t.terminoEstimado?.toISOString() ?? null,
       wbsArea:        areaId !== t.id ? { name: titleById.get(areaId) ?? "", color: null } : null,
-      responsible:    t.responsavel ?? null,
+      // Responsável pode ser um usuário cadastrado (FK) ou um nome digitado
+      // livremente (responsavelNome) — nunca os dois ao mesmo tempo.
+      responsible:    t.responsavel ?? (t.responsavelNome ? { id: "", name: t.responsavelNome, image: null } : null),
       parentId:       t.parentId ?? null,
       childCount:     childCount.get(t.id) ?? 0,
       commentCount:   t._count.comments,

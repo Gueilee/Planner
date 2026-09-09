@@ -973,23 +973,27 @@ model OrgConfig {
 // ─────────────────────────────────────────────
 
 model ScheduleV2Item {
-  id            String  @id @default(cuid())
-  projectId     String
+  id              String  @id @default(cuid())
+  projectId       String
   // Código curto exibido ("A1", "A2", ...) — estável, usado na sintaxe de
   // predecessor (CLAUDE.md §8). Gerado sequencialmente por projeto; não
   // renumera ao mover/reordenar linhas.
-  code          String
-  parentId      String?
-  order         Int     @default(0)
-  title         String
+  code            String
+  parentId        String?
+  order           Int     @default(0)
+  title           String
   // "A_INICIAR" | "EM_ANDAMENTO" | "CONCLUIDO" | "ATRASADO" — texto livre
   // na coluna (sem enum no banco) para não travar em migração se a lista
   // mudar; a UI que garante os 4 valores.
-  status        String  @default("A_INICIAR")
-  // FK de verdade (não texto livre) — precisa ser um User real para a
-  // Alocação de Recursos (lib/actions/allocation.ts) poder filtrar por
-  // pessoa, igual ao ScheduleTask.responsibleId legado.
-  responsavelId String?
+  status          String  @default("A_INICIAR")
+  // FK de verdade — precisa ser um User real para a Alocação de Recursos
+  // (lib/actions/allocation.ts) poder filtrar por pessoa, igual ao
+  // ScheduleTask.responsibleId legado. Quando o responsável ainda não é um
+  // usuário cadastrado no sistema (ex.: alguém de fora, ou o cadastro ainda
+  // não foi feito), responsavelNome guarda o nome digitado livremente — os
+  // dois nunca coexistem: preencher um limpa o outro (ver schedule-v2-client).
+  responsavelId   String?
+  responsavelNome String?
 
   // Fonte da verdade da barra — null = não agendado; 0 = marco (CLAUDE.md §3.3).
   duracaoDiasUteis Int?
