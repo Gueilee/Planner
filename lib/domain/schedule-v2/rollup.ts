@@ -68,6 +68,12 @@ export function projectEndDate(items: readonly SchedItem[]): string | null {
   return ends.length > 0 ? ends.reduce((max, d) => (d > max ? d : max)) : null
 }
 
+/** Início do projeto = min(início) de todos os itens agendados (raízes ou não). */
+export function projectStartDate(items: readonly SchedItem[]): string | null {
+  const starts = items.map((i) => i.inicioEstimado).filter((d): d is string => d !== null)
+  return starts.length > 0 ? starts.reduce((min, d) => (d < min ? d : min)) : null
+}
+
 export type ProgressItem = { id: string; parentId: string | null; percentualCompleto: number }
 
 /**

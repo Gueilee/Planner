@@ -13,7 +13,7 @@ import { recalcular } from "@/lib/domain/schedule-v2/scheduler"
 import { workingDaysBetween } from "@/lib/domain/schedule-v2/calendar"
 import { isValidDateStr } from "@/lib/date-utils"
 import { getHolidaysForYear } from "@/lib/working-days"
-import { rollupGroups, rollupProgress, projectEndDate as computeProjectEndDate } from "@/lib/domain/schedule-v2/rollup"
+import { rollupGroups, rollupProgress, projectEndDate as computeProjectEndDate, projectStartDate as computeProjectStartDate } from "@/lib/domain/schedule-v2/rollup"
 import { parsePredecessors, dropUnknownCodes, wouldCreateCycle } from "@/lib/domain/schedule-v2/dependency-parser"
 import type { Dependency, LinkType, SchedItem, SchedulingMode, WorkCalendar } from "@/lib/domain/schedule-v2/types"
 
@@ -97,6 +97,7 @@ export type ScheduleV2Payload = {
   items: ItemV2[]
   dependencies: DependencyV2[]
   conflicts: ConflictV2[]
+  projectStartDate: string | null
   projectEndDate: string | null
 }
 
@@ -473,7 +474,12 @@ export async function getScheduleV2(projectId: string): Promise<ScheduleV2Payloa
     lagDiasUteis: d.lagDiasUteis,
   }))
 
-  return { items, dependencies, conflicts, projectEndDate: computeProjectEndDate(rows.map(toSchedItem)) }
+  const schedItems = rows.map(toSchedItem)
+  return {
+    items, dependencies, conflicts,
+    projectStartDate: computeProjectStartDate(schedItems),
+    projectEndDate: computeProjectEndDate(schedItems),
+  }
 }
 
 // ─── Criar ────────────────────────────────────────────────────────────────

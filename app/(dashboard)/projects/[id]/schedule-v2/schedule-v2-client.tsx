@@ -6,7 +6,6 @@ import {
   hasUndoV2, hasRedoV2, undoLastChangeV2, redoLastChangeV2, applyTemplateV2,
 } from "@/lib/actions/schedule-v2"
 import type { ScheduleV2Payload, ItemV2 } from "@/lib/actions/schedule-v2"
-import { updateProjectDetails } from "@/lib/actions/projects"
 import { computeProjectProgress } from "@/lib/utils/project-progress"
 import { computeExpectedPct, computeScheduleStatus, DEFAULT_RISK_THRESHOLD_PCT, type ScheduleStatus } from "@/lib/utils/schedule-status"
 import { exportScheduleToExcel } from "@/lib/export-schedule"
@@ -154,11 +153,16 @@ function colPrefsKey(projectId: string) { return `sv2-columns-${projectId}` }
 
 // ─── Main ─────────────────────────────────────────────────────────────────
 
-export function ScheduleV2Client({ projectId, projectTitle, initial, initialProjectDates, members, riskThresholdPct = DEFAULT_RISK_THRESHOLD_PCT }: {
+export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlannedDates, members, riskThresholdPct = DEFAULT_RISK_THRESHOLD_PCT }: {
   projectId: string
   projectTitle: string
   initial: ScheduleV2Payload
-  initialProjectDates: { expectedStart: string | null; expectedEnd: string | null }
+  // Datas "planejadas" do projeto (Project.expectedStart/expectedEnd) —
+  // linha de base oficial, editada na tela de detalhe do projeto, usada
+  // só para calcular o progresso ESPERADO (mesma base do Kanban/Status
+  // Report). O início/término exibidos nesta tela vêm do cronograma em si
+  // (ver projectStartDate/projectEndDate abaixo) — não deste prop.
+  projectPlannedDates: { expectedStart: string | null; expectedEnd: string | null }
   members: { id: string; name: string }[]
   riskThresholdPct?: number
 }) {
@@ -168,7 +172,6 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, initialProj
   const [pending, startTransition] = useTransition()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [sort, setSort] = useState<SortState>({ column: null, dir: "asc" })
-  const [projectDates, setProjectDates] = useState(initialProjectDates)
   const [hasUndo, setHasUndo] = useState(false)
   const [hasRedo, setHasRedo] = useState(false)
 
@@ -209,10 +212,10 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, initialProj
   // com o progresso real acima para saber se está adiantado ou atrasado.
   const plannedPct = useMemo(
     () => computeExpectedPct(
-      projectDates.expectedStart ? new Date(`${projectDates.expectedStart}T00:00:00.000Z`) : null,
-      projectDates.expectedEnd ? new Date(`${projectDates.expectedEnd}T00:00:00.000Z`) : null,
+      projectPlannedDates.expectedStart ? new Date(`${projectPlannedDates.expectedStart}T00:00:00.000Z`) : null,
+      projectPlannedDates.expectedEnd ? new Date(`${projectPlannedDates.expectedEnd}T00:00:00.000Z`) : null,
     ),
-    [projectDates.expectedStart, projectDates.expectedEnd]
+    [projectPlannedDates.expectedStart, projectPlannedDates.expectedEnd]
   )
   const scheduleStatus: ScheduleStatus = useMemo(
     () => computeScheduleStatus(projectProgress, plannedPct, riskThresholdPct),
@@ -284,13 +287,6 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, initialProj
         setHasUndo(true)
       }
       setHasRedo(false)
-    })
-  }
-
-  function handleProjectDate(field: "expectedStart" | "expectedEnd", value: string | null) {
-    setProjectDates((prev) => ({ ...prev, [field]: value }))
-    startTransition(async () => {
-      await updateProjectDetails(projectId, { [field]: value })
     })
   }
 
@@ -514,13 +510,16 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, initialProj
         {members.map((m) => <option key={m.id} value={m.name} />)}
       </datalist>
 
-      {/* Header stats — Início/Término do projeto ficam editáveis desde a
-          abertura do cronograma (igual ao "Data de início/término" do
-          Artia), independente de já existir alguma atividade lançada. */}
+      {/* Header stats — Início/Término aqui são o próprio cronograma (min
+          início / max término entre todos os itens, regra §3.7 de rollup),
+          calculados no servidor a cada carregamento — nunca um campo solto
+          para digitar, que ficava desatualizado e não refletia as
+          atividades reais. Editar a data planejada oficial do projeto
+          continua na tela de detalhe do projeto. */}
       <div className="px-5 py-4 border-b border-slate-200 bg-white flex items-center gap-6 flex-wrap">
         <Stat label="Itens" value={data.items.length} />
-        <EditableDateStat label="Início" value={projectDates.expectedStart} onChange={(v) => handleProjectDate("expectedStart", v)} />
-        <EditableDateStat label="Término" value={projectDates.expectedEnd} onChange={(v) => handleProjectDate("expectedEnd", v)} />
+        <Stat label="Início" value={fmtDateLong(data.projectStartDate)} />
+        <Stat label="Término" value={fmtDateLong(data.projectEndDate)} />
         <Stat label="Conflitos" value={data.conflicts.length} color={data.conflicts.length > 0 ? "#D97706" : undefined} />
         <div className="ml-auto flex items-center gap-4">
           <div className="w-32">
@@ -740,35 +739,6 @@ function Stat({ label, value, color }: { label: string; value: string | number; 
   )
 }
 
-// Início/Término do projeto — editável desde a abertura do cronograma
-// (Project.expectedStart/expectedEnd), igual ao "Data de início/término"
-// do topo do Artia. Independe de já haver alguma atividade lançada.
-function EditableDateStat({ label, value, onChange }: {
-  label: string; value: string | null; onChange: (v: string | null) => void
-}) {
-  return (
-    <div>
-      <input
-        key={`projdate:${label}:${value}`}
-        type="date"
-        min={DATE_MIN}
-        max={DATE_MAX}
-        defaultValue={value ?? ""}
-        onBlur={(e) => {
-          if (!isSaneDateInput(e.target.value)) {
-            e.target.value = value ?? "" // reverte — ano com formato inválido
-            return
-          }
-          const v = e.target.value || null
-          if (v !== value) onChange(v)
-        }}
-        className="text-lg font-black bg-transparent outline-none rounded -mx-1 px-1 focus:bg-violet-50"
-        style={{ color: "#1E293B" }}
-      />
-      <p className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">{label}</p>
-    </div>
-  )
-}
 
 function ToolbarBtn({ children, onClick, title, disabled, wide }: {
   children: React.ReactNode; onClick: () => void; title: string; disabled?: boolean; wide?: boolean

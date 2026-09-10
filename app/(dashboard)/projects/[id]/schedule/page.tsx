@@ -62,7 +62,7 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
           projectId={id}
           projectTitle={project.title}
           initial={data}
-          initialProjectDates={{
+          projectPlannedDates={{
             expectedStart: safeDateStr(project.expectedStart),
             expectedEnd: safeDateStr(project.expectedEnd),
           }}
