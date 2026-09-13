@@ -101,8 +101,9 @@ export async function exportScheduleToExcel(
     { key: "pctEst",     width: 12 },  // M - % Esperado
     { key: "pctReal",    width: 12 },  // N - % Completo
     { key: "pred",       width: 26 },  // O - Predecessores
+    { key: "partic",     width: 26 },  // P - Participantes
   ]
-  const TOTAL_COLS = 15
+  const TOTAL_COLS = 16
 
   // ── Linha 1: título do projeto ─────────────────────────────────────────
   const titleRow = ws.addRow([`Cronograma — ${projectTitle}`])
@@ -149,6 +150,7 @@ export async function exportScheduleToExcel(
     { label: "% Esperado", color: "FFB45309" },
     { label: "% Completo" },
     { label: "Predecessores", color: "FF4338CA" },
+    { label: "Participantes", color: "FF4338CA" },
   ]
   const hdrRow = ws.addRow(HDR_COLS.map((c) => c.label))
   hdrRow.height = 26
@@ -202,6 +204,7 @@ export async function exportScheduleToExcel(
       expectedPct != null ? expectedPct / 100 : null,
       it.percentualCompleto / 100,
       predecessorsText(it.id, dependencies, codeById),
+      it.participantes.length > 0 ? it.participantes.join(", ") : "—",
     ])
     excelRow.height = 20
 
@@ -253,6 +256,9 @@ export async function exportScheduleToExcel(
         cell.font = { ...baseFont, bold: true, color: { argb: isDone ? "FF10B981" : "FF2463FF" } }
         cell.alignment = { vertical: "middle", horizontal: "center" }
       } else if (colN === 15) {
+        cell.font = { ...baseFont, color: { argb: "FF4338CA" }, size: 8 }
+        cell.alignment = { vertical: "middle", horizontal: "left", wrapText: true }
+      } else if (colN === 16) {
         cell.font = { ...baseFont, color: { argb: "FF4338CA" }, size: 8 }
         cell.alignment = { vertical: "middle", horizontal: "left", wrapText: true }
       }

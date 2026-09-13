@@ -10,8 +10,7 @@ import {
 import { computeProjectProgress } from "@/lib/utils/project-progress"
 import { computePlanned, computeRealized, computeBaselineCurve, type RawTask } from "@/lib/utils/s-curve-math"
 import { toLegacyLikeTasks } from "@/lib/utils/schedule-v2-adapter"
-
-const CAN_MANAGE_BASELINE = new Set(["ADMIN", "PROJECT_MANAGER", "SPONSOR"])
+import { createBaselineForProject } from "@/lib/actions/baseline"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -308,62 +307,13 @@ export async function getSCurveData(projectId: string): Promise<SCurvePayload | 
 }
 
 // ─── Create baseline server action ────────────────────────────────────────────
-
+// Lógica de verdade mora em lib/actions/baseline.ts (também usada pelo botão
+// "Salvar Linha de Base" do Cronograma) — um arquivo "use server" só pode
+// exportar funções async (um `export { x as y } from` vira "módulo sem
+// exports nenhum" pro bundler), por isso o wrapper em vez de reexportar.
 export async function createBaselineAction(
   projectId: string,
-  { name, reason, description }: { name?: string; reason?: string; description?: string }
+  opts: { name?: string; reason?: string; description?: string }
 ): Promise<{ error?: string; id?: string }> {
-  const session = await auth()
-  if (!session?.user) return { error: "Unauthorized" }
-  if (!CAN_MANAGE_BASELINE.has(session.user.role ?? "")) {
-    return { error: "Apenas Administradores, Gerentes de Projeto e Sponsors podem aprovar um baseline." }
-  }
-
-  const items = await db.scheduleV2Item.findMany({
-    where:  { projectId, terminoEstimado: { not: null } },
-    select: { id: true, parentId: true, title: true, inicioEstimado: true, terminoEstimado: true, budgetedCost: true },
-  })
-
-  const groupIds = new Set(items.map((t) => t.parentId).filter((id): id is string => id !== null))
-  const leafTasks = items.filter((t) => !groupIds.has(t.id))
-
-  if (leafTasks.length === 0) {
-    return { error: "O projeto não possui atividades folha com data de término definida." }
-  }
-
-  const last = await db.projectBaseline.findFirst({
-    where:   { projectId },
-    orderBy: { number: "desc" },
-    select:  { number: true },
-  })
-  const nextNumber = (last?.number ?? -1) + 1
-  const autoName   = name || (nextNumber === 0 ? "Baseline Original" : `Replanejamento ${nextNumber}`)
-
-  const userId = (session.user as { id?: string }).id ?? null
-  const now    = new Date()
-
-  const baseline = await db.projectBaseline.create({
-    data: {
-      projectId,
-      number:      nextNumber,
-      name:        autoName,
-      description: description ?? null,
-      reason:      reason ?? null,
-      createdById: userId,
-      status:      "APPROVED",
-      approvedById: userId,
-      approvedAt:   now,
-      snaps: {
-        create: leafTasks.map((t) => ({
-          taskId:       t.id,
-          taskTitle:    t.title,
-          plannedStart: t.inicioEstimado ?? null,
-          plannedEnd:   t.terminoEstimado!,
-          budgetedCost: t.budgetedCost ?? null,
-        })),
-      },
-    },
-  })
-
-  return { id: baseline.id }
+  return createBaselineForProject(projectId, opts)
 }

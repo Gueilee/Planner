@@ -269,7 +269,10 @@ function UserForm({
 
   function handleSubmit() {
     if (!name.trim())  { setError("Nome é obrigatório"); return }
-    if (!email.trim()) { setError("E-mail é obrigatório"); return }
+    // Cliente (usuário terceiro) pode não ter e-mail ainda — o servidor
+    // gera um sintético "@ext.planner" nesse caso (mesmo padrão dos
+    // convidados externos de Kick-off). Para os demais cargos, obrigatório.
+    if (!email.trim() && role !== "CLIENT") { setError("E-mail é obrigatório"); return }
     if (mode === "create" && password.length < 6) { setError("Senha deve ter no mínimo 6 caracteres"); return }
     if (department === "__other__" && !customDept.trim()) { setError("Informe o nome do departamento"); return }
     setError(null)
@@ -343,14 +346,14 @@ function UserForm({
 
         <div>
           <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
-            E-mail <span className="text-red-400">*</span>
+            E-mail {role !== "CLIENT" && <span className="text-red-400">*</span>}
           </label>
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className={iCls}
-            placeholder="nome@vendemmia.com.br"
+            placeholder={role === "CLIENT" ? "Opcional — deixe em branco se ainda não tiver" : "nome@vendemmia.com.br"}
           />
         </div>
 

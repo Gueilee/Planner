@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
+import { createBaselineForProject } from "@/lib/actions/baseline"
 
 export const dynamic = "force-dynamic"
-
-const CAN_MANAGE_BASELINE = new Set(["ADMIN", "PROJECT_MANAGER", "SPONSOR"])
 
 // GET /api/projects/[id]/baselines — list all baselines
 export async function GET(
@@ -31,15 +30,6 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth()
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!CAN_MANAGE_BASELINE.has(session.user.role ?? "")) {
-    return NextResponse.json(
-      { error: "Apenas Administradores, Gerentes de Projeto e Sponsors podem aprovar um baseline." },
-      { status: 403 }
-    )
-  }
-
   const { id } = await params
   const body = await req.json()
   const { name, description, reason } = body as {
@@ -48,57 +38,15 @@ export async function POST(
     reason?: string
   }
 
-  // Only snapshot leaf items (no children) with a término estimado
-  const items = await db.scheduleV2Item.findMany({
-    where:  { projectId: id, terminoEstimado: { not: null } },
-    select: { id: true, parentId: true, title: true, inicioEstimado: true, terminoEstimado: true, budgetedCost: true },
-  })
-
-  const groupIds = new Set(items.map((t) => t.parentId).filter((gid): gid is string => gid !== null))
-  const leafTasks = items.filter((t) => !groupIds.has(t.id))
-
-  if (leafTasks.length === 0) {
-    return NextResponse.json(
-      { error: "O projeto não possui atividades folha com data de término definida." },
-      { status: 400 }
-    )
+  const result = await createBaselineForProject(id, { name, description, reason })
+  if (result.error) {
+    const status = result.error === "Unauthorized" ? 401 : result.error.startsWith("Apenas") ? 403 : 400
+    return NextResponse.json({ error: result.error }, { status })
   }
 
-  // Find next baseline number
-  const last = await db.projectBaseline.findFirst({
-    where:   { projectId: id },
-    orderBy: { number: "desc" },
-    select:  { number: true },
-  })
-  const nextNumber = (last?.number ?? -1) + 1
-  const autoName   = name || (nextNumber === 0 ? "Baseline Original" : `Replanejamento ${nextNumber}`)
-
-  const userId = (session.user as { id?: string }).id ?? null
-  const now    = new Date()
-
-  const baseline = await db.projectBaseline.create({
-    data: {
-      projectId:   id,
-      number:      nextNumber,
-      name:        autoName,
-      description: description ?? null,
-      reason:      reason ?? null,
-      createdById:  userId,
-      status:       "APPROVED",
-      approvedById: userId,
-      approvedAt:   now,
-      snaps: {
-        create: leafTasks.map((t) => ({
-          taskId:       t.id,
-          taskTitle:    t.title,
-          plannedStart: t.inicioEstimado ?? null,
-          plannedEnd:   t.terminoEstimado!,
-          budgetedCost: t.budgetedCost ?? null,
-        })),
-      },
-    },
+  const baseline = await db.projectBaseline.findUnique({
+    where: { id: result.id },
     include: { snaps: true },
   })
-
   return NextResponse.json(baseline, { status: 201 })
 }

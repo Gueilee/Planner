@@ -417,6 +417,7 @@ model Project {
   scheduleV2Items     ScheduleV2Item[]
   scheduleV2Calendar  WorkCalendarV2?
   scheduleV2Snapshots ScheduleV2Snapshot[]
+  scheduleV2ChangeLogs ScheduleV2ChangeLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -994,6 +995,13 @@ model ScheduleV2Item {
   // dois nunca coexistem: preencher um limpa o outro (ver schedule-v2-client).
   responsavelId   String?
   responsavelNome String?
+  // Além do responsável principal (acima): outras pessoas ligadas à
+  // atividade ("participantes"/"informados", pedido da Millena) — texto
+  // livre, mesmo espírito de responsavelNome (nenhuma tela hoje precisa
+  // filtrar "atividades onde sou participante"; se isso vier a ser pedido,
+  // aí sim vale promover pra uma relação de verdade, como fizemos com
+  // responsavelId/responsavelNome).
+  participantes String[] @default([])
 
   // Fonte da verdade da barra — null = não agendado; 0 = marco (CLAUDE.md §3.3).
   duracaoDiasUteis Int?
@@ -1101,6 +1109,30 @@ model ScheduleV2Snapshot {
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, kind])
+}
+
+// Histórico de alterações do cronograma ("quem mudou o quê, quando") — pedido
+// da Millena depois de montar cronogramas reais e não ter como ver isso.
+// ScheduleV2Snapshot (acima) NÃO serve pra isso: é só um buffer de 1 nível
+// pra undo/redo, sobrescrito a cada mutação, sem usuário. Este model é
+// aditivo (cresce, nunca sobrescreve) e guarda `itemTitle`/`userName` como
+// texto solto (não FK) de propósito — sobrevive a exclusão do item ou
+// desativação do usuário, o registro histórico não pode sumir por causa
+// disso.
+model ScheduleV2ChangeLog {
+  id        String   @id @default(cuid())
+  projectId String
+  itemId    String? // null = ação de projeto inteiro (ex.: aplicar modelo)
+  itemTitle String
+  userId    String?
+  userName  String
+  action    String // "criou" | "editou_datas" | "editou_status" | "editou_percentual" | "editou_responsavel" | "editou_predecessor" | "excluiu" | "aplicou_modelo" | ...
+  description String
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
 }
 
 // Auditoria/rollback da migração ScheduleTask -> ScheduleV2Item (Fase 2 do

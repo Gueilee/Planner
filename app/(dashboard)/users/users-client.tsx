@@ -81,7 +81,11 @@ function UserModal({
 
   function handleSubmit() {
     if (!form.name.trim()) { setError("Nome é obrigatório"); return }
-    if (!form.email.trim()) { setError("E-mail é obrigatório"); return }
+    // Cliente (usuário terceiro) pode não ter e-mail ainda — o servidor
+    // gera um sintético "@ext.planner" nesse caso (mesmo padrão dos
+    // convidados externos de Kick-off). Para os demais cargos, continua
+    // obrigatório.
+    if (!form.email.trim() && form.role !== "CLIENT") { setError("E-mail é obrigatório"); return }
     setError("")
     start(async () => {
       try {
@@ -89,7 +93,7 @@ function UserModal({
         if (editing) {
           saved = await updateUser(editing.id, {
             name: form.name,
-            email: form.email,
+            email: form.email || undefined,
             department: form.department || null,
             role: form.role,
             phone: form.phone || null,
@@ -97,7 +101,7 @@ function UserModal({
         } else {
           saved = await createUser({
             name: form.name,
-            email: form.email,
+            email: form.email || undefined,
             department: form.department || null,
             role: form.role,
             phone: form.phone || null,
@@ -174,7 +178,7 @@ function UserModal({
 
           <div>
             <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">
-              E-mail corporativo *
+              E-mail corporativo {form.role !== "CLIENT" && "*"}
             </label>
             <input
               className={inputBase}
@@ -182,7 +186,7 @@ function UserModal({
               type="email"
               value={form.email}
               onChange={(e) => upd("email", e.target.value)}
-              placeholder="nome@vendemmia.com.br"
+              placeholder={form.role === "CLIENT" ? "Opcional — deixe em branco se ainda não tiver" : "nome@vendemmia.com.br"}
             />
           </div>
 

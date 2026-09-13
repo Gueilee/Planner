@@ -65,6 +65,10 @@ export type ItemV2 = {
   // cadastrado no sistema — nunca coexiste com responsavelId (ver
   // updateItemV2/createItemV2: gravar um sempre limpa o outro).
   responsavelNome: string | null
+  // Outras pessoas ligadas à atividade além do responsável principal
+  // ("participantes"/"informados") — texto livre, mesmo espírito de
+  // responsavelNome.
+  participantes: string[]
   duracaoDiasUteis: number | null
   inicioEstimado: string | null
   terminoEstimado: string | null
@@ -176,6 +180,7 @@ type ItemSnapshotRow = {
   id: string; code: string; parentId: string | null; order: number; title: string; status: string
   responsavelId: string | null
   responsavelNome: string | null
+  participantes: string[]
   duracaoDiasUteis: number | null
   inicioEstimado: string | null; terminoEstimado: string | null
   inicioReal: string | null; terminoReal: string | null
@@ -190,7 +195,7 @@ async function capturePayload(projectId: string): Promise<SnapshotPayload> {
   return {
     items: rows.map((r) => ({
       id: r.id, code: r.code, parentId: r.parentId, order: r.order, title: r.title, status: r.status,
-      responsavelId: r.responsavelId, responsavelNome: r.responsavelNome,
+      responsavelId: r.responsavelId, responsavelNome: r.responsavelNome, participantes: r.participantes,
       duracaoDiasUteis: r.duracaoDiasUteis,
       inicioEstimado: dstr(r.inicioEstimado), terminoEstimado: dstr(r.terminoEstimado),
       inicioReal: dstr(r.inicioReal), terminoReal: dstr(r.terminoReal),
@@ -224,6 +229,55 @@ async function saveSnapshot(projectId: string): Promise<void> {
   await clearSnapshot(projectId, "redo")
 }
 
+// ─── Histórico de alterações (quem/quando/o quê) ───────────────────────────
+// Diferente do snapshot acima (buffer de 1 nível, sobrescrito, sem usuário):
+// isto é aditivo, cresce pra sempre, e é o que alimenta a tela "Histórico"
+// pedida pela Millena. Chamado DEPOIS da mutação já ter sido persistida
+// (registra o que de fato aconteceu, não uma tentativa).
+async function logChange(
+  projectId: string,
+  itemId: string | null,
+  itemTitle: string,
+  action: string,
+  description: string
+): Promise<void> {
+  const session = await auth()
+  await db.scheduleV2ChangeLog.create({
+    data: {
+      projectId,
+      itemId,
+      itemTitle,
+      userId:   session?.user?.id ?? null,
+      userName: session?.user?.name ?? "—",
+      action,
+      description,
+    },
+  })
+}
+
+export type ChangeLogEntryV2 = {
+  id: string
+  itemId: string | null
+  itemTitle: string
+  userName: string
+  action: string
+  description: string
+  createdAt: string
+}
+
+export async function getChangeLogV2(projectId: string, take = 100): Promise<ChangeLogEntryV2[]> {
+  await requireAccess()
+  const rows = await db.scheduleV2ChangeLog.findMany({
+    where: { projectId },
+    orderBy: { createdAt: "desc" },
+    take,
+  })
+  return rows.map((r) => ({
+    id: r.id, itemId: r.itemId, itemTitle: r.itemTitle, userName: r.userName,
+    action: r.action, description: r.description, createdAt: r.createdAt.toISOString(),
+  }))
+}
+
 async function restorePayload(tx: Parameters<Parameters<typeof db.$transaction>[0]>[0], projectId: string, payload: SnapshotPayload): Promise<void> {
   await tx.scheduleV2Dependency.deleteMany({ where: { successor: { projectId } } })
   await tx.scheduleV2Item.deleteMany({ where: { projectId } })
@@ -234,7 +288,7 @@ async function restorePayload(tx: Parameters<Parameters<typeof db.$transaction>[
     await tx.scheduleV2Item.create({
       data: {
         id: it.id, projectId, code: it.code, parentId: null, order: it.order, title: it.title, status: it.status,
-        responsavelId: it.responsavelId, responsavelNome: it.responsavelNome,
+        responsavelId: it.responsavelId, responsavelNome: it.responsavelNome, participantes: it.participantes,
         duracaoDiasUteis: it.duracaoDiasUteis,
         inicioEstimado: ddate(it.inicioEstimado), terminoEstimado: ddate(it.terminoEstimado),
         inicioReal: ddate(it.inicioReal), terminoReal: ddate(it.terminoReal),
@@ -474,6 +528,7 @@ export async function getScheduleV2(projectId: string): Promise<ScheduleV2Payloa
     status: r.status,
     responsavelId: r.responsavelId,
     responsavelNome: r.responsavelNome,
+    participantes: r.participantes,
     duracaoDiasUteis: r.duracaoDiasUteis,
     inicioEstimado: dstr(r.inicioEstimado),
     terminoEstimado: dstr(r.terminoEstimado),
@@ -518,6 +573,7 @@ export type CreateItemV2Input = {
   status?: string
   responsavelId?: string | null
   responsavelNome?: string | null
+  participantes?: string[]
 }
 
 export async function createItemV2(input: CreateItemV2Input): Promise<ItemV2> {
@@ -545,6 +601,7 @@ export async function createItemV2(input: CreateItemV2Input): Promise<ItemV2> {
       status: input.status ?? "A_INICIAR",
       responsavelId: input.responsavelId ?? null,
       responsavelNome: input.responsavelNome ?? null,
+      participantes: input.participantes ?? [],
       order: (maxOrder._max.order ?? -1) + 1,
     },
   })
@@ -554,9 +611,11 @@ export async function createItemV2(input: CreateItemV2Input): Promise<ItemV2> {
   await recomputeAndPersist(input.projectId, [])
   revalidatePath(`/projects/${input.projectId}/schedule`)
 
+  await logChange(input.projectId, row.id, row.title, "criou", `criou a atividade "${row.title}"`)
+
   return {
     id: row.id, code: row.code, projectId: row.projectId, parentId: row.parentId, order: row.order,
-    title: row.title, status: row.status, responsavelId: row.responsavelId, responsavelNome: row.responsavelNome, duracaoDiasUteis: row.duracaoDiasUteis,
+    title: row.title, status: row.status, responsavelId: row.responsavelId, responsavelNome: row.responsavelNome, participantes: row.participantes, duracaoDiasUteis: row.duracaoDiasUteis,
     inicioEstimado: null, terminoEstimado: null, inicioReal: null, terminoReal: null,
     esforcoEstimadoH: row.esforcoEstimadoH, esforcoRealH: row.esforcoRealH,
     percentualCompleto: row.percentualCompleto, schedulingMode: row.schedulingMode as SchedulingMode,
@@ -590,6 +649,7 @@ export async function duplicateItemV2(id: string, projectId: string): Promise<{ 
       status: source.status,
       responsavelId: source.responsavelId,
       responsavelNome: source.responsavelNome,
+      participantes: source.participantes,
       duracaoDiasUteis: source.duracaoDiasUteis,
       esforcoEstimadoH: source.esforcoEstimadoH,
       esforcoRealH: source.esforcoRealH,
@@ -620,6 +680,7 @@ export async function duplicateItemV2(id: string, projectId: string): Promise<{ 
 
   await recomputeAndPersist(projectId, [created.id])
   revalidatePath(`/projects/${projectId}/schedule`)
+  await logChange(projectId, created.id, created.title, "duplicou", `duplicou a atividade "${source.title}"`)
   return { newId: created.id }
 }
 
@@ -642,6 +703,7 @@ export type UpdateItemV2Input = Partial<{
   status: string
   responsavelId: string | null
   responsavelNome: string | null
+  participantes: string[]
   schedulingMode: SchedulingMode
   constraintType: string | null
   constraintDate: string | null
@@ -657,7 +719,7 @@ export async function updateItemV2(
   await requireAccess()
   await saveSnapshot(projectId)
 
-  const current = await db.scheduleV2Item.findUnique({ where: { id }, select: { id: true, inicioEstimado: true } })
+  const current = await db.scheduleV2Item.findUnique({ where: { id }, select: { id: true, title: true, inicioEstimado: true } })
   if (!current) throw new Error("Item não encontrado")
 
   const hasChildren = (await db.scheduleV2Item.count({ where: { parentId: id } })) > 0
@@ -720,6 +782,7 @@ export async function updateItemV2(
       ...(data.status !== undefined && { status: data.status }),
       ...(responsavelIdUpdate !== undefined && { responsavelId: responsavelIdUpdate }),
       ...(responsavelNomeUpdate !== undefined && { responsavelNome: responsavelNomeUpdate }),
+      ...(data.participantes !== undefined && { participantes: data.participantes }),
       ...(data.schedulingMode !== undefined && { schedulingMode: data.schedulingMode }),
       ...(data.constraintType !== undefined && { constraintType: data.constraintType }),
       ...(data.constraintDate !== undefined && { constraintDate: ddate(data.constraintDate) }),
@@ -730,6 +793,25 @@ export async function updateItemV2(
 
   const result = await recomputeAndPersist(projectId, [id])
   revalidatePath(`/projects/${projectId}/schedule`)
+
+  // Descrição em texto simples (não é um diff exaustivo campo a campo — só
+  // os pontos que a Millena de fato quer rastrear: datas, status, %,
+  // responsável, título, estrutura).
+  const changed: string[] = []
+  if (data.title !== undefined) changed.push(`título para "${data.title}"`)
+  if (!hasChildren && data.inicioEstimado !== undefined) changed.push(`Início para ${data.inicioEstimado ?? "vazio"}`)
+  if (!hasChildren && (data.terminoEstimado !== undefined || duracaoFromTermino !== undefined)) changed.push("Término")
+  if (data.inicioReal !== undefined) changed.push(`Início Real para ${data.inicioReal ?? "vazio"}`)
+  if (data.terminoReal !== undefined) changed.push(`Término Real para ${data.terminoReal ?? "vazio"}`)
+  if (!hasChildren && data.percentualCompleto !== undefined) changed.push(`% Completo para ${data.percentualCompleto}%`)
+  if (data.status !== undefined) changed.push(`Status para ${data.status}`)
+  if (responsavelIdUpdate !== undefined || responsavelNomeUpdate !== undefined) changed.push("Responsável")
+  if (data.participantes !== undefined) changed.push("Participantes")
+  if (data.parentId !== undefined) changed.push("reestruturou (mudou de grupo)")
+  if (changed.length > 0) {
+    await logChange(projectId, id, data.title ?? current.title, "editou", `alterou ${changed.join(", ")}`)
+  }
+
   return result
 }
 
@@ -738,6 +820,8 @@ export async function updateItemV2(
 export async function deleteItemV2(id: string, projectId: string): Promise<{ deletedIds: string[] }> {
   await requireAccess()
   await saveSnapshot(projectId)
+
+  const target = await db.scheduleV2Item.findUnique({ where: { id }, select: { title: true } })
 
   // Sem CASCADE na auto-relação (mesmo motivo do ScheduleTask original:
   // Postgres não permite múltiplos caminhos de CASCADE ambíguos) — coleta
@@ -773,6 +857,9 @@ export async function deleteItemV2(id: string, projectId: string): Promise<{ del
   await recomputeAndPersist(projectId, affectedSuccessors)
   revalidatePath(`/projects/${projectId}/schedule`)
 
+  const suffix = toDelete.length > 1 ? ` (e ${toDelete.length - 1} subatividade${toDelete.length > 2 ? "s" : ""})` : ""
+  await logChange(projectId, id, target?.title ?? "?", "excluiu", `excluiu a atividade "${target?.title ?? "?"}"${suffix}`)
+
   return { deletedIds: toDelete }
 }
 
@@ -795,7 +882,7 @@ export async function setDependenciesV2(
   await requireAccess()
   await saveSnapshot(projectId)
 
-  const rows = await db.scheduleV2Item.findMany({ where: { projectId }, select: { id: true, code: true } })
+  const rows = await db.scheduleV2Item.findMany({ where: { projectId }, select: { id: true, code: true, title: true } })
   const idByCode = new Map(rows.map((r) => [r.code, r.id]))
   const validCodes = new Set(rows.map((r) => r.code))
 
@@ -836,6 +923,12 @@ export async function setDependenciesV2(
   const result = await recomputeAndPersist(projectId, [itemId])
   revalidatePath(`/projects/${projectId}/schedule`)
 
+  const itemTitle = rows.find((r) => r.id === itemId)?.title ?? "?"
+  const desc = raw.trim()
+    ? `alterou o predecessor de "${itemTitle}" para "${raw.trim()}"`
+    : `removeu o predecessor de "${itemTitle}"`
+  await logChange(projectId, itemId, itemTitle, "editou_predecessor", desc)
+
   return { accepted: accepted.length, rejected: parsed.length - accepted.length, ...result }
 }
 
@@ -873,6 +966,9 @@ export async function applyItemUpdatesV2(projectId: string, updates: ItemFieldUp
   const ids = updates.map((u) => u.itemId)
   const children = await db.scheduleV2Item.findMany({ where: { parentId: { in: ids } }, select: { parentId: true } })
   const hasChildrenSet = new Set(children.map((c) => c.parentId as string))
+  const titleById = new Map(
+    (await db.scheduleV2Item.findMany({ where: { id: { in: ids } }, select: { id: true, title: true } })).map((r) => [r.id, r.title])
+  )
 
   const needsCalendar = updates.some((u) => u.inicioEstimado !== undefined || u.terminoEstimado !== undefined)
   const cal = needsCalendar ? await loadCalendar(projectId) : null
@@ -908,6 +1004,22 @@ export async function applyItemUpdatesV2(projectId: string, updates: ItemFieldUp
 
   await recomputeAndPersist(projectId, ids)
   revalidatePath(`/projects/${projectId}/schedule`)
+
+  // Checkpoint/Kanban escrevem por aqui (não por updateItemV2) — mesmo
+  // princípio de log, campos que a Millena de fato quer rastrear.
+  for (const u of updates) {
+    const changed: string[] = []
+    if (u.status !== undefined) changed.push(`Status para ${u.status}`)
+    if (u.percentualCompleto !== undefined) changed.push(`% Completo para ${u.percentualCompleto}%`)
+    if (u.inicioReal !== undefined) changed.push(`Início Real para ${u.inicioReal ?? "vazio"}`)
+    if (u.terminoReal !== undefined) changed.push(`Término Real para ${u.terminoReal ?? "vazio"}`)
+    if (u.inicioEstimado !== undefined || u.terminoEstimado !== undefined) changed.push("datas planejadas")
+    if (u.budgetedCost !== undefined) changed.push("custo orçado")
+    if (u.actualCost !== undefined) changed.push("custo real")
+    if (changed.length === 0) continue
+    const title = titleById.get(u.itemId) ?? "?"
+    await logChange(projectId, u.itemId, title, "editou", `alterou ${changed.join(", ")}`)
+  }
 }
 
 // ─── Aplicar modelo de cronograma (Fase 1) ───────────────────────────────────
@@ -1012,6 +1124,8 @@ export async function applyTemplateV2(
 
   await recomputeAndPersist(projectId, leafIds)
   revalidatePath(`/projects/${projectId}/schedule`)
+
+  await logChange(projectId, null, template.name, "aplicou_modelo", `aplicou o modelo "${template.name}" (${tasks.length} atividades)`)
 
   return { count: tasks.length }
 }

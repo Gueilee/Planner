@@ -3,19 +3,22 @@
 import { useEffect, useMemo, useState, useTransition } from "react"
 import {
   createItemV2, updateItemV2, deleteItemV2, duplicateItemV2, reorderItemsV2, setDependenciesV2, getScheduleV2,
-  hasUndoV2, hasRedoV2, undoLastChangeV2, redoLastChangeV2, applyTemplateV2,
+  hasUndoV2, hasRedoV2, undoLastChangeV2, redoLastChangeV2, applyTemplateV2, getChangeLogV2,
 } from "@/lib/actions/schedule-v2"
-import type { ScheduleV2Payload, ItemV2 } from "@/lib/actions/schedule-v2"
+import type { ScheduleV2Payload, ItemV2, ChangeLogEntryV2 } from "@/lib/actions/schedule-v2"
 import { computeProjectProgress } from "@/lib/utils/project-progress"
 import { computeExpectedPct, computeScheduleStatus, DEFAULT_RISK_THRESHOLD_PCT, type ScheduleStatus } from "@/lib/utils/schedule-status"
 import { exportScheduleToExcel } from "@/lib/export-schedule"
 import { getTemplates } from "@/lib/actions/templates"
 import type { Template } from "@/lib/actions/templates"
+import { createBaselineForProject, getLatestBaselineByItem } from "@/lib/actions/baseline"
 import { fmtDateLong, isValidDateStr } from "@/lib/date-utils"
+import { formatDistanceToNow } from "date-fns"
+import { ptBR } from "date-fns/locale"
 import {
   ChevronRight, ChevronDown, Plus, IndentIncrease, IndentDecrease,
   ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, Milestone,
-  Circle, CircleX, CirclePlus, Pencil, Undo2, Redo2, GripVertical, GripHorizontal, LayoutTemplate, FileSpreadsheet,
+  Circle, CircleX, CirclePlus, Pencil, Undo2, Redo2, GripVertical, GripHorizontal, LayoutTemplate, FileSpreadsheet, BookmarkPlus, History,
 } from "lucide-react"
 
 // ─── Helpers de árvore ──────────────────────────────────────────────────────
@@ -135,24 +138,33 @@ function statusLabel(status: string) {
 // "Atividade" (título+hierarquia) fica fixa à esquerda — todo o resto é
 // livre para o usuário reordenar e redimensionar.
 
-type ColKey = "duracao" | "inicio" | "termino" | "inicioReal" | "terminoReal" | "pctEstimado" | "pct" | "predecessores" | "responsavel" | "status"
+type ColKey = "duracao" | "inicio" | "termino" | "inicioReal" | "terminoReal" | "baselineInicio" | "baselineTermino" | "pctEstimado" | "pct" | "predecessores" | "responsavel" | "participantes" | "status"
 
 const COL_LABELS: Record<ColKey, string> = {
   duracao: "Duração", inicio: "Início", termino: "Término",
   inicioReal: "Início Real", terminoReal: "Término Real",
+  // Datas congeladas na última linha de base salva (botão "Salvar Linha de
+  // Base" na barra de ferramentas) — somente leitura, pra comparar contra
+  // o planejado atual sem trocar de tela (só a Curva S mostrava isso antes,
+  // de forma agregada).
+  baselineInicio: "Início Base", baselineTermino: "Término Base",
   // "% Estimado" (quanto já deveria ter avançado hoje, calculado a partir do
   // período planejado) ao lado de "% Real" (o que foi digitado de verdade) —
   // pedido explícito: os dois lado a lado pra comparar.
   pctEstimado: "% Estimado", pct: "% Real",
-  predecessores: "Predecessores", responsavel: "Responsável", status: "Status",
+  predecessores: "Predecessores", responsavel: "Responsável",
+  // Além do responsável principal: outras pessoas ligadas à atividade
+  // ("participantes"/"informados") — texto livre, vários nomes por vírgula.
+  participantes: "Participantes", status: "Status",
 }
-const DEFAULT_COL_ORDER: ColKey[] = ["duracao", "inicio", "termino", "inicioReal", "terminoReal", "pctEstimado", "pct", "predecessores", "responsavel", "status"]
+const DEFAULT_COL_ORDER: ColKey[] = ["duracao", "inicio", "termino", "inicioReal", "terminoReal", "baselineInicio", "baselineTermino", "pctEstimado", "pct", "predecessores", "responsavel", "participantes", "status"]
 const DEFAULT_COL_WIDTHS: Record<ColKey, number> = {
-  duracao: 70, inicio: 110, termino: 100, inicioReal: 110, terminoReal: 110, pctEstimado: 70, pct: 60, predecessores: 150, responsavel: 140, status: 130,
+  duracao: 70, inicio: 110, termino: 100, inicioReal: 110, terminoReal: 110, baselineInicio: 100, baselineTermino: 100, pctEstimado: 70, pct: 60, predecessores: 150, responsavel: 140, participantes: 160, status: 130,
 }
 const COL_ALIGN: Record<ColKey, "center" | "left"> = {
-  duracao: "center", inicio: "center", termino: "center", inicioReal: "center", terminoReal: "center", pctEstimado: "center", pct: "center",
-  predecessores: "left", responsavel: "left", status: "left",
+  duracao: "center", inicio: "center", termino: "center", inicioReal: "center", terminoReal: "center",
+  baselineInicio: "center", baselineTermino: "center", pctEstimado: "center", pct: "center",
+  predecessores: "left", responsavel: "left", participantes: "left", status: "left",
 }
 const DEFAULT_TITLE_WIDTH = 320
 const GUTTER_WIDTH = 112
@@ -161,7 +173,7 @@ function colPrefsKey(projectId: string) { return `sv2-columns-${projectId}` }
 
 // ─── Main ─────────────────────────────────────────────────────────────────
 
-export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlannedDates, members, riskThresholdPct = DEFAULT_RISK_THRESHOLD_PCT }: {
+export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlannedDates, members, riskThresholdPct = DEFAULT_RISK_THRESHOLD_PCT, initialBaselineByItem = {} }: {
   projectId: string
   projectTitle: string
   initial: ScheduleV2Payload
@@ -173,6 +185,9 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
   projectPlannedDates: { expectedStart: string | null; expectedEnd: string | null }
   members: { id: string; name: string }[]
   riskThresholdPct?: number
+  // Datas congeladas na última linha de base (ver lib/actions/baseline.ts),
+  // indexadas por ScheduleV2Item.id — colunas "Início Base"/"Término Base".
+  initialBaselineByItem?: Record<string, { plannedStart: string | null; plannedEnd: string | null }>
 }) {
   const membersById = useMemo(() => new Map(members.map((m) => [m.id, m.name])), [members])
   const [data, setData] = useState<ScheduleV2Payload>(initial)
@@ -191,6 +206,19 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
   const [tplSelected, setTplSelected] = useState<string>("")
   const [tplStartDate, setTplStartDate] = useState<string>(() => new Date().toISOString().slice(0, 10))
   const [exporting, setExporting] = useState(false)
+
+  // Linha de base — "Salvar Linha de Base" congela início/término
+  // planejados de hoje; as colunas Início/Término Base mostram a última
+  // salva, pra comparar contra o planejado atual sem trocar de tela.
+  const [baselineByItem, setBaselineByItem] = useState(initialBaselineByItem)
+  const [savingBaseline, setSavingBaseline] = useState(false)
+  const [baselineMsg, setBaselineMsg] = useState<string | null>(null)
+
+  // Histórico de alterações — "quem mudou o quê, quando" (lib/actions/
+  // schedule-v2.ts::getChangeLogV2), carregado sob demanda ao abrir o modal.
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyEntries, setHistoryEntries] = useState<ChangeLogEntryV2[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   // Layout de colunas (larguras + ordem) — preferência pessoal, salva no
   // navegador (não é dado do cronograma, é só a visão de quem está olhando).
@@ -401,6 +429,33 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
       .finally(() => setExporting(false))
   }
 
+  function handleSaveBaseline() {
+    setSavingBaseline(true)
+    setBaselineMsg(null)
+    startTransition(async () => {
+      const result = await createBaselineForProject(projectId, {})
+      if (result.error) {
+        setBaselineMsg(result.error)
+      } else {
+        const fresh = await getLatestBaselineByItem(projectId)
+        setBaselineByItem(fresh)
+        setBaselineMsg("Linha de base salva.")
+      }
+      setSavingBaseline(false)
+      setTimeout(() => setBaselineMsg(null), 5000)
+    })
+  }
+
+  function handleOpenHistory() {
+    setHistoryOpen(true)
+    setHistoryLoading(true)
+    startTransition(async () => {
+      const entries = await getChangeLogV2(projectId)
+      setHistoryEntries(entries)
+      setHistoryLoading(false)
+    })
+  }
+
   function handleEditTitle(id: string) {
     const el = document.getElementById(`sv2-title-${id}`) as HTMLInputElement | null
     el?.focus()
@@ -504,7 +559,7 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
     data, expanded, onToggle: toggle, onUpdate: handleUpdate, onDeps: handleDeps, onDelete: handleDelete,
     onDuplicate: handleDuplicate, onAddAbove: handleAddAbove, onAddChild: handleAddChild, onEditTitle: handleEditTitle,
     selectedId, onSelect: setSelectedId, sort, conflictByItem,
-    colOrder, colWidths, titleWidth, members, membersById,
+    colOrder, colWidths, titleWidth, members, membersById, baselineByItem,
     dragRowId, dropTarget, onRowDragStart: handleRowDragStart, onRowDragOver: handleRowDragOver,
     onRowDrop: handleRowDrop, onRowDragEnd: handleRowDragEnd,
   }
@@ -589,6 +644,13 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
         <ToolbarBtn wide disabled={exporting || data.items.length === 0} onClick={handleExportExcel} title="Exportar este cronograma para uma planilha Excel formatada">
           <FileSpreadsheet className="w-3.5 h-3.5" /> {exporting ? "Exportando…" : "Exportar Excel"}
         </ToolbarBtn>
+        <ToolbarBtn wide disabled={savingBaseline || data.items.length === 0} onClick={handleSaveBaseline} title="Congela o início/término planejado de hoje — compare depois nas colunas Início Base/Término Base">
+          <BookmarkPlus className="w-3.5 h-3.5" /> {savingBaseline ? "Salvando…" : "Salvar Linha de Base"}
+        </ToolbarBtn>
+        {baselineMsg && <span className="text-[10px] font-bold text-[#7B2FBE]">{baselineMsg}</span>}
+        <ToolbarBtn wide onClick={handleOpenHistory} title="Ver quem alterou o quê e quando neste cronograma">
+          <History className="w-3.5 h-3.5" /> Histórico
+        </ToolbarBtn>
         <div className="w-px h-5 bg-slate-200 mx-1" />
         <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mr-1">
           {selectedItem ? <>Selecionado: <span className="text-slate-600 normal-case">{selectedItem.title}</span></> : "Selecione uma linha (círculo) ou arraste pela alcinha ⠿"}
@@ -670,6 +732,65 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
           onClose={() => setTplModalOpen(false)}
         />
       )}
+
+      {historyOpen && (
+        <HistoryModal loading={historyLoading} entries={historyEntries} onClose={() => setHistoryOpen(false)} />
+      )}
+    </div>
+  )
+}
+
+// ─── Modal "Histórico" ────────────────────────────────────────────────────
+function HistoryModal({ loading, entries, onClose }: {
+  loading: boolean
+  entries: ChangeLogEntryV2[]
+  onClose: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4" onClick={onClose}>
+      <div
+        className="w-full max-w-lg max-h-[80vh] flex flex-col rounded-2xl bg-white shadow-xl border border-slate-200 p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2 mb-1 shrink-0">
+          <History className="w-4 h-4 text-[#7B2FBE]" />
+          <h3 className="text-sm font-black text-slate-800">Histórico de alterações</h3>
+        </div>
+        <p className="text-xs text-slate-400 mb-4 shrink-0">
+          Quem mudou o quê e quando neste cronograma — mais recentes primeiro.
+        </p>
+
+        <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1">
+          {loading ? (
+            <p className="text-xs text-slate-400 text-center py-6">Carregando…</p>
+          ) : entries.length === 0 ? (
+            <p className="text-xs text-slate-400 text-center py-6">Nenhuma alteração registrada ainda.</p>
+          ) : (
+            <ul className="space-y-2">
+              {entries.map((e) => (
+                <li key={e.id} className="text-xs border-b border-slate-100 pb-2">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="font-bold text-slate-700">{e.userName}</span>
+                    <span
+                      className="text-[10px] text-slate-400 shrink-0"
+                      title={new Date(e.createdAt).toLocaleString("pt-BR")}
+                    >
+                      {formatDistanceToNow(new Date(e.createdAt), { addSuffix: true, locale: ptBR })}
+                    </span>
+                  </div>
+                  <p className="text-slate-600 mt-0.5">{e.description}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 mt-4 shrink-0">
+          <button onClick={onClose} className="px-3.5 py-2 rounded-lg text-xs font-bold text-slate-500 hover:bg-slate-100 transition-colors">
+            Fechar
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -870,6 +991,7 @@ type RowHandlers = {
   titleWidth: number
   members: { id: string; name: string }[]
   membersById: Map<string, string>
+  baselineByItem: Record<string, { plannedStart: string | null; plannedEnd: string | null }>
   dragRowId: string | null
   dropTarget: { id: string; zone: "before" | "after" | "inside" } | null
   onRowDragStart: (id: string) => void
@@ -1104,6 +1226,16 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
         />
       )
 
+    case "baselineInicio": {
+      const base = h.baselineByItem[item.id]?.plannedStart
+      return <span className="text-[10px] text-slate-400">{base ? fmtDateLong(base) : "—"}</span>
+    }
+
+    case "baselineTermino": {
+      const base = h.baselineByItem[item.id]?.plannedEnd
+      return <span className="text-[10px] text-slate-400">{base ? fmtDateLong(base) : "—"}</span>
+    }
+
     case "pctEstimado": {
       // Quanto a atividade JÁ deveria ter avançado hoje, dado o período
       // planejado dela — mesma conta do "Esperado" do cabeçalho
@@ -1169,6 +1301,28 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
             const match = h.members.find((m) => m.name.toLowerCase() === typed.toLowerCase())
             if (match) h.onUpdate(item.id, { responsavelId: match.id })
             else h.onUpdate(item.id, { responsavelNome: typed })
+          }}
+          className="w-full bg-transparent outline-none text-xs text-slate-700 placeholder-slate-300 rounded border-b border-transparent focus:border-[#7B2FBE] focus:bg-violet-50"
+        />
+      )
+    }
+
+    case "participantes": {
+      // Além do responsável (acima): outras pessoas ligadas à atividade,
+      // texto livre separado por vírgula (mesmo datalist de sugestão do
+      // Responsável, sem travar a digitação a ele).
+      const current = item.participantes.join(", ")
+      return (
+        <input
+          key={`part:${item.id}:${current}`}
+          list="sv2-members-list"
+          defaultValue={current}
+          placeholder="Sem participantes"
+          onBlur={(e) => {
+            const typed = e.target.value.trim()
+            if (typed === current) return
+            const list = typed === "" ? [] : typed.split(",").map((s) => s.trim()).filter(Boolean)
+            h.onUpdate(item.id, { participantes: list })
           }}
           className="w-full bg-transparent outline-none text-xs text-slate-700 placeholder-slate-300 rounded border-b border-transparent focus:border-[#7B2FBE] focus:bg-violet-50"
         />

@@ -134,7 +134,7 @@ export type CreateUserResult =
 
 export async function createUser(data: {
   name:         string
-  email:        string
+  email?:       string
   password:     string
   role:         string
   department?:  string
@@ -147,17 +147,26 @@ export async function createUser(data: {
   if (session.user.role !== "ADMIN") return { success: false, error: "Acesso restrito a administradores" }
 
   if (!data.name.trim())        return { success: false, error: "Nome é obrigatório" }
-  if (!data.email.trim())       return { success: false, error: "E-mail é obrigatório" }
+  const typedEmail = data.email?.trim().toLowerCase()
+  if (!typedEmail && data.role !== "CLIENT") return { success: false, error: "E-mail é obrigatório" }
   if (data.password.length < 6) return { success: false, error: "Senha deve ter no mínimo 6 caracteres" }
 
-  const exists = await db.user.findUnique({ where: { email: data.email.trim().toLowerCase() } })
+  // Cliente (usuário terceiro) pode não ter e-mail ainda — gera um
+  // sintético "@ext.planner", mesmo padrão já usado para convidados
+  // externos de Kick-off (lib/actions/kickoff.ts::syncExternalAttendees) e
+  // já reconhecido como "sem e-mail definido" na listagem (isSynthetic em
+  // users-tab.tsx/users-client.tsx).
+  const slug  = data.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 30).replace(/-$/, "")
+  const email = typedEmail || `ext-${slug}-${crypto.randomUUID().slice(0, 8)}@ext.planner`
+
+  const exists = await db.user.findUnique({ where: { email } })
   if (exists) return { success: false, error: "Já existe um usuário com este e-mail" }
 
   const hash = await bcrypt.hash(data.password, 10)
   const user = await db.user.create({
     data: {
       name:           data.name.trim(),
-      email:          data.email.trim().toLowerCase(),
+      email,
       password:       hash,
       role:           data.role as never,
       department:     data.department?.trim() || null,
