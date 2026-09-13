@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache"
 import { ProjectStatus } from "@/lib/generated/prisma/enums"
 import { notifyProjectMembers } from "@/lib/notify"
 import { isValidDateStr } from "@/lib/date-utils"
+import { computeRiskGrade, computeRiskStatus } from "@/lib/utils/risk-matrix"
 
 // ─── Project ───────────────────────────────────────────────────────────────
 
@@ -197,28 +198,42 @@ export async function removeProjectMember(projectId: string, userId: string) {
 
 export async function createRisk(projectId: string, data: {
   description: string
-  level: string
-  probability?: string
-  impact?: string
+  consequenceLevel: number
+  probabilityLevel: number
+  treatmentStrategy: string
   mitigation?: string
+  mainImpacted?: string
+  presentToClient?: boolean
+  responsibleId?: string | null
 }) {
   const session = await auth()
   if (!session?.user) throw new Error("Não autorizado")
 
-  const level = (data.level as import("@/lib/generated/prisma/enums").RiskLevel) ?? "MEDIUM"
+  const riskGrade = computeRiskGrade(data.consequenceLevel, data.probabilityLevel)
+  const status = computeRiskStatus(riskGrade)
 
   await db.risk.create({
     data: {
       projectId,
-      description: data.description,
-      status:      level,
-      probability: data.probability ?? "MÉDIO",
-      impact:      data.impact      ?? "MÉDIO",
-      mitigation:  data.mitigation  ?? null,
+      description:       data.description,
+      consequenceLevel:  data.consequenceLevel,
+      probabilityLevel:  data.probabilityLevel,
+      riskGrade,
+      status,
+      treatmentStrategy: data.treatmentStrategy,
+      mitigation:        data.mitigation ?? null,
+      mainImpacted:       data.mainImpacted ?? null,
+      presentToClient:   data.presentToClient ?? false,
+      responsibleId:     data.responsibleId ?? null,
+      // probability/impact (texto livre legado) não são mais preenchidos
+      // por nenhuma tela nova — ficam com um valor neutro só pra satisfazer
+      // a coluna obrigatória.
+      probability: "—",
+      impact:      "—",
     },
   })
 
-  if (level === "CRITICAL") {
+  if (status === "CRITICAL") {
     const project = await db.project.findUnique({ where: { id: projectId }, select: { title: true } })
     await notifyProjectMembers(projectId, "criticalRisk", {
       type:    "critical_risk_added",
@@ -233,22 +248,40 @@ export async function createRisk(projectId: string, data: {
 
 export async function updateRisk(id: string, data: {
   description?: string
-  level?: string
+  consequenceLevel?: number
+  probabilityLevel?: number
+  treatmentStrategy?: string
   mitigation?: string
+  mainImpacted?: string
+  presentToClient?: boolean
+  responsibleId?: string | null
 }) {
   const session = await auth()
   if (!session?.user) throw new Error("Não autorizado")
 
-  const risk = await db.risk.findUnique({ where: { id }, select: { projectId: true } })
+  const risk = await db.risk.findUnique({ where: { id }, select: { projectId: true, consequenceLevel: true, probabilityLevel: true } })
+  if (!risk) return
+
+  const consequenceLevel = data.consequenceLevel ?? risk.consequenceLevel
+  const probabilityLevel = data.probabilityLevel ?? risk.probabilityLevel
+  const riskGrade = computeRiskGrade(consequenceLevel, probabilityLevel)
+
   await db.risk.update({
     where: { id },
     data: {
-      description: data.description,
-      status:      data.level ? (data.level as import("@/lib/generated/prisma/enums").RiskLevel) : undefined,
-      mitigation:  data.mitigation,
+      description:       data.description,
+      consequenceLevel:  data.consequenceLevel,
+      probabilityLevel:  data.probabilityLevel,
+      riskGrade,
+      status:            computeRiskStatus(riskGrade),
+      treatmentStrategy: data.treatmentStrategy,
+      mitigation:        data.mitigation,
+      mainImpacted:       data.mainImpacted,
+      presentToClient:   data.presentToClient,
+      ...(data.responsibleId !== undefined && { responsibleId: data.responsibleId }),
     },
   })
-  if (risk) revalidatePath(`/projects/${risk.projectId}`)
+  revalidatePath(`/projects/${risk.projectId}`)
 }
 
 export async function deleteRisk(id: string) {

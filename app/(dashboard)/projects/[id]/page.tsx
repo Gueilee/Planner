@@ -35,6 +35,9 @@ const RISK_COLORS: Record<string, string> = {
 const RISK_LABELS: Record<string, string> = {
   LOW: "Baixo", MEDIUM: "Médio", HIGH: "Alto", CRITICAL: "Crítico"
 }
+const TREATMENT_LABELS: Record<string, string> = {
+  MITIGAR: "Mitigar", COMPARTILHAR: "Compartilhar", TRANSFERIR: "Transferir", ELIMINAR: "Eliminar", JUSTIFICAR: "Justificar",
+}
 const TASK_STATUS_LABELS: Record<string, string> = {
   PLANNING: "A Iniciar", IN_PROGRESS: "Em Andamento", COMPLETED: "Concluída",
   VALIDATION: "Validação", ON_HOLD: "Pausada", INITIATIVE: "Iniciativa",
@@ -78,7 +81,7 @@ export default async function ProjectDetailPage({
           responsavelId: true, responsavelNome: true, responsavel: { select: { id: true, name: true } },
         },
       },
-      risks: { orderBy: { createdAt: "asc" } },
+      risks: { orderBy: { createdAt: "asc" }, include: { responsible: { select: { id: true, name: true } } } },
       benefits: {
         orderBy: { createdAt: "asc" as const },
         select: {
@@ -328,10 +331,16 @@ export default async function ProjectDetailPage({
                     }))}
                     allUsers={allUsers}
                     risks={project.risks.map(r => ({
-                      id:          r.id,
-                      description: r.description,
-                      level:       r.status,
-                      mitigation:  r.mitigation,
+                      id:                r.id,
+                      description:       r.description,
+                      consequenceLevel:  r.consequenceLevel,
+                      probabilityLevel:  r.probabilityLevel,
+                      riskGrade:         r.riskGrade,
+                      treatmentStrategy: r.treatmentStrategy,
+                      mitigation:        r.mitigation,
+                      mainImpacted:      r.mainImpacted,
+                      presentToClient:   r.presentToClient,
+                      responsibleId:     r.responsibleId,
                     }))}
                     benefits={project.benefits.map(b => ({
                       id:              b.id,
@@ -1150,22 +1159,24 @@ export default async function ProjectDetailPage({
                   <div className="flex items-start justify-between gap-4">
                     <p className="text-sm font-bold text-[#0F172A] flex-1">{risk.description}</p>
                     <div className="flex gap-2 shrink-0">
-                      <span className={`px-2.5 py-1 text-[10px] font-bold rounded-full border ${RISK_COLORS[risk.probability] ?? ""}`}>
-                        P: {RISK_LABELS[risk.probability] ?? risk.probability}
-                      </span>
-                      <span className={`px-2.5 py-1 text-[10px] font-bold rounded-full border ${RISK_COLORS[risk.impact] ?? ""}`}>
-                        I: {RISK_LABELS[risk.impact] ?? risk.impact}
+                      <span className={`px-2.5 py-1 text-[10px] font-bold rounded-full border ${RISK_COLORS[risk.status] ?? ""}`}>
+                        Grau {risk.riskGrade} · {RISK_LABELS[risk.status] ?? risk.status}
                       </span>
                     </div>
                   </div>
+                  <p className="text-xs text-slate-400 mt-2">
+                    {TREATMENT_LABELS[risk.treatmentStrategy] ?? risk.treatmentStrategy}
+                    {risk.mainImpacted && ` · Impacta: ${risk.mainImpacted}`}
+                    {risk.presentToClient && " · Visível ao cliente"}
+                  </p>
                   {risk.mitigation && (
                     <p className="text-xs text-slate-400 mt-3 leading-relaxed">
                       <span className="font-bold text-slate-600">Mitigação:</span> {risk.mitigation}
                     </p>
                   )}
-                  {risk.owner && (
+                  {(risk.responsible?.name || risk.owner) && (
                     <p className="text-xs text-slate-400 mt-1">
-                      <span className="font-bold text-slate-600">Responsável:</span> {risk.owner}
+                      <span className="font-bold text-slate-600">Responsável:</span> {risk.responsible?.name ?? risk.owner}
                     </p>
                   )}
                 </div>

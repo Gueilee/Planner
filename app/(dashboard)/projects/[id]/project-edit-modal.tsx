@@ -10,12 +10,24 @@ import {
   createRisk, updateRisk, deleteRisk,
 } from "@/lib/actions/projects"
 import { createBenefit, updateBenefit, deleteBenefit } from "@/lib/actions/benefits"
+import { CONSEQUENCE_LEVELS, PROBABILITY_LEVELS, TREATMENT_STRATEGIES, computeRiskGrade, computeRiskStatus } from "@/lib/utils/risk-matrix"
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type Member = { userId: string; role: string; user: { id: string; name: string; department: string | null; role: string } }
 type AvailUser = { id: string; name: string; department: string | null; role: string }
-type RiskItem = { id: string; description: string; level: string; mitigation: string | null }
+type RiskItem = {
+  id: string
+  description: string
+  consequenceLevel: number
+  probabilityLevel: number
+  riskGrade: number
+  treatmentStrategy: string
+  mitigation: string | null
+  mainImpacted: string | null
+  presentToClient: boolean
+  responsibleId: string | null
+}
 type BenefitRow = {
   id: string
   category: "FINANCIAL" | "OPERATIONAL" | "STRATEGIC" | "COMPLIANCE"
@@ -1033,29 +1045,168 @@ function TeamSection({
 
 // ── Risks Section ───────────────────────────────────────────────────────────
 
+type RiskFormState = {
+  description: string
+  consequenceLevel: number
+  probabilityLevel: number
+  treatmentStrategy: string
+  mitigation: string
+  mainImpacted: string
+  presentToClient: boolean
+  responsibleId: string | null
+}
+const EMPTY_RISK_FORM: RiskFormState = {
+  description: "", consequenceLevel: 3, probabilityLevel: 3, treatmentStrategy: "MITIGAR",
+  mitigation: "", mainImpacted: "", presentToClient: false, responsibleId: null,
+}
+
+// Campos compartilhados entre o form de edição e o de "novo risco" — a
+// matriz de risco tem campos demais pra duplicar a JSX das duas vezes
+// (como o form de 3 campos antigo fazia).
+function RiskFormFields({ form, setForm, allUsers }: {
+  form: RiskFormState
+  setForm: (updater: (f: RiskFormState) => RiskFormState) => void
+  allUsers: AvailUser[]
+}) {
+  const grade = computeRiskGrade(form.consequenceLevel, form.probabilityLevel)
+  const cfg = riskCfg(computeRiskStatus(grade))
+  const consequenceHint = CONSEQUENCE_LEVELS.find(l => l.value === form.consequenceLevel)?.hint
+  const probabilityHint = PROBABILITY_LEVELS.find(l => l.value === form.probabilityLevel)?.hint
+  const strategyHint = TREATMENT_STRATEGIES.find(t => t.value === form.treatmentStrategy)?.hint
+
+  return (
+    <>
+      <Field label="Descrição do risco">
+        <textarea
+          className="lp-inp"
+          rows={2}
+          style={{ paddingTop: 10, paddingBottom: 10, resize: "vertical" }}
+          value={form.description}
+          onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+          placeholder="Descreva o risco ou issue..."
+        />
+      </Field>
+
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Nível da Consequência">
+          <div className="relative">
+            <select
+              className="lp-inp pr-8 appearance-none"
+              value={form.consequenceLevel}
+              onChange={e => setForm(f => ({ ...f, consequenceLevel: Number(e.target.value) }))}
+            >
+              {CONSEQUENCE_LEVELS.map(l => <option key={l.value} value={l.value}>{l.value} — {l.label}</option>)}
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+          </div>
+          {consequenceHint && <p className="text-[10px] text-slate-400 mt-1">{consequenceHint}</p>}
+        </Field>
+        <Field label="Probabilidade de Ocorrência">
+          <div className="relative">
+            <select
+              className="lp-inp pr-8 appearance-none"
+              value={form.probabilityLevel}
+              onChange={e => setForm(f => ({ ...f, probabilityLevel: Number(e.target.value) }))}
+            >
+              {PROBABILITY_LEVELS.map(l => <option key={l.value} value={l.value}>{l.value} — {l.label}</option>)}
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+          </div>
+          {probabilityHint && <p className="text-[10px] text-slate-400 mt-1">{probabilityHint}</p>}
+        </Field>
+      </div>
+
+      <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: cfg.bg, border: `1px solid ${cfg.border}` }}>
+        <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: cfg.color }}>Grau do Risco: {grade}</span>
+        <span className="text-[10px] font-black uppercase tracking-wide" style={{ color: cfg.color }}>{cfg.label}</span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Estratégia de Tratamento">
+          <div className="relative">
+            <select
+              className="lp-inp pr-8 appearance-none"
+              value={form.treatmentStrategy}
+              onChange={e => setForm(f => ({ ...f, treatmentStrategy: e.target.value }))}
+            >
+              {TREATMENT_STRATEGIES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+          </div>
+          {strategyHint && <p className="text-[10px] text-slate-400 mt-1">{strategyHint}</p>}
+        </Field>
+        <Field label="Responsável">
+          <select
+            className="lp-inp"
+            value={form.responsibleId ?? ""}
+            onChange={e => setForm(f => ({ ...f, responsibleId: e.target.value || null }))}
+          >
+            <option value="">Sem responsável</option>
+            {allUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </select>
+        </Field>
+      </div>
+
+      <Field label="Principal Impactado">
+        <input
+          className="lp-inp"
+          value={form.mainImpacted}
+          onChange={e => setForm(f => ({ ...f, mainImpacted: e.target.value }))}
+          placeholder="Quem ou o que é mais impactado por este risco"
+        />
+      </Field>
+
+      <Field label="Ação de Mitigação">
+        <input
+          className="lp-inp"
+          value={form.mitigation}
+          onChange={e => setForm(f => ({ ...f, mitigation: e.target.value }))}
+          placeholder="Ação de mitigação..."
+        />
+      </Field>
+
+      <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={form.presentToClient}
+          onChange={e => setForm(f => ({ ...f, presentToClient: e.target.checked }))}
+        />
+        Apresentar este risco ao cliente
+      </label>
+    </>
+  )
+}
+
 function RisksSection({
-  projectId, initialRisks,
-}: { projectId: string; initialRisks: RiskItem[] }) {
+  projectId, initialRisks, allUsers,
+}: { projectId: string; initialRisks: RiskItem[]; allUsers: AvailUser[] }) {
   const [risks, setRisks] = useState<RiskItem[]>(initialRisks)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({ description: "", level: "MEDIUM", mitigation: "" })
-  const [newForm, setNewForm] = useState({ description: "", level: "MEDIUM", mitigation: "" })
+  const [editForm, setEditForm] = useState<RiskFormState>(EMPTY_RISK_FORM)
+  const [newForm, setNewForm] = useState<RiskFormState>(EMPTY_RISK_FORM)
   const [showNew, setShowNew] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   function startEdit(r: RiskItem) {
     setEditingId(r.id)
-    setEditForm({ description: r.description, level: r.level, mitigation: r.mitigation ?? "" })
+    setEditForm({
+      description: r.description,
+      consequenceLevel: r.consequenceLevel,
+      probabilityLevel: r.probabilityLevel,
+      treatmentStrategy: r.treatmentStrategy,
+      mitigation: r.mitigation ?? "",
+      mainImpacted: r.mainImpacted ?? "",
+      presentToClient: r.presentToClient,
+      responsibleId: r.responsibleId,
+    })
   }
 
   function handleUpdate(id: string) {
     startTransition(async () => {
-      await updateRisk(id, { description: editForm.description, level: editForm.level, mitigation: editForm.mitigation })
-      setRisks(prev => prev.map(r => r.id === id
-        ? { ...r, description: editForm.description, level: editForm.level, mitigation: editForm.mitigation }
-        : r
-      ))
+      await updateRisk(id, { ...editForm })
+      const riskGrade = computeRiskGrade(editForm.consequenceLevel, editForm.probabilityLevel)
+      setRisks(prev => prev.map(r => r.id === id ? { ...r, ...editForm, riskGrade } : r))
       setEditingId(null)
     })
   }
@@ -1072,15 +1223,11 @@ function RisksSection({
   function handleCreate() {
     if (!newForm.description.trim()) return
     startTransition(async () => {
-      await createRisk(projectId, { description: newForm.description, level: newForm.level, mitigation: newForm.mitigation })
+      await createRisk(projectId, { ...newForm })
+      const riskGrade = computeRiskGrade(newForm.consequenceLevel, newForm.probabilityLevel)
       // optimistically add with temp id — revalidatePath will refresh on next load
-      setRisks(prev => [...prev, {
-        id: `temp-${Date.now()}`,
-        description: newForm.description,
-        level: newForm.level,
-        mitigation: newForm.mitigation || null,
-      }])
-      setNewForm({ description: "", level: "MEDIUM", mitigation: "" })
+      setRisks(prev => [...prev, { id: `temp-${Date.now()}`, ...newForm, riskGrade }])
+      setNewForm(EMPTY_RISK_FORM)
       setShowNew(false)
     })
   }
@@ -1094,8 +1241,10 @@ function RisksSection({
       )}
 
       {risks.map(r => {
-        const cfg = riskCfg(r.level)
+        const cfg = riskCfg(computeRiskStatus(r.riskGrade))
         const isEditing = editingId === r.id
+        const responsibleName = allUsers.find(u => u.id === r.responsibleId)?.name
+        const strategyLabel = TREATMENT_STRATEGIES.find(t => t.value === r.treatmentStrategy)?.label ?? r.treatmentStrategy
         return (
           <div
             key={r.id}
@@ -1104,37 +1253,7 @@ function RisksSection({
           >
             {isEditing ? (
               <div className="p-4 space-y-3">
-                <Field label="Descrição do risco">
-                  <textarea
-                    className="lp-inp"
-                    rows={2}
-                    style={{ paddingTop: 10, paddingBottom: 10, resize: "vertical" }}
-                    value={editForm.description}
-                    onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
-                  />
-                </Field>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Nível">
-                    <div className="relative">
-                      <select
-                        className="lp-inp pr-8 appearance-none"
-                        value={editForm.level}
-                        onChange={e => setEditForm(f => ({ ...f, level: e.target.value }))}
-                      >
-                        {RISK_LEVELS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-                      </select>
-                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-                    </div>
-                  </Field>
-                  <Field label="Mitigação">
-                    <input
-                      className="lp-inp"
-                      value={editForm.mitigation}
-                      onChange={e => setEditForm(f => ({ ...f, mitigation: e.target.value }))}
-                      placeholder="Ação de mitigação..."
-                    />
-                  </Field>
-                </div>
+                <RiskFormFields form={editForm} setForm={setEditForm} allUsers={allUsers} />
                 <div className="flex gap-2 pt-1">
                   <button
                     onClick={() => setEditingId(null)}
@@ -1159,10 +1278,16 @@ function RisksSection({
                   className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wide shrink-0 mt-0.5"
                   style={{ color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}` }}
                 >
-                  {cfg.label}
+                  {r.riskGrade} · {cfg.label}
                 </span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-[#0F172A] font-medium leading-snug">{r.description}</p>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    {strategyLabel}
+                    {r.mainImpacted && ` · Impacta: ${r.mainImpacted}`}
+                    {responsibleName && ` · Responsável: ${responsibleName}`}
+                    {r.presentToClient && " · Visível ao cliente"}
+                  </p>
                   {r.mitigation && (
                     <p className="text-[11px] text-slate-400 mt-1">Mitigação: {r.mitigation}</p>
                   )}
@@ -1195,39 +1320,7 @@ function RisksSection({
       {showNew && (
         <div className="rounded-xl p-4 space-y-3" style={{ border: "1px solid #93C5FD", background: "#EFF6FF" }}>
           <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wide">Novo Risco / Issue</p>
-          <Field label="Descrição do risco *">
-            <textarea
-              className="lp-inp"
-              rows={2}
-              style={{ paddingTop: 10, paddingBottom: 10, resize: "vertical" }}
-              value={newForm.description}
-              onChange={e => setNewForm(f => ({ ...f, description: e.target.value }))}
-              placeholder="Descreva o risco ou issue..."
-              autoFocus
-            />
-          </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Nível">
-              <div className="relative">
-                <select
-                  className="lp-inp pr-8 appearance-none"
-                  value={newForm.level}
-                  onChange={e => setNewForm(f => ({ ...f, level: e.target.value }))}
-                >
-                  {RISK_LEVELS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-              </div>
-            </Field>
-            <Field label="Mitigação">
-              <input
-                className="lp-inp"
-                value={newForm.mitigation}
-                onChange={e => setNewForm(f => ({ ...f, mitigation: e.target.value }))}
-                placeholder="Ação de mitigação..."
-              />
-            </Field>
-          </div>
+          <RiskFormFields form={newForm} setForm={setNewForm} allUsers={allUsers} />
           <div className="flex gap-2 pt-1">
             <button
               onClick={() => setShowNew(false)}
@@ -1549,7 +1642,7 @@ export function ProjectEditModal({ project, members, allUsers, risks, benefits }
 
               {/* ── Riscos ──────────────────────────────────────── */}
               {section === "risks" && (
-                <RisksSection projectId={project.id} initialRisks={risks} />
+                <RisksSection projectId={project.id} initialRisks={risks} allUsers={allUsers} />
               )}
 
               {/* ── Benefícios ──────────────────────────────────── */}

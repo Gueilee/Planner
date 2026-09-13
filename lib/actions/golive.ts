@@ -123,7 +123,7 @@ export async function getProjectForClosure(projectId: string) {
           responsavelId: true, responsavelNome: true, responsavel: { select: { id: true, name: true, image: true } },
         },
       },
-      risks: { orderBy: { createdAt: "asc" } },
+      risks: { orderBy: { createdAt: "asc" }, include: { responsible: { select: { id: true, name: true } } } },
       meetings: {
         orderBy: { date: "asc" },
         include: { _count: { select: { participants: true } } },

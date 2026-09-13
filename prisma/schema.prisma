@@ -284,6 +284,7 @@ model User {
   baselines              ProjectBaseline[]        @relation("BaselineCreatedBy")
   approvedBaselines      ProjectBaseline[]        @relation("BaselineApprovedBy")
   createdInvitations     Invitation[]             @relation("InvitationCreator")
+  riskResponsibleFor     Risk[]                   @relation("RiskResponsible")
   passwordResetTokens    PasswordResetToken[]
   organizationAccess     UserOrganizationAccess[]
   profileId              String?
@@ -547,16 +548,35 @@ model Risk {
   id          String    @id @default(cuid())
   projectId   String
   description String
+  // probability/impact ficam como estavam (texto livre, sem uso real na
+  // UI hoje) — a matriz de risco de verdade mora nos campos abaixo.
   probability String
   impact      String
   mitigation  String?
   status      RiskLevel @default(LOW)
+  // owner (texto livre) vira responsibleId (FK) — campo antigo fica sem
+  // uso novo, não apagado (não quebra risco antigo que só tinha texto).
   owner       String?
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  // Matriz de risco (Millena, especificação funcional 11.09) — escala
+  // fixa 1-5 pros dois eixos, grau calculado (consequência ×
+  // probabilidade), status derivado do grau por faixa em vez de escolhido
+  // à mão (ver lib/utils/risk-matrix.ts).
+  consequenceLevel  Int     @default(3)
+  probabilityLevel  Int     @default(3)
+  riskGrade         Int     @default(9)
+  treatmentStrategy String  @default("MITIGAR") // MITIGAR | COMPARTILHAR | TRANSFERIR | ELIMINAR | JUSTIFICAR
+  mainImpacted      String?
+  presentToClient   Boolean @default(false)
+  responsibleId     String?
+
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  responsible User?   @relation("RiskResponsible", fields: [responsibleId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([responsibleId])
 }
 
 // ─────────────────────────────────────────────

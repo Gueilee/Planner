@@ -60,6 +60,10 @@ const RISK_LEVEL_LABEL: Record<string, string> = {
   LOW: "Baixo", MEDIUM: "Médio", HIGH: "Alto", CRITICAL: "Crítico",
 }
 
+const TREATMENT_LABEL: Record<string, string> = {
+  MITIGAR: "Mitigar", COMPARTILHAR: "Compartilhar", TRANSFERIR: "Transferir", ELIMINAR: "Eliminar", JUSTIFICAR: "Justificar",
+}
+
 const ROLE_LABEL: Record<string, string> = {
   ADMIN:           "Administrador",
   DIRECTOR:        "Diretor",
@@ -822,9 +826,9 @@ export default async function ClosurePage({ params }: { params: Promise<{ id: st
                 <thead>
                   <tr>
                     <th style={{ width: "35%" }}>Descrição</th>
-                    <th style={{ width: "12%" }}>Probabilidade</th>
-                    <th style={{ width: "12%" }}>Impacto</th>
+                    <th style={{ width: "10%" }}>Grau</th>
                     <th style={{ width: "12%" }}>Nível</th>
+                    <th style={{ width: "14%" }}>Estratégia</th>
                     <th style={{ width: "18%" }}>Responsável</th>
                     <th style={{ width: "11%" }}>Mitigação</th>
                   </tr>
@@ -833,14 +837,14 @@ export default async function ClosurePage({ params }: { params: Promise<{ id: st
                   {project.risks.map((r) => (
                     <tr key={r.id}>
                       <td style={{ fontWeight: 500 }}>{r.description}</td>
-                      <td style={{ textAlign: "center" }}>{RISK_LEVEL_LABEL[r.probability] ?? r.probability}</td>
-                      <td style={{ textAlign: "center" }}>{RISK_LEVEL_LABEL[r.impact] ?? r.impact}</td>
+                      <td style={{ textAlign: "center" }}>{r.riskGrade}</td>
                       <td style={{ textAlign: "center" }}>
                         <span className={`badge ${riskBadge(r.status)}`}>
                           {RISK_LEVEL_LABEL[r.status] ?? r.status}
                         </span>
                       </td>
-                      <td style={{ color: "#6B7280" }}>{r.owner ?? "—"}</td>
+                      <td style={{ textAlign: "center" }}>{TREATMENT_LABEL[r.treatmentStrategy] ?? r.treatmentStrategy}</td>
+                      <td style={{ color: "#6B7280" }}>{r.responsible?.name ?? r.owner ?? "—"}</td>
                       <td style={{ fontSize: "7pt", color: "#6B7280" }}>{r.mitigation ? "✓ Definida" : "—"}</td>
                     </tr>
                   ))}
