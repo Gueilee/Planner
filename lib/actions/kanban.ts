@@ -18,7 +18,12 @@ import { applyItemUpdatesV2 } from "@/lib/actions/schedule-v2"
 export async function getProjectTasksForKanban(projectId: string) {
   const items = await db.scheduleV2Item.findMany({
     where:   { projectId },
-    orderBy: [{ order: "asc" }],
+    // Ordena por prazo (o que vence antes aparece primeiro dentro da coluna)
+    // em vez da ordem manual da grade do Cronograma — pedido da Millena pro
+    // Kanban, sem mexer no campo `order` (esse continua sendo o dono do
+    // drag-reorder na grade). Tarefa sem terminoEstimado (não agendada) vai
+    // pro fim da coluna, não pro topo.
+    orderBy: [{ terminoEstimado: { sort: "asc", nulls: "last" } }, { order: "asc" }],
     select: {
       id: true, parentId: true, title: true, status: true, percentualCompleto: true,
       inicioEstimado: true, terminoEstimado: true,
