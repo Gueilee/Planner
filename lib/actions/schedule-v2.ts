@@ -118,6 +118,8 @@ function toSchedItem(r: ItemRow): SchedItem {
     inicioEstimado: dstr(r.inicioEstimado),
     terminoEstimado: dstr(r.terminoEstimado),
     schedulingMode: r.schedulingMode as SchedulingMode,
+    constraintType: r.constraintType,
+    constraintDate: dstr(r.constraintDate),
   }
 }
 

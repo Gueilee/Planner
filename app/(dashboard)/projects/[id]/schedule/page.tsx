@@ -30,7 +30,7 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
   if (!session?.user) redirect("/login")
 
   const [project, data, members, org, baselineByItem] = await Promise.all([
-    db.project.findUnique({ where: { id }, select: { id: true, title: true, expectedStart: true, expectedEnd: true } }),
+    db.project.findUnique({ where: { id }, select: { id: true, title: true, expectedStart: true, expectedEnd: true, publicScheduleToken: true } }),
     getScheduleV2(id),
     db.user.findMany({
       where: { active: true, organizationId: session.user.organizationId },
@@ -71,6 +71,7 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
           members={members}
           riskThresholdPct={org?.riskThresholdPct ?? DEFAULT_RISK_THRESHOLD_PCT}
           initialBaselineByItem={baselineByItem}
+          initialPublicScheduleToken={project.publicScheduleToken}
         />
       </div>
     </div>

@@ -248,6 +248,75 @@ describe("scheduler — regra 3 (término sempre derivado de início+duração, 
   })
 })
 
+describe("scheduler — restrição \"não iniciar antes de\" (constraintType/constraintDate)", () => {
+  it("empurra o início pra frente quando a restrição é mais tarde que o predecessor calcularia", () => {
+    const items: SchedItem[] = [
+      { id: "A1", parentId: null, duracaoDiasUteis: 1, inicioEstimado: "2026-04-20", terminoEstimado: "2026-04-20", schedulingMode: "auto" },
+      { id: "A2", parentId: null, duracaoDiasUteis: 1, inicioEstimado: null, terminoEstimado: null, schedulingMode: "auto",
+        constraintType: "nao_iniciar_antes_de", constraintDate: "2026-04-30" },
+    ]
+    const deps: Dependency[] = [{ successorId: "A2", predecessorId: "A1", type: "FS", lag: 0 }]
+    const result = recalcular(items, deps, CAL, ["A1"])
+    // Sem a restrição, A2 iniciaria em 2026-04-21 (dia útil seguinte a A1) —
+    // a restrição (mais tarde) deve vencer, regra §3.9.
+    expect(updateOf(result, "A2").inicioEstimado).toBe("2026-04-30")
+    expect(updateOf(result, "A2").terminoEstimado).toBe("2026-04-30")
+  })
+
+  it("não altera o início quando o predecessor já calcula uma data mais tarde que a restrição", () => {
+    const items: SchedItem[] = [
+      { id: "A1", parentId: null, duracaoDiasUteis: 1, inicioEstimado: "2026-04-20", terminoEstimado: "2026-04-20", schedulingMode: "auto" },
+      { id: "A2", parentId: null, duracaoDiasUteis: 1, inicioEstimado: null, terminoEstimado: null, schedulingMode: "auto",
+        constraintType: "nao_iniciar_antes_de", constraintDate: "2026-04-15" },
+    ]
+    const deps: Dependency[] = [{ successorId: "A2", predecessorId: "A1", type: "FS", lag: 0 }]
+    const result = recalcular(items, deps, CAL, ["A1"])
+    expect(updateOf(result, "A2").inicioEstimado).toBe("2026-04-21")
+  })
+
+  it("item âncora (sem predecessor) com data manual mais tarde que a restrição mantém a data manual", () => {
+    const items: SchedItem[] = [
+      { id: "A1", parentId: null, duracaoDiasUteis: 1, inicioEstimado: "2026-05-10", terminoEstimado: "2026-05-10", schedulingMode: "auto",
+        constraintType: "nao_iniciar_antes_de", constraintDate: "2026-04-01" },
+    ]
+    const result = recalcular(items, [], CAL, ["A1"])
+    expect(updateOf(result, "A1").inicioEstimado).toBe("2026-05-10")
+  })
+
+  it("item âncora sem data própria vira o próprio piso da restrição", () => {
+    const items: SchedItem[] = [
+      { id: "A1", parentId: null, duracaoDiasUteis: 2, inicioEstimado: null, terminoEstimado: null, schedulingMode: "auto",
+        constraintType: "nao_iniciar_antes_de", constraintDate: "2026-04-20" },
+    ]
+    const result = recalcular(items, [], CAL, ["A1"])
+    expect(updateOf(result, "A1").inicioEstimado).toBe("2026-04-20")
+    expect(updateOf(result, "A1").terminoEstimado).toBe("2026-04-21")
+  })
+
+  it("modo manual só sinaliza conflito, não move a data quando a restrição diverge", () => {
+    const items: SchedItem[] = [
+      { id: "A1", parentId: null, duracaoDiasUteis: 1, inicioEstimado: "2026-04-20", terminoEstimado: "2026-04-20", schedulingMode: "auto" },
+      { id: "A2", parentId: null, duracaoDiasUteis: 1, inicioEstimado: "2026-04-21", terminoEstimado: "2026-04-21", schedulingMode: "manual",
+        constraintType: "nao_iniciar_antes_de", constraintDate: "2026-04-30" },
+    ]
+    const deps: Dependency[] = [{ successorId: "A2", predecessorId: "A1", type: "FS", lag: 0 }]
+    const result = recalcular(items, deps, CAL, ["A1"])
+    const a2 = updateOf(result, "A2")
+    expect(a2.inicioEstimado).toBe("2026-04-21") // não mudou
+    expect(a2.conflict).toBe(true)
+    expect(a2.suggestedInicio).toBe("2026-04-30")
+  })
+
+  it("outros tipos de constraint (fora de escopo do v1) são ignorados pelo motor", () => {
+    const items: SchedItem[] = [
+      { id: "A1", parentId: null, duracaoDiasUteis: 1, inicioEstimado: null, terminoEstimado: null, schedulingMode: "auto",
+        constraintType: "deve_terminar_em", constraintDate: "2026-04-20" },
+    ]
+    const result = recalcular(items, [], CAL, ["A1"])
+    expect(updateOf(result, "A1").inicioEstimado).toBeNull()
+  })
+})
+
 describe("scheduler — detecção defensiva de ciclo no recálculo", () => {
   it("itens presos num ciclo não travam o motor e voltam em cycleItemIds", () => {
     const items: SchedItem[] = [

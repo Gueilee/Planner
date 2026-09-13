@@ -1,6 +1,9 @@
 import type { NextAuthConfig } from "next-auth"
 
-const PUBLIC_ROUTES = ["/login", "/api/auth", "/invite", "/reset-password", "/reset"]
+// /public/* — links públicos permanentes (token, sem senha), ex.:
+// /public/schedule/[token] (Cronograma). O token em si é a autorização;
+// a rota confere isso sozinha, não depende de sessão nenhuma.
+const PUBLIC_ROUTES = ["/login", "/api/auth", "/invite", "/reset-password", "/reset", "/public"]
 
 export const authConfig: NextAuthConfig = {
   pages: { signIn: "/login", error: "/login" },

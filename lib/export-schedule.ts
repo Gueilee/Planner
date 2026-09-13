@@ -33,9 +33,12 @@ function fmtDate(ds: string | null): string {
 // Monta a lista em ordem hierárquica (pai antes dos filhos, respeitando
 // `order` entre irmãos) — a mesma árvore mostrada na tela, sem depender de
 // um índice "1.2.3" sintético (o item já tem um código estável, "A1"...).
-type ExportRow = { item: ItemV2; depth: number }
+// Exportada — reaproveitada pela view pública do cronograma (app/(print)/
+// public/schedule/[token]), pra nunca ter duas implementações da mesma
+// caminhada em árvore.
+export type ExportRow = { item: ItemV2; depth: number }
 
-function buildRows(items: ItemV2[]): ExportRow[] {
+export function buildRows(items: ItemV2[]): ExportRow[] {
   const rows: ExportRow[] = []
   const childrenByParent = new Map<string, ItemV2[]>()
   for (const it of items) {
@@ -54,7 +57,7 @@ function buildRows(items: ItemV2[]): ExportRow[] {
 }
 
 // "A2ss+1" etc. — mesma sintaxe de predecessor usada na tela.
-function predecessorsText(itemId: string, deps: DependencyV2[], codeById: Map<string, string>): string {
+export function predecessorsText(itemId: string, deps: DependencyV2[], codeById: Map<string, string>): string {
   const mine = deps.filter((d) => d.successorId === itemId)
   if (mine.length === 0) return "—"
   return mine

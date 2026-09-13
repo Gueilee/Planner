@@ -12,6 +12,7 @@ import { exportScheduleToExcel } from "@/lib/export-schedule"
 import { getTemplates } from "@/lib/actions/templates"
 import type { Template } from "@/lib/actions/templates"
 import { createBaselineForProject, getLatestBaselineByItem } from "@/lib/actions/baseline"
+import { getOrCreatePublicScheduleToken, revokePublicScheduleToken } from "@/lib/actions/public-links"
 import { fmtDateLong, isValidDateStr } from "@/lib/date-utils"
 import { formatDistanceToNow } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -19,6 +20,7 @@ import {
   ChevronRight, ChevronDown, Plus, IndentIncrease, IndentDecrease,
   ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, Milestone,
   Circle, CircleX, CirclePlus, Pencil, Undo2, Redo2, GripVertical, GripHorizontal, LayoutTemplate, FileSpreadsheet, BookmarkPlus, History,
+  Link2, Copy, Check, X,
 } from "lucide-react"
 
 // ─── Helpers de árvore ──────────────────────────────────────────────────────
@@ -138,7 +140,7 @@ function statusLabel(status: string) {
 // "Atividade" (título+hierarquia) fica fixa à esquerda — todo o resto é
 // livre para o usuário reordenar e redimensionar.
 
-type ColKey = "duracao" | "inicio" | "termino" | "inicioReal" | "terminoReal" | "baselineInicio" | "baselineTermino" | "pctEstimado" | "pct" | "predecessores" | "responsavel" | "participantes" | "status"
+type ColKey = "duracao" | "inicio" | "termino" | "inicioReal" | "terminoReal" | "baselineInicio" | "baselineTermino" | "pctEstimado" | "pct" | "predecessores" | "restricao" | "responsavel" | "participantes" | "status"
 
 const COL_LABELS: Record<ColKey, string> = {
   duracao: "Duração", inicio: "Início", termino: "Término",
@@ -152,19 +154,25 @@ const COL_LABELS: Record<ColKey, string> = {
   // período planejado) ao lado de "% Real" (o que foi digitado de verdade) —
   // pedido explícito: os dois lado a lado pra comparar.
   pctEstimado: "% Estimado", pct: "% Real",
-  predecessores: "Predecessores", responsavel: "Responsável",
+  predecessores: "Predecessores",
+  // Restrição de data — só "não iniciar antes de" está implementado (ver
+  // scheduler.ts); o campo já existia gravado no banco, mas o motor nunca
+  // lia e não havia como editar (a causa real da "regra do predecessor por
+  // data não funciona").
+  restricao: "Restrição",
+  responsavel: "Responsável",
   // Além do responsável principal: outras pessoas ligadas à atividade
   // ("participantes"/"informados") — texto livre, vários nomes por vírgula.
   participantes: "Participantes", status: "Status",
 }
-const DEFAULT_COL_ORDER: ColKey[] = ["duracao", "inicio", "termino", "inicioReal", "terminoReal", "baselineInicio", "baselineTermino", "pctEstimado", "pct", "predecessores", "responsavel", "participantes", "status"]
+const DEFAULT_COL_ORDER: ColKey[] = ["duracao", "inicio", "termino", "inicioReal", "terminoReal", "baselineInicio", "baselineTermino", "pctEstimado", "pct", "predecessores", "restricao", "responsavel", "participantes", "status"]
 const DEFAULT_COL_WIDTHS: Record<ColKey, number> = {
-  duracao: 70, inicio: 110, termino: 100, inicioReal: 110, terminoReal: 110, baselineInicio: 100, baselineTermino: 100, pctEstimado: 70, pct: 60, predecessores: 150, responsavel: 140, participantes: 160, status: 130,
+  duracao: 70, inicio: 110, termino: 100, inicioReal: 110, terminoReal: 110, baselineInicio: 100, baselineTermino: 100, pctEstimado: 70, pct: 60, predecessores: 150, restricao: 150, responsavel: 140, participantes: 160, status: 130,
 }
 const COL_ALIGN: Record<ColKey, "center" | "left"> = {
   duracao: "center", inicio: "center", termino: "center", inicioReal: "center", terminoReal: "center",
   baselineInicio: "center", baselineTermino: "center", pctEstimado: "center", pct: "center",
-  predecessores: "left", responsavel: "left", participantes: "left", status: "left",
+  predecessores: "left", restricao: "left", responsavel: "left", participantes: "left", status: "left",
 }
 const DEFAULT_TITLE_WIDTH = 320
 const GUTTER_WIDTH = 112
@@ -173,7 +181,7 @@ function colPrefsKey(projectId: string) { return `sv2-columns-${projectId}` }
 
 // ─── Main ─────────────────────────────────────────────────────────────────
 
-export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlannedDates, members, riskThresholdPct = DEFAULT_RISK_THRESHOLD_PCT, initialBaselineByItem = {} }: {
+export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlannedDates, members, riskThresholdPct = DEFAULT_RISK_THRESHOLD_PCT, initialBaselineByItem = {}, initialPublicScheduleToken = null }: {
   projectId: string
   projectTitle: string
   initial: ScheduleV2Payload
@@ -188,6 +196,9 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
   // Datas congeladas na última linha de base (ver lib/actions/baseline.ts),
   // indexadas por ScheduleV2Item.id — colunas "Início Base"/"Término Base".
   initialBaselineByItem?: Record<string, { plannedStart: string | null; plannedEnd: string | null }>
+  // Token do link público (Project.publicScheduleToken) — null = nenhum
+  // link ativo ainda.
+  initialPublicScheduleToken?: string | null
 }) {
   const membersById = useMemo(() => new Map(members.map((m) => [m.id, m.name])), [members])
   const [data, setData] = useState<ScheduleV2Payload>(initial)
@@ -219,6 +230,13 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
   const [historyOpen, setHistoryOpen] = useState(false)
   const [historyEntries, setHistoryEntries] = useState<ChangeLogEntryV2[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
+
+  // Link público (token permanente) — lib/actions/public-links.ts. Modal
+  // só abre depois do token existir (gera na hora se ainda não tiver um).
+  const [publicToken, setPublicToken] = useState(initialPublicScheduleToken)
+  const [publicLinkOpen, setPublicLinkOpen] = useState(false)
+  const [publicLinkLoading, setPublicLinkLoading] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   // Layout de colunas (larguras + ordem) — preferência pessoal, salva no
   // navegador (não é dado do cronograma, é só a visão de quem está olhando).
@@ -456,6 +474,27 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
     })
   }
 
+  function handleOpenPublicLink() {
+    setPublicLinkOpen(true)
+    setCopied(false)
+    if (publicToken) return
+    setPublicLinkLoading(true)
+    startTransition(async () => {
+      const token = await getOrCreatePublicScheduleToken(projectId)
+      setPublicToken(token)
+      setPublicLinkLoading(false)
+    })
+  }
+
+  function handleRevokePublicLink() {
+    setPublicLinkLoading(true)
+    startTransition(async () => {
+      await revokePublicScheduleToken(projectId)
+      setPublicToken(null)
+      setPublicLinkLoading(false)
+    })
+  }
+
   function handleEditTitle(id: string) {
     const el = document.getElementById(`sv2-title-${id}`) as HTMLInputElement | null
     el?.focus()
@@ -651,6 +690,9 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
         <ToolbarBtn wide onClick={handleOpenHistory} title="Ver quem alterou o quê e quando neste cronograma">
           <History className="w-3.5 h-3.5" /> Histórico
         </ToolbarBtn>
+        <ToolbarBtn wide onClick={handleOpenPublicLink} title="Gerar um link público (sem login) para acompanhar este cronograma">
+          <Link2 className="w-3.5 h-3.5" /> Link Público
+        </ToolbarBtn>
         <div className="w-px h-5 bg-slate-200 mx-1" />
         <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mr-1">
           {selectedItem ? <>Selecionado: <span className="text-slate-600 normal-case">{selectedItem.title}</span></> : "Selecione uma linha (círculo) ou arraste pela alcinha ⠿"}
@@ -736,6 +778,23 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
       {historyOpen && (
         <HistoryModal loading={historyLoading} entries={historyEntries} onClose={() => setHistoryOpen(false)} />
       )}
+
+      {publicLinkOpen && (
+        <PublicLinkModal
+          token={publicToken}
+          loading={publicLinkLoading}
+          copied={copied}
+          onCopy={() => {
+            if (!publicToken) return
+            navigator.clipboard.writeText(`${window.location.origin}/public/schedule/${publicToken}`).then(() => {
+              setCopied(true)
+              setTimeout(() => setCopied(false), 2000)
+            })
+          }}
+          onRevoke={handleRevokePublicLink}
+          onClose={() => setPublicLinkOpen(false)}
+        />
+      )}
     </div>
   )
 }
@@ -790,6 +849,64 @@ function HistoryModal({ loading, entries, onClose }: {
             Fechar
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Modal "Link Público" ─────────────────────────────────────────────────
+// Token permanente (lib/actions/public-links.ts) — a view pública (app/
+// (print)/public/schedule/[token]) não mostra custo/orçamento, só datas/
+// status/responsável/predecessores, e é somente leitura.
+function PublicLinkModal({ token, loading, copied, onCopy, onRevoke, onClose }: {
+  token: string | null
+  loading: boolean
+  copied: boolean
+  onCopy: () => void
+  onRevoke: () => void
+  onClose: () => void
+}) {
+  const url = token && typeof window !== "undefined" ? `${window.location.origin}/public/schedule/${token}` : ""
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl border border-slate-200 p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-2 mb-1">
+          <Link2 className="w-4 h-4 text-[#7B2FBE]" />
+          <h3 className="text-sm font-black text-slate-800">Link público do Cronograma</h3>
+        </div>
+        <p className="text-xs text-slate-400 mb-4">
+          Qualquer pessoa com este link vê o cronograma (datas, status, responsável, predecessores) sem precisar de login — sem custo/orçamento. Fica ativo até você revogar.
+        </p>
+
+        {loading ? (
+          <p className="text-xs text-slate-400 text-center py-4">Gerando link…</p>
+        ) : url ? (
+          <>
+            <div className="flex items-center gap-2 mb-4">
+              <input readOnly value={url} onFocus={(e) => e.target.select()}
+                className="flex-1 h-9 px-3 rounded-lg border border-slate-200 text-xs text-slate-600 bg-slate-50 outline-none" />
+              <button onClick={onCopy} title="Copiar link"
+                className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors">
+                {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+            <div className="flex items-center justify-between">
+              <button onClick={onRevoke}
+                className="flex items-center gap-1.5 text-xs font-bold text-red-500 hover:text-red-600 transition-colors">
+                <X className="w-3.5 h-3.5" /> Revogar link
+              </button>
+              <button onClick={onClose} className="px-3.5 py-2 rounded-lg text-xs font-bold text-slate-500 hover:bg-slate-100 transition-colors">
+                Fechar
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center justify-end">
+            <button onClick={onClose} className="px-3.5 py-2 rounded-lg text-xs font-bold text-slate-500 hover:bg-slate-100 transition-colors">
+              Fechar
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -1276,6 +1393,35 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
           className="w-full bg-transparent outline-none text-[10px] font-mono text-slate-700 placeholder-slate-300 rounded border-b border-transparent focus:border-[#7B2FBE] focus:bg-violet-50"
         />
       ) : null
+
+    case "restricao": {
+      // Só "não iniciar antes de" existe hoje (decisão de escopo) — a
+      // presença de uma data já implica esse tipo; limpar a data remove a
+      // restrição inteira. Participa do cálculo como mais um candidato de
+      // início (junto com predecessor/data manual), vence o mais tardio.
+      if (hasChildren) return null
+      return (
+        <input
+          key={`restricao:${item.id}:${item.constraintDate}`}
+          type="date"
+          min={DATE_MIN}
+          max={DATE_MAX}
+          defaultValue={item.constraintDate ?? ""}
+          title="Não iniciar antes de — data mínima de início, mesmo que o predecessor calcule uma data mais cedo"
+          onBlur={(e) => {
+            if (!isSaneDateInput(e.target.value)) {
+              e.target.value = item.constraintDate ?? ""
+              return
+            }
+            const v = e.target.value || null
+            if (v !== item.constraintDate) {
+              h.onUpdate(item.id, { constraintDate: v, constraintType: v !== null ? "nao_iniciar_antes_de" : null })
+            }
+          }}
+          className="w-full bg-transparent outline-none text-[10px] text-slate-700 rounded border-b border-transparent focus:border-[#7B2FBE] focus:bg-violet-50"
+        />
+      )
+    }
 
     case "responsavel": {
       // Campo livre — aceita qualquer nome digitado, mesmo de quem ainda não

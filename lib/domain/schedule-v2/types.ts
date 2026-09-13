@@ -22,6 +22,13 @@ export type SchedItem = {
   inicioEstimado: string | null
   terminoEstimado: string | null
   schedulingMode: SchedulingMode
+  /**
+   * Restrição de data (CLAUDE.md §4) — só "nao_iniciar_antes_de" está
+   * implementado no v1 (decisão explícita: escopo reduzido, ver scheduler.ts).
+   * Outros valores em constraintType são ignorados pelo motor.
+   */
+  constraintType?: string | null
+  constraintDate?: string | null
 }
 
 export type Dependency = {

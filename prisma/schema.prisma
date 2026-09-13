@@ -367,6 +367,11 @@ model Project {
   expectedEnd             DateTime?
   expectedDurationMonths  Int?
 
+  // Link público (token permanente, sem senha) — "Gerar Link Público" no
+  // Cronograma. Null = nenhum link ativo; revogar limpa o campo (o link
+  // antigo para de funcionar na hora, sem precisar trocar nada mais).
+  publicScheduleToken String? @unique
+
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 

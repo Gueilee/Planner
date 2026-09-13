@@ -59,23 +59,37 @@ function agendarItem(
   resolved: ReadonlyMap<string, ResolvedDates>,
   cal: WorkCalendar
 ): ScheduleUpdate {
-  if (deps.length === 0) {
-    // Sem predecessor — âncora ou item ainda não vinculado: início vem do
-    // que já está no item de entrada (edição direta do usuário, ou null);
-    // término sempre recalculado a partir de início + duração.
-    return {
-      itemId: item.id,
-      inicioEstimado: item.inicioEstimado,
-      terminoEstimado: deriveTermino(item, cal),
-      conflict: false,
-    }
-  }
-
-  const candidates = deps
+  const predCandidates = deps
     .map((d) => candidateStart(item, d, resolved, cal))
     .filter((s): s is string => s !== null)
 
+  // Restrição "não iniciar antes de" (único tipo implementado no v1, por
+  // decisão explícita — CLAUDE.md §4/§11 marca a política de constraint
+  // como decisão em aberto, "deve_terminar_em" fica pra depois) — participa
+  // da regra 9 (§3.9: múltiplos candidatos ⇒ vence o mais tardio) como só
+  // mais um candidato, exatamente como se fosse um predecessor extra. Isso
+  // é o que fazia a "regra do predecessor por data" nunca funcionar: o
+  // campo existia no banco mas o motor nunca olhava pra ele.
+  const constraintFloor =
+    item.constraintType === "nao_iniciar_antes_de" && item.constraintDate ? item.constraintDate : null
+
+  // Sem predecessor (âncora): a própria data já no item também entra como
+  // candidata, senão uma restrição mais tardia empurraria o início pra
+  // frente mas uma data manual JÁ mais tarde que a restrição seria
+  // incorretamente puxada de volta pro piso (regra 9 exige comparar as
+  // duas, não substituir uma pela outra).
+  const ownCandidate = deps.length === 0 ? item.inicioEstimado : null
+
+  const candidates = [
+    ...predCandidates,
+    ...(constraintFloor !== null ? [constraintFloor] : []),
+    ...(ownCandidate !== null ? [ownCandidate] : []),
+  ]
+
   if (candidates.length === 0) {
+    // Nada define uma data — âncora sem início ainda, ou vínculo(s) cujo
+    // predecessor está não agendado, e sem restrição: fica não agendado
+    // (regra §10), término sempre recalculado a partir do que já existe.
     return {
       itemId: item.id,
       inicioEstimado: item.inicioEstimado,
@@ -84,7 +98,7 @@ function agendarItem(
     }
   }
 
-  // regra 9: múltiplos predecessores ⇒ vence a restrição mais tardia.
+  // regra 9: múltiplos candidatos (predecessor e/ou restrição) ⇒ vence o mais tardio.
   const finalStart = candidates.reduce((max, s) => (s > max ? s : max))
   const finalTermino = item.duracaoDiasUteis !== null ? somarDuracao(finalStart, item.duracaoDiasUteis, cal) : null
 
