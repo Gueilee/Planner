@@ -12,17 +12,19 @@ export default async function KickOffPresentationPage({ params }: { params: Prom
   const session = await auth()
   if (!session?.user) redirect("/login")
 
-  const [project, kickoff, existing] = await Promise.all([
+  const [project, kickoff, existing, orgConfig] = await Promise.all([
     db.project.findUnique({
       where: { id },
       include: {
-        sponsor:  { select: { name: true, department: true } },
-        risks:    { orderBy: { status: "asc" } },
-        members:  { include: { user: { select: { id: true, name: true, department: true, role: true, email: true } } } },
+        sponsor:      { select: { name: true, department: true } },
+        risks:        { orderBy: { status: "asc" } },
+        members:      { include: { user: { select: { id: true, name: true, department: true, role: true, email: true } } } },
+        organization: { select: { logoUrl: true } },
       },
     }),
     getKickOff(id),
     getKickOffPresentation(id),
+    db.orgConfig.findUnique({ where: { id: "singleton" }, select: { logoUrl: true } }),
   ])
 
   if (!project) notFound()
@@ -60,6 +62,8 @@ export default async function KickOffPresentationPage({ params }: { params: Prom
       project={projectData}
       kickoff={kickoff}
       existing={existing}
+      vendemmiaLogoUrl={orgConfig?.logoUrl ?? null}
+      clientLogoUrl={project.organization?.logoUrl ?? null}
     />
   )
 }

@@ -12,9 +12,11 @@ import type { KOPresentation } from "@/lib/types/kickoff-presentation"
 interface KOViewerClientProps {
   presentation: KOPresentation & { id: string }
   projectId:    string
+  vendemmiaLogoUrl?: string | null
+  clientLogoUrl?: string | null
 }
 
-export function KOViewerClient({ presentation, projectId }: KOViewerClientProps) {
+export function KOViewerClient({ presentation, projectId, vendemmiaLogoUrl, clientLogoUrl }: KOViewerClientProps) {
   const router = useRouter()
   const [current,    setCurrent]    = useState(0)
   const [fullscreen, setFullscreen] = useState(false)
@@ -115,7 +117,7 @@ export function KOViewerClient({ presentation, projectId }: KOViewerClientProps)
           <div ref={slideAreaRef} className="w-full max-w-5xl">
             {slide && (
               <div style={{ width: "100%", aspectRatio: "16/9" }}>
-                <KOSlideRenderer slide={slide} scale={scale} />
+                <KOSlideRenderer slide={slide} scale={scale} vendemmiaLogoUrl={vendemmiaLogoUrl} clientLogoUrl={clientLogoUrl} />
               </div>
             )}
           </div>

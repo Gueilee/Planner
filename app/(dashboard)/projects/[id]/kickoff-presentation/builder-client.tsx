@@ -287,7 +287,14 @@ function SlideThumbnail({ slide, index, isActive, onClick, onDelete }: {
 
 // ─── Slide Renderer (light theme) ────────────────────────────────────────────
 
-export function KOSlideRenderer({ slide, scale = 1, noShadow, onEdit }: { slide: KOSlide; scale?: number; noShadow?: boolean; onEdit?: (patch: Partial<KOSlide>) => void }) {
+export function KOSlideRenderer({ slide, scale = 1, noShadow, onEdit, vendemmiaLogoUrl, clientLogoUrl }: {
+  slide: KOSlide; scale?: number; noShadow?: boolean; onEdit?: (patch: Partial<KOSlide>) => void
+  // Símbolo da Vendemmia (OrgConfig.logoUrl, já usado em ATAs/documentos) +
+  // símbolo do cliente (Organization.logoUrl — a organização/tenant dona
+  // do projeto) — só aparecem no slide de capa (pedido da Millena).
+  vendemmiaLogoUrl?: string | null
+  clientLogoUrl?: string | null
+}) {
   const s = (v: number) => `${v * scale}px`
 
   const slideBase: React.CSSProperties = {
@@ -362,9 +369,18 @@ export function KOSlideRenderer({ slide, scale = 1, noShadow, onEdit }: { slide:
             )}
           </div>
         </div>
-        {/* Bottom brand strip */}
+        {/* Bottom brand strip — logo Vendemmia + logo do cliente (quando configurados) */}
         <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, display: "flex", alignItems: "center", justifyContent: "space-between", padding: `${s(8)} ${s(52)}`, background: "#F8FAFC", borderTop: "1px solid #E2E8F0" }}>
-          <span style={{ fontSize: s(9), fontWeight: 800, color: "#94A3B8", letterSpacing: "0.12em", textTransform: "uppercase" }}>Vendemmia Comércio Internacional</span>
+          <div style={{ display: "flex", alignItems: "center", gap: s(14) }}>
+            {vendemmiaLogoUrl
+              ? <img src={vendemmiaLogoUrl} alt="Vendemmia" style={{ height: s(18), objectFit: "contain" }} />
+              : <span style={{ fontSize: s(9), fontWeight: 800, color: "#94A3B8", letterSpacing: "0.12em", textTransform: "uppercase" }}>Vendemmia Comércio Internacional</span>
+            }
+            {clientLogoUrl && <>
+              <div style={{ width: s(1), height: s(16), background: "#E2E8F0" }} />
+              <img src={clientLogoUrl} alt="Cliente" style={{ height: s(18), objectFit: "contain" }} />
+            </>}
+          </div>
           <span style={{ fontSize: s(9), fontWeight: 700, color: "#CBD5E1" }}>Confidencial</span>
         </div>
       </div>
@@ -1138,17 +1154,39 @@ interface KOBuilderClientProps {
   project:  ProjectData
   kickoff:  (KickOffData & { id: string }) | null
   existing: (KOPresentation & { id: string; updatedAt: string }) | null
+  vendemmiaLogoUrl?: string | null
+  clientLogoUrl?: string | null
 }
 
-export function KOBuilderClient({ project, kickoff, existing }: KOBuilderClientProps) {
+export function KOBuilderClient({ project, kickoff, existing, vendemmiaLogoUrl, clientLogoUrl }: KOBuilderClientProps) {
   const router = useRouter()
   const [pending, start] = useTransition()
+
+  // Etapa de Kick-Off (formulário separado) saiu do fluxo — só a
+  // apresentação continua. Sem um kickoff.meetingDate/location/objectives
+  // já registrado (ninguém mais preenche aquele formulário), pede esses 3
+  // campos essenciais aqui mesmo, uma vez, antes da primeira geração dos
+  // slides — EAP e marcos ficam em branco pra edição direta no slide
+  // correspondente (mais direto que preencher um formulário à parte).
+  const [showSetup, setShowSetup] = useState(!existing && !kickoff)
+  const [setupDate,       setSetupDate]       = useState(() => new Date().toISOString().slice(0, 10))
+  const [setupLocation,   setSetupLocation]   = useState("")
+  const [setupObjectives, setSetupObjectives] = useState(project.scope ?? "")
 
   const [docId,       setDocId]       = useState(existing?.id)
   const [title,       setTitle]       = useState(existing?.title ?? `Kick-Off — ${project.title}`)
   const [slides,      setSlides]      = useState<KOSlide[]>(() =>
-    existing?.slides?.length ? existing.slides : generateSlides(project, kickoff)
+    existing?.slides?.length ? existing.slides : kickoff ? generateSlides(project, kickoff) : []
   )
+
+  function handleSetupSubmit() {
+    const seed: KickOffData = {
+      projectId: project.id, meetingDate: setupDate, location: setupLocation, objectives: setupObjectives,
+      eapAreas: [], milestones: [], attachments: [], attendeeIds: [], externalAttendees: [], notes: "",
+    }
+    setSlides(generateSlides(project, seed))
+    setShowSetup(false)
+  }
   const [activeIdx,   setActiveIdx]   = useState(0)
   const [saveStatus,  setSaveStatus]  = useState<"idle"|"saving"|"saved">("idle")
   const [showAddModal,setShowAddModal]= useState(false)
@@ -1214,12 +1252,55 @@ export function KOBuilderClient({ project, kickoff, existing }: KOBuilderClientP
 
   const scale = previewW / 960
 
+  if (showSetup) {
+    return (
+      <div className="flex flex-col h-full bg-[#F1F5F9] items-center justify-center p-6">
+        <div className="w-full max-w-lg bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+          <div className="flex items-center gap-2 mb-1">
+            <Presentation className="w-4 h-4 text-violet-500" />
+            <h1 className="text-base font-black text-slate-800">Dados da Reunião de Kick-Off</h1>
+          </div>
+          <p className="text-xs text-slate-400 mb-5">
+            Só o essencial pra montar a capa e os objetivos — dá pra ajustar tudo depois, direto nos slides.
+          </p>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1.5">Data da Reunião</label>
+              <input type="date" value={setupDate} onChange={(e) => setSetupDate(e.target.value)}
+                className="w-full h-10 px-3 text-sm rounded-xl border border-slate-200 outline-none focus:border-violet-400 transition-colors" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1.5">Local</label>
+              <input value={setupLocation} onChange={(e) => setSetupLocation(e.target.value)} placeholder="Ex: Sala de reuniões, Teams, Meet..."
+                className="w-full h-10 px-3 text-sm rounded-xl border border-slate-200 outline-none focus:border-violet-400 transition-colors placeholder-slate-300" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1.5">Objetivos</label>
+              <textarea value={setupObjectives} onChange={(e) => setSetupObjectives(e.target.value)} rows={4}
+                className="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200 outline-none focus:border-violet-400 transition-colors resize-none" />
+            </div>
+          </div>
+          <div className="flex items-center justify-between mt-6">
+            <Link href={`/projects/${project.id}`} className="text-xs font-semibold text-slate-400 hover:text-slate-700 transition-colors">
+              Cancelar
+            </Link>
+            <button onClick={handleSetupSubmit}
+              className="inline-flex items-center gap-1.5 px-4 h-9 text-sm font-bold rounded-xl text-white transition-all hover:opacity-90"
+              style={{ background: "linear-gradient(135deg, #7B2FBE, #2463FF)", boxShadow: "0 4px 16px rgba(123,47,190,0.35)" }}>
+              <Sparkles className="w-3.5 h-3.5" /> Gerar Apresentação
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col h-full bg-[#F1F5F9]">
 
       {/* Top bar */}
       <div className="flex items-center gap-3 px-4 h-14 border-b border-slate-200 bg-white shrink-0">
-        <Link href={`/projects/${project.id}/kickoff`}
+        <Link href={`/projects/${project.id}`}
           className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-800 transition-colors font-medium shrink-0">
           <ArrowLeft className="w-4 h-4" /> Voltar
         </Link>
@@ -1287,7 +1368,7 @@ export function KOBuilderClient({ project, kickoff, existing }: KOBuilderClientP
             <div ref={previewRef} className="w-full max-w-4xl">
               {activeSlide && (
                 <div style={{ width: "100%", aspectRatio: "16/9" }}>
-                  <KOSlideRenderer slide={activeSlide} scale={scale} onEdit={updateActiveSlide} />
+                  <KOSlideRenderer slide={activeSlide} scale={scale} onEdit={updateActiveSlide} vendemmiaLogoUrl={vendemmiaLogoUrl} clientLogoUrl={clientLogoUrl} />
                 </div>
               )}
             </div>

@@ -388,12 +388,12 @@ export default async function ProjectDetailPage({
                         Indicadores
                       </Link>
                       <Link
-                        href={`/projects/${id}/kickoff`}
+                        href={`/projects/${id}/kickoff-presentation`}
                         className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.98]"
                         style={{ background: "linear-gradient(135deg, #10B981, #059669)", boxShadow: "0 4px 20px rgba(16,185,129,0.30)" }}
                       >
                         <Timer className="w-3.5 h-3.5" />
-                        Kick-Off
+                        Apresentação de Kick-off
                       </Link>
                       <Link
                         href={`/projects/${id}/meetings`}
@@ -448,15 +448,15 @@ export default async function ProjectDetailPage({
                           GO LIVE
                         </Link>
                       )}
-                      {/* Kick-Off — sempre acessível */}
+                      {/* Apresentação de Kick-off — sempre acessível */}
                       <Link
-                        href={`/projects/${id}/kickoff`}
+                        href={`/projects/${id}/kickoff-presentation`}
                         className="inline-flex items-center gap-2 px-3 h-9 text-sm font-semibold rounded-xl border transition-all hover:bg-emerald-50 active:scale-[0.98]"
                         style={{ borderColor: "#A7F3D0", color: "#059669", background: "transparent" }}
-                        title="Editar Kick-Off"
+                        title="Apresentação de Kick-off"
                       >
                         <Timer className="w-3.5 h-3.5" />
-                        Kick-Off
+                        Apresentação de Kick-off
                       </Link>
                       <Link
                         href={`/projects/${id}/meetings`}
@@ -493,15 +493,15 @@ export default async function ProjectDetailPage({
                         <FileDown className="w-3.5 h-3.5" />
                         Encerramento
                       </a>
-                      {/* Kick-Off edit — secondary, always accessible */}
+                      {/* Apresentação de Kick-off — secondary, always accessible */}
                       <Link
-                        href={`/projects/${id}/kickoff`}
+                        href={`/projects/${id}/kickoff-presentation`}
                         className="inline-flex items-center gap-2 px-3 h-9 text-sm font-semibold rounded-xl border transition-all hover:bg-emerald-50 active:scale-[0.98]"
                         style={{ borderColor: "#A7F3D0", color: "#059669", background: "transparent" }}
-                        title="Editar Kick-Off"
+                        title="Apresentação de Kick-off"
                       >
                         <Timer className="w-3.5 h-3.5" />
-                        Kick-Off
+                        Apresentação de Kick-off
                       </Link>
                       <Link
                         href={`/projects/${id}/indicators`}
