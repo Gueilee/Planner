@@ -371,6 +371,8 @@ model Project {
   // Cronograma. Null = nenhum link ativo; revogar limpa o campo (o link
   // antigo para de funcionar na hora, sem precisar trocar nada mais).
   publicScheduleToken String? @unique
+  // Mesmo mecanismo, aplicado ao Status Report.
+  publicStatusToken   String? @unique
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
@@ -1058,6 +1060,13 @@ model ScheduleV2Item {
   schedulingMode String    @default("auto") // "auto" | "manual" (CLAUDE.md §6)
   constraintType String?
   constraintDate DateTime? @db.Date
+
+  // Marco do "Macro Cronograma" do Status Report — diferente de marco de
+  // calendário (duracaoDiasUteis == 0). Marcação editorial: quais itens
+  // (de qualquer duração) valem a pena aparecer resumidos no relatório pro
+  // patrocinador. Herdado de ScheduleTemplateTask.isMilestone ao aplicar
+  // um modelo (ver lib/actions/schedule-v2.ts).
+  isMacroMilestone Boolean @default(false)
 
   project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   parent      ScheduleV2Item?  @relation("ScheduleV2Hierarchy", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)

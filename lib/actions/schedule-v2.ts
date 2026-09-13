@@ -81,6 +81,7 @@ export type ItemV2 = {
   constraintType: string | null
   constraintDate: string | null
   isGroup: boolean
+  isMacroMilestone: boolean
 }
 
 export type DependencyV2 = {
@@ -543,6 +544,7 @@ export async function getScheduleV2(projectId: string): Promise<ScheduleV2Payloa
     constraintType: r.constraintType,
     constraintDate: dstr(r.constraintDate),
     isGroup: groups.has(r.id),
+    isMacroMilestone: r.isMacroMilestone,
   }))
 
   const dependencies: DependencyV2[] = deps.map((d) => ({
@@ -623,6 +625,7 @@ export async function createItemV2(input: CreateItemV2Input): Promise<ItemV2> {
     percentualCompleto: row.percentualCompleto, schedulingMode: row.schedulingMode as SchedulingMode,
     constraintType: row.constraintType, constraintDate: dstr(row.constraintDate),
     isGroup: false,
+    isMacroMilestone: row.isMacroMilestone,
   }
 }
 
@@ -711,6 +714,7 @@ export type UpdateItemV2Input = Partial<{
   constraintDate: string | null
   parentId: string | null
   order: number
+  isMacroMilestone: boolean
 }>
 
 export async function updateItemV2(
@@ -790,6 +794,7 @@ export async function updateItemV2(
       ...(data.constraintDate !== undefined && { constraintDate: ddate(data.constraintDate) }),
       ...(data.parentId !== undefined && { parentId: data.parentId }),
       ...(data.order !== undefined && { order: data.order }),
+      ...(data.isMacroMilestone !== undefined && { isMacroMilestone: data.isMacroMilestone }),
     },
   })
 
@@ -1088,6 +1093,10 @@ export async function applyTemplateV2(
         esforcoEstimadoH: task.estimatedEffort ?? 0,
         status: "A_INICIAR",
         order: isRoot ? rootOrder : task.order,
+        // Herda a marcação do modelo pro Macro Cronograma do Status Report
+        // (Fase I) — antes disso o campo existia no template mas não era
+        // copiado pra nenhum lugar.
+        isMacroMilestone: task.isMilestone,
       },
     })
     codeToId.set(task.wbsCode, created.id)

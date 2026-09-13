@@ -20,7 +20,7 @@ import {
   ChevronRight, ChevronDown, Plus, IndentIncrease, IndentDecrease,
   ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, Milestone,
   Circle, CircleX, CirclePlus, Pencil, Undo2, Redo2, GripVertical, GripHorizontal, LayoutTemplate, FileSpreadsheet, BookmarkPlus, History,
-  Link2, Copy, Check, X,
+  Link2, Copy, Check, X, Star,
 } from "lucide-react"
 
 // ─── Helpers de árvore ──────────────────────────────────────────────────────
@@ -1179,6 +1179,14 @@ function Row({ item, depth, hasChildren, isOpen, ...h }: { item: ItemV2; depth: 
         {!hasChildren && (
           <button onClick={() => h.onEditTitle(item.id)} title="Editar título">
             <Pencil className="w-3 h-3 text-blue-300 hover:text-blue-500 transition-colors" />
+          </button>
+        )}
+        {!hasChildren && (
+          <button
+            onClick={() => h.onUpdate(item.id, { isMacroMilestone: !item.isMacroMilestone })}
+            title={item.isMacroMilestone ? "Remover do Macro Cronograma (Status Report)" : "Marcar para o Macro Cronograma (Status Report)"}
+          >
+            <Star className={`w-3 h-3 transition-colors ${item.isMacroMilestone ? "text-amber-400 fill-amber-400" : "text-slate-300 hover:text-amber-400"}`} />
           </button>
         )}
       </div>

@@ -13,11 +13,12 @@ import {
   CheckCheck, ListTodo, Play, Search, BarChart3,
   DollarSign, Target, RefreshCw, Activity, MapPin,
   Shield, Milestone, ChevronRight as ChevRight,
-  Lock, History, X, Loader2, AlertCircle,
+  Lock, History, X, Loader2, AlertCircle, Link2, Copy, Check,
 } from "lucide-react"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { LineChart, Line, XAxis, YAxis, ReferenceLine, ResponsiveContainer } from "recharts"
 import { closeMonthlyStatusReports, getStatusReportHistory, type StatusReportHistoryItem } from "@/lib/actions/status-report"
+import { getOrCreatePublicStatusToken, revokePublicStatusToken } from "@/lib/actions/public-links"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -60,6 +61,13 @@ export type ProjectSlideData = {
   budgetUsed: number | null
   meetingsCount: number; meetingsByType: Record<string, number>
   sCurve: { series: { date: string; planned: number; realized: number | null }[] } | null
+  // Link público (token permanente) — "Gerar Link Público" na apresentação.
+  publicStatusToken: string | null
+  // "Macro Cronograma": itens marcados na grade do Cronograma (estrela) para
+  // aparecer resumidos aqui — não é o mesmo conceito de marco de calendário
+  // (duracaoDiasUteis === 0). Só a rota pública/impressão exibe esta seção
+  // (a apresentação em tela cheia já não tem espaço sobrando no slide).
+  macroMilestones: { title: string; status: string; terminoEstimado: string | null }[]
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -556,7 +564,7 @@ function MiniSCurve({series}:{series:{date:string;planned:number;realized:number
   )
 }
 
-function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;total:number}) {
+export function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;total:number}) {
   const status=STATUS_CFG[data.status]??{label:data.status,color:"#94A3B8",bg:"rgba(148,163,184,0.12)",icon:"📋"}
   const costL=toTL(data.reportStatus.cost); const schL=toTL(data.reportStatus.schedule)
   const resL=toTL(data.reportStatus.resources); const ovL=toTL(data.reportStatus.overall)
@@ -1216,6 +1224,70 @@ function ProjectSelector({slides,onStart,canCloseMonth}:{slides:ProjectSlideData
   )
 }
 
+// ─── Modal "Link Público" (Status Report) ──────────────────────────────────
+// Token permanente (lib/actions/public-links.ts) — a view pública (app/
+// (print)/public/status-report/[token]) reaproveita o próprio ProjectSlide,
+// somente leitura, mais a seção "Macro Cronograma" que não cabe no slide
+// em tela cheia.
+function StatusPublicLinkModal({ token, loading, copied, onCopy, onRevoke, onClose }: {
+  token: string | null
+  loading: boolean
+  copied: boolean
+  onCopy: () => void
+  onRevoke: () => void
+  onClose: () => void
+}) {
+  const url = token && typeof window !== "undefined" ? `${window.location.origin}/public/status-report/${token}` : ""
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.6)" }}
+      onClick={(e) => { e.stopPropagation(); onClose() }}>
+      <div className="w-full max-w-md rounded-2xl p-5" style={{ background: "#0F2550", border: "1px solid rgba(255,255,255,0.1)" }}
+        onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-2 mb-1">
+          <Link2 className="w-4 h-4" style={{ color: "#93C5FD" }} />
+          <h3 className="text-sm font-bold text-white">Link público do Status Report</h3>
+        </div>
+        <p className="text-xs mb-4" style={{ color: "rgba(180,210,255,0.50)" }}>
+          Qualquer pessoa com este link vê o Status Report deste projeto (progresso, riscos, checkpoint, macro cronograma) sem precisar de login. Fica ativo até você revogar.
+        </p>
+
+        {loading ? (
+          <p className="text-xs text-center py-4" style={{ color: "rgba(180,210,255,0.45)" }}>Gerando link…</p>
+        ) : url ? (
+          <>
+            <div className="flex items-center gap-2 mb-4">
+              <input readOnly value={url} onFocus={(e) => e.target.select()}
+                className="flex-1 h-9 px-3 rounded-lg text-xs outline-none"
+                style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "#E2E8F0" }} />
+              <button onClick={onCopy} title="Copiar link"
+                className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-colors"
+                style={{ border: "1px solid rgba(255,255,255,0.12)", color: "rgba(180,210,255,0.75)" }}>
+                {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+            <div className="flex items-center justify-between">
+              <button onClick={onRevoke} className="flex items-center gap-1.5 text-xs font-bold text-red-400 hover:text-red-300 transition-colors">
+                <X className="w-3.5 h-3.5" /> Revogar link
+              </button>
+              <button onClick={onClose} className="px-3.5 py-2 rounded-lg text-xs font-bold transition-colors"
+                style={{ color: "rgba(180,210,255,0.75)" }}>
+                Fechar
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center justify-end">
+            <button onClick={onClose} className="px-3.5 py-2 rounded-lg text-xs font-bold transition-colors"
+              style={{ color: "rgba(180,210,255,0.75)" }}>
+              Fechar
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function ReportClient({slides:allSlides,totalMeetings,canCloseMonth}:{slides:ProjectSlideData[];totalMeetings:number;canCloseMonth:boolean}) {
@@ -1225,6 +1297,12 @@ export function ReportClient({slides:allSlides,totalMeetings,canCloseMonth}:{sli
   const [dir,setDir]           =useState(1)
   const [isFullscreen,setIsFs] =useState(false)
   const [idle,setIdle]         =useState(false)
+  const [publicTokens,setPublicTokens]=useState<Record<string,string|null>>(
+    ()=>Object.fromEntries(allSlides.map((s)=>[s.id,s.publicStatusToken]))
+  )
+  const [publicLinkOpen,setPublicLinkOpen]=useState(false)
+  const [publicLinkLoading,setPublicLinkLoading]=useState(false)
+  const [copied,setCopied]=useState(false)
   const containerRef=useRef<HTMLDivElement>(null)
   const idleTimer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined)
   const resetIdle=useCallback(()=>{setIdle(false);clearTimeout(idleTimer.current);idleTimer.current=setTimeout(()=>setIdle(true),4500)},[])
@@ -1277,7 +1355,32 @@ export function ReportClient({slides:allSlides,totalMeetings,canCloseMonth}:{sli
 
   // project index: starts after cover + agenda
   const projectIdx=current-2
+  const currentProject=slideType==="project"?activeSlides[projectIdx]:undefined
+  const currentToken=currentProject?publicTokens[currentProject.id]??null:null
   const date=format(new Date(),"dd 'de' MMMM 'de' yyyy",{locale:ptBR})
+
+  async function handleOpenPublicLink() {
+    setPublicLinkOpen(true); setCopied(false)
+    if (!currentProject || publicTokens[currentProject.id]) return
+    setPublicLinkLoading(true)
+    try {
+      const token = await getOrCreatePublicStatusToken(currentProject.id)
+      setPublicTokens((prev)=>({...prev,[currentProject.id]:token}))
+    } finally {
+      setPublicLinkLoading(false)
+    }
+  }
+
+  async function handleRevokePublicLink() {
+    if (!currentProject) return
+    setPublicLinkLoading(true)
+    try {
+      await revokePublicStatusToken(currentProject.id)
+      setPublicTokens((prev)=>({...prev,[currentProject.id]:null}))
+    } finally {
+      setPublicLinkLoading(false)
+    }
+  }
 
   if(allSlides.length===0)return <EmptyState/>
   if(!started){
@@ -1327,12 +1430,37 @@ export function ReportClient({slides:allSlides,totalMeetings,canCloseMonth}:{sli
         <div className="flex items-center gap-2">
           <span style={{fontSize:11,color:"rgba(148,185,255,0.22)"}}>{current+1}/{total} · F tela cheia</span>
 
+          {currentProject && (
+            <button onClick={handleOpenPublicLink} title="Gerar um link público (sem login) com o Status Report deste projeto"
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+              style={{color:"rgba(180,210,255,0.75)",border:"1px solid rgba(148,185,255,0.22)",background:"rgba(148,185,255,0.08)"}}>
+              <Link2 className="w-3.5 h-3.5"/> Link Público
+            </button>
+          )}
+
           <button onClick={toggleFullscreen} className="w-8 h-8 rounded-full flex items-center justify-center"
             style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.11)",color:"rgba(180,210,255,0.45)",cursor:"pointer"}}>
             {isFullscreen?<Minimize2 className="w-3.5 h-3.5"/>:<Maximize2 className="w-3.5 h-3.5"/>}
           </button>
         </div>
       </motion.div>
+
+      {publicLinkOpen && currentProject && (
+        <StatusPublicLinkModal
+          token={currentToken}
+          loading={publicLinkLoading}
+          copied={copied}
+          onCopy={() => {
+            if (!currentToken) return
+            navigator.clipboard.writeText(`${window.location.origin}/public/status-report/${currentToken}`).then(() => {
+              setCopied(true)
+              setTimeout(() => setCopied(false), 2000)
+            })
+          }}
+          onRevoke={handleRevokePublicLink}
+          onClose={() => setPublicLinkOpen(false)}
+        />
+      )}
 
       {/* Edge hints */}
       {current>0&&(

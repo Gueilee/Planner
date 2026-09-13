@@ -78,6 +78,7 @@ export default async function PublicSchedulePage({ params }: { params: Promise<{
     percentualCompleto: r.percentualCompleto, schedulingMode: r.schedulingMode as "auto" | "manual",
     constraintType: r.constraintType, constraintDate: dstr(r.constraintDate),
     isGroup: groupIds.has(r.id),
+    isMacroMilestone: r.isMacroMilestone,
   }))
   const dependencies: DependencyV2[] = deps.map((d) => ({
     id: d.id, successorId: d.successorId, predecessorId: d.predecessorId,

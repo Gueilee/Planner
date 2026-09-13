@@ -35,3 +35,26 @@ export async function revokePublicScheduleToken(projectId: string): Promise<void
   await db.project.update({ where: { id: projectId }, data: { publicScheduleToken: null } })
   revalidatePath(`/projects/${projectId}/schedule`)
 }
+
+// Mesmo mecanismo, aplicado ao Status Report (Fase I) — "Gerar Link
+// Público" na apresentação, rota pública em app/(print)/public/
+// status-report/[token].
+export async function getOrCreatePublicStatusToken(projectId: string): Promise<string> {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+
+  const project = await db.project.findUnique({ where: { id: projectId }, select: { publicStatusToken: true } })
+  if (project?.publicStatusToken) return project.publicStatusToken
+
+  const token = generateToken()
+  await db.project.update({ where: { id: projectId }, data: { publicStatusToken: token } })
+  revalidatePath("/status-report")
+  return token
+}
+
+export async function revokePublicStatusToken(projectId: string): Promise<void> {
+  const session = await auth()
+  if (!session?.user) throw new Error("Não autorizado")
+  await db.project.update({ where: { id: projectId }, data: { publicStatusToken: null } })
+  revalidatePath("/status-report")
+}
