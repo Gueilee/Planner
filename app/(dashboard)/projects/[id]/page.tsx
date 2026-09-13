@@ -9,7 +9,7 @@ import { ProjectEditModal } from "./project-edit-modal"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
   ArrowLeft, Users, Calendar, AlertTriangle, CheckCircle2,
-  Clock, BarChart3, Layers, TrendingUp, Timer, CalendarDays, RefreshCw,
+  Clock, BarChart3, Layers, TrendingUp, Timer, CalendarDays,
   Rocket, FileDown, BookOpen, Shield, FileText, Gem,
 } from "lucide-react"
 import { DeleteProjectButton } from "./delete-project-button"
@@ -412,14 +412,6 @@ export default async function ProjectDetailPage({
                       (ajustes, melhorias) com as mesmas ferramentas, até encerrar manualmente. */}
                   {["IN_PROGRESS", "PILOT", "RAMP_UP", "GO_LIVE", "POST_GOLIVE"].includes(project.status) && (
                     <>
-                      <Link
-                        href={`/projects/${id}/checkpoint`}
-                        className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl transition-all hover:opacity-90 active:scale-[0.98]"
-                        style={{ background: "linear-gradient(135deg, #2463FF, #8B2FFF)", boxShadow: "0 4px 20px rgba(36,99,255,0.30)", color: "white" }}
-                      >
-                        <RefreshCw className="w-3.5 h-3.5" />
-                        Checkpoint
-                      </Link>
                       <Link
                         href={`/projects/${id}/schedule`}
                         className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl transition-all hover:opacity-90 active:scale-[0.98]"
