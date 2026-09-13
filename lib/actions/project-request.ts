@@ -49,7 +49,11 @@ export async function createProjectRequest(data: {
       requestNumber:  nextNumber,
       organizationId: session.user.organizationId,
       description:    data.scope || null,
-      status:         ProjectStatus.PENDING_GO_NO_GO,
+      // Nasce direto em Planejamento — o gate de Go/No-Go foi removido do
+      // fluxo (pedido da Millena: "projetos em go/no-go ir para o
+      // Iniciar"). PENDING_GO_NO_GO continua existindo no enum só por
+      // causa do histórico de projetos antigos que já passaram por ele.
+      status:         ProjectStatus.PLANNING,
       projectArea:    (data.projectArea || "TECNOLOGIA") as never,
       origin:         data.origin || null,
       scope:          data.scope || null,

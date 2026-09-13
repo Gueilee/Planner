@@ -303,7 +303,7 @@ export default async function CharterPage({ params }: { params: Promise<{ id: st
 
             <h1 className="cover-title">{project.title}</h1>
             <p className="cover-subtitle">
-              Aprovado em Go/No-Go{goNoGo ? ` · ${fmt(goNoGo.date)}` : ""}
+              {goNoGo ? `Aprovado em Go/No-Go · ${fmt(goNoGo.date)}` : "Documento de Abertura do Projeto"}
             </p>
 
             {/* Key info grid */}

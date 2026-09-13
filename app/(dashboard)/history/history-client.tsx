@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useCallback } from "react"
 import { getProjectFullHistory, deleteMeeting, deleteAttachment } from "@/lib/actions/history"
+import { generateCharterDocument } from "@/lib/actions/charter"
 import { computeProjectProgress } from "@/lib/utils/project-progress"
 import { toLegacyLikeTasks, areasFromV2 } from "@/lib/utils/schedule-v2-adapter"
 import { format, differenceInDays, formatDistanceToNow } from "date-fns"
@@ -388,6 +389,58 @@ type DeleteProps = {
   setConfirmingAtt: (id: string | null) => void
   handleDeleteMeeting: (id: string) => Promise<void>
   handleDeleteAttachment: (id: string) => Promise<void>
+  // Nome genérico de propósito — reaproveitado pra qualquer mutação feita
+  // dentro de ProjectHistoryView que precise puxar o projeto de novo (hoje:
+  // gerar/atualizar o Termo de Abertura).
+  refreshHistory: () => void
+}
+
+// Termo de Abertura — botão "Gerar/Atualizar" (lib/actions/charter.ts::
+// generateCharterDocument grava um ProjectDocument de verdade) + "Baixar
+// PDF" apontando pra página de impressão já existente (app/(print)/
+// charter/[id]), mesmo padrão de PDF via navegador já usado no resto do
+// sistema — não duplica a estilização rica dessa página aqui.
+function CharterControl({ projectId, existingDoc, onGenerated }: {
+  projectId: string
+  existingDoc: { updatedAt: string | Date } | null
+  onGenerated: () => void
+}) {
+  const [isPending, startTransition] = useTransition()
+
+  function handleGenerate() {
+    startTransition(async () => {
+      await generateCharterDocument(projectId)
+      onGenerated()
+    })
+  }
+
+  return (
+    <div className="flex items-center gap-2 pl-4 pr-2 py-2 rounded-xl border" style={{ background: "#EEF2FF", borderColor: "#C7D2FE" }}>
+      <FileText className="w-3.5 h-3.5 shrink-0" style={{ color: "#3730A3" }} />
+      <div className="flex flex-col mr-1">
+        <span className="text-sm font-semibold" style={{ color: "#3730A3" }}>Termo de Abertura</span>
+        {existingDoc && (
+          <span className="text-[10px] text-gray-400">Gerado em {fmt(existingDoc.updatedAt)}</span>
+        )}
+      </div>
+      <button
+        onClick={handleGenerate}
+        disabled={isPending}
+        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all hover:opacity-80 disabled:opacity-50"
+        style={{ background: "white", color: "#3730A3", border: "1px solid #C7D2FE" }}
+      >
+        {isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+        {existingDoc ? "Atualizar" : "Gerar"}
+      </button>
+      <a
+        href={`/charter/${projectId}`} target="_blank" rel="noopener noreferrer"
+        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all hover:opacity-80"
+        style={{ background: "white", color: "#3730A3", border: "1px solid #C7D2FE" }}
+      >
+        <Download className="w-3 h-3" /> Baixar PDF
+      </a>
+    </div>
+  )
 }
 
 function ProjectHistoryView({ data, del }: { data: NonNullable<FullHistory>; del: DeleteProps }) {
@@ -396,6 +449,7 @@ function ProjectHistoryView({ data, del }: { data: NonNullable<FullHistory>; del
     deletedMtgIds, deletedAttIds,
     setConfirmingMtg, setConfirmingAtt,
     handleDeleteMeeting, handleDeleteAttachment,
+    refreshHistory,
   } = del
   const p   = data
   const cfg = STATUS_CFG[p.status] ?? STATUS_CFG.PLANNING
@@ -686,6 +740,17 @@ function ProjectHistoryView({ data, del }: { data: NonNullable<FullHistory>; del
                             <Download className="w-3 h-3" /> Baixar PDF da ATA
                           </button>
                         </>
+                      ) : isOpening ? (
+                        <>
+                          {doc.content && <p className="text-xs leading-relaxed text-gray-600 line-clamp-3">{doc.content.slice(0, 200)}{doc.content.length > 200 ? "…" : ""}</p>}
+                          <a
+                            href={`/charter/${p.id}`} target="_blank" rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all hover:opacity-80"
+                            style={{ background: "#F5F3FF", color: "#7C3AED", border: "1px solid #DDD6FE" }}
+                          >
+                            <Download className="w-3 h-3" /> Baixar PDF do Termo
+                          </a>
+                        </>
                       ) : doc.content ? (
                         <p className="text-xs leading-relaxed text-gray-600">{doc.content.slice(0, 250)}{doc.content.length > 250 ? "…" : ""}</p>
                       ) : null}
@@ -932,19 +997,19 @@ function ProjectHistoryView({ data, del }: { data: NonNullable<FullHistory>; del
         {/* 8. Documentos */}
         <section>
           <SectionTitle icon={FileText} title="Documentos e Relatórios" />
-          <div className="mt-4 flex flex-wrap gap-3">
-            {[
-              { label: "Termo de Abertura",         href: `/charter/${p.id}`,  color: "#3730A3", bg: "#EEF2FF", border: "#C7D2FE" },
-              { label: "Relatório de Encerramento", href: `/closure/${p.id}`,  color: "#7C3AED", bg: "#F5F3FF", border: "#DDD6FE" },
-            ].map(({ label, href, color, bg, border }) => (
-              <a key={label} href={href} target="_blank" rel="noopener noreferrer"
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all hover:opacity-80 border"
-                style={{ background: bg, color, borderColor: border }}>
-                <FileText className="w-3.5 h-3.5" />
-                {label}
-                <ArrowUpRight className="w-3 h-3 opacity-60" />
-              </a>
-            ))}
+          <div className="mt-4 flex flex-wrap gap-3 items-stretch">
+            <CharterControl
+              projectId={p.id}
+              existingDoc={p.documents.find((d) => d.type === "PROJECT_OPENING") ?? null}
+              onGenerated={refreshHistory}
+            />
+            <a href={`/closure/${p.id}`} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all hover:opacity-80 border"
+              style={{ background: "#F5F3FF", color: "#7C3AED", borderColor: "#DDD6FE" }}>
+              <FileText className="w-3.5 h-3.5" />
+              Relatório de Encerramento
+              <ArrowUpRight className="w-3 h-3 opacity-60" />
+            </a>
           </div>
         </section>
 
@@ -1139,6 +1204,17 @@ export function HistoryClient({ projects, userRole }: { projects: ProjectSummary
     })
   }, [selected])
 
+  // Refetch sem trocar de projeto — usado depois de gerar/atualizar o
+  // Termo de Abertura, pra puxar o ProjectDocument recém-criado sem
+  // precisar de um jeito próprio de atualizar só esse item na lista.
+  const refreshHistory = useCallback(() => {
+    if (!selected) return
+    startTransition(async () => {
+      const data = await getProjectFullHistory(selected)
+      setHistory(data ?? null)
+    })
+  }, [selected])
+
   return (
     <div className="flex flex-col h-full" style={{ background: "#F7F6F2" }}>
 
@@ -1314,6 +1390,7 @@ export function HistoryClient({ projects, userRole }: { projects: ProjectSummary
               deletedMtgIds, deletedAttIds,
               setConfirmingMtg, setConfirmingAtt,
               handleDeleteMeeting, handleDeleteAttachment,
+              refreshHistory,
             }} />
           ) : (
             <EmptyState />

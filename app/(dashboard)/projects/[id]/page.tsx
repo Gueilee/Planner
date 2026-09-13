@@ -9,7 +9,7 @@ import { ProjectEditModal } from "./project-edit-modal"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
   ArrowLeft, Users, Calendar, AlertTriangle, CheckCircle2,
-  Clock, BarChart3, Layers, TrendingUp, Play, Timer, CalendarDays, RefreshCw,
+  Clock, BarChart3, Layers, TrendingUp, Timer, CalendarDays, RefreshCw,
   Rocket, FileDown, BookOpen, Shield, FileText, Gem,
 } from "lucide-react"
 import { DeleteProjectButton } from "./delete-project-button"
@@ -366,84 +366,10 @@ export default async function ProjectDetailPage({
                   />
 
 
-                  {/* PENDING GO/NO-GO — nova solicitação aguardando análise e reunião */}
-                  {project.status === "PENDING_GO_NO_GO" && (
-                    <>
-                      <Link
-                        href={`/projects/${id}/go-no-go`}
-                        className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.98]"
-                        style={{ background: "linear-gradient(135deg, #D97706, #F59E0B)", boxShadow: "0 4px 20px rgba(217,119,6,0.35)" }}
-                      >
-                        <Play className="w-3.5 h-3.5" />
-                        Go/No-Go
-                      </Link>
-                      {(project.origin === "CLIENT" || project.projectArea === "ESTRATEGICO") && (
-                        <Link
-                          href={`/projects/${id}/presentation`}
-                          className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.98]"
-                          style={{ background: "linear-gradient(135deg, #0891B2, #06B6D4)", boxShadow: "0 4px 20px rgba(8,145,178,0.30)" }}
-                        >
-                          <Layers className="w-3.5 h-3.5" />
-                          Ap. Técnica
-                        </Link>
-                      )}
-                      <Link
-                        href={`/projects/${id}/schedule`}
-                        className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl transition-all hover:opacity-90 active:scale-[0.98]"
-                        style={{ background: "linear-gradient(135deg, #0F172A, #1E293B)", boxShadow: "0 4px 20px rgba(15,23,42,0.25)", color: "white" }}
-                      >
-                        <CalendarDays className="w-3.5 h-3.5" />
-                        Cronograma
-                      </Link>
-                      <ProjectKanbanButton projectId={id} projectTitle={project.title} />
-                      <Link
-                        href={`/projects/${id}/indicators`}
-                        className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.98]"
-                        style={{ background: "linear-gradient(135deg, #7B2FBE, #2463FF)", boxShadow: "0 4px 20px rgba(123,47,190,0.30)" }}
-                      >
-                        <BarChart3 className="w-3.5 h-3.5" />
-                        Indicadores
-                      </Link>
-                      <Link
-                        href={`/projects/${id}/kickoff`}
-                        className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.98]"
-                        style={{ background: "linear-gradient(135deg, #10B981, #059669)", boxShadow: "0 4px 20px rgba(16,185,129,0.30)" }}
-                      >
-                        <Timer className="w-3.5 h-3.5" />
-                        Kick-Off
-                      </Link>
-                      <Link
-                        href={`/projects/${id}/meetings`}
-                        className="inline-flex items-center gap-2 px-3 h-9 text-sm font-semibold rounded-xl border transition-all hover:bg-slate-50 active:scale-[0.98]"
-                        style={{ borderColor: "#E2E8F0", color: "#475569", background: "transparent" }}
-                      >
-                        <FileText className="w-3.5 h-3.5" />
-                        Reuniões
-                      </Link>
-                    </>
-                  )}
-
-                  {/* PLANNING — já passou pelo Go/No-Go e foi aprovado */}
+                  {/* PLANNING — a etapa "Iniciar" logo após a solicitação (Go/No-Go e Ap.
+                      Técnica foram removidos do fluxo — projeto nasce direto aqui). */}
                   {project.status === "PLANNING" && (
                     <>
-                      <Link
-                        href={`/projects/${id}/go-no-go`}
-                        className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.98]"
-                        style={{ background: "linear-gradient(135deg, #7B2FBE, #2463FF)", boxShadow: "0 4px 20px rgba(123,47,190,0.35)" }}
-                      >
-                        <Play className="w-3.5 h-3.5" />
-                        Go/No-Go
-                      </Link>
-                      {(project.origin === "CLIENT" || project.projectArea === "ESTRATEGICO") && (
-                        <Link
-                          href={`/projects/${id}/presentation`}
-                          className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.98]"
-                          style={{ background: "linear-gradient(135deg, #0891B2, #06B6D4)", boxShadow: "0 4px 20px rgba(8,145,178,0.30)" }}
-                        >
-                          <Layers className="w-3.5 h-3.5" />
-                          Ap. Técnica
-                        </Link>
-                      )}
                       <Link
                         href={`/projects/${id}/schedule`}
                         className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl transition-all hover:opacity-90 active:scale-[0.98]"
