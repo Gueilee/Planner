@@ -10,7 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
   ArrowLeft, Users, Calendar, AlertTriangle, CheckCircle2,
   Clock, BarChart3, Layers, TrendingUp, Timer, CalendarDays,
-  Rocket, FileDown, BookOpen, Shield, FileText, Gem,
+  Rocket, FileDown, BookOpen, Shield, Gem,
 } from "lucide-react"
 import { DeleteProjectButton } from "./delete-project-button"
 import { ProjectKanbanButton } from "./project-kanban-button"
@@ -395,14 +395,6 @@ export default async function ProjectDetailPage({
                         <Timer className="w-3.5 h-3.5" />
                         Apresentação de Kick-off
                       </Link>
-                      <Link
-                        href={`/projects/${id}/meetings`}
-                        className="inline-flex items-center gap-2 px-3 h-9 text-sm font-semibold rounded-xl border transition-all hover:bg-slate-50 active:scale-[0.98]"
-                        style={{ borderColor: "#E2E8F0", color: "#475569", background: "transparent" }}
-                      >
-                        <FileText className="w-3.5 h-3.5" />
-                        Reuniões
-                      </Link>
                       <StatusActions projectId={id} currentStatus={project.status} userRole={userRole} />
                     </>
                   )}
@@ -450,14 +442,6 @@ export default async function ProjectDetailPage({
                         <Timer className="w-3.5 h-3.5" />
                         Apresentação de Kick-off
                       </Link>
-                      <Link
-                        href={`/projects/${id}/meetings`}
-                        className="inline-flex items-center gap-2 px-3 h-9 text-sm font-semibold rounded-xl border transition-all hover:bg-slate-50 active:scale-[0.98]"
-                        style={{ borderColor: "#E2E8F0", color: "#475569", background: "transparent" }}
-                      >
-                        <FileText className="w-3.5 h-3.5" />
-                        Reuniões
-                      </Link>
                       {/* Avançar status: IN_PROGRESS→PILOT (Em Validação) | PILOT→RAMP_UP | RAMP_UP=null (via GO LIVE ceremony) */}
                       <StatusActions projectId={id} currentStatus={project.status} userRole={userRole} />
                     </>
@@ -502,14 +486,6 @@ export default async function ProjectDetailPage({
                       >
                         <BarChart3 className="w-3.5 h-3.5" />
                         Indicadores
-                      </Link>
-                      <Link
-                        href={`/projects/${id}/meetings`}
-                        className="inline-flex items-center gap-2 px-3 h-9 text-sm font-semibold rounded-xl border transition-all hover:bg-slate-50 active:scale-[0.98]"
-                        style={{ borderColor: "#E2E8F0", color: "#475569", background: "transparent" }}
-                      >
-                        <FileText className="w-3.5 h-3.5" />
-                        Reuniões
                       </Link>
                       <StatusActions projectId={id} currentStatus={project.status} userRole={userRole} />
                     </>
