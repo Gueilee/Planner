@@ -30,6 +30,18 @@ describe("dependency-parser — sintaxe de predecessor", () => {
     expect(parsePredecessorToken("A1SS+2")).toEqual({ code: "A1", type: "SS", lag: 2 })
   })
 
+  it("lag sem sigla assume FS (positivo)", () => {
+    expect(parsePredecessorToken("A2+5")).toEqual({ code: "A2", type: "FS", lag: 5 })
+  })
+
+  it("lag sem sigla assume FS (negativo)", () => {
+    expect(parsePredecessorToken("A2-3")).toEqual({ code: "A2", type: "FS", lag: -3 })
+  })
+
+  it("código de EAP com pontos + lag sem sigla", () => {
+    expect(parsePredecessorToken("3.1.1+2")).toEqual({ code: "3.1.1", type: "FS", lag: 2 })
+  })
+
   it("token vazio retorna null", () => {
     expect(parsePredecessorToken("")).toBeNull()
     expect(parsePredecessorToken("   ")).toBeNull()

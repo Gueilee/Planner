@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { projectEndDate, rollupGroups, rollupProgress } from "../rollup"
-import type { ProgressItem } from "../rollup"
+import { projectEndDate, projectStartDate, rollupGroups, rollupProgress, rollupStatus } from "../rollup"
+import type { ProgressItem, StatusItem } from "../rollup"
 import type { SchedItem } from "../types"
 
 function item(over: Partial<SchedItem> & { id: string }): SchedItem {
@@ -95,5 +95,93 @@ describe("projectEndDate", () => {
 
   it("retorna null quando nenhum item tem término", () => {
     expect(projectEndDate([item({ id: "A" })])).toBeNull()
+  })
+})
+
+describe("projectStartDate", () => {
+  it("é o min(início) entre todos os itens agendados", () => {
+    const items: SchedItem[] = [
+      item({ id: "A", inicioEstimado: "2026-04-20" }),
+      item({ id: "B", inicioEstimado: "2026-04-13" }),
+      item({ id: "C" }), // sem data, ignorado
+    ]
+    expect(projectStartDate(items)).toBe("2026-04-13")
+  })
+
+  it("retorna null quando nenhum item tem início", () => {
+    expect(projectStartDate([item({ id: "A" })])).toBeNull()
+  })
+})
+
+describe("rollupStatus — grupo herda o status mais crítico dos filhos diretos", () => {
+  function st(over: Partial<StatusItem> & { id: string }): StatusItem {
+    return { parentId: null, status: "A_INICIAR", ...over }
+  }
+
+  it("todos os filhos Concluído ⇒ grupo Concluído", () => {
+    const items: StatusItem[] = [
+      st({ id: "G1" }),
+      st({ id: "T1", parentId: "G1", status: "CONCLUIDO" }),
+      st({ id: "T2", parentId: "G1", status: "CONCLUIDO" }),
+    ]
+    expect(rollupStatus(items).get("G1")).toBe("CONCLUIDO")
+  })
+
+  it("um filho Em Andamento entre Concluídos ⇒ grupo Em Andamento (não fica preso em Concluído nem A Iniciar)", () => {
+    const items: StatusItem[] = [
+      st({ id: "G1" }),
+      st({ id: "T1", parentId: "G1", status: "CONCLUIDO" }),
+      st({ id: "T2", parentId: "G1", status: "EM_ANDAMENTO" }),
+    ]
+    expect(rollupStatus(items).get("G1")).toBe("EM_ANDAMENTO")
+  })
+
+  it("prioridade: Atrasado vence sobre Pausado, Em Andamento e A Iniciar", () => {
+    const items: StatusItem[] = [
+      st({ id: "G1" }),
+      st({ id: "T1", parentId: "G1", status: "PAUSADO" }),
+      st({ id: "T2", parentId: "G1", status: "EM_ANDAMENTO" }),
+      st({ id: "T3", parentId: "G1", status: "ATRASADO" }),
+      st({ id: "T4", parentId: "G1", status: "A_INICIAR" }),
+    ]
+    expect(rollupStatus(items).get("G1")).toBe("ATRASADO")
+  })
+
+  it("prioridade: Pausado vence sobre Em Andamento e A Iniciar (sem Atrasado)", () => {
+    const items: StatusItem[] = [
+      st({ id: "G1" }),
+      st({ id: "T1", parentId: "G1", status: "EM_ANDAMENTO" }),
+      st({ id: "T2", parentId: "G1", status: "PAUSADO" }),
+      st({ id: "T3", parentId: "G1", status: "A_INICIAR" }),
+    ]
+    expect(rollupStatus(items).get("G1")).toBe("PAUSADO")
+  })
+
+  it("todos A Iniciar ⇒ grupo A Iniciar", () => {
+    const items: StatusItem[] = [
+      st({ id: "G1" }),
+      st({ id: "T1", parentId: "G1", status: "A_INICIAR" }),
+      st({ id: "T2", parentId: "G1", status: "A_INICIAR" }),
+    ]
+    expect(rollupStatus(items).get("G1")).toBe("A_INICIAR")
+  })
+
+  it("folha mantém o próprio status (nunca sobrescrita por rollup)", () => {
+    const items: StatusItem[] = [st({ id: "T1", status: "PAUSADO" })]
+    expect(rollupStatus(items).get("T1")).toBe("PAUSADO")
+  })
+
+  it("recursivo: grupo de grupos usa o status já resolvido dos filhos diretos", () => {
+    const items: StatusItem[] = [
+      st({ id: "P" }),
+      st({ id: "G1", parentId: "P" }),
+      st({ id: "G2", parentId: "P" }),
+      st({ id: "T1", parentId: "G1", status: "CONCLUIDO" }),
+      st({ id: "T2", parentId: "G2", status: "ATRASADO" }),
+    ]
+    const rolled = rollupStatus(items)
+    expect(rolled.get("G1")).toBe("CONCLUIDO")
+    expect(rolled.get("G2")).toBe("ATRASADO")
+    expect(rolled.get("P")).toBe("ATRASADO") // pega o pior entre G1(Concluído) e G2(Atrasado)
   })
 })

@@ -49,6 +49,10 @@ function sortValue(item: ItemV2, col: SortColumn, membersById?: Map<string, stri
     case "termino": return item.terminoEstimado ?? ""
     case "inicioReal": return item.inicioReal ?? ""
     case "terminoReal": return item.terminoReal ?? ""
+    case "pctEstimado": return computeExpectedPct(
+      item.inicioEstimado ? new Date(`${item.inicioEstimado}T00:00:00.000Z`) : null,
+      item.terminoEstimado ? new Date(`${item.terminoEstimado}T00:00:00.000Z`) : null,
+    ) ?? -1
     case "pct": return item.percentualCompleto
     case "responsavel": return ((item.responsavelId ? membersById?.get(item.responsavelId) : item.responsavelNome) ?? "").toLowerCase()
     case "status": return statusLabel(item.status).label
@@ -131,19 +135,23 @@ function statusLabel(status: string) {
 // "Atividade" (título+hierarquia) fica fixa à esquerda — todo o resto é
 // livre para o usuário reordenar e redimensionar.
 
-type ColKey = "duracao" | "inicio" | "termino" | "inicioReal" | "terminoReal" | "pct" | "predecessores" | "responsavel" | "status"
+type ColKey = "duracao" | "inicio" | "termino" | "inicioReal" | "terminoReal" | "pctEstimado" | "pct" | "predecessores" | "responsavel" | "status"
 
 const COL_LABELS: Record<ColKey, string> = {
   duracao: "Duração", inicio: "Início", termino: "Término",
-  inicioReal: "Início Real", terminoReal: "Término Real", pct: "%",
+  inicioReal: "Início Real", terminoReal: "Término Real",
+  // "% Estimado" (quanto já deveria ter avançado hoje, calculado a partir do
+  // período planejado) ao lado de "% Real" (o que foi digitado de verdade) —
+  // pedido explícito: os dois lado a lado pra comparar.
+  pctEstimado: "% Estimado", pct: "% Real",
   predecessores: "Predecessores", responsavel: "Responsável", status: "Status",
 }
-const DEFAULT_COL_ORDER: ColKey[] = ["duracao", "inicio", "termino", "inicioReal", "terminoReal", "pct", "predecessores", "responsavel", "status"]
+const DEFAULT_COL_ORDER: ColKey[] = ["duracao", "inicio", "termino", "inicioReal", "terminoReal", "pctEstimado", "pct", "predecessores", "responsavel", "status"]
 const DEFAULT_COL_WIDTHS: Record<ColKey, number> = {
-  duracao: 70, inicio: 110, termino: 100, inicioReal: 110, terminoReal: 110, pct: 60, predecessores: 150, responsavel: 140, status: 130,
+  duracao: 70, inicio: 110, termino: 100, inicioReal: 110, terminoReal: 110, pctEstimado: 70, pct: 60, predecessores: 150, responsavel: 140, status: 130,
 }
 const COL_ALIGN: Record<ColKey, "center" | "left"> = {
-  duracao: "center", inicio: "center", termino: "center", inicioReal: "center", terminoReal: "center", pct: "center",
+  duracao: "center", inicio: "center", termino: "center", inicioReal: "center", terminoReal: "center", pctEstimado: "center", pct: "center",
   predecessores: "left", responsavel: "left", status: "left",
 }
 const DEFAULT_TITLE_WIDTH = 320
@@ -1015,7 +1023,7 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
             const v = e.target.value || null
             if (v !== item.inicioEstimado) h.onUpdate(item.id, { inicioEstimado: v })
           }}
-          className="bg-transparent outline-none text-[10px] text-slate-700 w-full text-center rounded focus:bg-violet-50"
+          className="bg-transparent outline-none text-[10px] text-slate-700 w-full text-right pr-0.5 rounded focus:bg-violet-50"
         />
       )
 
@@ -1036,7 +1044,7 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
             const v = e.target.value || null
             if (v !== item.terminoEstimado) h.onUpdate(item.id, { terminoEstimado: v })
           }}
-          className="bg-transparent outline-none text-[10px] text-slate-700 w-full text-center rounded focus:bg-violet-50"
+          className="bg-transparent outline-none text-[10px] text-slate-700 w-full text-right pr-0.5 rounded focus:bg-violet-50"
         />
       )
 
@@ -1064,7 +1072,7 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
               })
             }
           }}
-          className="bg-transparent outline-none text-[10px] text-slate-700 w-full text-center rounded focus:bg-violet-50"
+          className="bg-transparent outline-none text-[10px] text-slate-700 w-full text-right pr-0.5 rounded focus:bg-violet-50"
         />
       )
 
@@ -1092,9 +1100,22 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
               })
             }
           }}
-          className="bg-transparent outline-none text-[10px] text-slate-700 w-full text-center rounded focus:bg-violet-50"
+          className="bg-transparent outline-none text-[10px] text-slate-700 w-full text-right pr-0.5 rounded focus:bg-violet-50"
         />
       )
+
+    case "pctEstimado": {
+      // Quanto a atividade JÁ deveria ter avançado hoje, dado o período
+      // planejado dela — mesma conta do "Esperado" do cabeçalho
+      // (computeExpectedPct), só que por linha em vez de agregada no
+      // projeto inteiro. Sempre somente leitura (não é uma entrada
+      // manual, é derivado das datas planejadas).
+      const estimado = computeExpectedPct(
+        item.inicioEstimado ? new Date(`${item.inicioEstimado}T00:00:00.000Z`) : null,
+        item.terminoEstimado ? new Date(`${item.terminoEstimado}T00:00:00.000Z`) : null,
+      )
+      return <span className="text-xs text-slate-400">{estimado !== null ? `${estimado}%` : "—"}</span>
+    }
 
     case "pct":
       return !hasChildren ? (

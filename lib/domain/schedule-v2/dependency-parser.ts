@@ -15,9 +15,10 @@ export type ParsedPredecessor = {
 }
 
 // Código: letras/números/pontos (EAP "1.1.1" ou "A3"). Tipo: fs/ss/ff/sf,
-// opcional (default FS). Lag: opcional, só faz sentido junto de um tipo
-// explícito (igual ao Artia: "A1ss+2", nunca "A1+2" sem sigla).
-const TOKEN_RE = /^(.+?)(?:(fs|ss|ff|sf)([+-]\d+)?)?$/i
+// opcional (default FS). Lag: opcional — com tipo explícito ("A1ss+2") ou
+// sozinho após o código ("A1+5", mesmo espírito de "sigla omitida ⇒ FS":
+// aqui "sigla e sinal omitidos, só o lag" também assume FS).
+const TOKEN_RE = /^(.+?)(?:(fs|ss|ff|sf)([+-]\d+)?|([+-]\d+))?$/i
 
 export function parsePredecessorToken(rawToken: string): ParsedPredecessor | null {
   const token = rawToken.trim()
@@ -30,7 +31,8 @@ export function parsePredecessorToken(rawToken: string): ParsedPredecessor | nul
   if (!code) return null
 
   const type = (m[2]?.toUpperCase() as LinkType | undefined) ?? "FS"
-  const lag = m[3] ? parseInt(m[3], 10) : 0
+  const lagStr = m[3] ?? m[4]
+  const lag = lagStr ? parseInt(lagStr, 10) : 0
 
   return { code, type, lag }
 }

@@ -74,6 +74,54 @@ export function projectStartDate(items: readonly SchedItem[]): string | null {
   return starts.length > 0 ? starts.reduce((min, d) => (d < min ? d : min)) : null
 }
 
+export type StatusItem = { id: string; parentId: string | null; status: string }
+
+// Prioridade de rollup de status (do mais crítico ao menos): um grupo
+// herda o status mais crítico entre os filhos DIRETOS. CONCLUIDO fica por
+// último de propósito — como "nenhum status mais crítico" é o único jeito
+// de chegar até ele, o grupo só vira CONCLUIDO quando TODOS os filhos
+// estiverem CONCLUIDO, sem precisar de um caso especial separado.
+const STATUS_PRIORITY = ["ATRASADO", "PAUSADO", "EM_ANDAMENTO", "VALIDACAO", "A_INICIAR", "CONCLUIDO"] as const
+
+/**
+ * Status de grupo = o mais crítico entre os filhos diretos, bottom-up
+ * (mesmo padrão memoizado de rollupGroups/rollupProgress). Item-folha
+ * mantém o próprio status — nunca é sobrescrito por rollup, só o de um
+ * item COM filhos é derivado aqui.
+ */
+export function rollupStatus(items: readonly StatusItem[]): Map<string, string> {
+  const byId = new Map(items.map((i) => [i.id, i]))
+  const childrenOf = new Map<string, StatusItem[]>()
+  for (const item of items) {
+    if (item.parentId === null) continue
+    const arr = childrenOf.get(item.parentId) ?? []
+    arr.push(item)
+    childrenOf.set(item.parentId, arr)
+  }
+
+  const result = new Map<string, string>()
+
+  function resolve(id: string): string {
+    const cached = result.get(id)
+    if (cached !== undefined) return cached
+
+    const children = childrenOf.get(id) ?? []
+    if (children.length === 0) {
+      const value = byId.get(id)?.status ?? "A_INICIAR"
+      result.set(id, value)
+      return value
+    }
+
+    const childStatuses = children.map((c) => resolve(c.id))
+    const winner = STATUS_PRIORITY.find((s) => childStatuses.includes(s)) ?? "A_INICIAR"
+    result.set(id, winner)
+    return winner
+  }
+
+  for (const item of items) resolve(item.id)
+  return result
+}
+
 export type ProgressItem = { id: string; parentId: string | null; percentualCompleto: number }
 
 /**

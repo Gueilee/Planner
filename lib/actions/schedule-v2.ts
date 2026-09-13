@@ -13,7 +13,7 @@ import { recalcular } from "@/lib/domain/schedule-v2/scheduler"
 import { workingDaysBetween } from "@/lib/domain/schedule-v2/calendar"
 import { isValidDateStr } from "@/lib/date-utils"
 import { getHolidaysForYear } from "@/lib/working-days"
-import { rollupGroups, rollupProgress, projectEndDate as computeProjectEndDate, projectStartDate as computeProjectStartDate } from "@/lib/domain/schedule-v2/rollup"
+import { rollupGroups, rollupProgress, rollupStatus, projectEndDate as computeProjectEndDate, projectStartDate as computeProjectStartDate } from "@/lib/domain/schedule-v2/rollup"
 import { parsePredecessors, dropUnknownCodes, wouldCreateCycle } from "@/lib/domain/schedule-v2/dependency-parser"
 import type { Dependency, LinkType, SchedItem, SchedulingMode, WorkCalendar } from "@/lib/domain/schedule-v2/types"
 
@@ -357,8 +357,14 @@ async function recomputeAndPersist(
   })
   const rolledDates = rollupGroups(merged)
   const rolledProgress = rollupProgress(rows.map((r) => ({ id: r.id, parentId: r.parentId, percentualCompleto: r.percentualCompleto })))
+  // Status de grupo = o mais crítico entre os filhos diretos (ATRASADO >
+  // PAUSADO > EM_ANDAMENTO/VALIDACAO > A_INICIAR), só chegando a CONCLUIDO
+  // quando TODOS os filhos estão CONCLUIDO — regra confirmada com o time
+  // (ex.: grupo com 7 filhos 100%/Concluído ficava preso em "Em Andamento"
+  // porque não existia nenhum rollup de status antes desta função).
+  const rolledStatus = rollupStatus(rows.map((r) => ({ id: r.id, parentId: r.parentId, status: r.status })))
 
-  const writes: { id: string; inicio: string | null; termino: string | null; progresso: number; duracao: number | null | undefined }[] = []
+  const writes: { id: string; inicio: string | null; termino: string | null; progresso: number; duracao: number | null | undefined; status?: string }[] = []
   for (const r of rows) {
     const isGroup = groups.has(r.id)
     const hasDeps = leafDeps.some((d) => d.successorId === r.id)
@@ -369,6 +375,9 @@ async function recomputeAndPersist(
     // undefined = não mexe na duração já gravada (só grupo e "grupo que
     // ficou sem filhos" têm um valor-alvo explícito para este campo).
     let targetDuracao: number | null | undefined
+    // undefined = não mexe no status já gravado (só grupo tem status
+    // derivado dos filhos — item-folha é sempre editado manualmente).
+    let targetStatus: string | undefined
 
     if (isGroup) {
       // Grupo não tem duração própria (regra §3.7) — um item que virou
@@ -380,6 +389,7 @@ async function recomputeAndPersist(
       targetTermino = rolledDates.get(r.id)?.terminoEstimado ?? null
       targetProgresso = rolledProgress.get(r.id) ?? r.percentualCompleto
       targetDuracao = null
+      targetStatus = rolledStatus.get(r.id) ?? r.status
     } else if (!hasDeps && r.duracaoDiasUteis === null) {
       // Não é grupo, não tem vínculo, não tem duração própria — sem base
       // legítima para uma data. Cobre o caso de um grupo que acabou de
@@ -389,17 +399,28 @@ async function recomputeAndPersist(
       targetTermino = null
       targetProgresso = r.percentualCompleto
       targetDuracao = undefined
+      targetStatus = undefined
     } else {
-      targetInicio = updatesById.get(r.id)?.inicioEstimado ?? dstr(r.inicioEstimado)
-      targetTermino = updatesById.get(r.id)?.terminoEstimado ?? dstr(r.terminoEstimado)
+      // `u` só existe para itens que entraram no fecho transitivo do
+      // recálculo (o próprio alterado + seus sucessores) — nesse caso as
+      // datas resolvidas são a verdade nova e devem ser gravadas tal como
+      // vieram, MESMO quando `null` (ex.: predecessor removido/inválido
+      // deixou o item "não agendado" de novo). Usar `??` aqui era o bug:
+      // tratava `null` como "ausente" e mantinha a data antiga presa no
+      // banco (término nunca sobrescrito, cascata de sucessor travada).
+      const u = updatesById.get(r.id)
+      targetInicio = u !== undefined ? u.inicioEstimado : dstr(r.inicioEstimado)
+      targetTermino = u !== undefined ? u.terminoEstimado : dstr(r.terminoEstimado)
       targetProgresso = r.percentualCompleto
       targetDuracao = undefined
+      targetStatus = undefined
     }
 
     const changed =
       targetInicio !== dstr(r.inicioEstimado) || targetTermino !== dstr(r.terminoEstimado) ||
-      targetProgresso !== r.percentualCompleto || (targetDuracao !== undefined && targetDuracao !== r.duracaoDiasUteis)
-    if (changed) writes.push({ id: r.id, inicio: targetInicio, termino: targetTermino, progresso: targetProgresso, duracao: targetDuracao })
+      targetProgresso !== r.percentualCompleto || (targetDuracao !== undefined && targetDuracao !== r.duracaoDiasUteis) ||
+      (targetStatus !== undefined && targetStatus !== r.status)
+    if (changed) writes.push({ id: r.id, inicio: targetInicio, termino: targetTermino, progresso: targetProgresso, duracao: targetDuracao, status: targetStatus })
   }
 
   if (writes.length > 0) {
@@ -410,6 +431,7 @@ async function recomputeAndPersist(
           data: {
             inicioEstimado: ddate(w.inicio), terminoEstimado: ddate(w.termino), percentualCompleto: w.progresso,
             ...(w.duracao !== undefined && { duracaoDiasUteis: w.duracao }),
+            ...(w.status !== undefined && { status: w.status }),
           },
         })
       )
