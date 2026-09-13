@@ -2,13 +2,15 @@
 
 import { useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { Loader2, Play, CheckCircle2, FlaskConical, Rocket, TrendingUp, RotateCcw, PlayCircle } from "lucide-react"
+import { Loader2, Play, CheckCircle2, TrendingUp, RotateCcw, PlayCircle } from "lucide-react"
 import { updateProjectStatus } from "@/lib/actions/projects"
 
 const TRANSITIONS: Record<string, { label: string; next: string; icon: typeof Play; color: string }> = {
   PLANNING:        { label: "Iniciar Projeto",       next: "IN_PROGRESS", icon: Play,         color: "from-blue-500 to-blue-600" },
   // PENDING_GO_NO_GO — progride via reunião de Go/No-Go
-  IN_PROGRESS:     { label: "Em Validação",          next: "PILOT",       icon: FlaskConical, color: "from-cyan-500 to-cyan-600" },
+  // IN_PROGRESS — gate "Em Validação" removido do fluxo (Millena); projeto
+  // avança de Em Andamento direto pra Go Live pela cerimônia de GO LIVE
+  // (lib/actions/golive.ts::registerGoLive, que não depende do status atual).
   PILOT:           { label: "Iniciar Ramp-Up",       next: "RAMP_UP",     icon: TrendingUp,   color: "from-indigo-500 to-violet-500" },
   // RAMP_UP — avança somente via cerimônia de GO LIVE (registra datas e ATA)
   GO_LIVE:         { label: "Pós GO LIVE",           next: "POST_GOLIVE", icon: CheckCircle2, color: "from-teal-500 to-emerald-500" },
