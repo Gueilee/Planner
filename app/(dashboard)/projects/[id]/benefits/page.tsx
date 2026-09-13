@@ -23,6 +23,10 @@ export default async function ProjectBenefitsPage({
   })
   if (!project) notFound()
 
+  // Projeto de Armazém não usa a etapa de Benefícios (pedido da Millena) —
+  // volta pra tela do projeto em vez de mostrar uma página vazia/inaplicável.
+  if (project.projectArea === "ARMAZEM") redirect(`/projects/${id}`)
+
   const { benefits, metrics, investment } = await getProjectBenefits(id)
 
   return (

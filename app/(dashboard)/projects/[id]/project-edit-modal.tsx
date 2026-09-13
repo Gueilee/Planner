@@ -1390,7 +1390,8 @@ export function ProjectEditModal({ project, members, allUsers, risks, benefits }
 
             {/* Section tabs */}
             <div className="flex gap-0.5 px-4 py-2 shrink-0 overflow-x-auto" style={{ borderBottom: "1px solid #F1F5F9", background: "#FAFBFC" }}>
-              {SECTIONS.map(s => (
+              {/* Projeto de Armazém não usa a etapa de Benefícios (pedido da Millena). */}
+              {SECTIONS.filter(s => s.id !== "benefits" || project.projectArea !== "ARMAZEM").map(s => (
                 <button
                   key={s.id}
                   onClick={() => setSection(s.id)}

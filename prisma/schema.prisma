@@ -347,15 +347,24 @@ model Project {
   proposalNumber String? // Nº proposta comercial aprovada (projetos CLIENT)
   contractNumber String? // Nº do contrato ou pedido de venda (projetos CLIENT)
   scope          String?
+  // AS IS/TO BE saíram do formulário de solicitação (Millena pediu escopo
+  // simplificado, só escopo + justificativa) — campos ficam no banco pra
+  // não perder o histórico de projetos antigos, só não são mais coletados.
   asIs           String?
   toBe           String?
+  justification  String?
   assumptions    String?
   restrictions   String?
   budget         Float?
   estimatedCosts Float?
   economy        Float?
   expectedStart  DateTime?
-  expectedEnd    DateTime?
+  // expectedEnd agora é DERIVADO de expectedStart + expectedDurationMonths
+  // (não é mais digitado direto na solicitação) — continua sendo a coluna
+  // de verdade que todo o resto do sistema já consulta (Dashboard, IDP,
+  // Kanban, Analytics).
+  expectedEnd             DateTime?
+  expectedDurationMonths  Int?
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
