@@ -3,6 +3,9 @@ import { db } from "@/lib/db"
 import { requireScreenView } from "@/lib/permissions-guard"
 import { Header } from "@/components/layout/header"
 import { FolderKanban, Layers, Clock, CheckCircle2, BarChart3, PauseCircle } from "lucide-react"
+import { toLegacyLikeTasks, areasFromV2 } from "@/lib/utils/schedule-v2-adapter"
+import { computeScheduleCascade, resolveProjectScheduleStatus } from "@/lib/utils/schedule-cascade"
+import { DEFAULT_RISK_THRESHOLD_PCT } from "@/lib/utils/schedule-status"
 import { ProjectsClient, type ProjectRow } from "./projects-client"
 
 const KPI_GRADIENTS = [
@@ -17,7 +20,7 @@ const KPI_GRADIENTS = [
 export default async function ProjectsPage() {
   const { session } = await requireScreenView("projects")
 
-  const [projects, counts] = await Promise.all([
+  const [projects, counts, org] = await Promise.all([
     db.project.findMany({
       where: { organizationId: session.user.organizationId },
       select: {
@@ -34,14 +37,29 @@ export default async function ProjectsPage() {
             user: { select: { name: true, image: true } },
           },
         },
-        tasks: { select: { id: true, status: true, progress: true, wbsAreaId: true, parentId: true, startDate: true, endDate: true } },
-        wbsAreas: { select: { id: true, weight: true }, orderBy: { order: "asc" } },
+        // Cronograma v2 — o legado ScheduleTask/WbsArea ficou congelado
+        // (Fase de migração já concluída em outras telas: Analytics, Status
+        // Report, cabeçalho do projeto); esta lista ainda lia o legado, o
+        // que deixava o progresso e a situação de prazo desatualizados para
+        // todo projeto migrado para o Cronograma v2 (a maioria hoje).
+        scheduleV2Items: {
+          select: {
+            id: true, parentId: true, title: true, status: true, percentualCompleto: true,
+            inicioEstimado: true, terminoEstimado: true, inicioReal: true, terminoReal: true,
+            esforcoEstimadoH: true, esforcoRealH: true, budgetedCost: true, actualCost: true,
+            responsavelId: true, responsavelNome: true,
+          },
+        },
         _count: { select: { tasks: true, risks: true } },
       },
       orderBy: { createdAt: "desc" },
     }),
     db.project.groupBy({ by: ["status"], where: { organizationId: session.user.organizationId }, _count: true }),
+    db.organization.findUnique({ where: { id: session.user.organizationId }, select: { riskThresholdPct: true } }),
   ])
+
+  const riskThresholdPct = org?.riskThresholdPct ?? DEFAULT_RISK_THRESHOLD_PCT
+  const today = new Date()
 
   const byStatus       = Object.fromEntries(counts.map((c) => [c.status, c._count]))
   const total          = projects.length
@@ -60,18 +78,25 @@ export default async function ProjectsPage() {
     { label: "Análise Futura",  value: futureAnalysis, icon: BarChart3 },
   ]
 
-  const serialized: ProjectRow[] = projects.map((p) => ({
-    id:            p.id,
-    title:         p.title,
-    description:   p.description,
-    status:        p.status,
-    projectArea:   p.projectArea,
-    requestNumber: p.requestNumber,
-    members:       p.members,
-    tasks:         p.tasks,
-    wbsAreas:      p.wbsAreas,
-    _count:        p._count,
-  }))
+  const serialized: ProjectRow[] = projects.map((p) => {
+    const tasks = toLegacyLikeTasks(p.scheduleV2Items)
+    const areas = areasFromV2(p.scheduleV2Items)
+    const cascade = computeScheduleCascade(tasks, areas, riskThresholdPct, today)
+
+    return {
+      id:            p.id,
+      title:         p.title,
+      description:   p.description,
+      status:        p.status,
+      projectArea:   p.projectArea,
+      requestNumber: p.requestNumber,
+      members:       p.members,
+      tasks,
+      wbsAreas:      areas,
+      scheduleStatus: resolveProjectScheduleStatus(p.status, cascade.scheduleStatus),
+      _count:        p._count,
+    }
+  })
 
   return (
     <div className="flex flex-col h-full">

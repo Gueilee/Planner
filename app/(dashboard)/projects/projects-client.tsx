@@ -5,8 +5,10 @@ import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { FolderKanban, ChevronRight, Search, X, ChevronLeft, ArrowUpDown, Check } from "lucide-react"
 import { StatusBadge } from "@/components/kronex/status-badge"
+import { ScheduleRiskChip } from "@/components/kronex/schedule-risk-chip"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { computeProjectProgress } from "@/lib/utils/project-progress"
+import type { ScheduleStatus } from "@/lib/utils/schedule-status"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -20,6 +22,7 @@ export type ProjectRow = {
   members: { id: string; user: { name: string; image: string | null } }[]
   tasks: { id: string; status: string; progress: number; wbsAreaId: string | null; parentId: string | null; startDate: Date | string | null; endDate: Date | string | null }[]
   wbsAreas: { id: string; weight: number | null }[]
+  scheduleStatus: ScheduleStatus
   _count: { tasks: number; risks: number }
 }
 
@@ -362,7 +365,10 @@ export function ProjectsClient({ projects }: { projects: ProjectRow[] }) {
                   </div>
 
                   {/* Status */}
-                  <StatusBadge status={project.status} size="sm" />
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <StatusBadge status={project.status} size="sm" />
+                    <ScheduleRiskChip status={project.scheduleStatus} size="sm" />
+                  </div>
 
                   {/* Team */}
                   <div className="flex -space-x-1.5">

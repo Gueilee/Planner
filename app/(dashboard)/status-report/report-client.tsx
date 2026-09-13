@@ -19,6 +19,7 @@ import { UserAvatar } from "@/components/ui/user-avatar"
 import { LineChart, Line, XAxis, YAxis, ReferenceLine, ResponsiveContainer } from "recharts"
 import { closeMonthlyStatusReports, getStatusReportHistory, type StatusReportHistoryItem } from "@/lib/actions/status-report"
 import { getOrCreatePublicStatusToken, revokePublicStatusToken } from "@/lib/actions/public-links"
+import { computeWeightedIdp } from "@/lib/utils/weighted-idp"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -59,6 +60,10 @@ export type ProjectSlideData = {
   idc: number | null; idp: number | null; timelineProgress: number | null
   progressDelta: number | null
   budgetUsed: number | null
+  // Soma de budgetedCost das tarefas — usada só como peso alternativo do IDP
+  // ponderado do portfólio quando Project.budget não está preenchido (ver
+  // lib/utils/weighted-idp.ts).
+  tasksBudgetedCostSum: number
   meetingsCount: number; meetingsByType: Record<string, number>
   sCurve: { series: { date: string; planned: number; realized: number | null }[] } | null
   // Link público (token permanente) — "Gerar Link Público" na apresentação.
@@ -869,9 +874,12 @@ export function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:num
 function SummarySlide({projects,totalMeetings}:{projects:ProjectSlideData[];totalMeetings:number}) {
   const avgProg=projects.length>0?Math.round(projects.reduce((s,p)=>s+p.progress,0)/projects.length):0
   const idcList=projects.map((p)=>p.idc).filter((v):v is number=>v!==null)
-  const idpList=projects.map((p)=>p.idp).filter((v):v is number=>v!==null)
   const avgIdc=idcList.length>0?Math.round(idcList.reduce((a,b)=>a+b,0)/idcList.length*100)/100:null
-  const avgIdp=idpList.length>0?Math.round(idpList.reduce((a,b)=>a+b,0)/idpList.length*100)/100:null
+  // IDP médio ponderado por orçamento (Project.budget, ou soma de
+  // budgetedCost das tarefas quando não preenchido) — em vez da média
+  // aritmética simples, que dava o mesmo peso a um projeto pequeno e a um
+  // grande (lib/utils/weighted-idp.ts).
+  const avgIdp=computeWeightedIdp(projects.map((p)=>({ idp: p.idp, budget: p.budget, tasksBudgetedCostSum: p.tasksBudgetedCostSum })))
   const totalTasks=projects.reduce((s,p)=>s+p.tasks.total,0)
   const doneTasks=projects.reduce((s,p)=>s+p.tasks.completed,0)
   const critRisks=projects.reduce((s,p)=>s+p.risks.critical,0)

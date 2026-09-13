@@ -65,6 +65,8 @@ export function buildProjectSlideData(p: StatusReportProjectRow, today: Date): P
   const earnedValue   = tasks.reduce((s, t) => s + (t.budgetedCost ?? 0) * (t.progress / 100), 0)
   const actualCostSum = tasks.reduce((s, t) => s + (t.actualCost ?? 0), 0)
   const idc = actualCostSum > 0 ? Math.round((earnedValue / actualCostSum) * 100) / 100 : null
+  // Peso alternativo do IDP ponderado do portfólio (lib/utils/weighted-idp.ts).
+  const tasksBudgetedCostSum = tasks.reduce((s, t) => s + (t.budgetedCost ?? 0), 0)
 
   // IDP: usa expectedStart como linha de base (cronograma original, não data real de início)
   // Isso garante que projetos que começaram atrasados não tenham IDP artificialmente inflado
@@ -222,6 +224,7 @@ export function buildProjectSlideData(p: StatusReportProjectRow, today: Date): P
     progress: avgProgress,
     idc, idp, timelineProgress, progressDelta,
     budgetUsed: actualCostSum > 0 ? actualCostSum : null,
+    tasksBudgetedCostSum,
     meetingsCount:  p._count.meetings,
     meetingsByType,
     // Squad completa: membros formais + responsáveis do cronograma não listados como membros

@@ -3,6 +3,7 @@ import { auth } from "@/auth"
 import { notFound } from "next/navigation"
 import { Header } from "@/components/layout/header"
 import { StatusBadge } from "@/components/kronex/status-badge"
+import { ScheduleRiskChip } from "@/components/kronex/schedule-risk-chip"
 import { StatusActions } from "./status-actions"
 import { ReportStatusWidget } from "./report-status-widget"
 import { ProjectEditModal } from "./project-edit-modal"
@@ -24,6 +25,8 @@ import { ptBR } from "date-fns/locale"
 import { computeReportStatus } from "@/lib/utils/report-status"
 import { computeProjectProgress } from "@/lib/utils/project-progress"
 import { toLegacyLikeTasks, areasFromV2 } from "@/lib/utils/schedule-v2-adapter"
+import { computeScheduleCascade, resolveProjectScheduleStatus } from "@/lib/utils/schedule-cascade"
+import { DEFAULT_RISK_THRESHOLD_PCT } from "@/lib/utils/schedule-status"
 import { SCurveTab } from "./s-curve/s-curve-tab"
 
 const RISK_COLORS: Record<string, string> = {
@@ -190,6 +193,11 @@ export default async function ProjectDetailPage({
   const tasksDone  = legacyTasks.filter((t) => t.status === "COMPLETED").length
   const tasksTotal = legacyTasks.length
   const progress   = tasksTotal > 0 ? computeProjectProgress(legacyTasks) : (project.status === "COMPLETED" ? 100 : 0)
+
+  // Situação de prazo (chip ao lado do badge de fase) — mesma cascata
+  // canônica usada em Indicadores/Analytics, não o enum manual de status.
+  const scheduleCascade = computeScheduleCascade(legacyTasks, topAreas, org?.riskThresholdPct ?? DEFAULT_RISK_THRESHOLD_PCT, new Date())
+  const scheduleStatus  = resolveProjectScheduleStatus(project.status, scheduleCascade.scheduleStatus)
   const highRisks  = project.risks.filter((r) => ["HIGH", "CRITICAL"].includes(r.status)).length
   const daysLeft   = project.expectedEnd
     ? differenceInDays(project.expectedEnd, new Date())
@@ -297,6 +305,7 @@ export default async function ProjectDetailPage({
               <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
                 <div className="flex items-center gap-3">
                   <StatusBadge status={project.status} size="md" />
+                  <ScheduleRiskChip status={scheduleStatus} size="md" />
                   {project.status === "COMPLETED" && ["ADMIN", "PROJECT_MANAGER"].includes(userRole) && (
                     <ReopenProjectButton projectId={id} />
                   )}

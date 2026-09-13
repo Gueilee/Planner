@@ -34,6 +34,29 @@ export type ProjectCascadeResult = {
   areas:          AreaCascadeResult[]
 }
 
+// Status de PROJETO (não de tarefa) em que ainda não faz sentido calcular
+// desvio de prazo — o projeto não iniciou execução ou está parado. Mesmo
+// critério usado em Indicadores (Analytics), na lista de Projetos e no
+// cabeçalho do projeto — um só lugar de verdade para essa regra de negócio.
+export const SCHEDULE_STATUS_SKIP_STATUSES = new Set([
+  "PLANNING", "FUTURE_ANALYSIS", "ON_HOLD", "PAUSED", "PENDING_GO_NO_GO",
+])
+
+/**
+ * Ajusta o `scheduleStatus` bruto da cascata (calculado só a partir de
+ * datas/progresso das tarefas) pela fase do projeto: concluído é sempre
+ * "no prazo" (não importa quando terminou) e projetos ainda não iniciados/
+ * parados não têm desvio de prazo que faça sentido mostrar ("ND").
+ */
+export function resolveProjectScheduleStatus(
+  projectStatus: string,
+  cascadeStatus: ScheduleStatus,
+): ScheduleStatus {
+  if (projectStatus === "COMPLETED") return "ON_TIME"
+  if (SCHEDULE_STATUS_SKIP_STATUSES.has(projectStatus)) return "ND"
+  return cascadeStatus
+}
+
 /**
  * Cascata Tarefa → Módulo (WBS) → Projeto: progresso esperado por tarefa
  * (calendário: tempo decorrido ÷ duração) e status (on track/at risk/delayed)

@@ -2,7 +2,7 @@ import { db } from "@/lib/db"
 import { requireScreenView } from "@/lib/permissions-guard"
 import { computeProjectProgress } from "@/lib/utils/project-progress"
 import { DEFAULT_RISK_THRESHOLD_PCT, type ScheduleStatus } from "@/lib/utils/schedule-status"
-import { computeScheduleCascade } from "@/lib/utils/schedule-cascade"
+import { computeScheduleCascade, SCHEDULE_STATUS_SKIP_STATUSES, resolveProjectScheduleStatus } from "@/lib/utils/schedule-cascade"
 import { toLegacyLikeTasks, areasFromV2 } from "@/lib/utils/schedule-v2-adapter"
 import { ProjectStatus } from "@/lib/generated/prisma/enums"
 import { AnalyticsClient } from "./analytics-client"
@@ -69,11 +69,6 @@ export type ProjectIndicator = {
   areas: AreaDashData[]
 }
 
-// Nesses status o projeto ainda não iniciou ou está pausado — não calcular KPIs de progresso
-const SKIP_KPI_STATUSES = new Set([
-  "PLANNING", "FUTURE_ANALYSIS", "ON_HOLD", "PAUSED", "PENDING_GO_NO_GO",
-])
-
 export default async function AnalyticsPage() {
   const { session } = await requireScreenView("analytics")
 
@@ -126,7 +121,7 @@ export default async function AnalyticsPage() {
   const data: ProjectIndicator[] = projectsRaw.map((p) => {
     const tasks   = toLegacyLikeTasks(p.scheduleV2Items)
     const areas   = areasFromV2(p.scheduleV2Items)
-    const skipKpi = SKIP_KPI_STATUSES.has(p.status)
+    const skipKpi = SCHEDULE_STATUS_SKIP_STATUSES.has(p.status)
 
     const progress =
       tasks.length > 0
@@ -146,19 +141,20 @@ export default async function AnalyticsPage() {
     let idp:            number | null = (cascade.expectedPct !== null && cascade.expectedPct > 0)
       ? Math.round((progress / cascade.expectedPct) * 100) / 100
       : null
-    let scheduleStatus: ProjectIndicator["scheduleStatus"] = cascade.scheduleStatus
+    // scheduleStatus: mesma regra de negócio (concluído = no prazo; ainda não
+    // iniciado/parado = "ND") compartilhada com a lista de Projetos e o
+    // cabeçalho do projeto — ver lib/utils/schedule-cascade.ts.
+    const scheduleStatus: ProjectIndicator["scheduleStatus"] = resolveProjectScheduleStatus(p.status, cascade.scheduleStatus)
 
     if (p.status === "COMPLETED") {
       // Projeto concluído: considerado no prazo independente de quando finalizou
-      scheduleStatus = "ON_TIME"
-      plannedPct     = 100
-      devio          = progress - 100
-      idp            = 1.0
+      plannedPct = 100
+      devio      = progress - 100
+      idp        = 1.0
     } else if (skipKpi) {
-      scheduleStatus = "ND"
-      plannedPct     = null
-      devio          = null
-      idp            = null
+      plannedPct = null
+      devio      = null
+      idp        = null
     }
 
     // ── IDC — EVM: Valor Agregado / Custo Real ────────────────────────────────

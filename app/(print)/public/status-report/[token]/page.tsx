@@ -73,7 +73,7 @@ export default async function PublicStatusReportPage({ params }: { params: Promi
   // não os exiba visualmente hoje, os valores ainda viajam no payload de
   // hidratação da página (visíveis em "ver código-fonte"), então a
   // sanitização precisa acontecer nos dados, não só na UI.
-  const publicSlideData = { ...slideData, idc: null, budgetUsed: null, budget: null }
+  const publicSlideData = { ...slideData, idc: null, budgetUsed: null, budget: null, tasksBudgetedCostSum: 0 }
 
   return (
     <html lang="pt-BR">
