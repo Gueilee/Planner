@@ -10,6 +10,7 @@ import { db } from "@/lib/db"
 import { auth } from "@/auth"
 import { revalidatePath } from "next/cache"
 import { recalcular } from "@/lib/domain/schedule-v2/scheduler"
+import { computeCriticalPath } from "@/lib/domain/schedule-v2/critical-path"
 import { workingDaysBetween } from "@/lib/domain/schedule-v2/calendar"
 import { isValidDateStr } from "@/lib/date-utils"
 import { getHolidaysForYear } from "@/lib/working-days"
@@ -82,6 +83,12 @@ export type ItemV2 = {
   constraintDate: string | null
   isGroup: boolean
   isMacroMilestone: boolean
+  // Caminho crítico (lib/domain/schedule-v2/critical-path.ts) — calculado
+  // na leitura, nunca persistido (mesmo espírito de isGroup). Grupo e item
+  // não agendado sempre saem com critical=false/totalFloatDays=null (não
+  // participam do cálculo — ver módulo de domínio).
+  critical: boolean
+  totalFloatDays: number | null
 }
 
 export type DependencyV2 = {
@@ -521,6 +528,14 @@ export async function getScheduleV2(projectId: string): Promise<ScheduleV2Payloa
     .filter((u) => u.conflict)
     .map((u) => ({ itemId: u.itemId, suggestedInicio: u.suggestedInicio ?? null, suggestedTermino: u.suggestedTermino ?? null }))
 
+  // Caminho crítico — só o passo de volta (ver critical-path.ts), lido em
+  // cima das MESMAS datas já persistidas usadas acima pro recálculo (não
+  // as de `updates`, que servem só pra detectar conflito de modo manual) —
+  // por isso nunca diverge do que a grade/Gantt mostram.
+  const criticalById = new Map(
+    computeCriticalPath(leafItems, leafDeps, cal).map((c) => [c.itemId, c])
+  )
+
   const items: ItemV2[] = rows.map((r) => ({
     id: r.id,
     code: r.code,
@@ -545,6 +560,8 @@ export async function getScheduleV2(projectId: string): Promise<ScheduleV2Payloa
     constraintDate: dstr(r.constraintDate),
     isGroup: groups.has(r.id),
     isMacroMilestone: r.isMacroMilestone,
+    critical: criticalById.get(r.id)?.critical ?? false,
+    totalFloatDays: criticalById.get(r.id)?.totalFloatDays ?? null,
   }))
 
   const dependencies: DependencyV2[] = deps.map((d) => ({
@@ -637,6 +654,10 @@ export async function createItemV2(input: CreateItemV2Input): Promise<ItemV2> {
     constraintType: row.constraintType, constraintDate: dstr(row.constraintDate),
     isGroup: false,
     isMacroMilestone: row.isMacroMilestone,
+    // Item recém-criado nasce sem data (regra §10) — não participa do
+    // caminho crítico ainda; próxima leitura de getScheduleV2 recalcula.
+    critical: false,
+    totalFloatDays: null,
   }
 }
 

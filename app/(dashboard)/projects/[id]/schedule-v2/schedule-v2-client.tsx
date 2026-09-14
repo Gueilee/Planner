@@ -20,7 +20,7 @@ import {
   ChevronRight, ChevronDown, Plus, IndentIncrease, IndentDecrease,
   ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, Milestone,
   Circle, CircleX, CirclePlus, Pencil, Undo2, Redo2, GripVertical, GripHorizontal, LayoutTemplate, FileSpreadsheet, BookmarkPlus, History,
-  Link2, Copy, Check, X, Star, Columns3, CalendarDays, CalendarCheck2, CalendarClock,
+  Link2, Copy, Check, X, Star, Columns3, CalendarDays, CalendarCheck2, CalendarClock, Flame,
 } from "lucide-react"
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
@@ -64,6 +64,7 @@ function sortValue(item: ItemV2, col: SortColumn, membersById?: Map<string, stri
       item.terminoEstimado ? new Date(`${item.terminoEstimado}T00:00:00.000Z`) : null,
     ) ?? -1
     case "pct": return item.percentualCompleto
+    case "folga": return item.totalFloatDays ?? Number.MAX_SAFE_INTEGER
     case "responsavel": return ((item.responsavelId ? membersById?.get(item.responsavelId) : item.responsavelNome) ?? "").toLowerCase()
     case "status": return statusLabel(item.status).label
     default: return 0
@@ -145,7 +146,7 @@ function statusLabel(status: string) {
 // "Atividade" (título+hierarquia) fica fixa à esquerda — todo o resto é
 // livre para o usuário reordenar e redimensionar.
 
-type ColKey = "duracao" | "inicio" | "termino" | "inicioReal" | "terminoReal" | "baselineInicio" | "baselineTermino" | "pctEstimado" | "pct" | "predecessores" | "restricao" | "responsavel" | "participantes" | "status"
+type ColKey = "duracao" | "inicio" | "termino" | "inicioReal" | "terminoReal" | "baselineInicio" | "baselineTermino" | "pctEstimado" | "pct" | "folga" | "predecessores" | "restricao" | "responsavel" | "participantes" | "status"
 
 const COL_LABELS: Record<ColKey, string> = {
   duracao: "Duração", inicio: "Início", termino: "Término",
@@ -159,6 +160,11 @@ const COL_LABELS: Record<ColKey, string> = {
   // período planejado) ao lado de "% Real" (o que foi digitado de verdade) —
   // pedido explícito: os dois lado a lado pra comparar.
   pctEstimado: "% Estimado", pct: "% Real",
+  // Caminho crítico (CPM) — dias úteis de sobra antes de atrasar o projeto;
+  // 0 = crítico (mesmo item já fica marcado com o ícone 🔥 ao lado do
+  // título). Calculado na leitura (lib/domain/schedule-v2/critical-path.ts),
+  // nunca editável.
+  folga: "Folga",
   predecessores: "Predecessores",
   // Restrição de data — só "não iniciar antes de" está implementado (ver
   // scheduler.ts); o campo já existia gravado no banco, mas o motor nunca
@@ -170,13 +176,13 @@ const COL_LABELS: Record<ColKey, string> = {
   // ("participantes"/"informados") — texto livre, vários nomes por vírgula.
   participantes: "Participantes", status: "Status",
 }
-const DEFAULT_COL_ORDER: ColKey[] = ["duracao", "inicio", "termino", "inicioReal", "terminoReal", "baselineInicio", "baselineTermino", "pctEstimado", "pct", "predecessores", "restricao", "responsavel", "participantes", "status"]
+const DEFAULT_COL_ORDER: ColKey[] = ["duracao", "inicio", "termino", "inicioReal", "terminoReal", "baselineInicio", "baselineTermino", "pctEstimado", "pct", "folga", "predecessores", "restricao", "responsavel", "participantes", "status"]
 const DEFAULT_COL_WIDTHS: Record<ColKey, number> = {
-  duracao: 70, inicio: 110, termino: 100, inicioReal: 110, terminoReal: 110, baselineInicio: 100, baselineTermino: 100, pctEstimado: 70, pct: 60, predecessores: 150, restricao: 150, responsavel: 140, participantes: 160, status: 130,
+  duracao: 70, inicio: 110, termino: 100, inicioReal: 110, terminoReal: 110, baselineInicio: 100, baselineTermino: 100, pctEstimado: 70, pct: 60, folga: 70, predecessores: 150, restricao: 150, responsavel: 140, participantes: 160, status: 130,
 }
 const COL_ALIGN: Record<ColKey, "center" | "left"> = {
   duracao: "center", inicio: "center", termino: "center", inicioReal: "center", terminoReal: "center",
-  baselineInicio: "center", baselineTermino: "center", pctEstimado: "center", pct: "center",
+  baselineInicio: "center", baselineTermino: "center", pctEstimado: "center", pct: "center", folga: "center",
   predecessores: "left", restricao: "left", responsavel: "left", participantes: "left", status: "left",
 }
 const DEFAULT_TITLE_WIDTH = 320
@@ -1267,6 +1273,11 @@ function Row({ item, depth, hasChildren, isOpen, ...h }: { item: ItemV2; depth: 
             <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
           </span>
         )}
+        {!hasChildren && item.critical && (
+          <span title="Caminho crítico — sem folga, um atraso aqui atrasa o projeto inteiro">
+            <Flame className="w-3.5 h-3.5 text-red-600 shrink-0" />
+          </span>
+        )}
       </div>
 
       {/* Colunas configuráveis (ordem e largura vêm do estado do cliente) */}
@@ -1459,6 +1470,16 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
           className="w-10 text-center bg-transparent outline-none text-xs text-slate-700 rounded border-b border-transparent focus:border-[#7B2FBE] focus:bg-violet-50"
         />
       ) : <span className="text-xs font-bold text-[#7B2FBE]">{item.percentualCompleto}%</span>
+
+    case "folga":
+      if (item.totalFloatDays === null) return <span className="text-xs text-slate-300">—</span>
+      return item.critical ? (
+        <span className="inline-flex items-center gap-1 text-xs font-bold text-red-600" title="Caminho crítico — sem folga">
+          <Flame className="w-3 h-3" /> 0
+        </span>
+      ) : (
+        <span className="text-xs text-slate-500">{item.totalFloatDays}d</span>
+      )
 
     case "predecessores":
       return !hasChildren ? (

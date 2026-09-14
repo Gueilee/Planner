@@ -79,6 +79,10 @@ export default async function PublicSchedulePage({ params }: { params: Promise<{
     constraintType: r.constraintType, constraintDate: dstr(r.constraintDate),
     isGroup: groupIds.has(r.id),
     isMacroMilestone: r.isMacroMilestone,
+    // Esta página de impressão não mostra caminho crítico (só a grade e o
+    // Gantt mostram) — valores neutros só pra satisfazer o tipo ItemV2.
+    critical: false,
+    totalFloatDays: null,
   }))
   const dependencies: DependencyV2[] = deps.map((d) => ({
     id: d.id, successorId: d.successorId, predecessorId: d.predecessorId,

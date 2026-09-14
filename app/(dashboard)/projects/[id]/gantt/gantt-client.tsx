@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import Gantt, { type GanttTask } from "frappe-gantt"
 import "./frappe-gantt-vendored.css"
-import { CalendarClock, Info } from "lucide-react"
+import { CalendarClock, Info, Flame } from "lucide-react"
 import { ToolbarBtn, ToolbarGroup } from "@/components/kronex/toolbar"
 import { buildRows, predecessorsText } from "@/lib/export-schedule"
 import type { ItemV2, DependencyV2 } from "@/lib/actions/schedule-v2"
@@ -46,6 +46,10 @@ export function GanttClient({ projectTitle, items, dependencies, workCalendar, m
   const containerRef = useRef<HTMLDivElement>(null)
   const ganttRef = useRef<Gantt | null>(null)
   const [viewMode, setViewMode] = useState<(typeof VIEW_MODES)[number]["key"]>("Week")
+  // Desligado por padrão — o destaque é pra quem quer entender onde um
+  // atraso realmente atrasa o projeto, não pra sobrecarregar quem só quer
+  // ver o cronograma normal (decisão do plano).
+  const [showCritical, setShowCritical] = useState(false)
 
   const rows = useMemo(() => buildRows(items), [items])
   const codeById = useMemo(() => new Map(items.map((it) => [it.id, it.code])), [items])
@@ -62,6 +66,7 @@ export function GanttClient({ projectTitle, items, dependencies, workCalendar, m
   )
   const unscheduledCount = rows.length - scheduledRows.length
   const scheduledIds = useMemo(() => new Set(scheduledRows.map((r) => r.item.id)), [scheduledRows])
+  const criticalCount = scheduledRows.filter((r) => r.item.critical).length
 
   const tasks: GanttTask[] = useMemo(() => scheduledRows.map(({ item, depth }) => {
     const preds = dependencies
@@ -123,15 +128,22 @@ export function GanttClient({ projectTitle, items, dependencies, workCalendar, m
         ctx.set_subtitle(STATUS_LABELS[item.status] ?? item.status)
         const responsavel = item.responsavelId ? membersById[item.responsavelId] : item.responsavelNome
         const preds = predecessorsText(item.id, dependencies, codeById)
+        const folga = item.critical
+          ? `<strong style="color:#DC2626">Caminho crítico — sem folga</strong>`
+          : item.totalFloatDays !== null
+            ? `Folga: ${item.totalFloatDays} dia(s) útil(eis)`
+            : null
         ctx.set_details(
           `${item.duracaoDiasUteis === 0 ? "Marco" : `${item.duracaoDiasUteis ?? "—"} dia(s) úteis`} · ${item.percentualCompleto}% concluído<br/>` +
           `${responsavel ? `Responsável: ${responsavel}<br/>` : ""}` +
-          `${preds !== "—" ? `Predecessores: ${preds}` : "Sem predecessores"}`,
+          `${preds !== "—" ? `Predecessores: ${preds}` : "Sem predecessores"}` +
+          `${folga ? `<br/>${folga}` : ""}`,
         )
       },
     })
     ganttRef.current = instance
     applyExtraClasses()
+    applyCriticalHighlight(showCritical)
 
     return () => { ganttRef.current = null }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -152,6 +164,16 @@ export function GanttClient({ projectTitle, items, dependencies, workCalendar, m
     }
   }
 
+  // Contorno vermelho nas barras do caminho crítico — separado das outras
+  // classes extras porque este liga/desliga (botão "Caminho Crítico" na
+  // barra de ferramentas), enquanto grupo/marco são fixos por atividade.
+  function applyCriticalHighlight(show: boolean) {
+    for (const { item } of scheduledRows) {
+      const el = containerRef.current?.querySelector(`.bar-wrapper[data-id="${item.id}"]`)
+      el?.classList.toggle("gantt-critical", show && item.critical)
+    }
+  }
+
   const isFirstViewModeRender = useRef(true)
   useEffect(() => {
     // Pula a primeira execução — o efeito de cima (dependente de `tasks`)
@@ -162,8 +184,14 @@ export function GanttClient({ projectTitle, items, dependencies, workCalendar, m
     if (isFirstViewModeRender.current) { isFirstViewModeRender.current = false; return }
     ganttRef.current?.change_view_mode(viewMode)
     applyExtraClasses()
+    applyCriticalHighlight(showCritical)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewMode])
+
+  useEffect(() => {
+    applyCriticalHighlight(showCritical)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showCritical])
 
   return (
     <div className="flex flex-col h-full">
@@ -181,6 +209,22 @@ export function GanttClient({ projectTitle, items, dependencies, workCalendar, m
           </ToolbarBtn>
         </ToolbarGroup>
 
+        <ToolbarGroup>
+          <ToolbarBtn
+            wide
+            ghost={!showCritical}
+            onClick={() => setShowCritical((v) => !v)}
+            title="Destacar as atividades sem folga — um atraso nelas atrasa o projeto inteiro"
+          >
+            <Flame className={`w-3.5 h-3.5 ${showCritical ? "text-red-600" : ""}`} /> Caminho Crítico
+            {criticalCount > 0 && (
+              <span className={`text-[9px] font-black rounded-full px-1.5 leading-4 ${showCritical ? "bg-red-600 text-white" : "bg-slate-300 text-white"}`}>
+                {criticalCount}
+              </span>
+            )}
+          </ToolbarBtn>
+        </ToolbarGroup>
+
         {unscheduledCount > 0 && (
           <span className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 px-2">
             <Info className="w-3 h-3" /> {unscheduledCount} atividade{unscheduledCount > 1 ? "s" : ""} sem data — não {unscheduledCount > 1 ? "aparecem" : "aparece"} aqui
@@ -193,6 +237,10 @@ export function GanttClient({ projectTitle, items, dependencies, workCalendar, m
           <LegendItem color="#DC2626" label="Atrasado" />
           <span className="flex items-center gap-1"><span className="w-2 h-2 bg-slate-700 rotate-45 shrink-0" /> Marco</span>
           <span className="flex items-center gap-1"><span className="w-3.5 h-1.5 rounded-sm bg-slate-500 shrink-0" /> Grupo (resumo)</span>
+          <span className="flex items-center gap-1">
+            <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ border: "2px solid #DC2626", background: "transparent" }} />
+            Caminho crítico
+          </span>
         </div>
       </div>
 
@@ -234,6 +282,17 @@ export function GanttClient({ projectTitle, items, dependencies, workCalendar, m
           clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
         }
         .gantt-kronex .bar-wrapper.gantt-milestone .bar { fill: #334155; stroke: #334155; }
+
+        /* Contorno do caminho crítico — por cima de qualquer combinação de
+           status/grupo/marco (por isso vem por último: mesma especificidade,
+           a última regra do CSS vence). Só contorno, nunca preenchimento —
+           preenchimento já conta o status, contorno conta criticidade, são
+           informações diferentes (mesmo princípio do chip de risco de prazo
+           ao lado do badge de fase). */
+        .gantt-kronex .bar-wrapper.gantt-critical .bar {
+          stroke: #DC2626;
+          stroke-width: 2.5;
+        }
       `}</style>
     </div>
   )
