@@ -6,7 +6,7 @@ import { getLatestBaselineByItem } from "@/lib/actions/baseline"
 import { ScheduleV2Client } from "../schedule-v2/schedule-v2-client"
 import { DEFAULT_RISK_THRESHOLD_PCT } from "@/lib/utils/schedule-status"
 import Link from "next/link"
-import { ArrowLeft, TrendingUp } from "lucide-react"
+import { ArrowLeft, TrendingUp, GanttChartSquare } from "lucide-react"
 
 export const dynamic = "force-dynamic"
 export const metadata = { title: "Cronograma" }
@@ -53,11 +53,18 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
         <div className="w-px h-5 bg-slate-200" />
         <span className="text-sm font-black text-slate-800 truncate">{project.title}</span>
         <span className="text-xs text-slate-400 shrink-0">— Cronograma</span>
-        <Link href={`/projects/${id}/s-curve`}
-          title="Ver a Curva S deste projeto (planejado vs. realizado)"
-          className="ml-auto inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border border-violet-200 text-[#7B2FBE] bg-violet-50 hover:bg-violet-100 transition-colors">
-          <TrendingUp className="w-3.5 h-3.5" /> Ver Curva S
-        </Link>
+        <div className="ml-auto flex items-center gap-2">
+          <Link href={`/projects/${id}/gantt`}
+            title="Ver o Gantt deste projeto (linha do tempo, barras e dependências)"
+            className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border border-violet-200 text-[#7B2FBE] bg-violet-50 hover:bg-violet-100 transition-colors">
+            <GanttChartSquare className="w-3.5 h-3.5" /> Ver Gantt
+          </Link>
+          <Link href={`/projects/${id}/s-curve`}
+            title="Ver a Curva S deste projeto (planejado vs. realizado)"
+            className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border border-violet-200 text-[#7B2FBE] bg-violet-50 hover:bg-violet-100 transition-colors">
+            <TrendingUp className="w-3.5 h-3.5" /> Ver Curva S
+          </Link>
+        </div>
       </div>
 
       {/* Corpo com rolagem própria — o layout do dashboard é h-screen

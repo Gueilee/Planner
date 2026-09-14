@@ -11,7 +11,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
   ArrowLeft, Users, Calendar, AlertTriangle, CheckCircle2,
   Clock, BarChart3, Layers, TrendingUp, Timer, CalendarDays,
-  Rocket, FileDown, BookOpen, Shield, Gem,
+  Rocket, FileDown, BookOpen, Shield, Gem, GanttChartSquare,
 } from "lucide-react"
 import { DeleteProjectButton } from "./delete-project-button"
 import { ProjectKanbanButton } from "./project-kanban-button"
@@ -387,6 +387,14 @@ export default async function ProjectDetailPage({
                         <CalendarDays className="w-3.5 h-3.5" />
                         Cronograma
                       </Link>
+                      <Link
+                        href={`/projects/${id}/gantt`}
+                        className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.98]"
+                        style={{ background: "linear-gradient(135deg, #6D28D9, #7B2FBE)", boxShadow: "0 4px 20px rgba(109,40,217,0.30)" }}
+                      >
+                        <GanttChartSquare className="w-3.5 h-3.5" />
+                        Gantt
+                      </Link>
                       <ProjectKanbanButton projectId={id} projectTitle={project.title} />
                       <Link
                         href={`/projects/${id}/indicators`}
@@ -420,6 +428,14 @@ export default async function ProjectDetailPage({
                       >
                         <CalendarDays className="w-3.5 h-3.5" />
                         Cronograma
+                      </Link>
+                      <Link
+                        href={`/projects/${id}/gantt`}
+                        className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.98]"
+                        style={{ background: "linear-gradient(135deg, #6D28D9, #7B2FBE)", boxShadow: "0 4px 20px rgba(109,40,217,0.30)" }}
+                      >
+                        <GanttChartSquare className="w-3.5 h-3.5" />
+                        Gantt
                       </Link>
                       <ProjectKanbanButton projectId={id} projectTitle={project.title} />
                       <Link

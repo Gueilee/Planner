@@ -563,6 +563,17 @@ export async function getScheduleV2(projectId: string): Promise<ScheduleV2Payloa
   }
 }
 
+// Calendário de dias úteis/feriados do projeto — hoje só o servidor usava
+// (loadCalendar é privado, chamado internamente pelo recálculo). Exposto
+// aqui pela primeira vez pro cliente, pro Gantt (Fase Gantt) sombrear fins
+// de semana/feriados no fundo da linha do tempo — mesma fonte de verdade
+// do motor, não uma cópia recalculada no navegador.
+export async function getWorkCalendarV2(projectId: string): Promise<WorkCalendar> {
+  await requireAccess()
+  await ensureCalendarSeeded(projectId)
+  return loadCalendar(projectId)
+}
+
 // ─── Criar ────────────────────────────────────────────────────────────────
 
 export type CreateItemV2Input = {

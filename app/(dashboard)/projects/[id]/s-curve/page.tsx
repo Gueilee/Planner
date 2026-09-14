@@ -4,7 +4,7 @@ import { getSCurveData } from "@/lib/actions/s-curve"
 import { SCurveClient } from "./s-curve-client"
 import { db } from "@/lib/db"
 import Link from "next/link"
-import { ArrowLeft, BarChart3, CalendarRange } from "lucide-react"
+import { ArrowLeft, BarChart3, CalendarRange, GanttChartSquare } from "lucide-react"
 
 export const dynamic = "force-dynamic"
 
@@ -32,11 +32,18 @@ export default async function SCurvePage({ params }: { params: Promise<{ id: str
         <BarChart3 className="w-4 h-4 text-violet-400 shrink-0" />
         <span className="text-sm font-black text-white truncate">{project.title}</span>
         <span className="text-xs text-slate-500 shrink-0">— Curva S</span>
-        <Link href={`/projects/${id}/schedule`}
-          title="Ver o Cronograma (grade de atividades) deste projeto"
-          className="ml-auto inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border border-violet-500/30 text-violet-300 bg-violet-500/10 hover:bg-violet-500/20 transition-colors">
-          <CalendarRange className="w-3.5 h-3.5" /> Ver Cronograma
-        </Link>
+        <div className="ml-auto flex items-center gap-2">
+          <Link href={`/projects/${id}/schedule`}
+            title="Ver o Cronograma (grade de atividades) deste projeto"
+            className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border border-violet-500/30 text-violet-300 bg-violet-500/10 hover:bg-violet-500/20 transition-colors">
+            <CalendarRange className="w-3.5 h-3.5" /> Ver Cronograma
+          </Link>
+          <Link href={`/projects/${id}/gantt`}
+            title="Ver o Gantt deste projeto (linha do tempo, barras e dependências)"
+            className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border border-violet-500/30 text-violet-300 bg-violet-500/10 hover:bg-violet-500/20 transition-colors">
+            <GanttChartSquare className="w-3.5 h-3.5" /> Ver Gantt
+          </Link>
+        </div>
       </div>
       {/* Full chart */}
       <div className="flex-1">
