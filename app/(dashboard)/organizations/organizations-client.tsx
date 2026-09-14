@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition, useRef } from "react"
-import { ChevronDown, ChevronRight, Pencil, KeyRound, UserX, UserCheck, X, Check, Camera } from "lucide-react"
+import { ChevronDown, ChevronRight, Pencil, KeyRound, UserX, UserCheck, X, Check, Camera, Building2, Users } from "lucide-react"
 import {
   createOrganization,
   updateOrganization,
@@ -15,6 +15,7 @@ import {
   type OrgRow,
   type OrgUserRow,
 } from "@/lib/actions/organizations"
+import { GlobalUsersView } from "./global-users-view"
 
 function imageToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -48,6 +49,7 @@ const ROLE_LABELS: Record<string, string> = {
 type Props = { initialOrgs: OrgRow[]; currentOrgId: string }
 
 export function OrganizationsClient({ initialOrgs, currentOrgId }: Props) {
+  const [view, setView] = useState<"filiais" | "usuarios">("filiais")
   const [orgs, setOrgs] = useState(initialOrgs)
   const [orgUsers, setOrgUsers] = useState<Record<string, OrgUserRow[]>>({})
   const [expandedOrgs, setExpandedOrgs] = useState<Set<string>>(new Set())
@@ -265,12 +267,31 @@ export function OrganizationsClient({ initialOrgs, currentOrgId }: Props) {
           <h1 className="text-2xl font-semibold text-gray-900">Organizações</h1>
           <p className="text-sm text-gray-500 mt-1">Gerencie filiais, usuários e acessos</p>
         </div>
-        <button onClick={() => setShowNewOrg(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg transition-colors">
-          Nova organização
+        {view === "filiais" && (
+          <button onClick={() => setShowNewOrg(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg transition-colors">
+            Nova organização
+          </button>
+        )}
+      </div>
+
+      {/* Alternador de visão — filiais (o que já existia) ou usuários de
+          todas as filiais de uma vez (Gestão Global de Usuários) */}
+      <div className="flex gap-1 p-1 bg-gray-100 rounded-xl w-fit">
+        <button onClick={() => setView("filiais")}
+          className={`flex items-center gap-1.5 text-sm font-medium px-3.5 py-1.5 rounded-lg transition-colors ${view === "filiais" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+          <Building2 size={14} /> Filiais
+        </button>
+        <button onClick={() => setView("usuarios")}
+          className={`flex items-center gap-1.5 text-sm font-medium px-3.5 py-1.5 rounded-lg transition-colors ${view === "usuarios" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+          <Users size={14} /> Usuários (todas as filiais)
         </button>
       </div>
 
+      {view === "usuarios" ? (
+        <GlobalUsersView orgs={orgs} />
+      ) : (
+      <>
       {error   && <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">{error}</div>}
       {success && <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-lg">{success}</div>}
 
@@ -554,6 +575,8 @@ export function OrganizationsClient({ initialOrgs, currentOrgId }: Props) {
           )
         })}
       </div>
+      </>
+      )}
     </div>
   )
 }

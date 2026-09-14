@@ -137,6 +137,30 @@ export async function getUsersByOrg(orgId: string): Promise<OrgUserRow[]> {
   return users.map((u) => ({ ...u, role: u.role as string, createdAt: u.createdAt.toISOString() }))
 }
 
+// ─── Gestão Global de Usuários (todas as filiais de uma vez) ───────────────────
+
+export type GlobalUserRow = OrgUserRow & { organizationId: string; organizationName: string }
+
+export async function getAllUsersGlobal(): Promise<GlobalUserRow[]> {
+  const session = await auth()
+  if (!session?.user?.isGlobalAdmin) throw new Error("Não autorizado")
+
+  const users = await db.user.findMany({
+    select: {
+      id: true, name: true, email: true, role: true, department: true, phone: true, image: true, active: true, createdAt: true,
+      organizationId: true, organization: { select: { name: true } },
+    },
+    orderBy: [{ organization: { name: "asc" } }, { name: "asc" }],
+  })
+
+  return users.map((u) => ({
+    id: u.id, name: u.name, email: u.email, role: u.role as string,
+    department: u.department, phone: u.phone, image: u.image, active: u.active,
+    createdAt: u.createdAt.toISOString(),
+    organizationId: u.organizationId, organizationName: u.organization.name,
+  }))
+}
+
 export async function updateUserAvatarInOrg(userId: string, image: string | null): Promise<void> {
   const session = await auth()
   if (!session?.user?.isGlobalAdmin) throw new Error("Não autorizado")
