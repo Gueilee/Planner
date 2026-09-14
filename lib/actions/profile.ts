@@ -24,19 +24,37 @@ export async function getMyProfile() {
   })
 }
 
+// Admin de filial só vê a própria filial; admin global (isGlobalAdmin) vê
+// todo mundo, de todas as filiais — usado tanto pelo painel de usuários
+// (Configurações → Usuários) quanto pelo seletor "editar perfil de outro
+// usuário" já existente na aba Meu Perfil.
 export async function getAllUsers() {
   const session = await auth()
   if (!session?.user) throw new Error("Não autorizado")
   if (session.user.role !== "ADMIN") throw new Error("Acesso restrito a administradores")
   return db.user.findMany({
-    where:   { organizationId: session.user.organizationId },
-    orderBy: { name: "asc" },
+    where:   session.user.isGlobalAdmin ? {} : { organizationId: session.user.organizationId },
+    orderBy: [{ organization: { name: "asc" } }, { name: "asc" }],
     select:  {
       id: true, name: true, email: true, department: true, phone: true, image: true, role: true, active: true,
       profileId: true,
       accessProfile: { select: { id: true, name: true, color: true } },
+      organizationId: true,
+      organization: { select: { name: true } },
     },
   })
+}
+
+// Confere se quem está chamando pode gerenciar ESTE usuário: admin global
+// pode qualquer um; admin comum só quem é da própria filial. Lança erro
+// (não retorna boolean) porque toda função abaixo já segue esse padrão de
+// interromper a operação — mais simples que cada uma repetir o if/throw.
+async function assertCanManageUser(sessionUser: { isGlobalAdmin: boolean; organizationId: string }, targetUserId: string) {
+  if (sessionUser.isGlobalAdmin) return
+  const target = await db.user.findUnique({ where: { id: targetUserId }, select: { organizationId: true } })
+  if (!target || target.organizationId !== sessionUser.organizationId) {
+    throw new Error("Você só pode gerenciar usuários da sua própria filial")
+  }
 }
 
 // ─── Update own profile ───────────────────────────────────────────────────────
@@ -74,6 +92,8 @@ async function updateUserRow(userId: string, data: Record<string, unknown>) {
       id: true, name: true, email: true, phone: true, image: true, department: true, role: true, active: true,
       profileId: true,
       accessProfile: { select: { id: true, name: true, color: true } },
+      organizationId: true,
+      organization: { select: { name: true } },
     },
   })
 }
@@ -84,11 +104,34 @@ async function updateUserRow(userId: string, data: Record<string, unknown>) {
 // em vez de lançar exceção, pra mensagem real chegar até a tela.
 export async function updateUserById(
   userId: string,
-  data: ProfileInput & { role?: string; active?: boolean; profileId?: string | null }
+  data: ProfileInput & { role?: string; active?: boolean; profileId?: string | null; organizationId?: string }
 ): Promise<UpdateUserResult> {
   const session = await auth()
   if (!session?.user) return { success: false, error: "Não autorizado" }
   if (session.user.role !== "ADMIN") return { success: false, error: "Acesso restrito a administradores" }
+
+  try {
+    await assertCanManageUser(session.user, userId)
+  } catch (e: unknown) {
+    return { success: false, error: e instanceof Error ? e.message : "Não autorizado" }
+  }
+
+  // Só admin global pode mover a filial principal de alguém — admin comum
+  // não administra outra filial pra mandar alguém pra lá.
+  if (data.organizationId !== undefined && !session.user.isGlobalAdmin) {
+    return { success: false, error: "Só um admin global pode trocar a filial principal de um usuário" }
+  }
+
+  // Um perfil de acesso é sempre de UMA filial (AccessProfile.organizationId)
+  // — sem essa checagem, dava pra atribuir o perfil de uma filial pra
+  // usuário de outra sem nenhum aviso.
+  if (data.profileId) {
+    const targetOrgId = data.organizationId ?? (await db.user.findUnique({ where: { id: userId }, select: { organizationId: true } }))?.organizationId
+    const profile = await db.accessProfile.findUnique({ where: { id: data.profileId }, select: { organizationId: true } })
+    if (!profile || profile.organizationId !== targetOrgId) {
+      return { success: false, error: "Este perfil de acesso não pertence à filial deste usuário" }
+    }
+  }
 
   const newEmail = data.email?.trim().toLowerCase()
 
@@ -111,6 +154,7 @@ export async function updateUserById(
       ...(data.role      !== undefined   && { role:  data.role   as never }),
       ...(data.active     !== undefined  && { active: data.active }),
       ...(data.profileId !== undefined   && { profileId: data.profileId }),
+      ...(data.organizationId !== undefined && { organizationId: data.organizationId }),
     })
 
     // Revalidate only after a confirmed successful update
@@ -141,6 +185,8 @@ export async function createUser(data: {
   phone?:       string
   extraOrgIds?: string[]
   profileId?:   string | null
+  /** Só respeitado se quem chama for admin global — senão, sempre a própria filial. */
+  organizationId?: string
 }): Promise<CreateUserResult> {
   const session = await auth()
   if (!session?.user) return { success: false, error: "Não autorizado" }
@@ -150,6 +196,15 @@ export async function createUser(data: {
   const typedEmail = data.email?.trim().toLowerCase()
   if (!typedEmail && data.role !== "CLIENT") return { success: false, error: "E-mail é obrigatório" }
   if (data.password.length < 6) return { success: false, error: "Senha deve ter no mínimo 6 caracteres" }
+
+  const targetOrgId = session.user.isGlobalAdmin && data.organizationId ? data.organizationId : session.user.organizationId
+
+  if (data.profileId) {
+    const profile = await db.accessProfile.findUnique({ where: { id: data.profileId }, select: { organizationId: true } })
+    if (!profile || profile.organizationId !== targetOrgId) {
+      return { success: false, error: "Este perfil de acesso não pertence à filial escolhida" }
+    }
+  }
 
   // Cliente (usuário terceiro) pode não ter e-mail ainda — gera um
   // sintético "@ext.planner", mesmo padrão já usado para convidados
@@ -172,13 +227,15 @@ export async function createUser(data: {
       department:     data.department?.trim() || null,
       phone:          data.phone?.trim()      || null,
       active:         true,
-      organizationId: session.user.organizationId,
+      organizationId: targetOrgId,
       profileId:      data.profileId || null,
     },
     select: {
       id: true, name: true, email: true, department: true, phone: true, image: true, role: true, active: true,
       profileId: true,
       accessProfile: { select: { id: true, name: true, color: true } },
+      organizationId: true,
+      organization: { select: { name: true } },
     },
   })
 
@@ -199,6 +256,7 @@ export async function toggleUserActive(userId: string, active: boolean) {
   if (!session?.user) throw new Error("Não autorizado")
   if (session.user.role !== "ADMIN") throw new Error("Acesso restrito a administradores")
   if (userId === session.user.id && !active) throw new Error("Você não pode desativar sua própria conta")
+  await assertCanManageUser(session.user, userId)
 
   await db.user.update({ where: { id: userId }, data: { active } })
   revalidatePath("/settings")
@@ -212,6 +270,11 @@ export async function deleteUser(userId: string): Promise<{ success: true } | { 
   if (!session?.user)                    return { error: "Não autorizado" }
   if (session.user.role !== "ADMIN")     return { error: "Acesso restrito a administradores" }
   if (userId === session.user.id)        return { error: "Você não pode excluir sua própria conta" }
+  try {
+    await assertCanManageUser(session.user, userId)
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : "Não autorizado" }
+  }
 
   try {
     await db.user.delete({ where: { id: userId } })
@@ -258,6 +321,7 @@ export async function resetUserPassword(userId: string, newPassword: string) {
   if (!session?.user) throw new Error("Não autorizado")
   if (session.user.role !== "ADMIN") throw new Error("Acesso restrito a administradores")
   if (newPassword.length < 6) throw new Error("Senha deve ter no mínimo 6 caracteres")
+  await assertCanManageUser(session.user, userId)
 
   const hash = await bcrypt.hash(newPassword, 10)
   await db.user.update({ where: { id: userId }, data: { password: hash } })

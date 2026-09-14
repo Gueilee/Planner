@@ -8,10 +8,10 @@ import {
 import { ProfileTab }          from "./profile-tab"
 import { NotificationsTab }    from "./notifications-tab"
 import { OrganizationTab }     from "./organization-tab"
-import { UsersTab }            from "./users-tab"
 import { DocsTab }             from "./docs-tab"
 import { FiliaisTab }          from "./filiais-tab"
 import { AccessProfilesTab }   from "./access-profiles-tab"
+import { GlobalUsersView }     from "@/app/(dashboard)/organizations/global-users-view"
 import type { NotificationPreferenceData } from "@/lib/actions/notification-preferences"
 import type { OrgConfigData }              from "@/lib/types/org-config"
 import type { OrgRow }                     from "@/lib/actions/organizations"
@@ -298,12 +298,7 @@ export function SettingsClient({
               <OrganizationTab initial={orgConfig} initialRiskThresholdPct={riskThresholdPct} />
             )}
             {activeTab === "usuarios" && isAdmin && (
-              <UsersTab
-                initialUsers={allUsers}
-                currentUserId={currentUserId}
-                orgs={isRootAdmin ? initialOrgs : []}
-                profiles={initialProfiles}
-              />
+              <GlobalUsersView orgs={initialOrgs} isGlobalAdmin={isRootAdmin} currentOrgId={currentOrgId} />
             )}
             {activeTab === "perfis" && isAdmin && (
               <AccessProfilesTab initialProfiles={initialProfiles} />

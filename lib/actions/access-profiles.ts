@@ -47,6 +47,25 @@ export async function listAccessProfiles(): Promise<ProfileRow[]> {
   return rows.map(parse)
 }
 
+// Perfis de Acesso são por filial (AccessProfile.organizationId) — um admin
+// global gerenciando um usuário de OUTRA filial precisa ver os perfis
+// DAQUELA filial, não os da própria (listAccessProfiles acima só serve pra
+// quem administra a própria). Admin comum só pode pedir a própria filial.
+export async function listAccessProfilesForOrg(organizationId: string): Promise<ProfileRow[]> {
+  const session = await auth()
+  if (!session?.user || session.user.role !== "ADMIN") throw new Error("Não autorizado")
+  if (!session.user.isGlobalAdmin && organizationId !== session.user.organizationId) {
+    throw new Error("Não autorizado")
+  }
+
+  const rows = await db.accessProfile.findMany({
+    where:   { organizationId },
+    include: { _count: { select: { users: true } } },
+    orderBy: { createdAt: "asc" },
+  })
+  return rows.map(parse)
+}
+
 export async function createAccessProfile(data: {
   name:        string
   description: string
