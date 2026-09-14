@@ -7,6 +7,7 @@ import {
 } from "lucide-react"
 import { createUser, updateUser, toggleUserActive, type UserRow } from "@/lib/actions/users"
 import type { UserRole } from "@/lib/generated/prisma/enums"
+import { PeoplePicker } from "@/components/kronex/people-picker"
 
 // ── Role display config ────────────────────────────────────────────────────
 
@@ -162,6 +163,25 @@ function UserModal({
 
         {/* Form */}
         <div className="px-6 py-5 space-y-4">
+          {!editing && (
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">
+                Buscar no diretório da empresa
+              </label>
+              <PeoplePicker
+                autoLink={false}
+                placeholder="Digite o nome ou e-mail..."
+                onPick={(person) => {
+                  upd("name", person.name)
+                  upd("email", person.email)
+                }}
+              />
+              <p className="text-[10px] text-slate-400 mt-1">
+                Selecione para preencher nome e e-mail automaticamente, ou preencha manualmente abaixo.
+              </p>
+            </div>
+          )}
+
           <div>
             <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">
               Nome completo *

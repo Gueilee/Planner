@@ -17,6 +17,7 @@ import type { OrgRow } from "@/lib/actions/organizations"
 import type { ProfileRow } from "@/lib/actions/access-profiles"
 import { ROLE_LABELS, UserRole } from "@/lib/permissions"
 import { FilialPicker } from "@/components/kronex/filial-picker"
+import { PeoplePicker } from "@/components/kronex/people-picker"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -582,6 +583,16 @@ function InviteForm({ orgs, onClose }: { orgs: OrgRow[]; onClose: () => void }) 
       </div>
 
       <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        {!success && (
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Buscar no diretório da empresa</label>
+            <PeoplePicker
+              autoLink={false}
+              placeholder="Digite o nome ou e-mail..."
+              onPick={(person) => { setName(person.name); setEmail(person.email) }}
+            />
+          </div>
+        )}
         {success ? (
           <div className="flex flex-col items-center gap-3 py-8 text-center">
             <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center">

@@ -27,6 +27,7 @@ import {
   DropdownMenuCheckboxItem, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
 import { ToolbarBtn, ToolbarGroup } from "@/components/kronex/toolbar"
+import { PeoplePicker } from "@/components/kronex/people-picker"
 
 // ─── Helpers de árvore ──────────────────────────────────────────────────────
 
@@ -1538,22 +1539,23 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
     }
 
     case "responsavel": {
-      // Campo livre — aceita qualquer nome digitado, mesmo de quem ainda não
-      // é usuário do sistema (ex.: Millena). Sugere os membros cadastrados
-      // via <datalist> (id="sv2-members-list", declarada uma única vez no
-      // topo do componente), mas não trava a digitação a essa lista. Quando
-      // o texto digitado bate com um nome cadastrado, salva a FK
-      // (responsavelId) — senão salva o texto solto (responsavelNome).
+      // Busca no diretório do Azure AD (Microsoft Graph, components/kronex/
+      // people-picker.tsx) — digitar mostra sugestões com foto/cargo da
+      // empresa inteira, não só de quem já é usuário do Kronex. Escolher um
+      // resultado cria/vincula o usuário local automaticamente (grava
+      // responsavelId de verdade). Continua aceitando nome digitado sem
+      // selecionar nada (ex.: prestador que não está no Azure AD): cai no
+      // mesmo fallback de sempre — bate com um membro já cadastrado vira FK,
+      // senão salva como texto solto (responsavelNome).
       const currentName = item.responsavelId ? (h.membersById.get(item.responsavelId) ?? "") : (item.responsavelNome ?? "")
       return (
-        <input
+        <PeoplePicker
           key={`resp:${item.id}:${item.responsavelId}:${item.responsavelNome}`}
-          list="sv2-members-list"
           defaultValue={currentName}
           placeholder="Sem responsável"
-          onBlur={(e) => {
-            const typed = e.target.value.trim()
-            if (typed === currentName) return
+          compact
+          onSelect={(person) => h.onUpdate(item.id, { responsavelId: person.id })}
+          onFreeText={(typed) => {
             if (typed === "") {
               h.onUpdate(item.id, { responsavelId: null })
               return
@@ -1562,7 +1564,6 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
             if (match) h.onUpdate(item.id, { responsavelId: match.id })
             else h.onUpdate(item.id, { responsavelNome: typed })
           }}
-          className="w-full bg-transparent outline-none text-xs text-slate-700 placeholder-slate-300 rounded border-b border-transparent focus:border-[#7B2FBE] focus:bg-violet-50"
         />
       )
     }

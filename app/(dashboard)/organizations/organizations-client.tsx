@@ -16,6 +16,7 @@ import {
   type OrgUserRow,
 } from "@/lib/actions/organizations"
 import { GlobalUsersView } from "./global-users-view"
+import { PeoplePicker } from "@/components/kronex/people-picker"
 
 function imageToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -527,6 +528,15 @@ export function OrganizationsClient({ initialOrgs, currentOrgId }: Props) {
                   <h3 className="text-sm font-medium text-gray-700">
                     Adicionar usuário em <span className="text-blue-600">{org.name}</span>
                   </h3>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 block mb-1">Buscar no diretório da empresa</label>
+                    <PeoplePicker
+                      autoLink={false}
+                      placeholder="Digite o nome ou e-mail..."
+                      organizationId={org.id}
+                      onPick={(person) => { setNewUserName(person.name); setNewUserEmail(person.email) }}
+                    />
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs font-medium text-gray-600 block mb-1">Nome *</label>
