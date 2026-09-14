@@ -20,8 +20,12 @@ import {
   ChevronRight, ChevronDown, Plus, IndentIncrease, IndentDecrease,
   ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, Milestone,
   Circle, CircleX, CirclePlus, Pencil, Undo2, Redo2, GripVertical, GripHorizontal, LayoutTemplate, FileSpreadsheet, BookmarkPlus, History,
-  Link2, Copy, Check, X, Star,
+  Link2, Copy, Check, X, Star, Columns3,
 } from "lucide-react"
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
+  DropdownMenuCheckboxItem, DropdownMenuItem, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu"
 
 // ─── Helpers de árvore ──────────────────────────────────────────────────────
 
@@ -245,6 +249,11 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
   const [titleWidth, setTitleWidth] = useState(DEFAULT_TITLE_WIDTH)
   const [colsLoaded, setColsLoaded] = useState(false)
   const [dragCol, setDragCol] = useState<ColKey | null>(null)
+  // Ocultar coluna (igual "ocultar coluna" do Excel) — pedido pra deixar a
+  // grade mais enxuta em reunião com cliente, sem perder o dado (só some
+  // da tela; reaparece na mesma posição ao marcar de novo). Preferência
+  // salva junto com largura/ordem, no mesmo localStorage por projeto.
+  const [hiddenCols, setHiddenCols] = useState<ColKey[]>([])
 
   // Arrastar linha (encaixar antes/depois/dentro) — igual ao Artia.
   const [dragRowId, setDragRowId] = useState<string | null>(null)
@@ -288,10 +297,11 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
     try {
       const raw = localStorage.getItem(colPrefsKey(projectId))
       if (raw) {
-        const parsed = JSON.parse(raw) as { widths?: Partial<Record<ColKey, number>>; order?: ColKey[]; titleWidth?: number }
+        const parsed = JSON.parse(raw) as { widths?: Partial<Record<ColKey, number>>; order?: ColKey[]; titleWidth?: number; hidden?: ColKey[] }
         if (parsed.widths) setColWidths((w) => ({ ...w, ...parsed.widths }))
         if (Array.isArray(parsed.order) && parsed.order.length === DEFAULT_COL_ORDER.length) setColOrder(parsed.order)
         if (typeof parsed.titleWidth === "number") setTitleWidth(parsed.titleWidth)
+        if (Array.isArray(parsed.hidden)) setHiddenCols(parsed.hidden.filter((c): c is ColKey => DEFAULT_COL_ORDER.includes(c)))
       }
     } catch { /* localStorage indisponível — segue com o padrão */ }
     setColsLoaded(true)
@@ -299,8 +309,17 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
 
   useEffect(() => {
     if (!colsLoaded) return
-    try { localStorage.setItem(colPrefsKey(projectId), JSON.stringify({ widths: colWidths, order: colOrder, titleWidth })) } catch { /* noop */ }
-  }, [colsLoaded, colWidths, colOrder, titleWidth, projectId])
+    try { localStorage.setItem(colPrefsKey(projectId), JSON.stringify({ widths: colWidths, order: colOrder, titleWidth, hidden: hiddenCols })) } catch { /* noop */ }
+  }, [colsLoaded, colWidths, colOrder, titleWidth, hiddenCols, projectId])
+
+  // Colunas realmente desenhadas na grade — mesma ordem persistida, só sem
+  // as marcadas como ocultas. A "Atividade" (título) nunca pode ser
+  // ocultada — é a única identificação da linha.
+  const visibleColOrder = useMemo(() => colOrder.filter((c) => !hiddenCols.includes(c)), [colOrder, hiddenCols])
+
+  function toggleColVisibility(col: ColKey) {
+    setHiddenCols((prev) => prev.includes(col) ? prev.filter((c) => c !== col) : [...prev, col])
+  }
 
   // `focusId`: depois de recarregar, foca e seleciona o título da linha nova
   // (criada, duplicada) para o usuário já poder renomear direto.
@@ -598,7 +617,7 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
     data, expanded, onToggle: toggle, onUpdate: handleUpdate, onDeps: handleDeps, onDelete: handleDelete,
     onDuplicate: handleDuplicate, onAddAbove: handleAddAbove, onAddChild: handleAddChild, onEditTitle: handleEditTitle,
     selectedId, onSelect: setSelectedId, sort, conflictByItem,
-    colOrder, colWidths, titleWidth, members, membersById, baselineByItem,
+    colOrder: visibleColOrder, colWidths, titleWidth, members, membersById, baselineByItem,
     dragRowId, dropTarget, onRowDragStart: handleRowDragStart, onRowDragOver: handleRowDragOver,
     onRowDrop: handleRowDrop, onRowDragEnd: handleRowDragEnd,
   }
@@ -693,6 +712,36 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
         <ToolbarBtn wide onClick={handleOpenPublicLink} title="Gerar um link público (sem login) para acompanhar este cronograma">
           <Link2 className="w-3.5 h-3.5" /> Link Público
         </ToolbarBtn>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            title="Escolher quais colunas aparecem na grade — útil pra deixar mais enxuto numa reunião com cliente"
+            className="h-7 px-2.5 gap-1.5 text-xs font-bold rounded-lg flex items-center border border-slate-200 text-slate-500 bg-white transition-colors hover:bg-slate-100 hover:text-slate-800"
+          >
+            <Columns3 className="w-3.5 h-3.5" /> Colunas
+            {hiddenCols.length > 0 && (
+              <span className="text-[9px] font-black rounded-full px-1.5 leading-4 bg-[#7B2FBE] text-white">{hiddenCols.length}</span>
+            )}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-60 max-h-96 overflow-y-auto">
+            {colOrder.map((col) => (
+              <DropdownMenuCheckboxItem
+                key={col}
+                checked={!hiddenCols.includes(col)}
+                onCheckedChange={() => toggleColVisibility(col)}
+              >
+                {COL_LABELS[col]}
+              </DropdownMenuCheckboxItem>
+            ))}
+            {hiddenCols.length > 0 && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setHiddenCols([])} className="text-[#7B2FBE] font-semibold">
+                  Mostrar todas as colunas
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
         <div className="w-px h-5 bg-slate-200 mx-1" />
         <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mr-1">
           {selectedItem ? <>Selecionado: <span className="text-slate-600 normal-case">{selectedItem.title}</span></> : "Selecione uma linha (círculo) ou arraste pela alcinha ⠿"}
@@ -716,7 +765,7 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
           <SortableHeaderLabel label="Atividade" column="title" sort={sort} onSort={toggleSort} />
           <ColResizeHandle width={titleWidth} onResize={(w) => setTitleWidth(w)} />
         </div>
-        {colOrder.map((col) => (
+        {visibleColOrder.map((col) => (
           <div
             key={col}
             className="relative flex items-center gap-1 group/col"
