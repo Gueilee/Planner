@@ -324,6 +324,19 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
   // ocultada — é a única identificação da linha.
   const visibleColOrder = useMemo(() => colOrder.filter((c) => !hiddenCols.includes(c)), [colOrder, hiddenCols])
 
+  // Largura total da grade (gutter + título + todas as colunas visíveis) —
+  // usada como min-width do conteúdo rolável. Sem isso, cabeçalho e linhas
+  // (dois flex containers irmãos, sem essa largura em comum) encolhiam cada
+  // um a sua própria maneira quando a soma das colunas não cabia na tela —
+  // o cabeçalho (células vazias, bem compressíveis) encolhia mais que as
+  // linhas (ícones/inputs que não compressimem tanto), descasando tudo.
+  // Correção: ninguém encolhe (shrink-0 em cada célula) e o excesso vira
+  // scroll horizontal — igual Excel — em vez de comprimir e desalinhar.
+  const gridMinWidth = useMemo(
+    () => GUTTER_WIDTH + titleWidth + visibleColOrder.reduce((sum, col) => sum + colWidths[col], 0),
+    [titleWidth, visibleColOrder, colWidths]
+  )
+
   function toggleColVisibility(col: ColKey) {
     setHiddenCols((prev) => prev.includes(col) ? prev.filter((c) => c !== col) : [...prev, col])
   }
@@ -779,60 +792,73 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
         )}
       </div>
 
-      {/* Column headers — clique ordena; arraste a mãozinha (✥) para
-          reordenar a coluna; arraste a borda direita para redimensionar. */}
-      <div className="flex items-center px-4 py-2 border-b border-slate-200 bg-slate-50 text-[9px] font-black uppercase tracking-widest text-slate-400">
-        <div style={{ width: GUTTER_WIDTH }} />
-        <div className="relative" style={{ width: titleWidth }}>
-          <SortableHeaderLabel label="Atividade" column="title" sort={sort} onSort={toggleSort} />
-          <ColResizeHandle width={titleWidth} onResize={(w) => setTitleWidth(w)} />
-        </div>
-        {visibleColOrder.map((col) => (
-          <div
-            key={col}
-            className="relative flex items-center gap-1 group/col"
-            style={{ width: colWidths[col] }}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => { e.preventDefault(); handleColDrop(col) }}
-          >
-            <span
-              draggable
-              onDragStart={() => setDragCol(col)}
-              onDragEnd={() => setDragCol(null)}
-              title="Arrastar para reordenar a coluna"
-              className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 opacity-0 group-hover/col:opacity-100 transition-opacity shrink-0"
-            >
-              <GripHorizontal className="w-3 h-3" />
-            </span>
-            <SortableHeaderLabel
-              label={COL_LABELS[col]}
-              column={col}
-              sort={sort}
-              onSort={toggleSort}
-              center={COL_ALIGN[col] === "center"}
-            />
-            <ColResizeHandle width={colWidths[col]} onResize={(w) => handleColResize(col, w)} />
+      {/* Cabeçalho + linhas compartilham UMA única largura mínima (gutter +
+          título + soma das colunas visíveis) e rolam juntos — nenhuma célula
+          encolhe (shrink-0 em cada uma). Sem isso, cabeçalho e linhas eram
+          dois flex containers cada um encolhendo do seu próprio jeito
+          quando a soma das colunas não cabia na tela, descasando tudo
+          (dado aparecendo embaixo do cabeçalho errado). Excesso de colunas
+          agora vira rolagem horizontal, igual Excel, em vez de compressão. */}
+      <div className="overflow-x-auto">
+        <div style={{ minWidth: gridMinWidth }}>
+          {/* Column headers — clique ordena; arraste a mãozinha (✥) para
+              reordenar a coluna; arraste a borda direita para redimensionar. */}
+          <div className="flex items-center px-4 py-2 border-b border-slate-200 bg-slate-50 text-[9px] font-black uppercase tracking-widest text-slate-400">
+            <div className="shrink-0" style={{ width: GUTTER_WIDTH }} />
+            <div className="relative shrink-0" style={{ width: titleWidth }}>
+              <SortableHeaderLabel label="Atividade" column="title" sort={sort} onSort={toggleSort} />
+              <ColResizeHandle width={titleWidth} onResize={(w) => setTitleWidth(w)} />
+            </div>
+            {visibleColOrder.map((col) => (
+              <div
+                key={col}
+                className="relative flex items-center gap-1 group/col shrink-0"
+                style={{ width: colWidths[col] }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => { e.preventDefault(); handleColDrop(col) }}
+              >
+                <span
+                  draggable
+                  onDragStart={() => setDragCol(col)}
+                  onDragEnd={() => setDragCol(null)}
+                  title="Arrastar para reordenar a coluna"
+                  className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 opacity-0 group-hover/col:opacity-100 transition-opacity shrink-0"
+                >
+                  <GripHorizontal className="w-3 h-3" />
+                </span>
+                <SortableHeaderLabel
+                  label={COL_LABELS[col]}
+                  column={col}
+                  sort={sort}
+                  onSort={toggleSort}
+                  center={COL_ALIGN[col] === "center"}
+                />
+                <ColResizeHandle width={colWidths[col]} onResize={(w) => handleColResize(col, w)} />
+              </div>
+            ))}
           </div>
-        ))}
+
+          {/* Rows */}
+          {roots.length > 0 && (
+            <div className={`bg-white ${pending ? "opacity-60 pointer-events-none transition-opacity" : "transition-opacity"}`}>
+              {roots.map((item) => <RowGroup key={item.id} item={item} depth={0} {...rowHandlers} />)}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Rows */}
-      <div className={`bg-white ${pending ? "opacity-60 pointer-events-none transition-opacity" : "transition-opacity"}`}>
-        {roots.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <p className="text-sm font-semibold text-slate-400 mb-3">Nenhuma atividade ainda</p>
-            <button
-              onClick={handleAddRoot}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90"
-              style={{ background: "linear-gradient(135deg, #7B2FBE, #9333EA)" }}
-            >
-              <Plus className="w-4 h-4" /> Adicionar primeira atividade
-            </button>
-          </div>
-        ) : (
-          roots.map((item) => <RowGroup key={item.id} item={item} depth={0} {...rowHandlers} />)
-        )}
-      </div>
+      {roots.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <p className="text-sm font-semibold text-slate-400 mb-3">Nenhuma atividade ainda</p>
+          <button
+            onClick={handleAddRoot}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90"
+            style={{ background: "linear-gradient(135deg, #7B2FBE, #9333EA)" }}
+          >
+            <Plus className="w-4 h-4" /> Adicionar primeira atividade
+          </button>
+        </div>
+      )}
 
       {tplModalOpen && (
         <ApplyTemplateModal
@@ -1248,7 +1274,7 @@ function Row({ item, depth, hasChildren, isOpen, ...h }: { item: ItemV2; depth: 
       </div>
 
       {/* Título + hierarquia (coluna fixa) */}
-      <div className="flex items-center gap-1.5" style={{ width: h.titleWidth, paddingLeft: depth * 20 }}>
+      <div className="flex items-center gap-1.5 shrink-0" style={{ width: h.titleWidth, paddingLeft: depth * 20 }}>
         <button onClick={() => hasChildren && h.onToggle(item.id)} className="w-4 h-4 flex items-center justify-center shrink-0">
           {hasChildren
             ? (isOpen ? <ChevronDown className="w-3 h-3 text-slate-400" /> : <ChevronRight className="w-3 h-3 text-slate-400" />)
@@ -1282,7 +1308,7 @@ function Row({ item, depth, hasChildren, isOpen, ...h }: { item: ItemV2; depth: 
 
       {/* Colunas configuráveis (ordem e largura vêm do estado do cliente) */}
       {h.colOrder.map((col) => (
-        <div key={col} style={{ width: h.colWidths[col] }} className={COL_ALIGN[col] === "center" ? "text-center" : ""}>
+        <div key={col} style={{ width: h.colWidths[col] }} className={`shrink-0 overflow-hidden ${COL_ALIGN[col] === "center" ? "text-center" : ""}`}>
           {renderCell(col, item, hasChildren, h)}
         </div>
       ))}
