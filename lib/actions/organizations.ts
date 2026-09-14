@@ -16,7 +16,7 @@ export type OrgRow = {
 
 export async function listOrganizations(): Promise<OrgRow[]> {
   const session = await auth()
-  if (!session?.user || session.user.role !== "ADMIN") throw new Error("Não autorizado")
+  if (!session?.user?.isGlobalAdmin) throw new Error("Não autorizado")
 
   const orgs = await db.organization.findMany({
     orderBy: { name: "asc" },
@@ -32,7 +32,7 @@ export async function createOrganization(data: {
   logoUrl?: string | null
 }): Promise<OrgRow> {
   const session = await auth()
-  if (!session?.user || session.user.role !== "ADMIN") throw new Error("Não autorizado")
+  if (!session?.user?.isGlobalAdmin) throw new Error("Não autorizado")
 
   const slug = data.slug.trim().toLowerCase().replace(/\s+/g, "-")
   const existing = await db.organization.findUnique({ where: { slug } })
@@ -52,7 +52,7 @@ export async function updateOrganization(
   data: { name: string; logoUrl?: string | null }
 ): Promise<void> {
   const session = await auth()
-  if (!session?.user || session.user.role !== "ADMIN") throw new Error("Não autorizado")
+  if (!session?.user?.isGlobalAdmin) throw new Error("Não autorizado")
 
   await db.organization.update({
     where: { id },
@@ -64,7 +64,7 @@ export async function updateOrganization(
 
 export async function toggleOrganizationActive(id: string): Promise<{ active: boolean }> {
   const session = await auth()
-  if (!session?.user || session.user.role !== "ADMIN") throw new Error("Não autorizado")
+  if (!session?.user?.isGlobalAdmin) throw new Error("Não autorizado")
 
   // Protect the default Vendemmia org
   if (id === "org_vendemmia") throw new Error("Não é possível desativar a organização principal")
@@ -126,7 +126,7 @@ export type OrgUserRow = {
 
 export async function getUsersByOrg(orgId: string): Promise<OrgUserRow[]> {
   const session = await auth()
-  if (!session?.user || session.user.role !== "ADMIN") throw new Error("Não autorizado")
+  if (!session?.user?.isGlobalAdmin) throw new Error("Não autorizado")
 
   const users = await db.user.findMany({
     where: { organizationId: orgId },
@@ -139,7 +139,7 @@ export async function getUsersByOrg(orgId: string): Promise<OrgUserRow[]> {
 
 export async function updateUserAvatarInOrg(userId: string, image: string | null): Promise<void> {
   const session = await auth()
-  if (!session?.user || session.user.role !== "ADMIN") throw new Error("Não autorizado")
+  if (!session?.user?.isGlobalAdmin) throw new Error("Não autorizado")
 
   await db.user.update({ where: { id: userId }, data: { image } })
   revalidatePath("/organizations")
@@ -150,7 +150,7 @@ export async function updateUserInOrg(
   data: { name: string; email: string; role: string; department: string | null; phone: string | null }
 ): Promise<void> {
   const session = await auth()
-  if (!session?.user || session.user.role !== "ADMIN") throw new Error("Não autorizado")
+  if (!session?.user?.isGlobalAdmin) throw new Error("Não autorizado")
 
   const email = data.email.trim().toLowerCase()
   const conflict = await db.user.findFirst({ where: { email, NOT: { id: userId } } })
@@ -172,7 +172,7 @@ export async function updateUserInOrg(
 
 export async function resetUserPassword(userId: string, newPassword: string): Promise<void> {
   const session = await auth()
-  if (!session?.user || session.user.role !== "ADMIN") throw new Error("Não autorizado")
+  if (!session?.user?.isGlobalAdmin) throw new Error("Não autorizado")
 
   if (!newPassword || newPassword.length < 6) throw new Error("Senha deve ter no mínimo 6 caracteres")
 
@@ -184,7 +184,7 @@ export async function resetUserPassword(userId: string, newPassword: string): Pr
 
 export async function toggleUserActiveInOrg(userId: string): Promise<{ active: boolean }> {
   const session = await auth()
-  if (!session?.user || session.user.role !== "ADMIN") throw new Error("Não autorizado")
+  if (!session?.user?.isGlobalAdmin) throw new Error("Não autorizado")
 
   const current = await db.user.findUnique({ where: { id: userId }, select: { active: true } })
   if (!current) throw new Error("Usuário não encontrado")
@@ -196,18 +196,37 @@ export async function toggleUserActiveInOrg(userId: string): Promise<{ active: b
   return { active }
 }
 
-// ─── Org switcher (root admin only) ──────────────────────────────────────────
+// ─── Troca de filial ────────────────────────────────────────────────────────
+// Admin global (User.isGlobalAdmin) pode trocar pra qualquer filial. Usuário
+// comum só pode trocar pra filiais que tem acesso concedido de verdade
+// (UserOrganizationAccess, gerido em Configurações/Gestão Global de
+// Usuários — ver lib/actions/user-org-access.ts). A própria filial de
+// origem sempre entra na lista, mesmo sem registro em UserOrganizationAccess.
 
 export type OrgSwitchItem = { id: string; name: string; slug: string; active: boolean }
 
 export async function getOrgsForSwitch(): Promise<OrgSwitchItem[]> {
   const session = await auth()
-  const ROOT_ADMINS = ["gppereira@vendemmia.com.br", "mflorentina@vendemmia.com.br"]
-  if (!ROOT_ADMINS.includes(session?.user?.email ?? "")) throw new Error("Acesso restrito")
+  if (!session?.user) throw new Error("Não autorizado")
+
+  if (session.user.isGlobalAdmin) {
+    return db.organization.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, slug: true, active: true },
+    })
+  }
+
+  const access = await db.userOrganizationAccess.findMany({
+    where: { userId: session.user.id },
+    select: { organizationId: true },
+  })
+  const orgIds = [...new Set([session.user.organizationId, ...access.map((a) => a.organizationId)])]
+  if (orgIds.length <= 1) return []
 
   return db.organization.findMany({
+    where:   { id: { in: orgIds } },
     orderBy: { name: "asc" },
-    select: { id: true, name: true, slug: true, active: true },
+    select:  { id: true, name: true, slug: true, active: true },
   })
 }
 
@@ -221,7 +240,7 @@ export async function createUserInOrganization(data: {
   phone?: string | null
 }): Promise<void> {
   const session = await auth()
-  if (!session?.user || session.user.role !== "ADMIN") throw new Error("Não autorizado")
+  if (!session?.user?.isGlobalAdmin) throw new Error("Não autorizado")
 
   if (!data.password || data.password.length < 6)
     throw new Error("Senha deve ter no mínimo 6 caracteres")

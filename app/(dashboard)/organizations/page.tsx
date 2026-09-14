@@ -5,7 +5,7 @@ import { OrganizationsClient } from "./organizations-client"
 
 export default async function OrganizationsPage() {
   const session = await auth()
-  if (!session?.user || session.user.role !== "ADMIN") redirect("/dashboard")
+  if (!session?.user?.isGlobalAdmin) redirect("/dashboard")
 
   const orgs = await listOrganizations()
 

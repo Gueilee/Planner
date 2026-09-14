@@ -80,6 +80,16 @@ export async function updateAccessProfile(id: string, data: {
   const session = await auth()
   if (!session?.user || session.user.role !== "ADMIN") throw new Error("Não autorizado")
 
+  // Confere que o perfil é da própria organização antes de editar — sem
+  // isso, um ADMIN de qualquer filial podia editar o perfil de outra
+  // filial só sabendo o id (mesma checagem que deleteAccessProfile já
+  // tinha, faltando aqui).
+  const profile = await db.accessProfile.findFirst({
+    where: { id, organizationId: session.user.organizationId },
+    select: { id: true },
+  })
+  if (!profile) throw new Error("Perfil não encontrado")
+
   await db.accessProfile.update({
     where: { id },
     data: {

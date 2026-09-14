@@ -41,14 +41,14 @@ interface HeaderProps {
   subtitle?: string
 }
 
-const ROOT_ADMINS = ["gppereira@vendemmia.com.br", "mflorentina@vendemmia.com.br"]
-
 export function Header({ title, subtitle }: HeaderProps) {
   const { data: session, update } = useSession()
   const router = useRouter()
 
-  // Org switcher state (root admin only)
-  const isRootAdmin = ROOT_ADMINS.includes(session?.user?.email ?? "")
+  // Org switcher — disponível pra admin global (todas as filiais) e pra
+  // qualquer usuário com acesso concedido a mais de uma filial
+  // (UserOrganizationAccess); getOrgsForSwitch já resolve isso no servidor,
+  // aqui só decide se mostra a seção (0 ou 1 filial = nada pra trocar).
   const [switchOrgs,   setSwitchOrgs]   = useState<OrgSwitchItem[]>([])
   const [orgsLoaded,   setOrgsLoaded]   = useState(false)
   const [switching,    setSwitching]    = useState(false)
@@ -291,7 +291,7 @@ export function Header({ title, subtitle }: HeaderProps) {
         <div className="w-px h-6 bg-slate-200 mx-1" />
 
         {/* User Menu */}
-        <DropdownMenu onOpenChange={(open) => { if (open && isRootAdmin) loadOrgsForSwitch() }}>
+        <DropdownMenu onOpenChange={(open) => { if (open) loadOrgsForSwitch() }}>
           <DropdownMenuTrigger
             className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl hover:bg-slate-100 transition-colors focus:outline-none"
           >
@@ -332,19 +332,15 @@ export function Header({ title, subtitle }: HeaderProps) {
                 </div>
               </div>
             </div>
-            {/* Org switcher — root admin only */}
-            {isRootAdmin && (
+            {/* Org switcher — só aparece se houver mais de uma filial pra
+                trocar (admin global vê todas; usuário comum só vê as que
+                tem acesso concedido) */}
+            {orgsLoaded && switchOrgs.length > 0 && (
               <div className="px-3 pt-3 pb-1">
                 <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-1.5 flex items-center gap-1.5">
                   <Building2 className="w-2.5 h-2.5" />
                   Organização ativa
                 </p>
-                {!orgsLoaded ? (
-                  <div className="flex items-center gap-2 py-1.5 px-1 text-xs text-slate-400">
-                    <span className="w-3 h-3 border border-slate-300 border-t-transparent rounded-full animate-spin inline-block" />
-                    Carregando...
-                  </div>
-                ) : (
                   <div className="space-y-0.5">
                     {switchOrgs.map((org) => {
                       const active = org.id === session?.user?.organizationId
@@ -367,11 +363,10 @@ export function Header({ title, subtitle }: HeaderProps) {
                       )
                     })}
                   </div>
-                )}
               </div>
             )}
 
-            <div className={`p-1.5 ${isRootAdmin ? "border-t border-slate-100 mt-1" : ""}`}>
+            <div className={`p-1.5 ${orgsLoaded && switchOrgs.length > 0 ? "border-t border-slate-100 mt-1" : ""}`}>
               <DropdownMenuItem
                 onClick={() => router.push("/settings")}
                 className="gap-2.5 rounded-lg cursor-pointer text-sm font-medium"

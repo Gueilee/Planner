@@ -16,7 +16,7 @@ export default async function SettingsPage() {
   if (!session?.user) redirect("/login")
 
   const isAdmin     = session.user.role === "ADMIN"
-  const isRootAdmin = isAdmin && session.user.organizationId === "org_vendemmia"
+  const isRootAdmin = session.user.isGlobalAdmin
 
   const [profile, allUsers, preferences, notifications, orgConfig, initialOrgs, initialProfiles, riskThresholdPct] = await Promise.all([
     getMyProfile(),

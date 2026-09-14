@@ -27,6 +27,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             select: {
               id: true, name: true, email: true, password: true, role: true,
               department: true, image: true, active: true, organizationId: true, profileId: true,
+              isGlobalAdmin: true,
             },
           })
 
@@ -48,6 +49,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             department:     row.department,
             profileId:      row.profileId,
             organizationId: row.organizationId ?? "org_vendemmia",
+            isGlobalAdmin:  row.isGlobalAdmin,
             // Armazena só o path — nunca o base64 — para o JWT não estourar o cookie
             image:          row.image ? `/api/avatar/${uid}` : null,
           }
@@ -69,13 +71,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.image          = (user as { image?: string | null }).image ?? null
         token.name           = user.name ?? null
         token.organizationId = (user as { organizationId?: string }).organizationId ?? "org_vendemmia"
+        token.isGlobalAdmin  = (user as { isGlobalAdmin?: boolean }).isGlobalAdmin ?? false
       }
       if (trigger === "update" && token.id) {
         const payload = updateData as Record<string, unknown> | null
-        // Root-admin org switch — update organizationId without DB round-trip
-        const ROOT_ADMINS = ["gppereira@vendemmia.com.br", "mflorentina@vendemmia.com.br"]
-        if (payload?.switchToOrgId && ROOT_ADMINS.includes(token.email as string)) {
-          token.organizationId = payload.switchToOrgId as string
+        // Troca de filial — validado contra o banco a cada troca (admin global
+        // vê todas; usuário comum só as filiais que tem acesso concedido em
+        // UserOrganizationAccess), não mais uma lista de e-mails fixa no código.
+        if (payload?.switchToOrgId) {
+          const targetOrgId = payload.switchToOrgId as string
+          const isGlobalAdmin = Boolean(token.isGlobalAdmin)
+          const hasAccess = isGlobalAdmin
+            ? await db.organization.findUnique({ where: { id: targetOrgId }, select: { id: true } }).then((o) => !!o)
+            : targetOrgId === token.organizationId ||
+              await db.userOrganizationAccess.findUnique({
+                where: { userId_organizationId: { userId: token.id as string, organizationId: targetOrgId } },
+                select: { id: true },
+              }).then((r) => !!r)
+          if (hasAccess) token.organizationId = targetOrgId
         } else {
           // Regular profile refresh from DB (e.g. after avatar/name save)
           try {
@@ -101,6 +114,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.profileId      = (token.profileId as string | null) ?? null
         session.user.image          = (token.image as string | null) ?? null
         session.user.organizationId = (token.organizationId as string | null) ?? "org_vendemmia"
+        session.user.isGlobalAdmin  = Boolean(token.isGlobalAdmin)
         if (token.name) session.user.name = token.name as string
       }
       return session
@@ -119,6 +133,7 @@ declare module "next-auth" {
       profileId?:     string | null
       image?:         string | null
       organizationId: string
+      isGlobalAdmin:  boolean
     }
   }
 
@@ -127,6 +142,7 @@ declare module "next-auth" {
     department?:     string | null
     profileId?:      string | null
     organizationId?: string
+    isGlobalAdmin?:  boolean
   }
 }
 
@@ -139,5 +155,6 @@ declare module "@auth/core/jwt" {
     image?:          string | null
     name?:           string | null
     organizationId?: string | null
+    isGlobalAdmin?:  boolean
   }
 }

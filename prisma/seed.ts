@@ -52,7 +52,7 @@ async function main() {
     raquel, jose, paulo, marcos,
     jaqueline, daniel, wiverton,
   ] = await Promise.all([
-    db.user.create({ data: { name: "Gueilee Pereira",    email: "gppereira@vendemmia.com.br",     password: hash, role: UserRole.ADMIN,           department: "Projetos",    organizationId: "org_vendemmia" } }),
+    db.user.create({ data: { name: "Gueilee Pereira",    email: "gppereira@vendemmia.com.br",     password: hash, role: UserRole.ADMIN,           department: "Projetos",    organizationId: "org_vendemmia", isGlobalAdmin: true } }),
     db.user.create({ data: { name: "Rafael Puglia",      email: "rafael.puglia@vendemmia.com.br", password: hash, role: UserRole.DIRECTOR,         department: "Diretoria",   organizationId: "org_vendemmia" } }),
     db.user.create({ data: { name: "Osni Tavares",       email: "osni.tavares@vendemmia.com.br",  password: hash, role: UserRole.DIRECTOR,         department: "Diretoria",   organizationId: "org_vendemmia" } }),
     db.user.create({ data: { name: "Paola Schreiber",    email: "paola.schreiber@vendemmia.com.br",   password: hash, role: UserRole.SPONSOR, department: "Compras",     organizationId: "org_vendemmia" } }),

@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache"
 
 export async function getUserOrgAccess(userId: string): Promise<string[]> {
   const session = await auth()
-  if (!session?.user || session.user.role !== "ADMIN") throw new Error("Não autorizado")
+  if (!session?.user?.isGlobalAdmin) throw new Error("Não autorizado")
 
   const records = await db.userOrganizationAccess.findMany({
     where: { userId },
@@ -17,7 +17,7 @@ export async function getUserOrgAccess(userId: string): Promise<string[]> {
 
 export async function setUserOrgAccess(userId: string, orgIds: string[]): Promise<void> {
   const session = await auth()
-  if (!session?.user || session.user.role !== "ADMIN") throw new Error("Não autorizado")
+  if (!session?.user?.isGlobalAdmin) throw new Error("Não autorizado")
 
   await db.$transaction(async (tx) => {
     await tx.userOrganizationAccess.deleteMany({ where: { userId } })

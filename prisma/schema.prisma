@@ -260,6 +260,10 @@ model User {
   active         Boolean      @default(true)
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
+  // Admin de verdade acima das filiais (substitui a lista de e-mails fixa
+  // no código que existia em auth.ts/header.tsx/organizations.ts) — só
+  // quem tem isso pode acessar /organizations e as ações cross-filial.
+  isGlobalAdmin  Boolean      @default(false)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
