@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState, useTransition } from "react"
+import { useEffect, useMemo, useRef, useState, useTransition } from "react"
 import {
   createItemV2, updateItemV2, deleteItemV2, duplicateItemV2, reorderItemsV2, setDependenciesV2, getScheduleV2,
   hasUndoV2, hasRedoV2, undoLastChangeV2, redoLastChangeV2, applyTemplateV2, getChangeLogV2,
@@ -20,7 +20,7 @@ import {
   ChevronRight, ChevronDown, Plus, IndentIncrease, IndentDecrease,
   ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, Milestone,
   Circle, CircleX, CirclePlus, Pencil, Undo2, Redo2, GripVertical, GripHorizontal, LayoutTemplate, FileSpreadsheet, BookmarkPlus, History,
-  Link2, Copy, Check, X, Star, Columns3,
+  Link2, Copy, Check, X, Star, Columns3, CalendarDays, CalendarCheck2, CalendarClock,
 } from "lucide-react"
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
@@ -684,74 +684,89 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
         </div>
       </div>
 
-      {/* Barra de ações estruturais — agem sobre o item selecionado (círculo
-          cinza na frente da linha); "Voltar"/"Avançar" desfazem/refazem a
-          última alteração (igual Ctrl+Z / Ctrl+Y do Excel). Arrastar pela
-          alcinha (⠿) também reestrutura, direto na linha — veja abaixo. */}
-      <div className="px-5 py-2 border-b border-slate-200 bg-white flex items-center gap-2">
-        <ToolbarBtn wide disabled={!hasUndo} onClick={handleUndo} title="Voltar — desfaz a última alteração feita">
-          <Undo2 className="w-3.5 h-3.5" /> Voltar
-        </ToolbarBtn>
-        <ToolbarBtn wide disabled={!hasRedo} onClick={handleRedo} title="Avançar — refaz a última alteração desfeita">
-          <Redo2 className="w-3.5 h-3.5" /> Avançar
-        </ToolbarBtn>
-        <div className="w-px h-5 bg-slate-200 mx-1" />
-        <ToolbarBtn wide disabled={templates.length === 0} onClick={() => setTplModalOpen(true)} title="Aplicar um modelo de cronograma pronto a este projeto">
-          <LayoutTemplate className="w-3.5 h-3.5" /> Aplicar modelo
-        </ToolbarBtn>
-        <ToolbarBtn wide disabled={exporting || data.items.length === 0} onClick={handleExportExcel} title="Exportar este cronograma para uma planilha Excel formatada">
-          <FileSpreadsheet className="w-3.5 h-3.5" /> {exporting ? "Exportando…" : "Exportar Excel"}
-        </ToolbarBtn>
-        <ToolbarBtn wide disabled={savingBaseline || data.items.length === 0} onClick={handleSaveBaseline} title="Congela o início/término planejado de hoje — compare depois nas colunas Início Base/Término Base">
-          <BookmarkPlus className="w-3.5 h-3.5" /> {savingBaseline ? "Salvando…" : "Salvar Linha de Base"}
-        </ToolbarBtn>
+      {/* Barra de ferramentas — agrupada por finalidade (histórico,
+          produtividade, compartilhamento, colunas) em "cartões" leves, em
+          vez de uma fileira única de botões idênticos encostados uns nos
+          outros. `flex-wrap` com respiro vertical: numa tela mais estreita
+          quebra em duas linhas organizadas, nunca espremido. O bloco de
+          reestruturação (mover/indentar) fica à direita, agindo sobre o
+          item selecionado (círculo cinza na frente da linha) — arrastar
+          pela alcinha (⠿) também reestrutura, direto na linha. */}
+      <div className="px-5 py-2.5 border-b border-slate-200 bg-white flex items-center flex-wrap gap-2">
+        <ToolbarGroup>
+          <ToolbarBtn ghost disabled={!hasUndo} onClick={handleUndo} title="Voltar — desfaz a última alteração feita">
+            <Undo2 className="w-3.5 h-3.5" />
+          </ToolbarBtn>
+          <ToolbarBtn ghost disabled={!hasRedo} onClick={handleRedo} title="Avançar — refaz a última alteração desfeita">
+            <Redo2 className="w-3.5 h-3.5" />
+          </ToolbarBtn>
+        </ToolbarGroup>
+
+        <ToolbarGroup>
+          <ToolbarBtn ghost wide disabled={templates.length === 0} onClick={() => setTplModalOpen(true)} title="Aplicar um modelo de cronograma pronto a este projeto">
+            <LayoutTemplate className="w-3.5 h-3.5" /> Modelo
+          </ToolbarBtn>
+          <ToolbarBtn ghost wide disabled={savingBaseline || data.items.length === 0} onClick={handleSaveBaseline} title="Congela o início/término planejado de hoje — compare depois nas colunas Início Base/Término Base">
+            <BookmarkPlus className="w-3.5 h-3.5" /> {savingBaseline ? "Salvando…" : "Linha de Base"}
+          </ToolbarBtn>
+          <ToolbarBtn ghost wide onClick={handleOpenHistory} title="Ver quem alterou o quê e quando neste cronograma">
+            <History className="w-3.5 h-3.5" /> Histórico
+          </ToolbarBtn>
+        </ToolbarGroup>
         {baselineMsg && <span className="text-[10px] font-bold text-[#7B2FBE]">{baselineMsg}</span>}
-        <ToolbarBtn wide onClick={handleOpenHistory} title="Ver quem alterou o quê e quando neste cronograma">
-          <History className="w-3.5 h-3.5" /> Histórico
-        </ToolbarBtn>
-        <ToolbarBtn wide onClick={handleOpenPublicLink} title="Gerar um link público (sem login) para acompanhar este cronograma">
-          <Link2 className="w-3.5 h-3.5" /> Link Público
-        </ToolbarBtn>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            title="Escolher quais colunas aparecem na grade — útil pra deixar mais enxuto numa reunião com cliente"
-            className="h-7 px-2.5 gap-1.5 text-xs font-bold rounded-lg flex items-center border border-slate-200 text-slate-500 bg-white transition-colors hover:bg-slate-100 hover:text-slate-800"
-          >
-            <Columns3 className="w-3.5 h-3.5" /> Colunas
-            {hiddenCols.length > 0 && (
-              <span className="text-[9px] font-black rounded-full px-1.5 leading-4 bg-[#7B2FBE] text-white">{hiddenCols.length}</span>
-            )}
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-60 max-h-96 overflow-y-auto">
-            {colOrder.map((col) => (
-              <DropdownMenuCheckboxItem
-                key={col}
-                checked={!hiddenCols.includes(col)}
-                onCheckedChange={() => toggleColVisibility(col)}
-              >
-                {COL_LABELS[col]}
-              </DropdownMenuCheckboxItem>
-            ))}
-            {hiddenCols.length > 0 && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setHiddenCols([])} className="text-[#7B2FBE] font-semibold">
-                  Mostrar todas as colunas
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <div className="w-px h-5 bg-slate-200 mx-1" />
-        <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mr-1">
-          {selectedItem ? <>Selecionado: <span className="text-slate-600 normal-case">{selectedItem.title}</span></> : "Selecione uma linha (círculo) ou arraste pela alcinha ⠿"}
-        </span>
-        <ToolbarBtn disabled={!selectedItem || sort.column !== null} onClick={() => selectedItem && handleMove(selectedItem, -1)} title={sort.column ? "Limpe a ordenação da coluna para reestruturar manualmente" : "Mover para cima"}><ArrowUp className="w-3.5 h-3.5" /></ToolbarBtn>
-        <ToolbarBtn disabled={!selectedItem || sort.column !== null} onClick={() => selectedItem && handleMove(selectedItem, 1)} title={sort.column ? "Limpe a ordenação da coluna para reestruturar manualmente" : "Mover para baixo"}><ArrowDown className="w-3.5 h-3.5" /></ToolbarBtn>
-        <ToolbarBtn disabled={!selectedItem || sort.column !== null} onClick={() => selectedItem && handleIndent(selectedItem)} title={sort.column ? "Limpe a ordenação da coluna para reestruturar manualmente" : "Indentar (virar filho do anterior)"}><IndentIncrease className="w-3.5 h-3.5" /></ToolbarBtn>
-        <ToolbarBtn disabled={!selectedItem || selectedItem.parentId === null || sort.column !== null} onClick={() => selectedItem && handleOutdent(selectedItem)} title={sort.column ? "Limpe a ordenação da coluna para reestruturar manualmente" : "Promover (sair do grupo)"}><IndentDecrease className="w-3.5 h-3.5" /></ToolbarBtn>
+
+        <ToolbarGroup accent>
+          <ToolbarBtn ghost wide disabled={exporting || data.items.length === 0} onClick={handleExportExcel} title="Exportar este cronograma para uma planilha Excel formatada">
+            <FileSpreadsheet className="w-3.5 h-3.5" /> {exporting ? "Exportando…" : "Excel"}
+          </ToolbarBtn>
+          <ToolbarBtn ghost wide onClick={handleOpenPublicLink} title="Gerar um link público (sem login) para acompanhar este cronograma">
+            <Link2 className="w-3.5 h-3.5" /> Link Público
+          </ToolbarBtn>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              title="Escolher quais colunas aparecem na grade — útil pra deixar mais enxuto numa reunião com cliente"
+              className="h-7 px-2.5 gap-1.5 text-xs font-bold rounded-lg flex items-center text-[#7B2FBE] transition-colors hover:bg-white hover:shadow-sm"
+            >
+              <Columns3 className="w-3.5 h-3.5" /> Colunas
+              {hiddenCols.length > 0 && (
+                <span className="text-[9px] font-black rounded-full px-1.5 leading-4 bg-[#7B2FBE] text-white">{hiddenCols.length}</span>
+              )}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-60 max-h-96 overflow-y-auto">
+              {colOrder.map((col) => (
+                <DropdownMenuCheckboxItem
+                  key={col}
+                  checked={!hiddenCols.includes(col)}
+                  onCheckedChange={() => toggleColVisibility(col)}
+                >
+                  {COL_LABELS[col]}
+                </DropdownMenuCheckboxItem>
+              ))}
+              {hiddenCols.length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setHiddenCols([])} className="text-[#7B2FBE] font-semibold">
+                    Mostrar todas as colunas
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </ToolbarGroup>
+
+        <div className="flex-1 min-w-4" />
+
+        <ToolbarGroup>
+          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 px-1.5 max-w-[220px] truncate">
+            {selectedItem ? <>Sel.: <span className="text-slate-600 normal-case">{selectedItem.title}</span></> : "Selecione uma linha ou arraste ⠿"}
+          </span>
+          <ToolbarBtn ghost disabled={!selectedItem || sort.column !== null} onClick={() => selectedItem && handleMove(selectedItem, -1)} title={sort.column ? "Limpe a ordenação da coluna para reestruturar manualmente" : "Mover para cima"}><ArrowUp className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn ghost disabled={!selectedItem || sort.column !== null} onClick={() => selectedItem && handleMove(selectedItem, 1)} title={sort.column ? "Limpe a ordenação da coluna para reestruturar manualmente" : "Mover para baixo"}><ArrowDown className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn ghost disabled={!selectedItem || sort.column !== null} onClick={() => selectedItem && handleIndent(selectedItem)} title={sort.column ? "Limpe a ordenação da coluna para reestruturar manualmente" : "Indentar (virar filho do anterior)"}><IndentIncrease className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn ghost disabled={!selectedItem || selectedItem.parentId === null || sort.column !== null} onClick={() => selectedItem && handleOutdent(selectedItem)} title={sort.column ? "Limpe a ordenação da coluna para reestruturar manualmente" : "Promover (sair do grupo)"}><IndentDecrease className="w-3.5 h-3.5" /></ToolbarBtn>
+        </ToolbarGroup>
         {sort.column && (
-          <button onClick={() => setSort({ column: null, dir: "asc" })} className="text-[10px] font-bold text-slate-400 hover:text-[#7B2FBE] ml-1">
+          <button onClick={() => setSort({ column: null, dir: "asc" })} className="text-[10px] font-bold text-slate-400 hover:text-[#7B2FBE]">
             Limpar ordenação
           </button>
         )}
@@ -1035,18 +1050,38 @@ function Stat({ label, value, color }: { label: string; value: string | number; 
 }
 
 
-function ToolbarBtn({ children, onClick, title, disabled, wide }: {
-  children: React.ReactNode; onClick: () => void; title: string; disabled?: boolean; wide?: boolean
+// `ghost`: usado dentro de um ToolbarGroup (o cartão já dá o fundo/borda) —
+// sem contorno próprio, só reage no hover; sem `ghost`, mantém o pill branco
+// contornado de antes (usado fora de grupos, ex.: dentro de modais).
+function ToolbarBtn({ children, onClick, title, disabled, wide, ghost }: {
+  children: React.ReactNode; onClick: () => void; title: string; disabled?: boolean; wide?: boolean; ghost?: boolean
 }) {
   return (
     <button
       onClick={onClick}
       title={title}
       disabled={disabled}
-      className={`${wide ? "px-2.5 gap-1.5 text-xs font-bold" : "w-7 justify-center"} h-7 rounded-lg flex items-center border border-slate-200 text-slate-500 bg-white transition-colors hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white`}
+      className={`${wide ? "px-2.5 gap-1.5 text-xs font-bold" : "w-7 justify-center"} h-7 rounded-lg flex items-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
+        ghost
+          ? "text-slate-500 hover:bg-white hover:shadow-sm hover:text-slate-800 disabled:hover:bg-transparent disabled:hover:shadow-none"
+          : "border border-slate-200 text-slate-500 bg-white hover:bg-slate-100 hover:text-slate-800 disabled:hover:bg-white"
+      }`}
     >
       {children}
     </button>
+  )
+}
+
+// Agrupa botões relacionados num "cartão" leve — separa visualmente por
+// finalidade (histórico, produtividade, compartilhamento) sem depender só
+// de traços finos entre botões idênticos (era a fileira "espremida" antes).
+// `accent`: reservado pro grupo de ações que fazem sentido numa reunião com
+// cliente (exportar/compartilhar) — leve tom violeta em vez do cinza padrão.
+function ToolbarGroup({ children, accent }: { children: React.ReactNode; accent?: boolean }) {
+  return (
+    <div className={`flex items-center gap-0.5 p-1 rounded-xl border ${accent ? "bg-violet-50/50 border-violet-100" : "bg-slate-50 border-slate-100"}`}>
+      {children}
+    </div>
   )
 }
 
@@ -1278,6 +1313,76 @@ function Row({ item, depth, hasChildren, isOpen, ...h }: { item: ItemV2; depth: 
   )
 }
 
+// Célula de data compartilhada pelas 5 colunas editáveis (Início, Término,
+// Início/Término Real, Restrição) — antes cada uma só tinha o ícone nativo
+// do navegador (idêntico e minúsculo nas 5), causando a confusão relatada
+// ("não sei em qual clico"). Agora cada família de data tem um ícone e uma
+// cor própria — planejado (violeta), real (verde, mesma leitura de "Real"
+// já usada no resto do app) e restrição (âmbar) — clicável (abre o seletor
+// nativo via showPicker quando o navegador suporta) além de continuar
+// editável digitando direto. Também centraliza a validação/reversão de data
+// inválida, que se repetia igual nas 5 colunas.
+const DATE_CELL_STYLE = {
+  planned:    { Icon: CalendarDays,    color: "text-violet-400" },
+  real:       { Icon: CalendarCheck2,  color: "text-emerald-500" },
+  constraint: { Icon: CalendarClock,   color: "text-amber-500" },
+} as const
+
+function DateCell({ value, kind, title, onCommit }: {
+  value: string | null
+  kind: keyof typeof DATE_CELL_STYLE
+  title?: string
+  onCommit: (v: string | null) => void
+}) {
+  const ref = useRef<HTMLInputElement>(null)
+  const { Icon, color } = DATE_CELL_STYLE[kind]
+
+  function openPicker() {
+    const el = ref.current
+    if (!el) return
+    // showPicker() é recente (Chrome/Edge); em navegadores sem suporte,
+    // cai pro comportamento normal de focar o campo.
+    const withPicker = el as HTMLInputElement & { showPicker?: () => void }
+    if (typeof withPicker.showPicker === "function") {
+      try { withPicker.showPicker() } catch { el.focus() }
+    } else {
+      el.focus()
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-1 w-full group/date">
+      <button
+        type="button"
+        tabIndex={-1}
+        onClick={openPicker}
+        title={title}
+        className={`shrink-0 ${color} opacity-60 group-hover/date:opacity-100 transition-opacity`}
+      >
+        <Icon className="w-3 h-3" />
+      </button>
+      <input
+        ref={ref}
+        key={`${kind}:${value}`}
+        type="date"
+        min={DATE_MIN}
+        max={DATE_MAX}
+        defaultValue={value ?? ""}
+        title={title}
+        onBlur={(e) => {
+          if (!isSaneDateInput(e.target.value)) {
+            e.target.value = value ?? "" // reverte — ano com formato inválido
+            return
+          }
+          const v = e.target.value || null
+          if (v !== value) onCommit(v)
+        }}
+        className="bg-transparent outline-none text-[10px] text-slate-700 w-full text-right pr-0.5 rounded focus:bg-violet-50"
+      />
+    </div>
+  )
+}
+
 // Conteúdo de cada coluna configurável — separado da estrutura da linha para
 // poder ser reordenado livremente (h.colOrder) sem duplicar JSX.
 function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandlers): React.ReactNode {
@@ -1298,105 +1403,57 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
 
     case "inicio":
       return (
-        <input
-          key={`inicio:${item.id}:${item.inicioEstimado}`}
-          type="date"
-          min={DATE_MIN}
-          max={DATE_MAX}
-          defaultValue={item.inicioEstimado ?? ""}
+        <DateCell
+          value={item.inicioEstimado}
+          kind="planned"
           title={
             hasChildren
               ? "Data de grupo — as subatividades definem o período; um valor digitado aqui é descartado ao salvar"
               : item.schedulingMode === "auto" && hasPredecessor(item.id, h.data)
                 ? "Data controlada pelo predecessor — um valor digitado aqui é descartado ao salvar"
-                : undefined
+                : "Início planejado"
           }
-          onBlur={(e) => {
-            if (!isSaneDateInput(e.target.value)) {
-              e.target.value = item.inicioEstimado ?? "" // reverte — ano com formato inválido
-              return
-            }
-            const v = e.target.value || null
-            if (v !== item.inicioEstimado) h.onUpdate(item.id, { inicioEstimado: v })
-          }}
-          className="bg-transparent outline-none text-[10px] text-slate-700 w-full text-right pr-0.5 rounded focus:bg-violet-50"
+          onCommit={(v) => h.onUpdate(item.id, { inicioEstimado: v })}
         />
       )
 
     case "termino":
       return (
-        <input
-          key={`termino:${item.id}:${item.terminoEstimado}`}
-          type="date"
-          min={DATE_MIN}
-          max={DATE_MAX}
-          defaultValue={item.terminoEstimado ?? ""}
+        <DateCell
+          value={item.terminoEstimado}
+          kind="planned"
           title={hasChildren ? "Data de grupo — as subatividades definem o período; um valor digitado aqui é descartado ao salvar" : "Editar aqui recalcula a duração (início fica fixo)"}
-          onBlur={(e) => {
-            if (!isSaneDateInput(e.target.value)) {
-              e.target.value = item.terminoEstimado ?? "" // reverte — ano com formato inválido
-              return
-            }
-            const v = e.target.value || null
-            if (v !== item.terminoEstimado) h.onUpdate(item.id, { terminoEstimado: v })
-          }}
-          className="bg-transparent outline-none text-[10px] text-slate-700 w-full text-right pr-0.5 rounded focus:bg-violet-50"
+          onCommit={(v) => h.onUpdate(item.id, { terminoEstimado: v })}
         />
       )
 
     case "inicioReal":
       return (
-        <input
-          key={`inicioReal:${item.id}:${item.inicioReal}`}
-          type="date"
-          min={DATE_MIN}
-          max={DATE_MAX}
-          defaultValue={item.inicioReal ?? ""}
+        <DateCell
+          value={item.inicioReal}
+          kind="real"
           title="Data em que a atividade realmente começou — preencher muda o Status para Em Andamento"
-          onBlur={(e) => {
-            if (!isSaneDateInput(e.target.value)) {
-              e.target.value = item.inicioReal ?? "" // reverte — ano com formato inválido
-              return
-            }
-            const v = e.target.value || null
-            if (v !== item.inicioReal) {
-              h.onUpdate(item.id, {
-                inicioReal: v,
-                // Preencher o início real é o mesmo sinal de "começou de
-                // verdade" — muda o Status automaticamente (pedido do time).
-                ...(v !== null && { status: "EM_ANDAMENTO" }),
-              })
-            }
-          }}
-          className="bg-transparent outline-none text-[10px] text-slate-700 w-full text-right pr-0.5 rounded focus:bg-violet-50"
+          onCommit={(v) => h.onUpdate(item.id, {
+            inicioReal: v,
+            // Preencher o início real é o mesmo sinal de "começou de
+            // verdade" — muda o Status automaticamente (pedido do time).
+            ...(v !== null && { status: "EM_ANDAMENTO" }),
+          })}
         />
       )
 
     case "terminoReal":
       return (
-        <input
-          key={`terminoReal:${item.id}:${item.terminoReal}`}
-          type="date"
-          min={DATE_MIN}
-          max={DATE_MAX}
-          defaultValue={item.terminoReal ?? ""}
+        <DateCell
+          value={item.terminoReal}
+          kind="real"
           title="Data em que a atividade realmente terminou — preencher muda o Status para Concluído e o % para 100"
-          onBlur={(e) => {
-            if (!isSaneDateInput(e.target.value)) {
-              e.target.value = item.terminoReal ?? "" // reverte — ano com formato inválido
-              return
-            }
-            const v = e.target.value || null
-            if (v !== item.terminoReal) {
-              h.onUpdate(item.id, {
-                terminoReal: v,
-                // Preencher o término real é o mesmo sinal de "terminou de
-                // verdade" — muda Status e % automaticamente (pedido do time).
-                ...(v !== null && { status: "CONCLUIDO", percentualCompleto: 100 }),
-              })
-            }
-          }}
-          className="bg-transparent outline-none text-[10px] text-slate-700 w-full text-right pr-0.5 rounded focus:bg-violet-50"
+          onCommit={(v) => h.onUpdate(item.id, {
+            terminoReal: v,
+            // Preencher o término real é o mesmo sinal de "terminou de
+            // verdade" — muda Status e % automaticamente (pedido do time).
+            ...(v !== null && { status: "CONCLUIDO", percentualCompleto: 100 }),
+          })}
         />
       )
 
@@ -1458,24 +1515,11 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
       // início (junto com predecessor/data manual), vence o mais tardio.
       if (hasChildren) return null
       return (
-        <input
-          key={`restricao:${item.id}:${item.constraintDate}`}
-          type="date"
-          min={DATE_MIN}
-          max={DATE_MAX}
-          defaultValue={item.constraintDate ?? ""}
+        <DateCell
+          value={item.constraintDate}
+          kind="constraint"
           title="Não iniciar antes de — data mínima de início, mesmo que o predecessor calcule uma data mais cedo"
-          onBlur={(e) => {
-            if (!isSaneDateInput(e.target.value)) {
-              e.target.value = item.constraintDate ?? ""
-              return
-            }
-            const v = e.target.value || null
-            if (v !== item.constraintDate) {
-              h.onUpdate(item.id, { constraintDate: v, constraintType: v !== null ? "nao_iniciar_antes_de" : null })
-            }
-          }}
-          className="w-full bg-transparent outline-none text-[10px] text-slate-700 rounded border-b border-transparent focus:border-[#7B2FBE] focus:bg-violet-50"
+          onCommit={(v) => h.onUpdate(item.id, { constraintDate: v, constraintType: v !== null ? "nao_iniciar_antes_de" : null })}
         />
       )
     }
