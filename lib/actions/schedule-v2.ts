@@ -67,9 +67,12 @@ export type ItemV2 = {
   // updateItemV2/createItemV2: gravar um sempre limpa o outro).
   responsavelNome: string | null
   // Outras pessoas ligadas à atividade além do responsável principal
-  // ("participantes"/"informados") — texto livre, mesmo espírito de
-  // responsavelNome.
+  // ("participantes"/"informados"). participanteIds são usuários Kronex de
+  // verdade (achados/criados via busca no Azure AD); participantes continua
+  // texto livre, para fornecedor/terceiro fora do diretório da empresa —
+  // os dois grupos coexistem (ver components/kronex/people-multi-picker.tsx).
   participantes: string[]
+  participanteIds: string[]
   duracaoDiasUteis: number | null
   inicioEstimado: string | null
   terminoEstimado: string | null
@@ -191,6 +194,7 @@ type ItemSnapshotRow = {
   responsavelId: string | null
   responsavelNome: string | null
   participantes: string[]
+  participanteIds: string[]
   duracaoDiasUteis: number | null
   inicioEstimado: string | null; terminoEstimado: string | null
   inicioReal: string | null; terminoReal: string | null
@@ -206,6 +210,7 @@ async function capturePayload(projectId: string): Promise<SnapshotPayload> {
     items: rows.map((r) => ({
       id: r.id, code: r.code, parentId: r.parentId, order: r.order, title: r.title, status: r.status,
       responsavelId: r.responsavelId, responsavelNome: r.responsavelNome, participantes: r.participantes,
+      participanteIds: r.participanteIds,
       duracaoDiasUteis: r.duracaoDiasUteis,
       inicioEstimado: dstr(r.inicioEstimado), terminoEstimado: dstr(r.terminoEstimado),
       inicioReal: dstr(r.inicioReal), terminoReal: dstr(r.terminoReal),
@@ -299,6 +304,7 @@ async function restorePayload(tx: Parameters<Parameters<typeof db.$transaction>[
       data: {
         id: it.id, projectId, code: it.code, parentId: null, order: it.order, title: it.title, status: it.status,
         responsavelId: it.responsavelId, responsavelNome: it.responsavelNome, participantes: it.participantes,
+        participanteIds: it.participanteIds,
         duracaoDiasUteis: it.duracaoDiasUteis,
         inicioEstimado: ddate(it.inicioEstimado), terminoEstimado: ddate(it.terminoEstimado),
         inicioReal: ddate(it.inicioReal), terminoReal: ddate(it.terminoReal),
@@ -547,6 +553,7 @@ export async function getScheduleV2(projectId: string): Promise<ScheduleV2Payloa
     responsavelId: r.responsavelId,
     responsavelNome: r.responsavelNome,
     participantes: r.participantes,
+    participanteIds: r.participanteIds,
     duracaoDiasUteis: r.duracaoDiasUteis,
     inicioEstimado: dstr(r.inicioEstimado),
     terminoEstimado: dstr(r.terminoEstimado),
@@ -606,6 +613,7 @@ export type CreateItemV2Input = {
   responsavelId?: string | null
   responsavelNome?: string | null
   participantes?: string[]
+  participanteIds?: string[]
 }
 
 export async function createItemV2(input: CreateItemV2Input): Promise<ItemV2> {
@@ -634,6 +642,7 @@ export async function createItemV2(input: CreateItemV2Input): Promise<ItemV2> {
       responsavelId: input.responsavelId ?? null,
       responsavelNome: input.responsavelNome ?? null,
       participantes: input.participantes ?? [],
+      participanteIds: input.participanteIds ?? [],
       order: (maxOrder._max.order ?? -1) + 1,
     },
   })
@@ -647,7 +656,7 @@ export async function createItemV2(input: CreateItemV2Input): Promise<ItemV2> {
 
   return {
     id: row.id, code: row.code, projectId: row.projectId, parentId: row.parentId, order: row.order,
-    title: row.title, status: row.status, responsavelId: row.responsavelId, responsavelNome: row.responsavelNome, participantes: row.participantes, duracaoDiasUteis: row.duracaoDiasUteis,
+    title: row.title, status: row.status, responsavelId: row.responsavelId, responsavelNome: row.responsavelNome, participantes: row.participantes, participanteIds: row.participanteIds, duracaoDiasUteis: row.duracaoDiasUteis,
     inicioEstimado: null, terminoEstimado: null, inicioReal: null, terminoReal: null,
     esforcoEstimadoH: row.esforcoEstimadoH, esforcoRealH: row.esforcoRealH,
     percentualCompleto: row.percentualCompleto, schedulingMode: row.schedulingMode as SchedulingMode,
@@ -687,6 +696,7 @@ export async function duplicateItemV2(id: string, projectId: string): Promise<{ 
       responsavelId: source.responsavelId,
       responsavelNome: source.responsavelNome,
       participantes: source.participantes,
+      participanteIds: source.participanteIds,
       duracaoDiasUteis: source.duracaoDiasUteis,
       esforcoEstimadoH: source.esforcoEstimadoH,
       esforcoRealH: source.esforcoRealH,
@@ -741,6 +751,7 @@ export type UpdateItemV2Input = Partial<{
   responsavelId: string | null
   responsavelNome: string | null
   participantes: string[]
+  participanteIds: string[]
   schedulingMode: SchedulingMode
   constraintType: string | null
   constraintDate: string | null
@@ -821,6 +832,7 @@ export async function updateItemV2(
       ...(responsavelIdUpdate !== undefined && { responsavelId: responsavelIdUpdate }),
       ...(responsavelNomeUpdate !== undefined && { responsavelNome: responsavelNomeUpdate }),
       ...(data.participantes !== undefined && { participantes: data.participantes }),
+      ...(data.participanteIds !== undefined && { participanteIds: data.participanteIds }),
       ...(data.schedulingMode !== undefined && { schedulingMode: data.schedulingMode }),
       ...(data.constraintType !== undefined && { constraintType: data.constraintType }),
       ...(data.constraintDate !== undefined && { constraintDate: ddate(data.constraintDate) }),
@@ -845,7 +857,7 @@ export async function updateItemV2(
   if (!hasChildren && data.percentualCompleto !== undefined) changed.push(`% Completo para ${data.percentualCompleto}%`)
   if (data.status !== undefined) changed.push(`Status para ${data.status}`)
   if (responsavelIdUpdate !== undefined || responsavelNomeUpdate !== undefined) changed.push("Responsável")
-  if (data.participantes !== undefined) changed.push("Participantes")
+  if (data.participantes !== undefined || data.participanteIds !== undefined) changed.push("Participantes")
   if (data.parentId !== undefined) changed.push("reestruturou (mudou de grupo)")
   if (changed.length > 0) {
     await logChange(projectId, id, data.title ?? current.title, "editou", `alterou ${changed.join(", ")}`)

@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { ToolbarBtn, ToolbarGroup } from "@/components/kronex/toolbar"
 import { PeoplePicker } from "@/components/kronex/people-picker"
+import { PeopleMultiPicker } from "@/components/kronex/people-multi-picker"
 
 // ─── Helpers de árvore ──────────────────────────────────────────────────────
 
@@ -212,7 +213,21 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
   // link ativo ainda.
   initialPublicScheduleToken?: string | null
 }) {
-  const membersById = useMemo(() => new Map(members.map((m) => [m.id, m.name])), [members])
+  // `members` só é buscado uma vez, no carregamento da página (server
+  // component) — quem for vinculado via busca no Azure AD DEPOIS disso
+  // (Responsável ou Participantes) não aparece ali até recarregar a
+  // página. `linkedFromDirectory` guarda essas pessoas nesta sessão do
+  // navegador, mesclado em `membersById`, pra o nome aparecer na hora.
+  const [linkedFromDirectory, setLinkedFromDirectory] = useState<{ id: string; name: string }[]>([])
+  const allMembers = useMemo(() => {
+    const byId = new Map(members.map((m) => [m.id, m]))
+    for (const m of linkedFromDirectory) if (!byId.has(m.id)) byId.set(m.id, m)
+    return [...byId.values()]
+  }, [members, linkedFromDirectory])
+  const membersById = useMemo(() => new Map(allMembers.map((m) => [m.id, m.name])), [allMembers])
+  function handlePersonLinked(person: { id: string; name: string }) {
+    setLinkedFromDirectory((prev) => (prev.some((p) => p.id === person.id) ? prev : [...prev, person]))
+  }
   const [data, setData] = useState<ScheduleV2Payload>(initial)
   const [expanded, setExpanded] = useState<Set<string>>(new Set(initial.items.filter((i) => i.isGroup).map((i) => i.id)))
   const [pending, startTransition] = useTransition()
@@ -638,9 +653,10 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
     data, expanded, onToggle: toggle, onUpdate: handleUpdate, onDeps: handleDeps, onDelete: handleDelete,
     onDuplicate: handleDuplicate, onAddAbove: handleAddAbove, onAddChild: handleAddChild, onEditTitle: handleEditTitle,
     selectedId, onSelect: setSelectedId, sort, conflictByItem,
-    colOrder: visibleColOrder, colWidths, titleWidth, members, membersById, baselineByItem,
+    colOrder: visibleColOrder, colWidths, titleWidth, members: allMembers, membersById, baselineByItem,
     dragRowId, dropTarget, onRowDragStart: handleRowDragStart, onRowDragOver: handleRowDragOver,
     onRowDrop: handleRowDrop, onRowDragEnd: handleRowDragEnd,
+    onPersonLinked: handlePersonLinked,
   }
 
   return (
@@ -1198,6 +1214,10 @@ type RowHandlers = {
   onRowDragOver: (e: React.DragEvent, targetId: string) => void
   onRowDrop: (targetId: string) => void
   onRowDragEnd: () => void
+  // Chamado sempre que um PeoplePicker/PeopleMultiPicker vincula/cria
+  // alguém pela busca do Azure AD — mantém membersById atualizado nesta
+  // sessão sem precisar recarregar a página (ver linkedFromDirectory).
+  onPersonLinked: (person: { id: string; name: string }) => void
 }
 
 function RowGroup({ item, depth, ...h }: { item: ItemV2; depth: number } & RowHandlers) {
@@ -1554,7 +1574,7 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
           defaultValue={currentName}
           placeholder="Sem responsável"
           compact
-          onSelect={(person) => h.onUpdate(item.id, { responsavelId: person.id })}
+          onSelect={(person) => { h.onPersonLinked(person); h.onUpdate(item.id, { responsavelId: person.id }) }}
           onFreeText={(typed) => {
             if (typed === "") {
               h.onUpdate(item.id, { responsavelId: null })
@@ -1568,27 +1588,20 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
       )
     }
 
-    case "participantes": {
-      // Além do responsável (acima): outras pessoas ligadas à atividade,
-      // texto livre separado por vírgula (mesmo datalist de sugestão do
-      // Responsável, sem travar a digitação a ele).
-      const current = item.participantes.join(", ")
+    case "participantes":
+      // Dois grupos: usuários de verdade (participanteIds, achados/criados
+      // via busca no Azure AD — mesma fonte do Responsável) e texto livre
+      // (participantes) para fornecedor/terceiro fora do diretório da
+      // empresa. Ver components/kronex/people-multi-picker.tsx.
       return (
-        <input
-          key={`part:${item.id}:${current}`}
-          list="sv2-members-list"
-          defaultValue={current}
-          placeholder="Sem participantes"
-          onBlur={(e) => {
-            const typed = e.target.value.trim()
-            if (typed === current) return
-            const list = typed === "" ? [] : typed.split(",").map((s) => s.trim()).filter(Boolean)
-            h.onUpdate(item.id, { participantes: list })
-          }}
-          className="w-full bg-transparent outline-none text-xs text-slate-700 placeholder-slate-300 rounded border-b border-transparent focus:border-[#7B2FBE] focus:bg-violet-50"
+        <PeopleMultiPicker
+          linkedIds={item.participanteIds}
+          resolveName={(id) => h.membersById.get(id)}
+          freeText={item.participantes}
+          onChange={({ linkedIds, freeText }) => h.onUpdate(item.id, { participanteIds: linkedIds, participantes: freeText })}
+          onPersonLinked={h.onPersonLinked}
         />
       )
-    }
 
     case "status": {
       const st = statusLabel(item.status)

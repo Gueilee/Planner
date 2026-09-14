@@ -207,7 +207,11 @@ export async function exportScheduleToExcel(
       expectedPct != null ? expectedPct / 100 : null,
       it.percentualCompleto / 100,
       predecessorsText(it.id, dependencies, codeById),
-      it.participantes.length > 0 ? it.participantes.join(", ") : "—",
+      (() => {
+        const linked = it.participanteIds.map((id) => membersById.get(id)).filter((n): n is string => !!n)
+        const all = [...linked, ...it.participantes]
+        return all.length > 0 ? all.join(", ") : "—"
+      })(),
     ])
     excelRow.height = 20
 

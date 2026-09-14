@@ -1036,12 +1036,14 @@ model ScheduleV2Item {
   responsavelId   String?
   responsavelNome String?
   // Além do responsável principal (acima): outras pessoas ligadas à
-  // atividade ("participantes"/"informados", pedido da Millena) — texto
-  // livre, mesmo espírito de responsavelNome (nenhuma tela hoje precisa
-  // filtrar "atividades onde sou participante"; se isso vier a ser pedido,
-  // aí sim vale promover pra uma relação de verdade, como fizemos com
-  // responsavelId/responsavelNome).
-  participantes String[] @default([])
+  // atividade ("participantes"/"informados", pedido da Millena). Dois
+  // grupos coexistem, mesmo espírito de responsavelId/responsavelNome:
+  // participanteIds são usuários Kronex de verdade (achados/criados via
+  // busca no Azure AD — components/kronex/people-multi-picker.tsx);
+  // participantes continua texto livre, para fornecedor/terceiro que não
+  // está no diretório da empresa.
+  participantes   String[] @default([])
+  participanteIds String[] @default([])
 
   // Fonte da verdade da barra — null = não agendado; 0 = marco (CLAUDE.md §3.3).
   duracaoDiasUteis Int?

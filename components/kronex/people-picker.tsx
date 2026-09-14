@@ -11,6 +11,7 @@
 // busca no servidor (Graph) com debounce.
 
 import { useEffect, useRef, useState, useTransition } from "react"
+import { Popover } from "@base-ui/react/popover"
 import { Search, Loader2 } from "lucide-react"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { useDebouncedValue } from "@/hooks/use-debounced-value"
@@ -69,6 +70,12 @@ export function PeoplePicker({
   const [isSearching, startSearch] = useTransition()
   const debouncedSearch = useDebouncedValue(search, 300)
   const lastCommitted = useRef(defaultValue)
+  const inputWrapperRef = useRef<HTMLDivElement>(null)
+  // Passado como `initialFocus` do Popover — sem isso, o Popover move o foco
+  // pra si mesmo ao abrir, o que dispara o onBlur do input e fecha o próprio
+  // dropdown que acabou de abrir (loop). Mantém o foco no input, de propósito,
+  // pra continuar digitando com o dropdown aberto.
+  const inputElRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const term = debouncedSearch.trim()
@@ -116,9 +123,13 @@ export function PeoplePicker({
     lastCommitted.current = typed
   }
 
+  const showResults = dropdownOpen && results.length > 0
+  const showEmpty = dropdownOpen && debouncedSearch.trim().length >= 2 && !isSearching && results.length === 0
+
   return (
     <div className={`relative ${className ?? ""}`}>
       <div
+        ref={inputWrapperRef}
         className={
           compact
             ? "flex items-center gap-1 rounded border border-transparent focus-within:border-[#7B2FBE] focus-within:bg-violet-50 transition-all"
@@ -127,6 +138,7 @@ export function PeoplePicker({
       >
         {!compact && <Search className="w-3.5 h-3.5 text-slate-300 shrink-0" />}
         <input
+          ref={inputElRef}
           value={search}
           onChange={(e) => { setSearch(e.target.value); setDropdownOpen(true) }}
           onFocus={() => setDropdownOpen(true)}
@@ -137,36 +149,48 @@ export function PeoplePicker({
         {isSearching && <Loader2 className="w-3.5 h-3.5 text-slate-300 animate-spin shrink-0" />}
       </div>
 
-      {dropdownOpen && results.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 z-50 rounded-xl border border-slate-200 bg-white shadow-xl overflow-hidden">
-          {results.map((r) => (
-            <button
-              key={r.azureId}
-              type="button"
-              onMouseDown={() => pick(r)}
-              disabled={linkingEmail === r.email}
-              className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-violet-50 transition-colors text-left disabled:opacity-50 border-b border-slate-50 last:border-0"
+      {/* Portal (via @base-ui/react/popover, mesma lib do DropdownMenu) —
+          a grade do Cronograma rola dentro de um container com overflow
+          (schedule-v2-client.tsx) que recortaria um dropdown `absolute`
+          comum; ancorado ao input via `anchor`, sem usar Popover.Trigger
+          (que abriria só no clique — aqui precisa abrir ao focar/digitar,
+          então quem controla `open` é o próprio onFocus/onChange/onBlur). */}
+      <Popover.Root open={showResults || showEmpty} onOpenChange={() => {}}>
+        <Popover.Portal>
+          <Popover.Positioner anchor={inputWrapperRef} side="bottom" align="start" sideOffset={4} className="z-50 outline-none">
+            <Popover.Popup
+              initialFocus={inputElRef}
+              className="w-(--anchor-width) rounded-xl border border-slate-200 bg-white shadow-xl outline-none overflow-hidden"
             >
-              <UserAvatar name={r.name} image={null} size={28} />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-[#0F172A] truncate">{r.name}</p>
-                <p className="text-[10px] text-slate-400 truncate">
-                  {r.jobTitle ? `${r.jobTitle} · ` : ""}{r.email}
-                </p>
-              </div>
-              {linkingEmail === r.email && <Loader2 className="w-3.5 h-3.5 text-[#7B2FBE] animate-spin shrink-0" />}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {dropdownOpen && debouncedSearch.trim().length >= 2 && !isSearching && results.length === 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 z-50 rounded-xl border border-slate-200 bg-white shadow-xl px-4 py-3">
-          <p className="text-xs text-slate-400">
-            Ninguém encontrado no diretório para &quot;{debouncedSearch}&quot; — o texto digitado será salvo como está.
-          </p>
-        </div>
-      )}
+              {showResults && results.map((r) => (
+                <button
+                  key={r.azureId}
+                  type="button"
+                  onMouseDown={() => pick(r)}
+                  disabled={linkingEmail === r.email}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-violet-50 transition-colors text-left disabled:opacity-50 border-b border-slate-50 last:border-0"
+                >
+                  <UserAvatar name={r.name} image={null} size={28} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-[#0F172A] truncate">{r.name}</p>
+                    <p className="text-[10px] text-slate-400 truncate">
+                      {r.jobTitle ? `${r.jobTitle} · ` : ""}{r.email}
+                    </p>
+                  </div>
+                  {linkingEmail === r.email && <Loader2 className="w-3.5 h-3.5 text-[#7B2FBE] animate-spin shrink-0" />}
+                </button>
+              ))}
+              {showEmpty && (
+                <div className="px-4 py-3">
+                  <p className="text-xs text-slate-400">
+                    Ninguém encontrado no diretório para &quot;{debouncedSearch}&quot; — o texto digitado será salvo como está.
+                  </p>
+                </div>
+              )}
+            </Popover.Popup>
+          </Popover.Positioner>
+        </Popover.Portal>
+      </Popover.Root>
     </div>
   )
 }

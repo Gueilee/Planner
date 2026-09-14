@@ -71,7 +71,7 @@ export default async function PublicSchedulePage({ params }: { params: Promise<{
   const items: ItemV2[] = rows.map((r) => ({
     id: r.id, code: r.code, projectId: r.projectId, parentId: r.parentId, order: r.order,
     title: r.title, status: r.status, responsavelId: r.responsavelId, responsavelNome: r.responsavelNome,
-    participantes: r.participantes, duracaoDiasUteis: r.duracaoDiasUteis,
+    participantes: r.participantes, participanteIds: r.participanteIds, duracaoDiasUteis: r.duracaoDiasUteis,
     inicioEstimado: dstr(r.inicioEstimado), terminoEstimado: dstr(r.terminoEstimado),
     inicioReal: dstr(r.inicioReal), terminoReal: dstr(r.terminoReal),
     esforcoEstimadoH: r.esforcoEstimadoH, esforcoRealH: r.esforcoRealH,
