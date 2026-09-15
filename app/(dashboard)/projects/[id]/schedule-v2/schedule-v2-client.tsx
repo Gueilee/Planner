@@ -21,6 +21,7 @@ import {
   ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, Milestone,
   Circle, CircleX, CirclePlus, Pencil, Undo2, Redo2, GripVertical, GripHorizontal, LayoutTemplate, FileSpreadsheet, BookmarkPlus, History,
   Link2, Copy, Check, X, Star, Columns3, CalendarDays, CalendarCheck2, CalendarClock, Flame,
+  Loader2, CircleCheck, CircleAlert,
 } from "lucide-react"
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
@@ -236,6 +237,21 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
   const [hasUndo, setHasUndo] = useState(false)
   const [hasRedo, setHasRedo] = useState(false)
 
+  // Toda edição salva sozinha ao sair do campo (sem botão "Salvar" — não
+  // existe rascunho local pra ele salvar de uma vez). O problema real que
+  // isso resolve: até agora, se um salvamento falhasse (rede instável, o
+  // servidor reiniciando no meio da requisição, sessão expirada), o erro
+  // desaparecia em silêncio — o campo continuava mostrando o valor
+  // digitado, dando a falsa impressão de que salvou, e só na próxima vez
+  // que a página recarregasse é que a pessoa descobria que aquilo nunca
+  // foi gravado (foi exatamente isso que aconteceu com a Millena no
+  // Cronograma da Aptissen). Este indicador (mais o retry abaixo) garante
+  // que uma falha SEMPRE aparece na hora, com um jeito de tentar de novo
+  // sem perder o que foi digitado.
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
+  const [saveError, setSaveError] = useState<{ message: string; retry: () => void } | null>(null)
+  const savedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   // "Aplicar modelo" — reaproveita os modelos de cronograma já cadastrados
   // (/templates), mas cria a árvore direto no motor v2 (dias úteis reais,
   // não addDays corrido — ver applyTemplateV2 em lib/actions/schedule-v2.ts).
@@ -314,6 +330,19 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
     getTemplates().then(setTemplates).catch(() => {})
   }, [projectId])
 
+  // Sair da página com um salvamento em andamento ou que falhou é
+  // exatamente o cenário que causou a perda de dados relatada no
+  // Cronograma da Aptissen — o navegador confirma antes de fechar/sair.
+  useEffect(() => {
+    if (saveStatus !== "saving" && saveStatus !== "error") return
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault()
+      e.returnValue = ""
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload)
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload)
+  }, [saveStatus])
+
   // Carrega preferências de coluna salvas (só no cliente — evita divergir da
   // renderização do servidor). Só grava de volta depois de já ter lido.
   useEffect(() => {
@@ -358,25 +387,52 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
   }
 
   // `focusId`: depois de recarregar, foca e seleciona o título da linha nova
-  // (criada, duplicada) para o usuário já poder renomear direto.
-  function refresh(focusId?: string) {
+  // (criada, duplicada) para o usuário já poder renomear direto. Função pura
+  // (sem startTransition próprio) — quem chama já roda dentro de
+  // `runMutation`, que é quem controla o status de salvamento.
+  async function refreshData(focusId?: string) {
+    const fresh = await getScheduleV2(projectId)
+    setData(fresh)
+    setHasUndo(true)
+    setHasRedo(false)
+    if (focusId) {
+      requestAnimationFrame(() => {
+        const el = document.getElementById(`sv2-title-${focusId}`) as HTMLInputElement | null
+        el?.focus()
+        el?.select()
+      })
+    }
+  }
+
+  function extractErrorMessage(e: unknown): string {
+    return e instanceof Error && e.message ? e.message : "Não foi possível salvar. Tente novamente."
+  }
+
+  // Wrapper único por onde toda mutação (editar campo, criar/excluir/mover
+  // linha, desfazer/refazer) passa — mostra "Salvando..." na hora, "Tudo
+  // salvo" por alguns segundos ao terminar, ou "Falha ao salvar" com um
+  // botão de tentar de novo (chamando a MESMA ação, sem perder nada) se
+  // der erro. `action` deve ser idempotente o bastante pra rodar de novo
+  // com segurança — todas as ações abaixo já são (releem o servidor no
+  // fim, não dependem de estado local que possa ter mudado).
+  function runMutation(action: () => Promise<void>) {
+    if (savedTimeoutRef.current) clearTimeout(savedTimeoutRef.current)
+    setSaveStatus("saving")
+    setSaveError(null)
     startTransition(async () => {
-      const fresh = await getScheduleV2(projectId)
-      setData(fresh)
-      setHasUndo(true)
-      setHasRedo(false)
-      if (focusId) {
-        requestAnimationFrame(() => {
-          const el = document.getElementById(`sv2-title-${focusId}`) as HTMLInputElement | null
-          el?.focus()
-          el?.select()
-        })
+      try {
+        await action()
+        setSaveStatus("saved")
+        savedTimeoutRef.current = setTimeout(() => setSaveStatus((s) => (s === "saved" ? "idle" : s)), 3000)
+      } catch (e: unknown) {
+        setSaveStatus("error")
+        setSaveError({ message: extractErrorMessage(e), retry: () => runMutation(action) })
       }
     })
   }
 
   function handleUndo() {
-    startTransition(async () => {
+    runMutation(async () => {
       const result = await undoLastChangeV2(projectId)
       if (result.ok) {
         const fresh = await getScheduleV2(projectId)
@@ -388,7 +444,7 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
   }
 
   function handleRedo() {
-    startTransition(async () => {
+    runMutation(async () => {
       const result = await redoLastChangeV2(projectId)
       if (result.ok) {
         const fresh = await getScheduleV2(projectId)
@@ -427,25 +483,25 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
   }
 
   function handleUpdate(id: string, patch: Parameters<typeof updateItemV2>[2]) {
-    startTransition(async () => {
+    runMutation(async () => {
       await updateItemV2(id, projectId, patch)
-      refresh()
+      await refreshData()
     })
   }
 
   function handleDeps(id: string, raw: string) {
-    startTransition(async () => {
+    runMutation(async () => {
       await setDependenciesV2(id, projectId, raw)
-      refresh()
+      await refreshData()
     })
   }
 
   function handleDelete(id: string) {
     if (!confirm("Excluir este item e todos os seus filhos?")) return
     if (selectedId === id) setSelectedId(null)
-    startTransition(async () => {
+    runMutation(async () => {
       await deleteItemV2(id, projectId)
-      refresh()
+      await refreshData()
     })
   }
 
@@ -454,45 +510,45 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
   //    seja atividade, tarefa ou subtarefa. ─────────────────────────────
 
   function handleDuplicate(item: ItemV2) {
-    startTransition(async () => {
+    runMutation(async () => {
       const result = await duplicateItemV2(item.id, projectId)
-      refresh(result.newId)
+      await refreshData(result.newId)
     })
   }
 
   function handleAddAbove(item: ItemV2) {
-    startTransition(async () => {
+    runMutation(async () => {
       const created = await createItemV2({ projectId, parentId: item.parentId, title: "Nova atividade" })
       const sibs = siblingsOf(data.items, item.parentId)
       const idx = sibs.findIndex((s) => s.id === item.id)
       const orderedIds = [...sibs.slice(0, idx).map((s) => s.id), created.id, ...sibs.slice(idx).map((s) => s.id)]
       await reorderItemsV2(projectId, orderedIds)
-      refresh(created.id)
+      await refreshData(created.id)
     })
   }
 
   function handleAddChild(item: ItemV2) {
-    startTransition(async () => {
+    runMutation(async () => {
       const created = await createItemV2({ projectId, parentId: item.id, title: "Nova atividade" })
       setExpanded((prev) => new Set(prev).add(item.id))
-      refresh(created.id)
+      await refreshData(created.id)
     })
   }
 
   function handleAddRoot() {
-    startTransition(async () => {
+    runMutation(async () => {
       const created = await createItemV2({ projectId, parentId: null, title: "Nova atividade" })
-      refresh(created.id)
+      await refreshData(created.id)
     })
   }
 
   function handleApplyTemplate() {
     if (!tplSelected || !isSaneDateInput(tplStartDate) || tplStartDate === "") return
-    startTransition(async () => {
+    runMutation(async () => {
       await applyTemplateV2(projectId, tplSelected, tplStartDate)
       setTplModalOpen(false)
       setTplSelected("")
-      refresh()
+      await refreshData()
     })
   }
 
@@ -563,9 +619,9 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
     if (swapIdx < 0 || swapIdx >= sibs.length) return
     const reordered = [...sibs]
     ;[reordered[idx], reordered[swapIdx]] = [reordered[swapIdx]!, reordered[idx]!]
-    startTransition(async () => {
+    runMutation(async () => {
       await reorderItemsV2(projectId, reordered.map((s) => s.id))
-      refresh()
+      await refreshData()
     })
   }
 
@@ -574,9 +630,9 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
     const idx = sibs.findIndex((s) => s.id === item.id)
     const newParent = sibs[idx - 1]
     if (!newParent) return
-    startTransition(async () => {
+    runMutation(async () => {
       await updateItemV2(item.id, projectId, { parentId: newParent.id })
-      refresh()
+      await refreshData()
     })
   }
 
@@ -584,9 +640,9 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
     if (item.parentId === null) return
     const parent = data.items.find((i) => i.id === item.parentId)
     if (!parent) return
-    startTransition(async () => {
+    runMutation(async () => {
       await updateItemV2(item.id, projectId, { parentId: parent.parentId })
-      refresh()
+      await refreshData()
     })
   }
 
@@ -615,7 +671,7 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
     if (!sourceId || !target) return
     if (isSelfOrDescendant(data.items, target.id, sourceId)) return
 
-    startTransition(async () => {
+    runMutation(async () => {
       if (target.zone === "inside") {
         await updateItemV2(sourceId, projectId, { parentId: target.id })
         const kidsAfter = siblingsOf(
@@ -637,7 +693,7 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
         const finalIds = [...sibs.slice(0, insertAt).map((s) => s.id), sourceId, ...sibs.slice(insertAt).map((s) => s.id)]
         await reorderItemsV2(projectId, finalIds)
       }
-      refresh()
+      await refreshData()
     })
   }
 
@@ -738,6 +794,32 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
             <Redo2 className="w-3.5 h-3.5" />
           </ToolbarBtn>
         </ToolbarGroup>
+
+        {/* Status de salvamento — cada edição salva sozinha ao sair do
+            campo (sem botão "Salvar"); isto garante que uma falha NUNCA
+            passa em silêncio (ver comentário em cima de `saveStatus`). */}
+        {saveStatus === "saving" && (
+          <span className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 px-1">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Salvando…
+          </span>
+        )}
+        {saveStatus === "saved" && (
+          <span className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-600 px-1">
+            <CircleCheck className="w-3.5 h-3.5" /> Tudo salvo
+          </span>
+        )}
+        {saveStatus === "error" && saveError && (
+          <span className="flex items-center gap-1.5 text-[11px] font-bold text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-1">
+            <CircleAlert className="w-3.5 h-3.5 shrink-0" />
+            <span title={saveError.message}>Falha ao salvar</span>
+            <button
+              onClick={saveError.retry}
+              className="ml-1 px-1.5 py-0.5 rounded-md bg-red-600 text-white hover:bg-red-700 transition-colors"
+            >
+              Tentar de novo
+            </button>
+          </span>
+        )}
 
         <ToolbarGroup>
           <ToolbarBtn ghost wide disabled={templates.length === 0} onClick={() => setTplModalOpen(true)} title="Aplicar um modelo de cronograma pronto a este projeto">
