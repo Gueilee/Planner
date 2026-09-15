@@ -460,11 +460,22 @@ async function recomputeAndPersist(
       targetProgresso = rolledProgress.get(r.id) ?? r.percentualCompleto
       targetDuracao = null
       targetStatus = rolledStatus.get(r.id) ?? r.status
-    } else if (!hasDeps && r.duracaoDiasUteis === null) {
-      // Não é grupo, não tem vínculo, não tem duração própria — sem base
-      // legítima para uma data. Cobre o caso de um grupo que acabou de
-      // ficar sem filhos (rule §3.7): a data que ele carregava era só o
+    } else if (!hasDeps && r.duracaoDiasUteis === null && !updatesById.has(r.id)) {
+      // Não é grupo, não tem vínculo, não tem duração própria, E não foi
+      // recalculado nesta passada (`updatesById` só tem os itens do fecho
+      // transitivo — o alterado + seus sucessores, ver recalcular()) — sem
+      // base legítima pra uma data. Cobre o caso de um grupo que acabou de
+      // ficar sem filhos (regra §3.7): a data que ele carregava era só o
       // rollup dos filhos, nunca "sua própria", e não deve sobreviver.
+      //
+      // O `!updatesById.has(r.id)` é o que faltava: sem ele, esta mesma
+      // condição também batia num item-folha comum, sem vínculo, ao qual
+      // alguém tinha ACABADO de digitar um Início manualmente (mas ainda
+      // sem duração) — o item editado está SEMPRE no fecho transitivo
+      // (é o próprio `changedItemIds`), então `agendarItem` já calculou
+      // certo (preserva o início digitado, regra §3.10); esta cláusula
+      // sobrescrevia esse resultado correto de volta pra null, na mesma
+      // gravação — a pessoa via "Tudo salvo" mas a data nunca ficava.
       targetInicio = null
       targetTermino = null
       targetProgresso = r.percentualCompleto
