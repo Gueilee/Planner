@@ -745,7 +745,7 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
   }
 
   return (
-    <div className="min-h-full text-slate-700" style={{ background: "#F8F9FC" }}>
+    <div className="h-full flex flex-col text-slate-700" style={{ background: "#F8F9FC" }}>
       {/* Sugestões do campo Responsável (célula "responsavel" abaixo) —
           declarada uma única vez para todas as linhas, não trava a
           digitação a esta lista (ver renderCell). */}
@@ -759,7 +759,7 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
           para digitar, que ficava desatualizado e não refletia as
           atividades reais. Editar a data planejada oficial do projeto
           continua na tela de detalhe do projeto. */}
-      <div className="px-5 py-4 border-b border-slate-200 bg-white flex items-center gap-6 flex-wrap">
+      <div className="shrink-0 px-5 py-4 border-b border-slate-200 bg-white flex items-center gap-6 flex-wrap">
         <Stat label="Itens" value={data.items.length} />
         <Stat label="Início" value={fmtDateLong(data.projectStartDate)} />
         <Stat label="Término" value={fmtDateLong(data.projectEndDate)} />
@@ -814,7 +814,7 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
           reestruturação (mover/indentar) fica à direita, agindo sobre o
           item selecionado (círculo cinza na frente da linha) — arrastar
           pela alcinha (⠿) também reestrutura, direto na linha. */}
-      <div className="px-5 py-2.5 border-b border-slate-200 bg-white flex items-center flex-wrap gap-2">
+      <div className="shrink-0 px-5 py-2.5 border-b border-slate-200 bg-white flex items-center flex-wrap gap-2">
         <ToolbarGroup>
           <ToolbarBtn ghost disabled={!hasUndo} onClick={handleUndo} title="Voltar — desfaz a última alteração feita">
             <Undo2 className="w-3.5 h-3.5" />
@@ -950,18 +950,26 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
         )}
       </div>
 
-      {/* Cabeçalho + linhas compartilham UMA única largura mínima (gutter +
-          título + soma das colunas visíveis) e rolam juntos — nenhuma célula
-          encolhe (shrink-0 em cada uma). Sem isso, cabeçalho e linhas eram
-          dois flex containers cada um encolhendo do seu próprio jeito
-          quando a soma das colunas não cabia na tela, descasando tudo
-          (dado aparecendo embaixo do cabeçalho errado). Excesso de colunas
-          agora vira rolagem horizontal, igual Excel, em vez de compressão. */}
-      <div className="overflow-x-auto">
+      {/* Região com rolagem própria (vertical E horizontal) para o corpo da
+          grade — antes, esta área não tinha altura própria: crescia com
+          as N linhas do cronograma e quem rolava a página inteira era o
+          wrapper lá em cima (app/(dashboard)/projects/[id]/schedule/
+          page.tsx), então a barra de rolagem horizontal (overflow-x-auto)
+          ficava grudada no fim de TODAS as linhas — com 79 itens, isso é
+          bem abaixo da dobra, então na prática não existia jeito visível
+          de rolar pros lados sem antes descer a página inteira até o
+          fim. Agora esta div é a única coisa que rola (flex-1 min-h-0
+          preenche o espaço restante abaixo da barra de ferramentas) e o
+          cabeçalho das colunas fica `sticky` no topo dela, então tanto a
+          barra vertical quanto a horizontal ficam sempre à mão, na borda
+          da tela, igual Excel/Google Sheets. */}
+      <div className="flex-1 min-h-0 overflow-auto">
         <div style={{ minWidth: gridMinWidth }}>
           {/* Column headers — clique ordena; arraste a mãozinha (✥) para
-              reordenar a coluna; arraste a borda direita para redimensionar. */}
-          <div className="flex items-center px-4 py-2 border-b border-slate-200 bg-slate-50 text-[9px] font-black uppercase tracking-widest text-slate-400">
+              reordenar a coluna; arraste a borda direita para redimensionar.
+              `sticky top-0` exige fundo opaco (bg-slate-50) pra não deixar
+              as linhas "passarem por baixo" visualmente ao rolar. */}
+          <div className="sticky top-0 z-10 flex items-center px-4 py-2 border-b border-slate-200 bg-slate-50 text-[9px] font-black uppercase tracking-widest text-slate-400">
             <div className="shrink-0" style={{ width: GUTTER_WIDTH }} />
             <div className="relative shrink-0" style={{ width: titleWidth }}>
               <SortableHeaderLabel label="Atividade" column="title" sort={sort} onSort={toggleSort} />
@@ -1003,20 +1011,20 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
             </div>
           )}
         </div>
-      </div>
 
-      {roots.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <p className="text-sm font-semibold text-slate-400 mb-3">Nenhuma atividade ainda</p>
-          <button
-            onClick={handleAddRoot}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90"
-            style={{ background: "linear-gradient(135deg, #7B2FBE, #9333EA)" }}
-          >
-            <Plus className="w-4 h-4" /> Adicionar primeira atividade
-          </button>
-        </div>
-      )}
+        {roots.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <p className="text-sm font-semibold text-slate-400 mb-3">Nenhuma atividade ainda</p>
+            <button
+              onClick={handleAddRoot}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90"
+              style={{ background: "linear-gradient(135deg, #7B2FBE, #9333EA)" }}
+            >
+              <Plus className="w-4 h-4" /> Adicionar primeira atividade
+            </button>
+          </div>
+        )}
+      </div>
 
       {tplModalOpen && (
         <ApplyTemplateModal

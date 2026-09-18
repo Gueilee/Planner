@@ -67,11 +67,15 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
         </div>
       </div>
 
-      {/* Corpo com rolagem própria — o layout do dashboard é h-screen
-          overflow-hidden, então quem faz scroll é este container, não a
-          página inteira (senão o conteúdo mais comprido que a tela fica
-          cortado sem barra de rolagem nenhuma). */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      {/* Corpo com altura própria (sem overflow-y aqui) — o layout do
+          dashboard é h-screen overflow-hidden, e agora é o ScheduleV2Client
+          quem controla a própria rolagem internamente (cabeçalho/barra de
+          ferramentas fixos, só a grade rola, nos dois eixos, com o
+          cabeçalho de colunas sticky). Antes este wrapper rolava a página
+          inteira verticalmente, o que empurrava a barra de rolagem
+          horizontal da grade pro fim de todas as N linhas — praticamente
+          inacessível num cronograma grande (79 itens na Aptissen). */}
+      <div className="flex-1 min-h-0 overflow-hidden">
         <ScheduleV2Client
           projectId={id}
           projectTitle={project.title}
