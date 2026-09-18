@@ -295,6 +295,114 @@ function serializeTemplate(t: {
   }
 }
 
+// ─── Edição de modelo padrão x personalizado ──────────────────────────────────
+// Decisão de produto: os 5 modelos padrão (isBuiltIn) são globais — não têm
+// organizationId, valem pra Vendemmia inteira — então nunca são editados no
+// lugar (mudaria o que toda filial vê como "padrão" de uma vez). Editar um
+// padrão sempre passa por duplicateTemplate() primeiro, que cria uma cópia
+// isBuiltIn:false. Esta checagem existia só no client (templates-client.tsx
+// escondia os controles); agora também trava no server, pra uma chamada
+// direta à action não conseguir contornar a regra.
+async function assertTemplateEditable(templateId: string): Promise<void> {
+  const session = await auth()
+  if (!session?.user?.id) throw new Error("Não autenticado")
+  const template = await db.scheduleTemplate.findUnique({ where: { id: templateId }, select: { isBuiltIn: true } })
+  if (!template) throw new Error("Modelo não encontrado")
+  if (template.isBuiltIn) throw new Error("Modelos padrão não podem ser editados — duplique o modelo antes de editar")
+}
+
+// ─── Reordenar / indentar / promover atividades ───────────────────────────────
+// wbsCode/parentCode são strings livres (não uma FK como no Cronograma v2
+// real) — pra mover uma atividade de lugar sem deixar código duplicado ou
+// ciclo, a estratégia é: reconstruir a árvore inteira em memória por ID
+// (estável), aplicar a mudança pedida nessa árvore, e então renumerar TUDO
+// do zero em ordem de árvore ("1", "1.1", "1.2", "2", ...) — isso também
+// garante `order` topológico (pai sempre antes dos filhos), que é o que
+// applyTemplateV2 (lib/actions/schedule-v2.ts) exige pra montar o
+// cronograma real corretamente a partir do modelo.
+
+type TreeState = {
+  tasks: Awaited<ReturnType<typeof db.scheduleTemplateTask.findMany>>
+  parentIdOf: Map<string, string | null>
+  childrenOf: Map<string | null, string[]>
+  predecessorIdsOf: Map<string, string[]>
+}
+
+async function loadTreeState(templateId: string): Promise<TreeState> {
+  const tasks = await db.scheduleTemplateTask.findMany({ where: { templateId }, orderBy: { order: "asc" } })
+  const idByCode = new Map(tasks.map((t) => [t.wbsCode, t.id]))
+  const parentIdOf = new Map<string, string | null>(
+    tasks.map((t) => [t.id, t.parentCode ? idByCode.get(t.parentCode) ?? null : null])
+  )
+  const childrenOf = new Map<string | null, string[]>()
+  for (const t of tasks) {
+    const pid = parentIdOf.get(t.id) ?? null
+    const arr = childrenOf.get(pid) ?? []
+    arr.push(t.id)
+    childrenOf.set(pid, arr)
+  }
+  const predecessorIdsOf = new Map<string, string[]>(
+    tasks.map((t) => {
+      const codes: string[] = t.predecessorCodes ? JSON.parse(t.predecessorCodes) : []
+      return [t.id, codes.map((c) => idByCode.get(c)).filter((x): x is string => !!x)]
+    })
+  )
+  return { tasks, parentIdOf, childrenOf, predecessorIdsOf }
+}
+
+// Percorre childrenOf em profundidade a partir da raiz (null) e devolve o
+// wbsCode/order finais — sempre "1", "1.1", "1.2", "2", ... na ordem em que
+// os nós aparecem nas listas de filhos (que é a ordem que as operações de
+// mover/indentar/promover abaixo já deixaram correta).
+function renumberTree(childrenOf: Map<string | null, string[]>): { wbsCode: Map<string, string>; order: Map<string, number> } {
+  const wbsCode = new Map<string, string>()
+  const order = new Map<string, number>()
+  let counter = 0
+  function visit(parentId: string | null, prefix: string) {
+    const kids = childrenOf.get(parentId) ?? []
+    kids.forEach((id, i) => {
+      const code = prefix ? `${prefix}.${i + 1}` : `${i + 1}`
+      wbsCode.set(id, code)
+      order.set(id, counter++)
+      visit(id, code)
+    })
+  }
+  visit(null, "")
+  return { wbsCode, order }
+}
+
+// Grava o estado final (renumerado) da árvore — `deletedIds` (se houver)
+// vira DELETE em vez de UPDATE, e é filtrado de qualquer predecessorCodes
+// que ainda apontasse pra ele (mesma regra de "predecessor inexistente é
+// ignorado" do motor real — lib/domain/schedule-v2/dependency-parser.ts).
+async function persistTree(templateId: string, state: TreeState, deletedIds: Set<string> = new Set()): Promise<void> {
+  const { wbsCode: newCode, order: newOrder } = renumberTree(state.childrenOf)
+
+  const updates = state.tasks
+    .filter((t) => !deletedIds.has(t.id))
+    .map((t) => {
+      const parentId = state.parentIdOf.get(t.id) ?? null
+      const newParentCode = parentId ? newCode.get(parentId) ?? null : null
+      const preds = (state.predecessorIdsOf.get(t.id) ?? [])
+        .filter((pid) => !deletedIds.has(pid))
+        .map((pid) => newCode.get(pid))
+        .filter((x): x is string => !!x)
+      return db.scheduleTemplateTask.update({
+        where: { id: t.id },
+        data: {
+          wbsCode: newCode.get(t.id)!,
+          parentCode: newParentCode,
+          order: newOrder.get(t.id)!,
+          predecessorCodes: preds.length > 0 ? JSON.stringify(preds) : null,
+        },
+      })
+    })
+  const deletes = [...deletedIds].map((id) => db.scheduleTemplateTask.delete({ where: { id } }))
+
+  await db.$transaction([...deletes, ...updates])
+  revalidatePath("/templates")
+}
+
 // ─── Seed (called once on first page load) ────────────────────────────────────
 
 export async function seedDefaultTemplates() {
@@ -379,19 +487,59 @@ export async function createTemplate(data: {
 export async function updateTemplate(id: string, data: {
   name?: string; description?: string; projectType?: string; color?: string
 }): Promise<void> {
-  const session = await auth()
-  if (!session?.user?.id) throw new Error("Não autenticado")
+  await assertTemplateEditable(id)
 
   await db.scheduleTemplate.update({ where: { id }, data })
   revalidatePath("/templates")
 }
 
 export async function deleteTemplate(id: string): Promise<void> {
-  const session = await auth()
-  if (!session?.user?.id) throw new Error("Não autenticado")
+  await assertTemplateEditable(id)
 
   await db.scheduleTemplate.delete({ where: { id } })
   revalidatePath("/templates")
+}
+
+// Cria uma cópia editável de QUALQUER modelo (padrão ou personalizado) — é o
+// único jeito de "editar" um dos 5 padrão: a cópia nasce isBuiltIn:false,
+// com o mesmo conteúdo (tasks incluídas, wbsCode/parentCode preservados —
+// são referências internas ao próprio modelo, continuam válidas na cópia),
+// pronta pra editar sem afetar o original nem quem mais o usa.
+export async function duplicateTemplate(id: string): Promise<Template> {
+  const session = await auth()
+  if (!session?.user?.id) throw new Error("Não autenticado")
+
+  const source = await db.scheduleTemplate.findUnique({
+    where: { id },
+    include: { tasks: { orderBy: { order: "asc" } } },
+  })
+  if (!source) throw new Error("Modelo não encontrado")
+
+  const created = await db.scheduleTemplate.create({
+    data: {
+      name:        `${source.name} (cópia)`,
+      description: source.description,
+      projectType: source.projectType,
+      color:       source.color,
+      isBuiltIn:   false,
+      createdById: session.user.id,
+      tasks: {
+        create: source.tasks.map((t) => ({
+          wbsCode:          t.wbsCode,
+          parentCode:       t.parentCode,
+          title:            t.title,
+          estimatedEffort:  t.estimatedEffort,
+          isMilestone:      t.isMilestone,
+          predecessorCodes: t.predecessorCodes,
+          durationDays:     t.durationDays,
+          order:            t.order,
+        })),
+      },
+    },
+    include: { tasks: { orderBy: { order: "asc" } } },
+  })
+  revalidatePath("/templates")
+  return serializeTemplate(created)
 }
 
 // ─── Template Tasks ───────────────────────────────────────────────────────────
@@ -401,8 +549,7 @@ export async function addTemplateTask(templateId: string, data: {
   estimatedEffort?: number | null; isMilestone?: boolean
   predecessorCodes?: string[]; durationDays?: number
 }): Promise<TemplateTask> {
-  const session = await auth()
-  if (!session?.user?.id) throw new Error("Não autenticado")
+  await assertTemplateEditable(templateId)
 
   const count = await db.scheduleTemplateTask.count({ where: { templateId } })
   const t = await db.scheduleTemplateTask.create({
@@ -431,6 +578,10 @@ export async function updateTemplateTask(id: string, data: {
   title?: string; estimatedEffort?: number | null; isMilestone?: boolean
   predecessorCodes?: string[]; durationDays?: number; wbsCode?: string; parentCode?: string | null
 }): Promise<void> {
+  const task = await db.scheduleTemplateTask.findUnique({ where: { id }, select: { templateId: true } })
+  if (!task) throw new Error("Atividade não encontrada")
+  await assertTemplateEditable(task.templateId)
+
   await db.scheduleTemplateTask.update({
     where: { id },
     data: {
@@ -443,9 +594,100 @@ export async function updateTemplateTask(id: string, data: {
   revalidatePath("/templates")
 }
 
+// Ao excluir, os FILHOS da atividade excluída (se houver) sobem um nível —
+// herdam o avô como pai, na posição onde ela estava — em vez de ficarem
+// órfãos apontando pra um wbsCode que não existe mais (bug real que já
+// existia: nada removia/realocava esses filhos antes). A árvore inteira é
+// renumerada depois, então não sobra nenhum código "furado".
 export async function deleteTemplateTask(id: string): Promise<void> {
-  await db.scheduleTemplateTask.delete({ where: { id } })
-  revalidatePath("/templates")
+  const task = await db.scheduleTemplateTask.findUnique({ where: { id }, select: { templateId: true } })
+  if (!task) return
+  await assertTemplateEditable(task.templateId)
+
+  const state = await loadTreeState(task.templateId)
+  const deletedParentId = state.parentIdOf.get(id) ?? null
+  const ownChildren = state.childrenOf.get(id) ?? []
+  const siblings = state.childrenOf.get(deletedParentId) ?? []
+  const idx = siblings.indexOf(id)
+  if (idx !== -1) siblings.splice(idx, 1, ...ownChildren)
+  else siblings.push(...ownChildren)
+  state.childrenOf.set(deletedParentId, siblings)
+  state.childrenOf.delete(id)
+  for (const childId of ownChildren) state.parentIdOf.set(childId, deletedParentId)
+  state.parentIdOf.delete(id)
+
+  await persistTree(task.templateId, state, new Set([id]))
+}
+
+// ─── Mover / indentar / promover (usa o mesmo motor de renumeração acima) ────
+
+export async function moveTemplateTaskUp(templateId: string, taskId: string): Promise<void> {
+  await assertTemplateEditable(templateId)
+  const state = await loadTreeState(templateId)
+  const parentId = state.parentIdOf.get(taskId) ?? null
+  const siblings = state.childrenOf.get(parentId) ?? []
+  const idx = siblings.indexOf(taskId)
+  if (idx > 0) {
+    ;[siblings[idx - 1], siblings[idx]] = [siblings[idx]!, siblings[idx - 1]!]
+    state.childrenOf.set(parentId, siblings)
+  }
+  await persistTree(templateId, state)
+}
+
+export async function moveTemplateTaskDown(templateId: string, taskId: string): Promise<void> {
+  await assertTemplateEditable(templateId)
+  const state = await loadTreeState(templateId)
+  const parentId = state.parentIdOf.get(taskId) ?? null
+  const siblings = state.childrenOf.get(parentId) ?? []
+  const idx = siblings.indexOf(taskId)
+  if (idx !== -1 && idx < siblings.length - 1) {
+    ;[siblings[idx], siblings[idx + 1]] = [siblings[idx + 1]!, siblings[idx]!]
+    state.childrenOf.set(parentId, siblings)
+  }
+  await persistTree(templateId, state)
+}
+
+// Vira filha do irmão imediatamente anterior (mesmo comportamento do
+// Cronograma v2 real — handleIndent em schedule-v2-client.tsx).
+export async function indentTemplateTask(templateId: string, taskId: string): Promise<void> {
+  await assertTemplateEditable(templateId)
+  const state = await loadTreeState(templateId)
+  const parentId = state.parentIdOf.get(taskId) ?? null
+  const siblings = state.childrenOf.get(parentId) ?? []
+  const idx = siblings.indexOf(taskId)
+  if (idx > 0) {
+    const newParentId = siblings[idx - 1]!
+    siblings.splice(idx, 1)
+    state.childrenOf.set(parentId, siblings)
+    const newSiblings = state.childrenOf.get(newParentId) ?? []
+    newSiblings.push(taskId)
+    state.childrenOf.set(newParentId, newSiblings)
+    state.parentIdOf.set(taskId, newParentId)
+  }
+  await persistTree(templateId, state)
+}
+
+// Sai do grupo atual, virando irmã (logo depois) do próprio pai, dentro dos
+// filhos do avô — mesmo comportamento do Cronograma v2 real (handleOutdent).
+export async function outdentTemplateTask(templateId: string, taskId: string): Promise<void> {
+  await assertTemplateEditable(templateId)
+  const state = await loadTreeState(templateId)
+  const parentId = state.parentIdOf.get(taskId) ?? null
+  if (parentId !== null) {
+    const grandparentId = state.parentIdOf.get(parentId) ?? null
+    const oldSiblings = state.childrenOf.get(parentId) ?? []
+    const idx = oldSiblings.indexOf(taskId)
+    if (idx !== -1) oldSiblings.splice(idx, 1)
+    state.childrenOf.set(parentId, oldSiblings)
+
+    const newSiblings = state.childrenOf.get(grandparentId) ?? []
+    const parentIdx = newSiblings.indexOf(parentId)
+    if (parentIdx === -1) newSiblings.push(taskId)
+    else newSiblings.splice(parentIdx + 1, 0, taskId)
+    state.childrenOf.set(grandparentId, newSiblings)
+    state.parentIdOf.set(taskId, grandparentId)
+  }
+  await persistTree(templateId, state)
 }
 
 // A antiga "aplicar modelo" (dias corridos, gravava em ScheduleTask) foi

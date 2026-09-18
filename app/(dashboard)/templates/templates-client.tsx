@@ -5,10 +5,12 @@ import {
   LayoutTemplate, Plus, Pencil, Trash2, ChevronRight, ChevronDown,
   Loader2, X, Check, Milestone, Clock, Copy, Star,
   FolderTree, Zap, Award, Globe2, Layers, BookOpen, Warehouse,
+  ArrowUp, ArrowDown, IndentIncrease, IndentDecrease,
 } from "lucide-react"
 import {
-  createTemplate, updateTemplate, deleteTemplate,
+  getTemplates, createTemplate, updateTemplate, deleteTemplate, duplicateTemplate,
   addTemplateTask, updateTemplateTask, deleteTemplateTask,
+  moveTemplateTaskUp, moveTemplateTaskDown, indentTemplateTask, outdentTemplateTask,
 } from "@/lib/actions/templates"
 import type { Template, TemplateTask } from "@/lib/actions/templates"
 
@@ -34,7 +36,7 @@ interface Props {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function TaskTree({ tasks, depth = 0, expandedSet, onToggle, onEdit, onDelete, canManage }: {
+function TaskTree({ tasks, depth = 0, expandedSet, onToggle, onEdit, onDelete, canManage, onMoveUp, onMoveDown, onIndent, onOutdent }: {
   tasks: TemplateTask[]
   depth?: number
   expandedSet: Set<string>
@@ -42,6 +44,10 @@ function TaskTree({ tasks, depth = 0, expandedSet, onToggle, onEdit, onDelete, c
   onEdit: (t: TemplateTask) => void
   onDelete: (id: string) => void
   canManage: boolean
+  onMoveUp: (id: string) => void
+  onMoveDown: (id: string) => void
+  onIndent: (id: string) => void
+  onOutdent: (id: string) => void
 }) {
   const roots = tasks.filter((t) => depth === 0 ? !t.parentCode : false)
 
@@ -49,6 +55,14 @@ function TaskTree({ tasks, depth = 0, expandedSet, onToggle, onEdit, onDelete, c
     const children = tasks.filter((t) => t.parentCode === task.wbsCode)
     const hasChildren = children.length > 0
     const isOpen = expandedSet.has(task.id)
+    // Posição entre os irmãos (mesmo parentCode) — `tasks` já vem ordenada
+    // por `order` do servidor, então o índice aqui reflete a ordem real.
+    const siblings = tasks.filter((t) => t.parentCode === task.parentCode)
+    const siblingIdx = siblings.findIndex((t) => t.id === task.id)
+    const canMoveUp = siblingIdx > 0
+    const canMoveDown = siblingIdx !== -1 && siblingIdx < siblings.length - 1
+    const canIndent = siblingIdx > 0
+    const canOutdent = task.parentCode !== null
 
     return (
       <div key={task.id}>
@@ -101,11 +115,28 @@ function TaskTree({ tasks, depth = 0, expandedSet, onToggle, onEdit, onDelete, c
           {/* Actions */}
           {canManage && (
             <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity">
-              <button onClick={() => onEdit(task)}
+              <button onClick={() => onMoveUp(task.id)} disabled={!canMoveUp} title="Mover para cima"
+                className="p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:hover:bg-transparent transition-colors">
+                <ArrowUp className="w-3 h-3" />
+              </button>
+              <button onClick={() => onMoveDown(task.id)} disabled={!canMoveDown} title="Mover para baixo"
+                className="p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:hover:bg-transparent transition-colors">
+                <ArrowDown className="w-3 h-3" />
+              </button>
+              <button onClick={() => onIndent(task.id)} disabled={!canIndent} title="Indentar (virar filha da atividade anterior)"
+                className="p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:hover:bg-transparent transition-colors">
+                <IndentIncrease className="w-3 h-3" />
+              </button>
+              <button onClick={() => onOutdent(task.id)} disabled={!canOutdent} title="Promover (sair do grupo)"
+                className="p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:hover:bg-transparent transition-colors">
+                <IndentDecrease className="w-3 h-3" />
+              </button>
+              <span className="w-px h-3 bg-slate-200 mx-0.5" />
+              <button onClick={() => onEdit(task)} title="Editar"
                 className="p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-600 transition-colors">
                 <Pencil className="w-3 h-3" />
               </button>
-              <button onClick={() => onDelete(task.id)}
+              <button onClick={() => onDelete(task.id)} title="Excluir"
                 className="p-1 rounded hover:bg-red-100 text-slate-400 hover:text-red-500 transition-colors">
                 <Trash2 className="w-3 h-3" />
               </button>
@@ -194,6 +225,33 @@ export function TemplatesClient({ templates: initialTemplates, userRole }: Props
     })
   }
 
+  // Recarrega a lista inteira do servidor (mais simples e sempre correto do
+  // que remendar o array local) — necessário depois de qualquer operação
+  // que renumera a árvore (mover/indentar/promover/excluir tarefa mexem em
+  // wbsCode/parentCode de OUTRAS linhas além da tocada diretamente).
+  async function refreshTemplates(selectId?: string) {
+    const fresh = await getTemplates()
+    setTemplates(fresh)
+    if (selectId) {
+      const freshSelected = fresh.find((t) => t.id === selectId)
+      if (freshSelected) setSelected(freshSelected)
+    } else if (selected) {
+      const freshSelected = fresh.find((t) => t.id === selected.id)
+      setSelected(freshSelected ?? null)
+    }
+  }
+
+  // Único jeito de "editar" um dos 5 modelos padrão: duplica (isBuiltIn
+  // sempre nasce false na cópia) e já abre a cópia pronta pra editar — o
+  // original nunca muda, então outras filiais continuam vendo o padrão
+  // intacto (decisão confirmada: modelos são globais, sem organizationId).
+  function handleDuplicateTemplate(t: Template) {
+    start(async () => {
+      const copy = await duplicateTemplate(t.id)
+      await refreshTemplates(copy.id)
+    })
+  }
+
   function openAddTask(tpl: Template) {
     setEditingTask(null)
     setTaskForm({ wbsCode: "", parentCode: "", title: "", estimatedEffort: "", isMilestone: false, predecessorCodes: "", durationDays: "1" })
@@ -241,12 +299,7 @@ export function TemplatesClient({ templates: initialTemplates, userRole }: Props
           durationDays: parseInt(taskForm.durationDays) || 1,
         })
       }
-      // Refresh selected template
-      const { getTemplates: refresh } = await import("@/lib/actions/templates")
-      const fresh = await refresh()
-      setTemplates(fresh)
-      const freshSelected = fresh.find((t) => t.id === selected.id)
-      if (freshSelected) setSelected(freshSelected)
+      await refreshTemplates(selected.id)
       setTaskModal(false)
     })
   }
@@ -255,10 +308,28 @@ export function TemplatesClient({ templates: initialTemplates, userRole }: Props
     if (!selected) return
     start(async () => {
       await deleteTemplateTask(taskId)
-      const updated: Template = { ...selected, tasks: selected.tasks.filter((t) => t.id !== taskId) }
-      setSelected(updated)
-      setTemplates((prev) => prev.map((t) => t.id === selected.id ? updated : t))
+      await refreshTemplates(selected.id)
     })
+  }
+
+  // Mover/indentar/promover — cada ação renumera a árvore inteira no
+  // servidor (ver lib/actions/templates.ts), então sempre recarrega tudo
+  // depois, igual excluir tarefa.
+  function handleMoveTaskUp(taskId: string) {
+    if (!selected) return
+    start(async () => { await moveTemplateTaskUp(selected.id, taskId); await refreshTemplates(selected.id) })
+  }
+  function handleMoveTaskDown(taskId: string) {
+    if (!selected) return
+    start(async () => { await moveTemplateTaskDown(selected.id, taskId); await refreshTemplates(selected.id) })
+  }
+  function handleIndentTask(taskId: string) {
+    if (!selected) return
+    start(async () => { await indentTemplateTask(selected.id, taskId); await refreshTemplates(selected.id) })
+  }
+  function handleOutdentTask(taskId: string) {
+    if (!selected) return
+    start(async () => { await outdentTemplateTask(selected.id, taskId); await refreshTemplates(selected.id) })
   }
 
   const typeKeys = ["AUTOMACAO", "QUALIDADE", "CERTIFICACAO", "EXTERNO", "ARMAZEM", "CUSTOM"]
@@ -334,7 +405,7 @@ export function TemplatesClient({ templates: initialTemplates, userRole }: Props
               <div>
                 <p className="text-[9px] font-black uppercase tracking-[0.15em] text-slate-400 px-1 mb-2">Modelos Padrão</p>
                 <div className="space-y-2">
-                  {templates.filter((t) => t.isBuiltIn).map((t) => <TemplateCard key={t.id} t={t} selected={selected} setSelected={setSelected} setExpanded={setExpanded} canManage={canManage} onEdit={openEditTemplate} onDelete={handleDeleteTemplate} />)}
+                  {templates.filter((t) => t.isBuiltIn).map((t) => <TemplateCard key={t.id} t={t} selected={selected} setSelected={setSelected} setExpanded={setExpanded} canManage={canManage} onEdit={openEditTemplate} onDelete={handleDeleteTemplate} onDuplicate={handleDuplicateTemplate} />)}
                 </div>
               </div>
             )}
@@ -344,7 +415,7 @@ export function TemplatesClient({ templates: initialTemplates, userRole }: Props
               <div>
                 <p className="text-[9px] font-black uppercase tracking-[0.15em] text-slate-400 px-1 mb-2 mt-4">Personalizados</p>
                 <div className="space-y-2">
-                  {templates.filter((t) => !t.isBuiltIn).map((t) => <TemplateCard key={t.id} t={t} selected={selected} setSelected={setSelected} setExpanded={setExpanded} canManage={canManage} onEdit={openEditTemplate} onDelete={handleDeleteTemplate} />)}
+                  {templates.filter((t) => !t.isBuiltIn).map((t) => <TemplateCard key={t.id} t={t} selected={selected} setSelected={setSelected} setExpanded={setExpanded} canManage={canManage} onEdit={openEditTemplate} onDelete={handleDeleteTemplate} onDuplicate={handleDuplicateTemplate} />)}
                 </div>
               </div>
             )}
@@ -392,7 +463,14 @@ export function TemplatesClient({ templates: initialTemplates, userRole }: Props
                   </button>
                 )}
                 {canManage && selected.isBuiltIn && (
-                  <span className="text-xs text-slate-400 italic">Modelos padrão não podem ser editados</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-400 italic">Modelo padrão — não pode ser editado direto</span>
+                    <button onClick={() => handleDuplicateTemplate(selected)} disabled={pending}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white disabled:opacity-50 transition-all hover:opacity-90"
+                      style={{ background: "linear-gradient(135deg, #7B2FBE, #9333EA)" }}>
+                      {pending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Copy className="w-3.5 h-3.5" />} Duplicar para editar
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -429,6 +507,10 @@ export function TemplatesClient({ templates: initialTemplates, userRole }: Props
                     onEdit={openEditTask}
                     onDelete={handleDeleteTask}
                     canManage={canManage && !selected.isBuiltIn}
+                    onMoveUp={handleMoveTaskUp}
+                    onMoveDown={handleMoveTaskDown}
+                    onIndent={handleIndentTask}
+                    onOutdent={handleOutdentTask}
                   />
                 </div>
               </div>
@@ -567,7 +649,7 @@ function TypeBadge({ type, size = "sm" }: { type: string; size?: "sm" | "lg" }) 
   )
 }
 
-function TemplateCard({ t, selected, setSelected, setExpanded, canManage, onEdit, onDelete }: {
+function TemplateCard({ t, selected, setSelected, setExpanded, canManage, onEdit, onDelete, onDuplicate }: {
   t: Template
   selected: Template | null
   setSelected: (t: Template) => void
@@ -575,6 +657,7 @@ function TemplateCard({ t, selected, setSelected, setExpanded, canManage, onEdit
   canManage: boolean
   onEdit: (t: Template) => void
   onDelete: (id: string) => void
+  onDuplicate: (t: Template) => void
 }) {
   const isActive = selected?.id === t.id
   const cfg = TYPE_CONFIG[t.projectType] ?? TYPE_CONFIG.CUSTOM
@@ -616,18 +699,28 @@ function TemplateCard({ t, selected, setSelected, setExpanded, canManage, onEdit
         )}
       </div>
 
-      {/* Actions — only for custom, non built-in templates */}
-      {canManage && !t.isBuiltIn && (
+      {/* Ações: Editar/Excluir só em modelo personalizado (modelo padrão
+          nunca muda no lugar — ver duplicateTemplate); Duplicar vale pros
+          dois, é o caminho pra "destravar" a edição de um padrão. */}
+      {canManage && (
         <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity"
           onClick={(e) => e.stopPropagation()}>
-          <button onClick={() => onEdit(t)}
+          {!t.isBuiltIn && (
+            <button onClick={() => onEdit(t)} title="Editar"
+              className="p-1.5 rounded-lg hover:bg-white text-slate-400 hover:text-slate-600 transition-colors">
+              <Pencil className="w-3 h-3" />
+            </button>
+          )}
+          <button onClick={() => onDuplicate(t)} title="Duplicar"
             className="p-1.5 rounded-lg hover:bg-white text-slate-400 hover:text-slate-600 transition-colors">
-            <Pencil className="w-3 h-3" />
+            <Copy className="w-3 h-3" />
           </button>
-          <button onClick={() => onDelete(t.id)}
-            className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors">
-            <Trash2 className="w-3 h-3" />
-          </button>
+          {!t.isBuiltIn && (
+            <button onClick={() => onDelete(t.id)} title="Excluir"
+              className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors">
+              <Trash2 className="w-3 h-3" />
+            </button>
+          )}
         </div>
       )}
     </div>
