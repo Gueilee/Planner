@@ -877,6 +877,50 @@ export async function updateItemV2(
   return result
 }
 
+// ─── Atribuir responsável em lote ────────────────────────────────────────
+// Pedido direto da Millena: montar o cronograma atividade por atividade,
+// digitando o mesmo responsável em cada linha, é lento. A grade agora deixa
+// marcar várias linhas de uma vez (bolinha de seleção virou multi-seleção
+// no client); esta action grava o mesmo responsável (FK de usuário ou nome
+// livre, nunca os dois — mesma regra do updateItemV2 acima) em todos os
+// itens marcados, como UMA única ação de undo/histórico, em vez de uma por
+// item.
+export async function bulkAssignResponsavelV2(
+  projectId: string,
+  itemIds: string[],
+  data: { responsavelId: string | null; responsavelNome: string | null },
+  label: string
+): Promise<{ conflicts: ConflictV2[]; cycleItemIds: string[] }> {
+  await requireAccess()
+  if (itemIds.length === 0) throw new Error("Nenhum item selecionado")
+  await saveSnapshot(projectId)
+
+  const items = await db.scheduleV2Item.findMany({
+    where: { id: { in: itemIds }, projectId },
+    select: { id: true },
+  })
+  if (items.length === 0) throw new Error("Itens não encontrados")
+  const ids = items.map((i) => i.id)
+
+  await db.scheduleV2Item.updateMany({
+    where: { id: { in: ids } },
+    data: { responsavelId: data.responsavelId, responsavelNome: data.responsavelNome },
+  })
+
+  const result = await recomputeAndPersist(projectId, ids)
+  revalidatePath(`/projects/${projectId}/schedule`)
+
+  await logChange(
+    projectId,
+    null,
+    `${ids.length} itens`,
+    "atribuiu responsável em lote",
+    `definiu "${label}" como responsável de ${ids.length} ${ids.length === 1 ? "item" : "itens"}`
+  )
+
+  return result
+}
+
 // ─── Excluir ──────────────────────────────────────────────────────────────
 
 export async function deleteItemV2(id: string, projectId: string): Promise<{ deletedIds: string[] }> {

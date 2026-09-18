@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react"
 import {
   createItemV2, updateItemV2, deleteItemV2, duplicateItemV2, reorderItemsV2, setDependenciesV2, getScheduleV2,
-  hasUndoV2, hasRedoV2, undoLastChangeV2, redoLastChangeV2, applyTemplateV2, getChangeLogV2,
+  hasUndoV2, hasRedoV2, undoLastChangeV2, redoLastChangeV2, applyTemplateV2, getChangeLogV2, bulkAssignResponsavelV2,
 } from "@/lib/actions/schedule-v2"
 import type { ScheduleV2Payload, ItemV2, ChangeLogEntryV2 } from "@/lib/actions/schedule-v2"
 import { computeProjectProgress } from "@/lib/utils/project-progress"
@@ -232,7 +232,12 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
   const [data, setData] = useState<ScheduleV2Payload>(initial)
   const [expanded, setExpanded] = useState<Set<string>>(new Set(initial.items.filter((i) => i.isGroup).map((i) => i.id)))
   const [pending, startTransition] = useTransition()
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  // Seleção de linhas: multi (bolinha de cada linha só marca/desmarca a
+  // própria linha, sem afetar as outras). Mover/indentar/promover continuam
+  // exigindo exatamente 1 marcada (ver selectedItem abaixo) — reestruturar
+  // várias de uma vez seria ambíguo; a seleção múltipla existe pra atribuir
+  // responsável em lote (handleBulkAssignResponsavel).
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [sort, setSort] = useState<SortState>({ column: null, dir: "asc" })
   const [hasUndo, setHasUndo] = useState(false)
   const [hasRedo, setHasRedo] = useState(false)
@@ -489,6 +494,16 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
     })
   }
 
+  function handleBulkAssignResponsavel(patch: { responsavelId: string | null; responsavelNome: string | null }, label: string) {
+    const ids = [...selectedIds]
+    if (ids.length === 0) return
+    runMutation(async () => {
+      await bulkAssignResponsavelV2(projectId, ids, patch, label)
+      await refreshData()
+      setSelectedIds(new Set())
+    })
+  }
+
   function handleDeps(id: string, raw: string) {
     runMutation(async () => {
       await setDependenciesV2(id, projectId, raw)
@@ -498,7 +513,12 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
 
   function handleDelete(id: string) {
     if (!confirm("Excluir este item e todos os seus filhos?")) return
-    if (selectedId === id) setSelectedId(null)
+    setSelectedIds((prev) => {
+      if (!prev.has(id)) return prev
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
     runMutation(async () => {
       await deleteItemV2(id, projectId)
       await refreshData()
@@ -703,12 +723,21 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
   }
 
   const roots = sortedSiblingsOf(data.items, null, sort, membersById)
-  const selectedItem = selectedId ? data.items.find((i) => i.id === selectedId) ?? null : null
+  // Mover/indentar/promover só fazem sentido com exatamente 1 linha marcada.
+  const selectedItem = selectedIds.size === 1 ? data.items.find((i) => i.id === [...selectedIds][0]) ?? null : null
+
+  function handleToggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
 
   const rowHandlers: RowHandlers = {
     data, expanded, onToggle: toggle, onUpdate: handleUpdate, onDeps: handleDeps, onDelete: handleDelete,
     onDuplicate: handleDuplicate, onAddAbove: handleAddAbove, onAddChild: handleAddChild, onEditTitle: handleEditTitle,
-    selectedId, onSelect: setSelectedId, sort, conflictByItem,
+    selectedIds, onSelect: handleToggleSelect, sort, conflictByItem,
     colOrder: visibleColOrder, colWidths, titleWidth, members: allMembers, membersById, baselineByItem,
     dragRowId, dropTarget, onRowDragStart: handleRowDragStart, onRowDragOver: handleRowDragOver,
     onRowDrop: handleRowDrop, onRowDragEnd: handleRowDragEnd,
@@ -877,13 +906,43 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
 
         <ToolbarGroup>
           <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 px-1.5 max-w-[220px] truncate">
-            {selectedItem ? <>Sel.: <span className="text-slate-600 normal-case">{selectedItem.title}</span></> : "Selecione uma linha ou arraste ⠿"}
+            {selectedIds.size === 0
+              ? "Selecione uma linha ou arraste ⠿"
+              : selectedIds.size === 1
+                ? <>Sel.: <span className="text-slate-600 normal-case">{selectedItem?.title}</span></>
+                : `${selectedIds.size} linhas selecionadas`}
           </span>
-          <ToolbarBtn ghost disabled={!selectedItem || sort.column !== null} onClick={() => selectedItem && handleMove(selectedItem, -1)} title={sort.column ? "Limpe a ordenação da coluna para reestruturar manualmente" : "Mover para cima"}><ArrowUp className="w-3.5 h-3.5" /></ToolbarBtn>
-          <ToolbarBtn ghost disabled={!selectedItem || sort.column !== null} onClick={() => selectedItem && handleMove(selectedItem, 1)} title={sort.column ? "Limpe a ordenação da coluna para reestruturar manualmente" : "Mover para baixo"}><ArrowDown className="w-3.5 h-3.5" /></ToolbarBtn>
-          <ToolbarBtn ghost disabled={!selectedItem || sort.column !== null} onClick={() => selectedItem && handleIndent(selectedItem)} title={sort.column ? "Limpe a ordenação da coluna para reestruturar manualmente" : "Indentar (virar filho do anterior)"}><IndentIncrease className="w-3.5 h-3.5" /></ToolbarBtn>
-          <ToolbarBtn ghost disabled={!selectedItem || selectedItem.parentId === null || sort.column !== null} onClick={() => selectedItem && handleOutdent(selectedItem)} title={sort.column ? "Limpe a ordenação da coluna para reestruturar manualmente" : "Promover (sair do grupo)"}><IndentDecrease className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn ghost disabled={!selectedItem || sort.column !== null} onClick={() => selectedItem && handleMove(selectedItem, -1)} title={sort.column ? "Limpe a ordenação da coluna para reestruturar manualmente" : selectedIds.size > 1 ? "Mover exige exatamente 1 linha selecionada" : "Mover para cima"}><ArrowUp className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn ghost disabled={!selectedItem || sort.column !== null} onClick={() => selectedItem && handleMove(selectedItem, 1)} title={sort.column ? "Limpe a ordenação da coluna para reestruturar manualmente" : selectedIds.size > 1 ? "Mover exige exatamente 1 linha selecionada" : "Mover para baixo"}><ArrowDown className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn ghost disabled={!selectedItem || sort.column !== null} onClick={() => selectedItem && handleIndent(selectedItem)} title={sort.column ? "Limpe a ordenação da coluna para reestruturar manualmente" : selectedIds.size > 1 ? "Indentar exige exatamente 1 linha selecionada" : "Indentar (virar filho do anterior)"}><IndentIncrease className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn ghost disabled={!selectedItem || selectedItem.parentId === null || sort.column !== null} onClick={() => selectedItem && handleOutdent(selectedItem)} title={sort.column ? "Limpe a ordenação da coluna para reestruturar manualmente" : selectedIds.size > 1 ? "Promover exige exatamente 1 linha selecionada" : "Promover (sair do grupo)"}><IndentDecrease className="w-3.5 h-3.5" /></ToolbarBtn>
         </ToolbarGroup>
+
+        {selectedIds.size > 1 && (
+          <ToolbarGroup>
+            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 px-1.5 whitespace-nowrap">
+              Responsável p/ as {selectedIds.size}:
+            </span>
+            <div className="w-40">
+              <PeoplePicker
+                key={`bulk-resp:${selectedIds.size}`}
+                placeholder="Definir responsável…"
+                compact
+                onSelect={(person) => {
+                  handlePersonLinked(person)
+                  handleBulkAssignResponsavel({ responsavelId: person.id, responsavelNome: null }, person.name)
+                }}
+                onFreeText={(typed) => {
+                  if (typed === "") return
+                  const match = allMembers.find((m) => m.name.toLowerCase() === typed.toLowerCase())
+                  if (match) handleBulkAssignResponsavel({ responsavelId: match.id, responsavelNome: null }, match.name)
+                  else handleBulkAssignResponsavel({ responsavelId: null, responsavelNome: typed }, typed)
+                }}
+              />
+            </div>
+            <ToolbarBtn ghost onClick={() => setSelectedIds(new Set())} title="Limpar seleção"><X className="w-3.5 h-3.5" /></ToolbarBtn>
+          </ToolbarGroup>
+        )}
         {sort.column && (
           <button onClick={() => setSort({ column: null, dir: "asc" })} className="text-[10px] font-bold text-slate-400 hover:text-[#7B2FBE]">
             Limpar ordenação
@@ -1280,8 +1339,8 @@ type RowHandlers = {
   onAddAbove: (item: ItemV2) => void
   onAddChild: (item: ItemV2) => void
   onEditTitle: (id: string) => void
-  selectedId: string | null
-  onSelect: (id: string | null) => void
+  selectedIds: Set<string>
+  onSelect: (id: string) => void
   sort: SortState
   conflictByItem: Map<string, ScheduleV2Payload["conflicts"][number]>
   colOrder: ColKey[]
@@ -1320,7 +1379,7 @@ function RowGroup({ item, depth, ...h }: { item: ItemV2; depth: number } & RowHa
 
 function Row({ item, depth, hasChildren, isOpen, ...h }: { item: ItemV2; depth: number; hasChildren: boolean; isOpen: boolean } & RowHandlers) {
   const conflict = h.conflictByItem.get(item.id)
-  const selected = h.selectedId === item.id
+  const selected = h.selectedIds.has(item.id)
   const isDragging = h.dragRowId === item.id
   const dropHere = h.dropTarget?.id === item.id ? h.dropTarget.zone : null
 
@@ -1354,7 +1413,7 @@ function Row({ item, depth, hasChildren, isOpen, ...h }: { item: ItemV2; depth: 
         >
           <GripVertical className="w-3.5 h-3.5" />
         </span>
-        <button onClick={() => h.onSelect(selected ? null : item.id)} title="Selecionar (para mover/indentar)">
+        <button onClick={() => h.onSelect(item.id)} title="Selecionar (marque várias para atribuir responsável em lote)">
           <Circle className={`w-3.5 h-3.5 transition-colors ${selected ? "text-[#7B2FBE] fill-[#7B2FBE]/25" : "text-slate-300 hover:text-slate-400"}`} />
         </button>
         <button onClick={() => h.onDelete(item.id)} title="Excluir">
