@@ -1,6 +1,7 @@
 import { auth } from "@/auth"
 import { redirect, notFound } from "next/navigation"
 import { db } from "@/lib/db"
+import { canAccessOrg } from "@/lib/actions/project-access"
 import { getKickOffPresentation } from "@/lib/actions/kickoff-presentation"
 import { KOViewerClient } from "./viewer-client"
 
@@ -10,6 +11,10 @@ export default async function KickOffViewerPage({ params }: { params: Promise<{ 
   const { id } = await params
   const session = await auth()
   if (!session?.user) redirect("/login")
+
+  const orgCheck = await db.project.findUnique({ where: { id }, select: { organizationId: true } })
+  if (!orgCheck) notFound()
+  if (!(await canAccessOrg(session, orgCheck.organizationId))) notFound()
 
   const [presentation, project, orgConfig] = await Promise.all([
     getKickOffPresentation(id),

@@ -8,6 +8,7 @@
 
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
+import { assertProjectAccess } from "@/lib/actions/project-access"
 import { revalidatePath } from "next/cache"
 import { recalcular } from "@/lib/domain/schedule-v2/scheduler"
 import { computeCriticalPath } from "@/lib/domain/schedule-v2/critical-path"
@@ -24,11 +25,15 @@ import type { Dependency, LinkType, SchedItem, SchedulingMode, WorkCalendar } fr
 // era só uma cautela da fase Beta, não uma decisão definitiva de produto
 // (decisão do time ao cortar a rota). Mantém o mesmo padrão de acesso de
 // sempre, igual ao lib/actions/schedule.ts que este motor substitui.
-
-async function requireAccess() {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
-  return session
+//
+// Até aqui isto só checava "tem sessão?" — nunca se o PROJETO era da filial
+// de quem pediu. Auditoria de segurança confirmou: qualquer usuário logado
+// de qualquer filial conseguia ler e escrever o cronograma (datas, custos,
+// responsáveis, dependências) de um projeto de outra filial, bastando saber
+// o projectId. Agora delega pra assertProjectAccess (lib/actions/
+// project-access.ts), que confere a filial antes de liberar.
+async function requireAccess(projectId: string) {
+  return assertProjectAccess(projectId)
 }
 
 // ─── Datas: Date (Prisma) <-> string "yyyy-MM-dd" (domínio) ─────────────────
@@ -291,7 +296,7 @@ export type ChangeLogEntryV2 = {
 }
 
 export async function getChangeLogV2(projectId: string, take = 100): Promise<ChangeLogEntryV2[]> {
-  await requireAccess()
+  await requireAccess(projectId)
   const rows = await db.scheduleV2ChangeLog.findMany({
     where: { projectId },
     orderBy: { createdAt: "desc" },
@@ -336,19 +341,19 @@ async function restorePayload(tx: Parameters<Parameters<typeof db.$transaction>[
 }
 
 export async function hasUndoV2(projectId: string): Promise<boolean> {
-  await requireAccess()
+  await requireAccess(projectId)
   const snap = await db.scheduleV2Snapshot.findUnique({ where: { projectId_kind: { projectId, kind: "undo" } }, select: { id: true } })
   return snap !== null
 }
 
 export async function hasRedoV2(projectId: string): Promise<boolean> {
-  await requireAccess()
+  await requireAccess(projectId)
   const snap = await db.scheduleV2Snapshot.findUnique({ where: { projectId_kind: { projectId, kind: "redo" } }, select: { id: true } })
   return snap !== null
 }
 
 export async function undoLastChangeV2(projectId: string): Promise<{ ok: boolean; message?: string }> {
-  await requireAccess()
+  await requireAccess(projectId)
 
   const snap = await db.scheduleV2Snapshot.findUnique({ where: { projectId_kind: { projectId, kind: "undo" } } })
   if (!snap) return { ok: false, message: "Nada para desfazer." }
@@ -371,7 +376,7 @@ export async function undoLastChangeV2(projectId: string): Promise<{ ok: boolean
 }
 
 export async function redoLastChangeV2(projectId: string): Promise<{ ok: boolean; message?: string }> {
-  await requireAccess()
+  await requireAccess(projectId)
 
   const snap = await db.scheduleV2Snapshot.findUnique({ where: { projectId_kind: { projectId, kind: "redo" } } })
   if (!snap) return { ok: false, message: "Nada para avançar." }
@@ -540,7 +545,7 @@ async function recomputeAndPersist(
 // ─── Leitura ──────────────────────────────────────────────────────────────
 
 export async function getScheduleV2(projectId: string): Promise<ScheduleV2Payload> {
-  await requireAccess()
+  await requireAccess(projectId)
 
   const { rows, deps } = await loadRows(projectId)
   const groups = groupIdSet(rows)
@@ -617,7 +622,7 @@ export async function getScheduleV2(projectId: string): Promise<ScheduleV2Payloa
 // de semana/feriados no fundo da linha do tempo — mesma fonte de verdade
 // do motor, não uma cópia recalculada no navegador.
 export async function getWorkCalendarV2(projectId: string): Promise<WorkCalendar> {
-  await requireAccess()
+  await requireAccess(projectId)
   await ensureCalendarSeeded(projectId)
   return loadCalendar(projectId)
 }
@@ -641,7 +646,7 @@ export type CreateItemV2Input = {
 }
 
 export async function createItemV2(input: CreateItemV2Input): Promise<ItemV2> {
-  await requireAccess()
+  await requireAccess(input.projectId)
   await saveSnapshot(input.projectId)
 
   const [maxOrder, code] = await Promise.all([
@@ -701,7 +706,7 @@ export async function createItemV2(input: CreateItemV2Input): Promise<ItemV2> {
 // original, no mesmo nível.
 
 export async function duplicateItemV2(id: string, projectId: string): Promise<{ newId: string }> {
-  await requireAccess()
+  await requireAccess(projectId)
   await saveSnapshot(projectId)
 
   const [source, sourceDeps, code] = await Promise.all([
@@ -794,7 +799,7 @@ export async function updateItemV2(
   projectId: string,
   data: UpdateItemV2Input
 ): Promise<{ conflicts: ConflictV2[]; cycleItemIds: string[] }> {
-  await requireAccess()
+  await requireAccess(projectId)
   await saveSnapshot(projectId)
 
   const current = await db.scheduleV2Item.findUnique({ where: { id }, select: { id: true, title: true, inicioEstimado: true } })
@@ -917,7 +922,7 @@ export async function bulkAssignResponsavelV2(
   data: { responsavelId: string | null; responsavelNome: string | null },
   label: string
 ): Promise<{ conflicts: ConflictV2[]; cycleItemIds: string[] }> {
-  await requireAccess()
+  await requireAccess(projectId)
   if (itemIds.length === 0) throw new Error("Nenhum item selecionado")
   await saveSnapshot(projectId)
 
@@ -950,7 +955,7 @@ export async function bulkAssignResponsavelV2(
 // ─── Excluir ──────────────────────────────────────────────────────────────
 
 export async function deleteItemV2(id: string, projectId: string): Promise<{ deletedIds: string[] }> {
-  await requireAccess()
+  await requireAccess(projectId)
   await saveSnapshot(projectId)
 
   const target = await db.scheduleV2Item.findUnique({ where: { id }, select: { title: true } })
@@ -998,7 +1003,7 @@ export async function deleteItemV2(id: string, projectId: string): Promise<{ del
 // ─── Reordenar ────────────────────────────────────────────────────────────
 
 export async function reorderItemsV2(projectId: string, orderedIds: string[]): Promise<void> {
-  await requireAccess()
+  await requireAccess(projectId)
   await saveSnapshot(projectId)
   await db.$transaction(orderedIds.map((id, i) => db.scheduleV2Item.update({ where: { id }, data: { order: i } })))
   revalidatePath(`/projects/${projectId}/schedule`)
@@ -1011,7 +1016,7 @@ export async function setDependenciesV2(
   projectId: string,
   raw: string
 ): Promise<{ accepted: number; rejected: number; conflicts: ConflictV2[]; cycleItemIds: string[] }> {
-  await requireAccess()
+  await requireAccess(projectId)
   await saveSnapshot(projectId)
 
   const rows = await db.scheduleV2Item.findMany({ where: { projectId }, select: { id: true, code: true, title: true } })
@@ -1167,7 +1172,7 @@ export async function applyTemplateV2(
   templateId: string,
   startDate: string
 ): Promise<{ count: number }> {
-  await requireAccess()
+  await requireAccess(projectId)
   await saveSnapshot(projectId)
   await ensureCalendarSeeded(projectId)
 

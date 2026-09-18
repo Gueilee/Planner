@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
+import { assertProjectAccess } from "@/lib/actions/project-access"
 import { revalidatePath } from "next/cache"
 import { startOfMonth, endOfMonth } from "date-fns"
 import { notifyProjectMembers } from "@/lib/notify"
@@ -112,8 +113,7 @@ export async function closeMonthlyStatusReports(
 // ─── Histórico de meses já fechados de um projeto ─────────────────────────────
 
 export async function getStatusReportHistory(projectId: string): Promise<StatusReportHistoryItem[]> {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  await assertProjectAccess(projectId)
 
   const rows = await db.statusReport.findMany({
     where:   { projectId },

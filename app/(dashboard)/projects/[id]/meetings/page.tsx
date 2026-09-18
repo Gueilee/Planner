@@ -1,6 +1,7 @@
 import { auth } from "@/auth"
 import { db } from "@/lib/db"
 import { notFound, redirect } from "next/navigation"
+import { canAccessOrg } from "@/lib/actions/project-access"
 import { getAllMeetingsForProject } from "@/lib/actions/ata"
 import { MeetingsClient } from "./meetings-client"
 
@@ -11,15 +12,14 @@ export default async function MeetingsPage({ params }: { params: Promise<{ id: s
   const session = await auth()
   if (!session?.user) redirect("/login")
 
-  const [project, meetings] = await Promise.all([
-    db.project.findUnique({
-      where: { id },
-      select: { id: true, title: true },
-    }),
-    getAllMeetingsForProject(id),
-  ])
-
+  const project = await db.project.findUnique({
+    where: { id },
+    select: { id: true, title: true, organizationId: true },
+  })
   if (!project) notFound()
+  if (!(await canAccessOrg(session, project.organizationId))) notFound()
+
+  const meetings = await getAllMeetingsForProject(id)
 
   return <MeetingsClient project={project} meetings={meetings} />
 }

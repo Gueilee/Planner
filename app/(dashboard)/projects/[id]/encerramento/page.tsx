@@ -1,5 +1,7 @@
 import { auth } from "@/auth"
 import { notFound, redirect } from "next/navigation"
+import { db } from "@/lib/db"
+import { canAccessOrg } from "@/lib/actions/project-access"
 import { getProjectClosureData } from "@/lib/actions/encerramento"
 import { getProjectParticipants, getAllActiveUsers } from "@/lib/actions/meeting-participants"
 import { toLegacyLikeTasks, areasFromV2 } from "@/lib/utils/schedule-v2-adapter"
@@ -11,6 +13,10 @@ export default async function EncerramentoMeetingPage({ params }: { params: Prom
   const { id } = await params
   const session = await auth()
   if (!session?.user) redirect("/login")
+
+  const orgCheck = await db.project.findUnique({ where: { id }, select: { organizationId: true } })
+  if (!orgCheck) notFound()
+  if (!(await canAccessOrg(session, orgCheck.organizationId))) notFound()
 
   const [project, projectParticipants, allUsers] = await Promise.all([
     getProjectClosureData(id),

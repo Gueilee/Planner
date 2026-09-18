@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
+import { assertProjectAccess } from "@/lib/actions/project-access"
 import { revalidatePath } from "next/cache"
 import type {
   BenefitFormData, MeasurementFormData, BenefitItem,
@@ -97,6 +98,8 @@ export async function getProjectBenefits(projectId: string): Promise<{
   metrics: ProjectBenefitMetrics
   investment: number
 }> {
+  await assertProjectAccess(projectId)
+
   const [rawBenefits, project] = await Promise.all([
     db.projectBenefit.findMany({
       where:   { projectId },
@@ -236,8 +239,7 @@ export async function getPortfolioBenefits(filters?: {
 
 // ── CRUD ──────────────────────────────────────────────────────────────────────
 export async function createBenefit(projectId: string, data: BenefitFormData) {
-  const session = await auth()
-  if (!session?.user?.id) throw new Error("Unauthorized")
+  const session = await assertProjectAccess(projectId)
   if (!CAN_MANAGE.has(session.user.role ?? "")) throw new Error("Forbidden")
 
   // Derive plannedValue and strategicWeight from impactLevel when provided
@@ -297,15 +299,13 @@ export async function createBenefit(projectId: string, data: BenefitFormData) {
 }
 
 export async function updateBenefit(benefitId: string, data: Partial<BenefitFormData>) {
-  const session = await auth()
-  if (!session?.user?.id) throw new Error("Unauthorized")
-  if (!CAN_MANAGE.has(session.user.role ?? "")) throw new Error("Forbidden")
-
   const existing = await db.projectBenefit.findUnique({
     where: { id: benefitId },
     select: { projectId: true, plannedValue: true, realizedValue: true, status: true, category: true },
   })
   if (!existing) throw new Error("Not found")
+  const session = await assertProjectAccess(existing.projectId)
+  if (!CAN_MANAGE.has(session.user.role ?? "")) throw new Error("Forbidden")
 
   // Derive plannedValue and strategicWeight from impactLevel when provided
   const impactLevel = data.impactLevel ?? null
@@ -349,12 +349,10 @@ export async function updateBenefit(benefitId: string, data: Partial<BenefitForm
 }
 
 export async function deleteBenefit(benefitId: string) {
-  const session = await auth()
-  if (!session?.user?.id) throw new Error("Unauthorized")
-  if (!CAN_MANAGE.has(session.user.role ?? "")) throw new Error("Forbidden")
-
   const benefit = await db.projectBenefit.findUnique({ where: { id: benefitId }, select: { projectId: true } })
   if (!benefit) throw new Error("Not found")
+  const session = await assertProjectAccess(benefit.projectId)
+  if (!CAN_MANAGE.has(session.user.role ?? "")) throw new Error("Forbidden")
 
   await db.projectBenefit.delete({ where: { id: benefitId } })
 
@@ -364,8 +362,7 @@ export async function deleteBenefit(benefitId: string) {
 
 // ── Investment ────────────────────────────────────────────────────────────────
 export async function updateProjectInvestment(projectId: string, investment: number) {
-  const session = await auth()
-  if (!session?.user?.id) throw new Error("Unauthorized")
+  const session = await assertProjectAccess(projectId)
   if (!CAN_MANAGE.has(session.user.role ?? "")) throw new Error("Forbidden")
 
   await db.project.update({ where: { id: projectId }, data: { investment } })
@@ -376,12 +373,10 @@ export async function updateProjectInvestment(projectId: string, investment: num
 
 // ── Measurements ──────────────────────────────────────────────────────────────
 export async function addMeasurement(benefitId: string, data: MeasurementFormData) {
-  const session = await auth()
-  if (!session?.user?.id) throw new Error("Unauthorized")
-  if (!CAN_MANAGE.has(session.user.role ?? "")) throw new Error("Forbidden")
-
   const benefit = await db.projectBenefit.findUnique({ where: { id: benefitId }, select: { projectId: true } })
   if (!benefit) throw new Error("Not found")
+  const session = await assertProjectAccess(benefit.projectId)
+  if (!CAN_MANAGE.has(session.user.role ?? "")) throw new Error("Forbidden")
 
   await db.benefitMeasurement.create({
     data: {
@@ -406,8 +401,12 @@ export async function addMeasurement(benefitId: string, data: MeasurementFormDat
 }
 
 export async function deleteMeasurement(measurementId: string) {
-  const session = await auth()
-  if (!session?.user?.id) throw new Error("Unauthorized")
+  const measurement = await db.benefitMeasurement.findUnique({
+    where: { id: measurementId },
+    select: { benefit: { select: { projectId: true } } },
+  })
+  if (!measurement) return
+  const session = await assertProjectAccess(measurement.benefit.projectId)
   if (!CAN_MANAGE.has(session.user.role ?? "")) throw new Error("Forbidden")
 
   await db.benefitMeasurement.delete({ where: { id: measurementId } })
@@ -418,11 +417,9 @@ export async function addBenefitAttachment(
   benefitId: string,
   file: { fileName: string; fileUrl: string; fileType: string; fileSize: number },
 ) {
-  const session = await auth()
-  if (!session?.user?.id) throw new Error("Unauthorized")
-
   const benefit = await db.projectBenefit.findUnique({ where: { id: benefitId }, select: { projectId: true } })
   if (!benefit) throw new Error("Not found")
+  await assertProjectAccess(benefit.projectId)
 
   await db.attachment.create({
     data: { benefitId, fileName: file.fileName, fileUrl: file.fileUrl, fileType: file.fileType, fileSize: file.fileSize },
@@ -432,8 +429,7 @@ export async function addBenefitAttachment(
 }
 
 export async function deleteBenefitAttachment(attachmentId: string, projectId: string) {
-  const session = await auth()
-  if (!session?.user?.id) throw new Error("Unauthorized")
+  await assertProjectAccess(projectId)
 
   await db.attachment.delete({ where: { id: attachmentId } })
   revalidatePath(`/projects/${projectId}/benefits`)

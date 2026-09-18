@@ -1,6 +1,7 @@
 import { auth } from "@/auth"
 import { db } from "@/lib/db"
 import { notFound, redirect } from "next/navigation"
+import { canAccessOrg } from "@/lib/actions/project-access"
 import { getPresentation } from "@/lib/actions/presentation"
 import { BuilderClient } from "./builder-client"
 
@@ -27,6 +28,7 @@ export default async function PresentationPage({
   })
 
   if (!project) notFound()
+  if (!(await canAccessOrg(session, project.organizationId))) notFound()
 
   const existing = await getPresentation(id)
 

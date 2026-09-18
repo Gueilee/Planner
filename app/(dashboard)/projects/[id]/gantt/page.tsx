@@ -1,6 +1,7 @@
 import { auth } from "@/auth"
 import { notFound, redirect } from "next/navigation"
 import { db } from "@/lib/db"
+import { canAccessOrg } from "@/lib/actions/project-access"
 import { getScheduleV2, getWorkCalendarV2 } from "@/lib/actions/schedule-v2"
 import { GanttClient } from "./gantt-client"
 import Link from "next/link"
@@ -18,8 +19,11 @@ export default async function GanttPage({ params }: { params: Promise<{ id: stri
   const session = await auth()
   if (!session?.user) redirect("/login")
 
-  const [project, data, workCalendar, members] = await Promise.all([
-    db.project.findUnique({ where: { id }, select: { id: true, title: true } }),
+  const project = await db.project.findUnique({ where: { id }, select: { id: true, title: true, organizationId: true } })
+  if (!project) notFound()
+  if (!(await canAccessOrg(session, project.organizationId))) notFound()
+
+  const [data, workCalendar, members] = await Promise.all([
     getScheduleV2(id),
     getWorkCalendarV2(id),
     db.user.findMany({
@@ -27,7 +31,6 @@ export default async function GanttPage({ params }: { params: Promise<{ id: stri
       select: { id: true, name: true },
     }),
   ])
-  if (!project) notFound()
 
   const membersById = Object.fromEntries(members.map((m) => [m.id, m.name]))
 

@@ -7,6 +7,7 @@ import { DocumentType } from "@/lib/generated/prisma/enums"
 import { format } from "date-fns"
 import type { KickOffData, ExternalAttendee } from "@/lib/types/kickoff"
 import { generateMeetingATA } from "@/lib/actions/ata"
+import { assertProjectAccess } from "@/lib/actions/project-access"
 import bcrypt from "bcryptjs"
 
 async function syncExternalAttendees(projectId: string, externalAttendees: ExternalAttendee[], organizationId: string) {
@@ -32,6 +33,8 @@ async function syncExternalAttendees(projectId: string, externalAttendees: Exter
 }
 
 export async function getKickOff(projectId: string) {
+  await assertProjectAccess(projectId)
+
   const doc = await db.projectDocument.findFirst({
     where: { projectId, type: DocumentType.KICKOFF },
     orderBy: { updatedAt: "desc" },
@@ -46,8 +49,7 @@ export async function getKickOff(projectId: string) {
 }
 
 export async function saveKickOff(data: KickOffData) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  const session = await assertProjectAccess(data.projectId)
 
   const content = JSON.stringify({
     meetingDate: data.meetingDate,
@@ -90,8 +92,7 @@ export async function saveKickOff(data: KickOffData) {
 }
 
 export async function registerKickOff(data: KickOffData) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  const session = await assertProjectAccess(data.projectId)
 
   const meetingDate = data.meetingDate ? new Date(data.meetingDate) : new Date()
   const registeredAt = new Date().toISOString()

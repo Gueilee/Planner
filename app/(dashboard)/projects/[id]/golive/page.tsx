@@ -1,6 +1,7 @@
 import { auth } from "@/auth"
 import { db } from "@/lib/db"
 import { notFound, redirect } from "next/navigation"
+import { canAccessOrg } from "@/lib/actions/project-access"
 import { getProjectParticipants, getAllActiveUsers } from "@/lib/actions/meeting-participants"
 import { GoLiveClient } from "./golive-client"
 
@@ -14,13 +15,14 @@ export default async function GoLivePage({ params }: { params: Promise<{ id: str
   const [project, projectParticipants, allUsers] = await Promise.all([
     db.project.findUnique({
       where: { id },
-      select: { id: true, title: true, status: true, goLiveDate: true, postGoLiveEndDate: true },
+      select: { id: true, title: true, status: true, goLiveDate: true, postGoLiveEndDate: true, organizationId: true },
     }),
     getProjectParticipants(id),
     getAllActiveUsers(),
   ])
 
   if (!project) notFound()
+  if (!(await canAccessOrg(session, project.organizationId))) notFound()
 
   return (
     <GoLiveClient

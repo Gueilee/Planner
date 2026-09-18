@@ -1,6 +1,7 @@
 import { auth } from "@/auth"
 import { db } from "@/lib/db"
 import { notFound, redirect } from "next/navigation"
+import { canAccessOrg } from "@/lib/actions/project-access"
 import { getProjectLessons } from "@/lib/actions/lessons"
 import { LessonsClient } from "./lessons-client"
 
@@ -11,19 +12,20 @@ export default async function LessonsPage({ params }: { params: Promise<{ id: st
   const session = await auth()
   if (!session?.user) redirect("/login")
 
-  const [project, members, lessons] = await Promise.all([
-    db.project.findUnique({
-      where: { id },
-      select: { id: true, title: true, status: true },
-    }),
+  const project = await db.project.findUnique({
+    where: { id },
+    select: { id: true, title: true, status: true, organizationId: true },
+  })
+  if (!project) notFound()
+  if (!(await canAccessOrg(session, project.organizationId))) notFound()
+
+  const [members, lessons] = await Promise.all([
     db.projectMember.findMany({
       where: { projectId: id },
       include: { user: { select: { id: true, name: true } } },
     }),
     getProjectLessons(id),
   ])
-
-  if (!project) notFound()
 
   return (
     <LessonsClient

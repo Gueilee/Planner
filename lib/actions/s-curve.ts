@@ -11,6 +11,7 @@ import { computeProjectProgress } from "@/lib/utils/project-progress"
 import { computePlanned, computeRealized, computeBaselineCurve, type RawTask } from "@/lib/utils/s-curve-math"
 import { toLegacyLikeTasks } from "@/lib/utils/schedule-v2-adapter"
 import { createBaselineForProject } from "@/lib/actions/baseline"
+import { canAccessOrg } from "@/lib/actions/project-access"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -81,7 +82,7 @@ export async function getSCurveData(projectId: string): Promise<SCurvePayload | 
     db.project.findUnique({
       where: { id: projectId },
       select: {
-        id: true, title: true,
+        id: true, title: true, organizationId: true,
         expectedStart: true, expectedEnd: true,
         actualStart: true, actualEnd: true,
         scheduleV2Items: {
@@ -106,6 +107,7 @@ export async function getSCurveData(projectId: string): Promise<SCurvePayload | 
   ])
 
   if (!project) return null
+  if (!(await canAccessOrg(session, project.organizationId))) return null
 
   const today = startOfWeek(new Date(), { weekStartsOn: 1 })
   // Tarefas-FOLHA (sem subtarefa) — mesma base do progresso canônico do

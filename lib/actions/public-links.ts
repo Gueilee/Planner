@@ -7,7 +7,7 @@
 // public/schedule/[token]) só confia no token, adicionado a PUBLIC_ROUTES
 // em auth.config.ts pra pular o middleware de autenticação.
 import { db } from "@/lib/db"
-import { auth } from "@/auth"
+import { assertProjectAccess } from "@/lib/actions/project-access"
 import { revalidatePath } from "next/cache"
 import { randomBytes } from "crypto"
 
@@ -16,9 +16,12 @@ function generateToken(): string {
   return randomBytes(32).toString("hex")
 }
 
+// Gera um link ACESSÍVEL NA INTERNET, sem login nenhum (ver PUBLIC_ROUTES em
+// auth.config.ts) — por isso a checagem de filial aqui importa em dobro:
+// sem ela, qualquer usuário logado de QUALQUER filial conseguia publicar na
+// internet aberta o cronograma/status report de um projeto de outra filial.
 export async function getOrCreatePublicScheduleToken(projectId: string): Promise<string> {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  await assertProjectAccess(projectId)
 
   const project = await db.project.findUnique({ where: { id: projectId }, select: { publicScheduleToken: true } })
   if (project?.publicScheduleToken) return project.publicScheduleToken
@@ -30,8 +33,7 @@ export async function getOrCreatePublicScheduleToken(projectId: string): Promise
 }
 
 export async function revokePublicScheduleToken(projectId: string): Promise<void> {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  await assertProjectAccess(projectId)
   await db.project.update({ where: { id: projectId }, data: { publicScheduleToken: null } })
   revalidatePath(`/projects/${projectId}/schedule`)
 }
@@ -40,8 +42,7 @@ export async function revokePublicScheduleToken(projectId: string): Promise<void
 // Público" na apresentação, rota pública em app/(print)/public/
 // status-report/[token].
 export async function getOrCreatePublicStatusToken(projectId: string): Promise<string> {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  await assertProjectAccess(projectId)
 
   const project = await db.project.findUnique({ where: { id: projectId }, select: { publicStatusToken: true } })
   if (project?.publicStatusToken) return project.publicStatusToken
@@ -53,8 +54,7 @@ export async function getOrCreatePublicStatusToken(projectId: string): Promise<s
 }
 
 export async function revokePublicStatusToken(projectId: string): Promise<void> {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  await assertProjectAccess(projectId)
   await db.project.update({ where: { id: projectId }, data: { publicStatusToken: null } })
   revalidatePath("/status-report")
 }

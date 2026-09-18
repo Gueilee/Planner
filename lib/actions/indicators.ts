@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
+import { canAccessOrg } from "@/lib/actions/project-access"
 import { toLegacyLikeTasks, areasFromV2, dependenciesById } from "@/lib/utils/schedule-v2-adapter"
 
 export async function getIndicatorsData(projectId: string) {
@@ -12,7 +13,7 @@ export async function getIndicatorsData(projectId: string) {
     db.project.findUnique({
       where: { id: projectId },
       select: {
-        id: true, title: true, status: true, requestNumber: true,
+        id: true, title: true, status: true, requestNumber: true, organizationId: true,
         expectedStart: true, expectedEnd: true,
         actualStart: true, actualEnd: true,
         budget: true, estimatedCosts: true, economy: true,
@@ -34,6 +35,7 @@ export async function getIndicatorsData(projectId: string) {
   ])
 
   if (!project) return null
+  if (!(await canAccessOrg(session, project.organizationId))) return null
 
   const legacyTasks = toLegacyLikeTasks(project.scheduleV2Items)
   const areas = areasFromV2(project.scheduleV2Items)

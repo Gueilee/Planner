@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
+import { assertProjectAccess } from "@/lib/actions/project-access"
 import { revalidatePath } from "next/cache"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -486,18 +487,16 @@ type MeetingWithRelations = {
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export async function generateMeetingATA(meetingId: string) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
-
   const meeting = await db.meeting.findUnique({
     where: { id: meetingId },
     include: {
       createdBy:    { select: { name: true } },
       participants: { include: { user: { select: { name: true, department: true } } } },
-      project:      { select: { title: true } },
+      project:      { select: { id: true, title: true } },
     },
   })
   if (!meeting) throw new Error("Reunião não encontrada")
+  const session = await assertProjectAccess(meeting.project.id)
 
   const projectTitle = meeting.project.title
   const participants = meeting.participants.map((p) => ({
@@ -687,9 +686,10 @@ export async function generateCheckpointATADirect(ctx: {
 export async function getExistingMeetingATA(meetingId: string) {
   const doc = await db.projectDocument.findFirst({
     where:  { meetingId },
-    select: { id: true, content: true, updatedAt: true },
+    select: { id: true, content: true, updatedAt: true, projectId: true },
   })
   if (!doc?.content) return null
+  await assertProjectAccess(doc.projectId)
   return {
     docId:     doc.id,
     content:   doc.content,
@@ -698,6 +698,8 @@ export async function getExistingMeetingATA(meetingId: string) {
 }
 
 export async function getAllMeetingsForProject(projectId: string) {
+  await assertProjectAccess(projectId)
+
   const meetings = await db.meeting.findMany({
     where:   { projectId },
     orderBy: { date: "desc" },

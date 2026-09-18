@@ -1,6 +1,7 @@
 import { auth } from "@/auth"
 import { db } from "@/lib/db"
 import { notFound, redirect } from "next/navigation"
+import { canAccessOrg } from "@/lib/actions/project-access"
 import { getKickOff } from "@/lib/actions/kickoff"
 import { getKickOffPresentation } from "@/lib/actions/kickoff-presentation"
 import { KOBuilderClient } from "./builder-client"
@@ -12,22 +13,23 @@ export default async function KickOffPresentationPage({ params }: { params: Prom
   const session = await auth()
   if (!session?.user) redirect("/login")
 
-  const [project, kickoff, existing, orgConfig] = await Promise.all([
-    db.project.findUnique({
-      where: { id },
-      include: {
-        sponsor:      { select: { name: true, department: true } },
-        risks:        { orderBy: { status: "asc" } },
-        members:      { include: { user: { select: { id: true, name: true, department: true, role: true, email: true } } } },
-        organization: { select: { logoUrl: true } },
-      },
-    }),
+  const project = await db.project.findUnique({
+    where: { id },
+    include: {
+      sponsor:      { select: { name: true, department: true } },
+      risks:        { orderBy: { status: "asc" } },
+      members:      { include: { user: { select: { id: true, name: true, department: true, role: true, email: true } } } },
+      organization: { select: { logoUrl: true } },
+    },
+  })
+  if (!project) notFound()
+  if (!(await canAccessOrg(session, project.organizationId))) notFound()
+
+  const [kickoff, existing, orgConfig] = await Promise.all([
     getKickOff(id),
     getKickOffPresentation(id),
     db.orgConfig.findUnique({ where: { id: "singleton" }, select: { logoUrl: true } }),
   ])
-
-  if (!project) notFound()
 
   const projectData = {
     id:             project.id,

@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
+import { assertProjectAccess } from "@/lib/actions/project-access"
 import { revalidatePath } from "next/cache"
 import { ProjectStatus } from "@/lib/generated/prisma/enums"
 import { notifyProjectMembers } from "@/lib/notify"
@@ -35,8 +36,7 @@ export async function createProject(data: {
 }
 
 export async function updateProjectStatus(id: string, status: ProjectStatus) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  await assertProjectAccess(id)
 
   const data: Record<string, unknown> = { status }
   if (status === "IN_PROGRESS") data.actualStart = new Date()
@@ -68,8 +68,7 @@ export async function updateProjectDetails(id: string, data: {
   roadmapYear?:    number
   roadmapQuarter?: number
 }) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  await assertProjectAccess(id)
 
   // Exige ano com exatamente 4 dígitos — <input type="date"> do navegador
   // deixa digitar mais (ex.: "092026"), o que gera um Date cujo
@@ -107,8 +106,14 @@ export async function updateProjectDetails(id: string, data: {
 }
 
 export async function deleteProject(id: string) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  const session = await assertProjectAccess(id)
+  // Excluir projeto é ação de administrador — não basta "ter acesso à
+  // filial" (ver os outros usos de assertProjectAccess neste arquivo);
+  // qualquer PROJECT_MEMBER/CLIENT da própria filial conseguia apagar
+  // projeto alheio antes desta checagem.
+  if (session.user.role !== "ADMIN" && session.user.role !== "PROJECT_MANAGER") {
+    throw new Error("Você não tem permissão para excluir projetos")
+  }
 
   await db.project.delete({ where: { id } })
   revalidatePath(`/projects`)
@@ -118,8 +123,7 @@ export async function updateSuggestedDates(id: string, data: {
   suggestedStart: string | null
   suggestedEnd: string | null
 }) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  await assertProjectAccess(id)
 
   const toDate = (v: string | null) => (v && isValidDateStr(v)) ? new Date(`${v}T00:00:00.000Z`) : null
 
@@ -137,8 +141,7 @@ export async function updateSuggestedDates(id: string, data: {
 // ─── WBS Areas ─────────────────────────────────────────────────────────────
 
 export async function createWbsArea(projectId: string, name: string, color: string) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  await assertProjectAccess(projectId)
 
   const max = await db.wbsArea.aggregate({ where: { projectId }, _max: { order: true } })
   await db.wbsArea.create({
@@ -148,21 +151,21 @@ export async function createWbsArea(projectId: string, name: string, color: stri
 }
 
 export async function updateWbsArea(id: string, data: { name?: string; color?: string }) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
-
   const area = await db.wbsArea.findUnique({ where: { id }, select: { projectId: true } })
+  if (!area) return
+  await assertProjectAccess(area.projectId)
+
   await db.wbsArea.update({ where: { id }, data })
-  if (area) revalidatePath(`/projects/${area.projectId}`)
+  revalidatePath(`/projects/${area.projectId}`)
 }
 
 export async function deleteWbsArea(id: string) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
-
   const area = await db.wbsArea.findUnique({ where: { id }, select: { projectId: true } })
+  if (!area) return
+  await assertProjectAccess(area.projectId)
+
   await db.wbsArea.delete({ where: { id } })
-  if (area) revalidatePath(`/projects/${area.projectId}`)
+  revalidatePath(`/projects/${area.projectId}`)
 }
 
 // createTask/updateTask/deleteTask (ScheduleTask legado) foram removidas na
@@ -173,8 +176,7 @@ export async function deleteWbsArea(id: string) {
 // ─── Team Members ──────────────────────────────────────────────────────────
 
 export async function addProjectMember(projectId: string, userId: string, role: string) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  await assertProjectAccess(projectId)
 
   await db.projectMember.upsert({
     where: { projectId_userId: { projectId, userId } },
@@ -185,8 +187,7 @@ export async function addProjectMember(projectId: string, userId: string, role: 
 }
 
 export async function removeProjectMember(projectId: string, userId: string) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  await assertProjectAccess(projectId)
 
   await db.projectMember.delete({
     where: { projectId_userId: { projectId, userId } },
@@ -206,8 +207,7 @@ export async function createRisk(projectId: string, data: {
   presentToClient?: boolean
   responsibleId?: string | null
 }) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  await assertProjectAccess(projectId)
 
   const riskGrade = computeRiskGrade(data.consequenceLevel, data.probabilityLevel)
   const status = computeRiskStatus(riskGrade)
@@ -256,11 +256,9 @@ export async function updateRisk(id: string, data: {
   presentToClient?: boolean
   responsibleId?: string | null
 }) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
-
   const risk = await db.risk.findUnique({ where: { id }, select: { projectId: true, consequenceLevel: true, probabilityLevel: true } })
   if (!risk) return
+  await assertProjectAccess(risk.projectId)
 
   const consequenceLevel = data.consequenceLevel ?? risk.consequenceLevel
   const probabilityLevel = data.probabilityLevel ?? risk.probabilityLevel
@@ -285,10 +283,10 @@ export async function updateRisk(id: string, data: {
 }
 
 export async function deleteRisk(id: string) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
-
   const risk = await db.risk.findUnique({ where: { id }, select: { projectId: true } })
+  if (!risk) return
+  await assertProjectAccess(risk.projectId)
+
   await db.risk.delete({ where: { id } })
-  if (risk) revalidatePath(`/projects/${risk.projectId}`)
+  revalidatePath(`/projects/${risk.projectId}`)
 }

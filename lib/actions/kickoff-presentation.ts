@@ -2,13 +2,13 @@
 
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
+import { assertProjectAccess } from "@/lib/actions/project-access"
 import { revalidatePath } from "next/cache"
 import { DocumentType } from "@/lib/generated/prisma/enums"
 import type { KOPresentation } from "@/lib/types/kickoff-presentation"
 
 export async function saveKickOffPresentation(data: KOPresentation & { projectId: string }) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  const session = await assertProjectAccess(data.projectId)
 
   const content = JSON.stringify({ slides: data.slides })
 
@@ -36,6 +36,8 @@ export async function saveKickOffPresentation(data: KOPresentation & { projectId
 }
 
 export async function getKickOffPresentation(projectId: string) {
+  await assertProjectAccess(projectId)
+
   const doc = await db.projectDocument.findFirst({
     where: { projectId, type: DocumentType.KICKOFF_PRESENTATION },
     orderBy: { updatedAt: "desc" },

@@ -10,6 +10,7 @@ import { deriveStatus, deriveProgress } from "@/lib/utils/task-progress"
 import { detectScheduleStatusWorsening, DEFAULT_RISK_THRESHOLD_PCT } from "@/lib/utils/schedule-status"
 import { LEGACY_STATUS_TO_V2 } from "@/lib/utils/schedule-v2-adapter"
 import { applyItemUpdatesV2 } from "@/lib/actions/schedule-v2"
+import { assertProjectAccess } from "@/lib/actions/project-access"
 import { notifyUser, notifyProjectMembers } from "@/lib/notify"
 
 export type CheckpointFrequency = "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY"
@@ -58,8 +59,7 @@ const FREQ_LABELS: Record<CheckpointFrequency, string> = {
 }
 
 export async function saveCheckpoint(data: CheckpointInput) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  const session = await assertProjectAccess(data.projectId)
 
   const meetingDate = new Date(data.date)
   const freq        = FREQ_LABELS[data.frequency]
@@ -258,8 +258,7 @@ export async function updateTaskScheduleFromCheckpoint(
     actualCost?:    number | null
   },
 ) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  await assertProjectAccess(projectId)
 
   await applyItemUpdatesV2(projectId, [{
     itemId: taskId,
@@ -273,6 +272,8 @@ export async function updateTaskScheduleFromCheckpoint(
 }
 
 export async function getCheckpointHistory(projectId: string) {
+  await assertProjectAccess(projectId)
+
   const meetings = await db.meeting.findMany({
     where:   { projectId, type: "CHECKPOINT" },
     orderBy: { date: "desc" },

@@ -1,6 +1,7 @@
 import { auth } from "@/auth"
 import { db } from "@/lib/db"
 import { notFound, redirect } from "next/navigation"
+import { canAccessOrg } from "@/lib/actions/project-access"
 import { getProjectParticipants, getAllActiveUsers } from "@/lib/actions/meeting-participants"
 import { GoNoGoClient } from "./go-no-go-client"
 
@@ -27,6 +28,7 @@ export default async function GoNoGoPage({ params }: { params: Promise<{ id: str
   ])
 
   if (!project) notFound()
+  if (!(await canAccessOrg(session, project.organizationId))) notFound()
 
   const projectData = {
     id: project.id, title: project.title, status: project.status,

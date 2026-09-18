@@ -1,6 +1,7 @@
 import { auth } from "@/auth"
 import { notFound } from "next/navigation"
 import { getSCurveData } from "@/lib/actions/s-curve"
+import { canAccessOrg } from "@/lib/actions/project-access"
 import { SCurveClient } from "./s-curve-client"
 import { db } from "@/lib/db"
 import Link from "next/link"
@@ -13,12 +14,11 @@ export default async function SCurvePage({ params }: { params: Promise<{ id: str
   const session = await auth()
   if (!session) notFound()
 
-  const [data, project] = await Promise.all([
-    getSCurveData(id),
-    db.project.findUnique({ where: { id }, select: { id: true, title: true } }),
-  ])
-
+  const project = await db.project.findUnique({ where: { id }, select: { id: true, title: true, organizationId: true } })
   if (!project) notFound()
+  if (!(await canAccessOrg(session, project.organizationId))) notFound()
+
+  const data = await getSCurveData(id)
 
   return (
     <div className="flex flex-col min-h-screen bg-[#0F172A]">

@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
+import { assertProjectAccess } from "@/lib/actions/project-access"
 import { revalidatePath } from "next/cache"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -49,6 +50,7 @@ export async function getProjectsForClosure() {
 }
 
 export async function getProjectClosureData(projectId: string) {
+  await assertProjectAccess(projectId)
   return db.project.findUnique({
     where: { id: projectId },
     include: {

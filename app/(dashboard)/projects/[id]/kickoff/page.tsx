@@ -1,6 +1,7 @@
 import { auth } from "@/auth"
 import { db } from "@/lib/db"
 import { notFound, redirect } from "next/navigation"
+import { canAccessOrg } from "@/lib/actions/project-access"
 import { getKickOff } from "@/lib/actions/kickoff"
 import { getProjectParticipants, getAllActiveUsers } from "@/lib/actions/meeting-participants"
 import { KickOffClient } from "./kickoff-client"
@@ -12,23 +13,24 @@ export default async function KickOffPage({ params }: { params: Promise<{ id: st
   const session = await auth()
   if (!session?.user) redirect("/login")
 
-  const [project, projectParticipants, allUsers, existing] = await Promise.all([
-    db.project.findUnique({
-      where: { id },
-      include: {
-        sponsor: { select: { name: true, department: true } },
-        risks: { orderBy: { status: "asc" } },
-        members: {
-          include: { user: { select: { id: true, name: true, department: true, role: true } } },
-        },
+  const project = await db.project.findUnique({
+    where: { id },
+    include: {
+      sponsor: { select: { name: true, department: true } },
+      risks: { orderBy: { status: "asc" } },
+      members: {
+        include: { user: { select: { id: true, name: true, department: true, role: true } } },
       },
-    }),
+    },
+  })
+  if (!project) notFound()
+  if (!(await canAccessOrg(session, project.organizationId))) notFound()
+
+  const [projectParticipants, allUsers, existing] = await Promise.all([
     getProjectParticipants(id),
     getAllActiveUsers(),
     getKickOff(id),
   ])
-
-  if (!project) notFound()
 
   const projectData = {
     id: project.id, title: project.title, description: project.description,

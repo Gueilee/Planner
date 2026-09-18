@@ -1,6 +1,7 @@
 import { auth } from "@/auth"
 import { redirect, notFound } from "next/navigation"
 import { Header } from "@/components/layout/header"
+import { canAccessOrg } from "@/lib/actions/project-access"
 import { getProjectBenefits } from "@/lib/actions/benefits"
 import { ProjectBenefitsClient } from "./project-benefits-client"
 import { db } from "@/lib/db"
@@ -19,9 +20,10 @@ export default async function ProjectBenefitsPage({
 
   const project = await db.project.findUnique({
     where: { id },
-    select: { id: true, title: true, status: true, projectArea: true },
+    select: { id: true, title: true, status: true, projectArea: true, organizationId: true },
   })
   if (!project) notFound()
+  if (!(await canAccessOrg(session, project.organizationId))) notFound()
 
   // Projeto de Armazém não usa a etapa de Benefícios (pedido da Millena) —
   // volta pra tela do projeto em vez de mostrar uma página vazia/inaplicável.

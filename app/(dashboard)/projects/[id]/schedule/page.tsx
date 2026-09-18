@@ -1,6 +1,7 @@
 import { auth } from "@/auth"
 import { notFound, redirect } from "next/navigation"
 import { db } from "@/lib/db"
+import { canAccessOrg } from "@/lib/actions/project-access"
 import { getScheduleV2 } from "@/lib/actions/schedule-v2"
 import { getLatestBaselineByItem } from "@/lib/actions/baseline"
 import { ScheduleV2Client } from "../schedule-v2/schedule-v2-client"
@@ -29,8 +30,11 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
   const session = await auth()
   if (!session?.user) redirect("/login")
 
-  const [project, data, members, org, baselineByItem] = await Promise.all([
-    db.project.findUnique({ where: { id }, select: { id: true, title: true, expectedStart: true, expectedEnd: true, publicScheduleToken: true } }),
+  const project = await db.project.findUnique({ where: { id }, select: { id: true, title: true, expectedStart: true, expectedEnd: true, publicScheduleToken: true, organizationId: true } })
+  if (!project) notFound()
+  if (!(await canAccessOrg(session, project.organizationId))) notFound()
+
+  const [data, members, org, baselineByItem] = await Promise.all([
     getScheduleV2(id),
     db.user.findMany({
       where: { active: true, organizationId: session.user.organizationId },
@@ -40,7 +44,6 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
     db.organization.findUnique({ where: { id: session.user.organizationId }, select: { riskThresholdPct: true } }),
     getLatestBaselineByItem(id),
   ])
-  if (!project) notFound()
 
   return (
     <div className="flex flex-col h-full" style={{ background: "#F8F9FC" }}>

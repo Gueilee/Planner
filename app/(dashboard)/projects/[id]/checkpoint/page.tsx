@@ -1,6 +1,7 @@
 import { auth } from "@/auth"
 import { db } from "@/lib/db"
 import { notFound, redirect } from "next/navigation"
+import { canAccessOrg } from "@/lib/actions/project-access"
 import { getCheckpointHistory } from "@/lib/actions/checkpoint"
 import { getProjectParticipants, getAllActiveUsers } from "@/lib/actions/meeting-participants"
 import { V2_STATUS_TO_LEGACY, areasFromV2, topLevelAncestorId } from "@/lib/utils/schedule-v2-adapter"
@@ -13,11 +14,14 @@ export default async function CheckpointPage({ params }: { params: Promise<{ id:
   const session = await auth()
   if (!session?.user) redirect("/login")
 
-  const [project, items, projectParticipants, allUsers, history] = await Promise.all([
-    db.project.findUnique({
-      where: { id },
-      select: { id: true, title: true, status: true },
-    }),
+  const project = await db.project.findUnique({
+    where: { id },
+    select: { id: true, title: true, status: true, organizationId: true },
+  })
+  if (!project) notFound()
+  if (!(await canAccessOrg(session, project.organizationId))) notFound()
+
+  const [items, projectParticipants, allUsers, history] = await Promise.all([
     db.scheduleV2Item.findMany({
       where: { projectId: id },
       select: {
@@ -36,8 +40,6 @@ export default async function CheckpointPage({ params }: { params: Promise<{ id:
     getAllActiveUsers(),
     getCheckpointHistory(id),
   ])
-
-  if (!project) notFound()
 
   const taskTitleMap = new Map(items.map((t) => [t.id, t.title]))
   // "Área" v2 = item de topo da árvore (ver lib/utils/schedule-v2-adapter.ts)

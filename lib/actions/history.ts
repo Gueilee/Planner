@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
+import { assertProjectAccess } from "@/lib/actions/project-access"
 import { revalidatePath } from "next/cache"
 
 export async function getAllProjectsSummary() {
@@ -28,8 +29,7 @@ export async function getAllProjectsSummary() {
 }
 
 export async function getProjectFullHistory(projectId: string) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  await assertProjectAccess(projectId)
   return db.project.findUnique({
     where: { id: projectId },
     include: {
@@ -76,14 +76,13 @@ export async function getProjectFullHistory(projectId: string) {
 // ─── Exclusão de Reunião ──────────────────────────────────────────────────────
 
 export async function deleteMeeting(meetingId: string) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
-
-  // Busca o projectId antes de deletar para revalidar as rotas certas
+  // Busca o projectId antes de deletar para revalidar as rotas certas (e
+  // pra conferir a filial — precisa vir antes do assertProjectAccess)
   const meeting = await db.meeting.findUnique({
     where:  { id: meetingId },
     select: { projectId: true },
   })
+  if (meeting?.projectId) await assertProjectAccess(meeting.projectId)
 
   await db.meeting.delete({ where: { id: meetingId } })
 
@@ -102,14 +101,12 @@ export async function deleteMeeting(meetingId: string) {
 // ─── Exclusão de Anexo ────────────────────────────────────────────────────────
 
 export async function deleteAttachment(attachmentId: string) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
-
   const att = await db.attachment.findUnique({
     where:  { id: attachmentId },
     select: { fileUrl: true, projectId: true, taskId: true },
   })
   if (!att) throw new Error("Anexo não encontrado")
+  if (att.projectId) await assertProjectAccess(att.projectId)
 
   await db.attachment.delete({ where: { id: attachmentId } })
 

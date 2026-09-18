@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
+import { assertProjectAccess } from "@/lib/actions/project-access"
 import { revalidatePath } from "next/cache"
 import { ProjectStatus, TaskStatus } from "@/lib/generated/prisma/enums"
 import { V2_STATUS_TO_LEGACY, LEGACY_STATUS_TO_V2, topLevelAncestorId } from "@/lib/utils/schedule-v2-adapter"
@@ -16,6 +17,8 @@ import { applyItemUpdatesV2 } from "@/lib/actions/schedule-v2"
 // vocabulário.
 
 export async function getProjectTasksForKanban(projectId: string) {
+  await assertProjectAccess(projectId)
+
   const items = await db.scheduleV2Item.findMany({
     where:   { projectId },
     // Ordena por prazo (o que vence antes aparece primeiro dentro da coluna)
@@ -59,14 +62,12 @@ export async function getProjectTasksForKanban(projectId: string) {
 }
 
 export async function updateTaskStatusKanban(taskId: string, status: TaskStatus) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
-
   const item = await db.scheduleV2Item.findUnique({
     where:  { id: taskId },
     select: { projectId: true, parentId: true },
   })
   if (!item) return
+  await assertProjectAccess(item.projectId)
 
   const v2Status = LEGACY_STATUS_TO_V2[status] ?? "A_INICIAR"
   await applyItemUpdatesV2(item.projectId, [{
@@ -156,6 +157,7 @@ export async function getTaskDetail(taskId: string) {
     where: { id: taskId },
     select: {
       id:                 true,
+      projectId:          true,
       inicioReal:         true,
       terminoReal:        true,
       percentualCompleto: true,
@@ -178,6 +180,7 @@ export async function getTaskDetail(taskId: string) {
     },
   })
   if (!item) return null
+  await assertProjectAccess(item.projectId)
   return {
     id:           item.id,
     actualStart:  item.inicioReal?.toISOString()  ?? null,
@@ -203,8 +206,7 @@ export async function updateTaskKanban(
     actualCost?:   number | null
   },
 ) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  await assertProjectAccess(projectId)
 
   const v2Status = data.status !== undefined ? (LEGACY_STATUS_TO_V2[data.status] ?? "A_INICIAR") : undefined
 
@@ -227,8 +229,8 @@ export async function updateTaskKanban(
 }
 
 export async function addTaskComment(taskId: string, projectId: string, content: string) {
-  const session = await auth()
-  if (!session?.user?.email) throw new Error("Não autorizado")
+  const session = await assertProjectAccess(projectId)
+  if (!session.user.email) throw new Error("Não autorizado")
 
   const user = await db.user.findUnique({
     where:  { email: session.user.email },
@@ -255,8 +257,7 @@ export async function addTaskAttachmentKanban(
   projectId: string,
   attachment: { fileName: string; fileUrl: string; fileType: string; fileSize: number },
 ) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  await assertProjectAccess(projectId)
 
   const att = await db.attachment.create({
     data: { scheduleV2ItemId: taskId, projectId, fileName: attachment.fileName, fileUrl: attachment.fileUrl, fileType: attachment.fileType, fileSize: attachment.fileSize },
@@ -272,8 +273,7 @@ export async function updateProjectStatusKanban(
   projectId: string,
   newStatus: string,
 ) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  await assertProjectAccess(projectId)
 
   await db.project.update({
     where: { id: projectId },
