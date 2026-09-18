@@ -1564,6 +1564,58 @@ function DateCell({ value, kind, title, onCommit }: {
   )
 }
 
+// ─── Custo (Orçado/Real) — formato R$ brasileiro ─────────────────────────
+
+function fmtBRL(v: number): string {
+  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+}
+
+// Aceita tanto "2520.5" (o que a própria célula mostra ao entrar em edição)
+// quanto "2.520,50" colado de outro lugar já no formato brasileiro — só um
+// separador (`,` OU `.`) vira decimal; múltiplos pontos/vírgulas antes do
+// último são tratados como separador de milhar e descartados.
+function parseBRLInput(raw: string): number | null {
+  const trimmed = raw.trim()
+  if (trimmed === "") return null
+  const normalized = trimmed.includes(",")
+    ? trimmed.replace(/\./g, "").replace(",", ".")
+    : trimmed
+  const n = parseFloat(normalized)
+  return Number.isNaN(n) ? null : n
+}
+
+// Mostra "R$ 1.234,56" (locale pt-BR) parada; ao focar, troca pro número cru
+// (mais fácil de editar/apagar) e reformata ao sair do campo — mesmo
+// princípio de "exibição ≠ edição" do DateCell acima, adaptado pra moeda
+// (não dá pra usar <input type="number"> com prefixo/milhar formatado).
+function CurrencyCell({ value, onCommit, highlight, title }: {
+  value: number | null
+  onCommit: (v: number | null) => void
+  highlight?: boolean
+  title?: string
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState("")
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      placeholder="—"
+      title={title}
+      value={editing ? draft : value !== null ? fmtBRL(value) : ""}
+      onFocus={() => { setDraft(value !== null ? String(value) : ""); setEditing(true) }}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        setEditing(false)
+        const v = parseBRLInput(draft)
+        if (v !== value) onCommit(v)
+      }}
+      className={`w-24 text-center bg-transparent outline-none text-xs rounded border-b border-transparent focus:border-[#7B2FBE] focus:bg-violet-50 ${highlight ? "text-red-600 font-bold" : "text-slate-700"}`}
+    />
+  )
+}
+
 // Conteúdo de cada coluna configurável — separado da estrutura da linha para
 // poder ser reordenado livremente (h.colOrder) sem duplicar JSX.
 function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandlers): React.ReactNode {
@@ -1779,16 +1831,9 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
     // ItemV2.budgetedCost, lib/actions/schedule-v2.ts).
     case "custoOrcado":
       return !hasChildren ? (
-        <input
-          key={`budg:${item.id}:${item.budgetedCost}`}
-          type="number" min={0} step="0.01" inputMode="decimal"
-          defaultValue={item.budgetedCost ?? ""}
-          placeholder="—"
-          onBlur={(e) => {
-            const v = e.target.value === "" ? null : parseFloat(e.target.value)
-            if (v !== item.budgetedCost) h.onUpdate(item.id, { budgetedCost: v !== null && Number.isNaN(v) ? null : v })
-          }}
-          className="w-20 text-center bg-transparent outline-none text-xs text-slate-700 rounded border-b border-transparent focus:border-[#7B2FBE] focus:bg-violet-50"
+        <CurrencyCell
+          value={item.budgetedCost}
+          onCommit={(v) => h.onUpdate(item.id, { budgetedCost: v })}
         />
       ) : <span className="text-[10px] text-slate-300">—</span>
 
@@ -1796,17 +1841,11 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
       if (hasChildren) return <span className="text-[10px] text-slate-300">—</span>
       const over = item.budgetedCost !== null && item.actualCost !== null && item.actualCost > item.budgetedCost
       return (
-        <input
-          key={`act:${item.id}:${item.actualCost}`}
-          type="number" min={0} step="0.01" inputMode="decimal"
-          defaultValue={item.actualCost ?? ""}
-          placeholder="—"
+        <CurrencyCell
+          value={item.actualCost}
+          highlight={over}
           title={over ? "Custo real acima do orçado" : undefined}
-          onBlur={(e) => {
-            const v = e.target.value === "" ? null : parseFloat(e.target.value)
-            if (v !== item.actualCost) h.onUpdate(item.id, { actualCost: v !== null && Number.isNaN(v) ? null : v })
-          }}
-          className={`w-20 text-center bg-transparent outline-none text-xs rounded border-b border-transparent focus:border-[#7B2FBE] focus:bg-violet-50 ${over ? "text-red-600 font-bold" : "text-slate-700"}`}
+          onCommit={(v) => h.onUpdate(item.id, { actualCost: v })}
         />
       )
     }
