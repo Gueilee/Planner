@@ -21,7 +21,7 @@ import {
   ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, Milestone,
   Circle, CircleX, CirclePlus, Pencil, Undo2, Redo2, GripVertical, GripHorizontal, LayoutTemplate, FileSpreadsheet, BookmarkPlus, History,
   Link2, Copy, Check, X, Star, Columns3, CalendarDays, CalendarCheck2, CalendarClock, Flame,
-  Loader2, CircleCheck, CircleAlert,
+  Loader2, CircleCheck, CircleAlert, Wallet, Receipt, TrendingUp, TrendingDown, Minus,
 } from "lucide-react"
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
@@ -336,6 +336,18 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
     () => computeScheduleStatus(projectProgress, plannedPct, riskThresholdPct),
     [projectProgress, plannedPct, riskThresholdPct]
   )
+
+  // Custo do projeto — soma direta das colunas Custo Orçado/Custo Real de
+  // TODAS as linhas (grupo nunca tem valor próprio nesses dois campos, ver
+  // updateItemV2 em lib/actions/schedule-v2.ts, então somar sem filtrar
+  // hierarquia não dobra a conta — mesmo princípio do BAC/AC em
+  // Indicadores, lib/actions/indicators.ts). "Economia" é o que sobrou do
+  // orçado (positivo = ainda tem folga; negativo = já estourou).
+  const costSummary = useMemo(() => {
+    const budgeted = data.items.reduce((s, it) => s + (it.budgetedCost ?? 0), 0)
+    const actual = data.items.reduce((s, it) => s + (it.actualCost ?? 0), 0)
+    return { budgeted, actual, delta: budgeted - actual, hasData: budgeted > 0 || actual > 0 }
+  }, [data.items])
 
   useEffect(() => {
     hasUndoV2(projectId).then(setHasUndo).catch(() => {})
@@ -814,6 +826,47 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
         </div>
       </div>
 
+      {/* Resumo financeiro — soma direta das colunas Custo Orçado/Custo
+          Real de toda a árvore (custoSummary acima). Pedido direto: ver o
+          gasto do projeto de relance, sem precisar abrir Indicadores (que
+          mostra o mesmo número, só que dentro de um painel de KPIs bem
+          mais denso — aqui é o resumo rápido, junto do cronograma em si,
+          onde o custo é lançado linha a linha). Fundo em gradiente leve
+          só pra diferenciar visualmente da barra de status acima, sem
+          brigar com o roxo/azul da marca. */}
+      <div
+        className="shrink-0 px-5 py-3 border-b border-slate-200 flex items-center gap-3 flex-wrap"
+        style={{ background: "linear-gradient(90deg, #FAF5FF, #F5F9FF)" }}
+      >
+        <CostCard
+          icon={Wallet}
+          label="Custo Orçado"
+          value={costSummary.hasData ? fmtBRL(costSummary.budgeted) : "—"}
+          color="#7B2FBE"
+        />
+        <CostCard
+          icon={Receipt}
+          label="Custo Real"
+          value={costSummary.hasData ? fmtBRL(costSummary.actual) : "—"}
+          color="#2463FF"
+        />
+        {costSummary.hasData ? (
+          <CostCard
+            icon={costSummary.delta >= 0 ? TrendingUp : TrendingDown}
+            label={costSummary.delta >= 0 ? "Economia" : "Estouro de orçamento"}
+            value={fmtBRL(Math.abs(costSummary.delta))}
+            color={costSummary.delta >= 0 ? "#10B981" : "#EF4444"}
+            sublabel={
+              costSummary.budgeted > 0
+                ? `${Math.abs(Math.round((costSummary.delta / costSummary.budgeted) * 100))}% ${costSummary.delta >= 0 ? "abaixo" : "acima"} do orçado`
+                : undefined
+            }
+          />
+        ) : (
+          <CostCard icon={Minus} label="Economia / Estouro" value="—" color="#94A3B8" />
+        )}
+      </div>
+
       {/* Barra de ferramentas — agrupada por finalidade (histórico,
           produtividade, compartilhamento, colunas) em "cartões" leves, em
           vez de uma fileira única de botões idênticos encostados uns nos
@@ -1252,6 +1305,31 @@ function Stat({ label, value, color }: { label: string; value: string | number; 
     <div>
       <p className="text-lg font-black" style={{ color: color ?? "#1E293B" }}>{value}</p>
       <p className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">{label}</p>
+    </div>
+  )
+}
+
+// Cartão do resumo financeiro (Custo Orçado/Real/Economia) — mesmo padrão
+// visual "ícone num círculo + rótulo + valor" usado nos indicadores
+// financeiros de app/(dashboard)/projects/[id]/indicators/indicators-client.tsx,
+// só que compacto o bastante pra caber numa fileira dentro do Cronograma.
+function CostCard({ icon: Icon, label, value, color, sublabel }: {
+  icon: React.ElementType
+  label: string
+  value: string
+  color: string
+  sublabel?: string
+}) {
+  return (
+    <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-white/70 backdrop-blur-sm border border-white shadow-sm min-w-[168px]">
+      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${color}1A` }}>
+        <Icon className="w-4 h-4" style={{ color }} />
+      </div>
+      <div className="min-w-0 leading-tight">
+        <p className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">{label}</p>
+        <p className="text-sm font-black truncate" style={{ color }}>{value}</p>
+        {sublabel && <p className="text-[9px] font-bold" style={{ color }}>{sublabel}</p>}
+      </div>
     </div>
   )
 }
