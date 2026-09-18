@@ -75,6 +75,14 @@ export default async function PublicSchedulePage({ params }: { params: Promise<{
     inicioEstimado: dstr(r.inicioEstimado), terminoEstimado: dstr(r.terminoEstimado),
     inicioReal: dstr(r.inicioReal), terminoReal: dstr(r.terminoReal),
     esforcoEstimadoH: r.esforcoEstimadoH, esforcoRealH: r.esforcoRealH,
+    // Propositalmente null aqui, não r.budgetedCost/r.actualCost — ver o
+    // comentário no topo do arquivo: link público é pra stakeholder
+    // externo acompanhar prazo/progresso, nunca custo. buildRows/a tabela
+    // desta página já não renderizam essas colunas, mas zerar o valor na
+    // origem (em vez de só "não mostrar na UI") evita que um custo real
+    // vaze nesta rota sem login se algum dia alguém adicionar a coluna
+    // aqui sem querer.
+    budgetedCost: null, actualCost: null,
     percentualCompleto: r.percentualCompleto, schedulingMode: r.schedulingMode as "auto" | "manual",
     constraintType: r.constraintType, constraintDate: dstr(r.constraintDate),
     isGroup: groupIds.has(r.id),

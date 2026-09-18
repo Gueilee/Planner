@@ -80,6 +80,14 @@ export type ItemV2 = {
   terminoReal: string | null
   esforcoEstimadoH: number
   esforcoRealH: number
+  // Custo orçado/real da atividade (R$) — paridade com o ScheduleTask
+  // antigo, que já tinha esses dois campos. Só item-folha tem valor
+  // próprio (mesma regra de duração/% completo, §3.7): o Indicadores
+  // (BAC/AC/EV) soma este campo em TODOS os itens sem filtrar por
+  // hierarquia, então um grupo com custo próprio dobraria a conta junto
+  // com os filhos — ver updateItemV2, gate `!hasChildren`.
+  budgetedCost: number | null
+  actualCost: number | null
   percentualCompleto: number
   schedulingMode: SchedulingMode
   constraintType: string | null
@@ -199,6 +207,7 @@ type ItemSnapshotRow = {
   inicioEstimado: string | null; terminoEstimado: string | null
   inicioReal: string | null; terminoReal: string | null
   esforcoEstimadoH: number; esforcoRealH: number; percentualCompleto: number
+  budgetedCost: number | null; actualCost: number | null
   schedulingMode: string; constraintType: string | null; constraintDate: string | null
 }
 type DepSnapshotRow = { id: string; successorId: string; predecessorId: string; type: string; lagDiasUteis: number }
@@ -215,6 +224,7 @@ async function capturePayload(projectId: string): Promise<SnapshotPayload> {
       inicioEstimado: dstr(r.inicioEstimado), terminoEstimado: dstr(r.terminoEstimado),
       inicioReal: dstr(r.inicioReal), terminoReal: dstr(r.terminoReal),
       esforcoEstimadoH: r.esforcoEstimadoH, esforcoRealH: r.esforcoRealH, percentualCompleto: r.percentualCompleto,
+      budgetedCost: r.budgetedCost, actualCost: r.actualCost,
       schedulingMode: r.schedulingMode, constraintType: r.constraintType, constraintDate: dstr(r.constraintDate),
     })),
     dependencies: deps.map((d) => ({
@@ -309,6 +319,7 @@ async function restorePayload(tx: Parameters<Parameters<typeof db.$transaction>[
         inicioEstimado: ddate(it.inicioEstimado), terminoEstimado: ddate(it.terminoEstimado),
         inicioReal: ddate(it.inicioReal), terminoReal: ddate(it.terminoReal),
         esforcoEstimadoH: it.esforcoEstimadoH, esforcoRealH: it.esforcoRealH, percentualCompleto: it.percentualCompleto,
+        budgetedCost: it.budgetedCost, actualCost: it.actualCost,
         schedulingMode: it.schedulingMode, constraintType: it.constraintType, constraintDate: ddate(it.constraintDate),
       },
     })
@@ -572,6 +583,8 @@ export async function getScheduleV2(projectId: string): Promise<ScheduleV2Payloa
     terminoReal: dstr(r.terminoReal),
     esforcoEstimadoH: r.esforcoEstimadoH,
     esforcoRealH: r.esforcoRealH,
+    budgetedCost: r.budgetedCost,
+    actualCost: r.actualCost,
     percentualCompleto: r.percentualCompleto,
     schedulingMode: r.schedulingMode as SchedulingMode,
     constraintType: r.constraintType,
@@ -670,6 +683,7 @@ export async function createItemV2(input: CreateItemV2Input): Promise<ItemV2> {
     title: row.title, status: row.status, responsavelId: row.responsavelId, responsavelNome: row.responsavelNome, participantes: row.participantes, participanteIds: row.participanteIds, duracaoDiasUteis: row.duracaoDiasUteis,
     inicioEstimado: null, terminoEstimado: null, inicioReal: null, terminoReal: null,
     esforcoEstimadoH: row.esforcoEstimadoH, esforcoRealH: row.esforcoRealH,
+    budgetedCost: null, actualCost: null,
     percentualCompleto: row.percentualCompleto, schedulingMode: row.schedulingMode as SchedulingMode,
     constraintType: row.constraintType, constraintDate: dstr(row.constraintDate),
     isGroup: false,
@@ -711,6 +725,8 @@ export async function duplicateItemV2(id: string, projectId: string): Promise<{ 
       duracaoDiasUteis: source.duracaoDiasUteis,
       esforcoEstimadoH: source.esforcoEstimadoH,
       esforcoRealH: source.esforcoRealH,
+      budgetedCost: source.budgetedCost,
+      actualCost: source.actualCost,
       percentualCompleto: source.percentualCompleto,
       schedulingMode: source.schedulingMode,
       constraintType: source.constraintType,
@@ -757,6 +773,8 @@ export type UpdateItemV2Input = Partial<{
   terminoReal: string | null
   esforcoEstimadoH: number
   esforcoRealH: number
+  budgetedCost: number | null
+  actualCost: number | null
   percentualCompleto: number
   status: string
   responsavelId: string | null
@@ -838,6 +856,12 @@ export async function updateItemV2(
       ...(data.terminoReal !== undefined && { terminoReal: ddate(data.terminoReal) }),
       ...(data.esforcoEstimadoH !== undefined && { esforcoEstimadoH: data.esforcoEstimadoH }),
       ...(data.esforcoRealH !== undefined && { esforcoRealH: data.esforcoRealH }),
+      // Custo só em item-folha (mesmo motivo do !hasChildren em duração/%
+      // acima): Indicadores soma budgetedCost/actualCost de TODO item sem
+      // filtrar hierarquia (getIndicatorsData/BAC), então custo num grupo
+      // dobraria a conta junto com o que os filhos já somam.
+      ...(!hasChildren && data.budgetedCost !== undefined && { budgetedCost: data.budgetedCost }),
+      ...(!hasChildren && data.actualCost !== undefined && { actualCost: data.actualCost }),
       ...(!hasChildren && data.percentualCompleto !== undefined && { percentualCompleto: data.percentualCompleto }),
       ...(data.status !== undefined && { status: data.status }),
       ...(responsavelIdUpdate !== undefined && { responsavelId: responsavelIdUpdate }),
@@ -866,6 +890,8 @@ export async function updateItemV2(
   if (data.inicioReal !== undefined) changed.push(`Início Real para ${data.inicioReal ?? "vazio"}`)
   if (data.terminoReal !== undefined) changed.push(`Término Real para ${data.terminoReal ?? "vazio"}`)
   if (!hasChildren && data.percentualCompleto !== undefined) changed.push(`% Completo para ${data.percentualCompleto}%`)
+  if (!hasChildren && data.budgetedCost !== undefined) changed.push("custo orçado")
+  if (!hasChildren && data.actualCost !== undefined) changed.push("custo real")
   if (data.status !== undefined) changed.push(`Status para ${data.status}`)
   if (responsavelIdUpdate !== undefined || responsavelNomeUpdate !== undefined) changed.push("Responsável")
   if (data.participantes !== undefined || data.participanteIds !== undefined) changed.push("Participantes")

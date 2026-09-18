@@ -70,6 +70,8 @@ function sortValue(item: ItemV2, col: SortColumn, membersById?: Map<string, stri
     case "folga": return item.totalFloatDays ?? Number.MAX_SAFE_INTEGER
     case "responsavel": return ((item.responsavelId ? membersById?.get(item.responsavelId) : item.responsavelNome) ?? "").toLowerCase()
     case "status": return statusLabel(item.status).label
+    case "custoOrcado": return item.budgetedCost ?? -1
+    case "custoReal": return item.actualCost ?? -1
     default: return 0
   }
 }
@@ -149,7 +151,7 @@ function statusLabel(status: string) {
 // "Atividade" (título+hierarquia) fica fixa à esquerda — todo o resto é
 // livre para o usuário reordenar e redimensionar.
 
-type ColKey = "duracao" | "inicio" | "termino" | "inicioReal" | "terminoReal" | "baselineInicio" | "baselineTermino" | "pctEstimado" | "pct" | "folga" | "predecessores" | "restricao" | "responsavel" | "participantes" | "status"
+type ColKey = "duracao" | "inicio" | "termino" | "inicioReal" | "terminoReal" | "baselineInicio" | "baselineTermino" | "pctEstimado" | "pct" | "folga" | "predecessores" | "restricao" | "responsavel" | "participantes" | "status" | "custoOrcado" | "custoReal"
 
 const COL_LABELS: Record<ColKey, string> = {
   duracao: "Duração", inicio: "Início", termino: "Término",
@@ -178,15 +180,21 @@ const COL_LABELS: Record<ColKey, string> = {
   // Além do responsável principal: outras pessoas ligadas à atividade
   // ("participantes"/"informados") — texto livre, vários nomes por vírgula.
   participantes: "Participantes", status: "Status",
+  // Paridade com o Custo Orçado/Custo Real do cronograma antigo (ScheduleTask)
+  // — só item-folha tem valor próprio (grupo soma os filhos no Indicadores,
+  // ver comentário em ItemV2.budgetedCost em lib/actions/schedule-v2.ts).
+  custoOrcado: "Custo Orçado", custoReal: "Custo Real",
 }
-const DEFAULT_COL_ORDER: ColKey[] = ["duracao", "inicio", "termino", "inicioReal", "terminoReal", "baselineInicio", "baselineTermino", "pctEstimado", "pct", "folga", "predecessores", "restricao", "responsavel", "participantes", "status"]
+const DEFAULT_COL_ORDER: ColKey[] = ["duracao", "inicio", "termino", "inicioReal", "terminoReal", "baselineInicio", "baselineTermino", "pctEstimado", "pct", "folga", "predecessores", "restricao", "responsavel", "participantes", "status", "custoOrcado", "custoReal"]
 const DEFAULT_COL_WIDTHS: Record<ColKey, number> = {
   duracao: 70, inicio: 110, termino: 100, inicioReal: 110, terminoReal: 110, baselineInicio: 100, baselineTermino: 100, pctEstimado: 70, pct: 60, folga: 70, predecessores: 150, restricao: 150, responsavel: 140, participantes: 160, status: 130,
+  custoOrcado: 120, custoReal: 120,
 }
 const COL_ALIGN: Record<ColKey, "center" | "left"> = {
   duracao: "center", inicio: "center", termino: "center", inicioReal: "center", terminoReal: "center",
   baselineInicio: "center", baselineTermino: "center", pctEstimado: "center", pct: "center", folga: "center",
   predecessores: "left", restricao: "left", responsavel: "left", participantes: "left", status: "left",
+  custoOrcado: "center", custoReal: "center",
 }
 const DEFAULT_TITLE_WIDTH = 320
 const GUTTER_WIDTH = 112
@@ -1763,6 +1771,43 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
         >
           {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
+      )
+    }
+
+    // Custo orçado/real (R$) — paridade com o cronograma antigo. Só
+    // item-folha (grupo soma os filhos no Indicadores; ver comentário em
+    // ItemV2.budgetedCost, lib/actions/schedule-v2.ts).
+    case "custoOrcado":
+      return !hasChildren ? (
+        <input
+          key={`budg:${item.id}:${item.budgetedCost}`}
+          type="number" min={0} step="0.01" inputMode="decimal"
+          defaultValue={item.budgetedCost ?? ""}
+          placeholder="—"
+          onBlur={(e) => {
+            const v = e.target.value === "" ? null : parseFloat(e.target.value)
+            if (v !== item.budgetedCost) h.onUpdate(item.id, { budgetedCost: v !== null && Number.isNaN(v) ? null : v })
+          }}
+          className="w-20 text-center bg-transparent outline-none text-xs text-slate-700 rounded border-b border-transparent focus:border-[#7B2FBE] focus:bg-violet-50"
+        />
+      ) : <span className="text-[10px] text-slate-300">—</span>
+
+    case "custoReal": {
+      if (hasChildren) return <span className="text-[10px] text-slate-300">—</span>
+      const over = item.budgetedCost !== null && item.actualCost !== null && item.actualCost > item.budgetedCost
+      return (
+        <input
+          key={`act:${item.id}:${item.actualCost}`}
+          type="number" min={0} step="0.01" inputMode="decimal"
+          defaultValue={item.actualCost ?? ""}
+          placeholder="—"
+          title={over ? "Custo real acima do orçado" : undefined}
+          onBlur={(e) => {
+            const v = e.target.value === "" ? null : parseFloat(e.target.value)
+            if (v !== item.actualCost) h.onUpdate(item.id, { actualCost: v !== null && Number.isNaN(v) ? null : v })
+          }}
+          className={`w-20 text-center bg-transparent outline-none text-xs rounded border-b border-transparent focus:border-[#7B2FBE] focus:bg-violet-50 ${over ? "text-red-600 font-bold" : "text-slate-700"}`}
+        />
       )
     }
 

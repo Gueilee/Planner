@@ -105,8 +105,10 @@ export async function exportScheduleToExcel(
     { key: "pctReal",    width: 12 },  // N - % Completo
     { key: "pred",       width: 26 },  // O - Predecessores
     { key: "partic",     width: 26 },  // P - Participantes
+    { key: "custoOrc",   width: 15 },  // Q - Custo Orçado
+    { key: "custoReal",  width: 15 },  // R - Custo Real
   ]
-  const TOTAL_COLS = 16
+  const TOTAL_COLS = 18
 
   // ── Linha 1: título do projeto ─────────────────────────────────────────
   const titleRow = ws.addRow([`Cronograma — ${projectTitle}`])
@@ -154,6 +156,8 @@ export async function exportScheduleToExcel(
     { label: "% Completo" },
     { label: "Predecessores", color: "FF4338CA" },
     { label: "Participantes", color: "FF4338CA" },
+    { label: "Custo Orçado", color: "FF7B2FBE" },
+    { label: "Custo Real", color: "FF7B2FBE" },
   ]
   const hdrRow = ws.addRow(HDR_COLS.map((c) => c.label))
   hdrRow.height = 26
@@ -189,6 +193,7 @@ export async function exportScheduleToExcel(
       today,
     )
     const over = it.esforcoRealH > 0 && it.esforcoEstimadoH > 0 && it.esforcoRealH > it.esforcoEstimadoH
+    const costOver = it.budgetedCost !== null && it.actualCost !== null && it.actualCost > it.budgetedCost
 
     const indent = depth > 0 ? "  ".repeat(depth) : ""
     const excelRow = ws.addRow([
@@ -212,6 +217,8 @@ export async function exportScheduleToExcel(
         const all = [...linked, ...it.participantes]
         return all.length > 0 ? all.join(", ") : "—"
       })(),
+      it.budgetedCost ?? null,
+      it.actualCost ?? null,
     ])
     excelRow.height = 20
 
@@ -268,6 +275,14 @@ export async function exportScheduleToExcel(
       } else if (colN === 16) {
         cell.font = { ...baseFont, color: { argb: "FF4338CA" }, size: 8 }
         cell.alignment = { vertical: "middle", horizontal: "left", wrapText: true }
+      } else if (colN === 17) {
+        cell.font = { ...baseFont, color: { argb: "FF7B2FBE" } }
+        cell.numFmt = '"R$" #,##0.00'
+        cell.alignment = { vertical: "middle", horizontal: "center" }
+      } else if (colN === 18) {
+        cell.font = { ...baseFont, bold: costOver, color: { argb: costOver ? "FFEF4444" : "FF7B2FBE" } }
+        cell.numFmt = '"R$" #,##0.00'
+        cell.alignment = { vertical: "middle", horizontal: "center" }
       }
 
       cell.border = {
