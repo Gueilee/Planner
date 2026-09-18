@@ -54,25 +54,31 @@ function makeTransport() {
   })
 }
 
-async function sendMail(to: string, subject: string, html: string) {
+// Devolve se um e-mail de verdade foi enviado (true) ou só simulado no
+// console porque nenhum SMTP está configurado (false) — sem essa distinção,
+// quem chama não tem como saber que "sendMail não lançou erro" não é o
+// mesmo que "o e-mail realmente saiu". Foi esse silêncio que fazia a tela
+// de convite achar que tinha dado certo mesmo sem nenhum SMTP no ar.
+async function sendMail(to: string, subject: string, html: string): Promise<boolean> {
   const transport = makeTransport()
   if (!transport) {
     console.log(`\n📧 [DEV] E-mail para ${to}\n   Assunto: ${subject}\n`)
-    return
+    return false
   }
   await transport.sendMail({ from: FROM, to, subject, html })
+  return true
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
-export async function sendInviteEmail(to: string, name: string, token: string) {
+export async function sendInviteEmail(to: string, name: string, token: string): Promise<boolean> {
   const link = `${BASE_URL}/invite/${token}`
-  await sendMail(to, 'Você foi convidado para o PLANNER Vendemmia', inviteHtml(name, link))
+  return sendMail(to, 'Você foi convidado para o PLANNER Vendemmia', inviteHtml(name, link))
 }
 
-export async function sendPasswordResetEmail(to: string, name: string, token: string) {
+export async function sendPasswordResetEmail(to: string, name: string, token: string): Promise<boolean> {
   const link = `${BASE_URL}/reset/${token}`
-  await sendMail(to, 'Redefinição de senha — PLANNER Vendemmia', resetHtml(name, link))
+  return sendMail(to, 'Redefinição de senha — PLANNER Vendemmia', resetHtml(name, link))
 }
 
 // ── HTML Templates ───────────────────────────────────────────────────────────
