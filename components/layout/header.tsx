@@ -45,13 +45,17 @@ export function Header({ title, subtitle }: HeaderProps) {
   const { data: session, update } = useSession()
   const router = useRouter()
 
-  // Org switcher — disponível pra admin global (todas as filiais) e pra
-  // qualquer usuário com acesso concedido a mais de uma filial
-  // (UserOrganizationAccess); getOrgsForSwitch já resolve isso no servidor,
-  // aqui só decide se mostra a seção (0 ou 1 filial = nada pra trocar).
+  // Org switcher — getOrgsForSwitch sempre devolve pelo menos a própria
+  // filial da pessoa (mesmo sem nenhuma extra concedida via
+  // UserOrganizationAccess), então esta mesma lista também alimenta o selo
+  // "filial atual" abaixo — sem ele, não havia NENHUMA indicação de qual
+  // filial se está vendo fora do menu de perfil (pedido direto: ficava
+  // fácil esquecer depois de trocar). Carregado assim que a página abre
+  // (não só ao clicar no menu), pra o selo já aparecer pronto.
   const [switchOrgs,   setSwitchOrgs]   = useState<OrgSwitchItem[]>([])
   const [orgsLoaded,   setOrgsLoaded]   = useState(false)
   const [switching,    setSwitching]    = useState(false)
+  const [orgMenuOpen,  setOrgMenuOpen]  = useState(false)
 
   async function loadOrgsForSwitch() {
     if (orgsLoaded) return
@@ -61,6 +65,10 @@ export function Header({ title, subtitle }: HeaderProps) {
       setOrgsLoaded(true)
     } catch { /* ignore */ }
   }
+
+  useEffect(() => { if (session?.user) loadOrgsForSwitch() }, [session?.user]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const currentOrg = switchOrgs.find((o) => o.id === session?.user?.organizationId) ?? null
 
   async function handleSwitchOrg(orgId: string) {
     if (orgId === session?.user?.organizationId) return
@@ -164,6 +172,50 @@ export function Header({ title, subtitle }: HeaderProps) {
 
       {/* Actions */}
       <div className="flex items-center gap-1.5">
+
+        {/* Filial atual — sempre visível, não só dentro do menu de perfil
+            (pedido direto: sem isso, trocar de filial e não ver mais onde
+            se está era confuso, já que as telas ficam idênticas entre
+            filiais). Vira um seletor clicável quando há mais de uma opção;
+            senão é só uma etiqueta informativa. */}
+        {currentOrg && (
+          <DropdownMenu open={orgMenuOpen} onOpenChange={setOrgMenuOpen}>
+            <DropdownMenuTrigger
+              disabled={switchOrgs.length <= 1}
+              title={switchOrgs.length > 1 ? "Trocar de filial" : currentOrg.name}
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 h-9 rounded-xl text-xs font-bold transition-colors focus:outline-none disabled:cursor-default"
+              style={{ background: "rgba(123,47,190,0.08)", color: "#7B2FBE", border: "1px solid rgba(123,47,190,0.18)" }}
+            >
+              <Building2 className="w-3.5 h-3.5 shrink-0" />
+              <span className="max-w-[160px] truncate">{currentOrg.name}</span>
+              {switchOrgs.length > 1 && <ChevronDown className="w-3 h-3 opacity-70 shrink-0" />}
+            </DropdownMenuTrigger>
+            {switchOrgs.length > 1 && (
+              <DropdownMenuContent align="start" className="w-60 rounded-xl border-[#E2E8F0] shadow-xl p-1.5">
+                <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  Trocar de filial
+                </div>
+                {switchOrgs.map((org) => {
+                  const active = org.id === session?.user?.organizationId
+                  return (
+                    <button
+                      key={org.id}
+                      onClick={() => { handleSwitchOrg(org.id); setOrgMenuOpen(false) }}
+                      disabled={switching}
+                      className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm transition-colors text-left ${
+                        active ? "bg-violet-50 text-[#7B2FBE] font-semibold" : "text-slate-600 hover:bg-slate-100"
+                      }`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${active ? "bg-[#7B2FBE]" : "bg-slate-300"}`} />
+                      <span className="flex-1 truncate">{org.name}</span>
+                      {active && <Check className="w-3 h-3 flex-shrink-0" />}
+                    </button>
+                  )
+                })}
+              </DropdownMenuContent>
+            )}
+          </DropdownMenu>
+        )}
 
         {/* Quick Create */}
         <DropdownMenu>

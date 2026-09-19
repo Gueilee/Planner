@@ -225,7 +225,13 @@ export async function toggleUserActiveInOrg(userId: string): Promise<{ active: b
 // comum só pode trocar pra filiais que tem acesso concedido de verdade
 // (UserOrganizationAccess, gerido em Configurações/Gestão Global de
 // Usuários — ver lib/actions/user-org-access.ts). A própria filial de
-// origem sempre entra na lista, mesmo sem registro em UserOrganizationAccess.
+// origem sempre entra na lista, mesmo sem registro em UserOrganizationAccess
+// — inclusive quando é a ÚNICA filial da pessoa: antes isto devolvia []
+// nesse caso (só existia pra alimentar o SELETOR de troca, que não faz
+// sentido com 1 opção só), mas Header/Sidebar também usam esta mesma lista
+// pra sempre MOSTRAR qual filial a pessoa está vendo agora — pedido direto:
+// sem essa indicação visível, ficava fácil esquecer em qual filial se está
+// depois de trocar (só aparecia dentro do menu de perfil).
 
 export type OrgSwitchItem = { id: string; name: string; slug: string; active: boolean }
 
@@ -245,7 +251,6 @@ export async function getOrgsForSwitch(): Promise<OrgSwitchItem[]> {
     select: { organizationId: true },
   })
   const orgIds = [...new Set([session.user.organizationId, ...access.map((a) => a.organizationId)])]
-  if (orgIds.length <= 1) return []
 
   return db.organization.findMany({
     where:   { id: { in: orgIds } },

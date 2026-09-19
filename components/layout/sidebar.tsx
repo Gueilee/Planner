@@ -8,7 +8,7 @@ import { signOut, useSession } from "next-auth/react"
 import { cn } from "@/lib/utils"
 import {
   LayoutDashboard, FolderKanban,
-  BookOpen, Settings, ChevronLeft, LogOut, FileBarChart2, Star, Columns3, History, CheckCircle2, TrendingUp, LayoutTemplate, Gem,
+  BookOpen, Settings, ChevronLeft, LogOut, FileBarChart2, Star, Columns3, History, CheckCircle2, TrendingUp, LayoutTemplate, Gem, Building2,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ROLE_LABELS } from "@/lib/permissions"
@@ -32,13 +32,21 @@ const SYSTEM_ITEMS = [
 ]
 
 interface SidebarProps {
-  collapsed:   boolean
-  onToggle:    () => void
-  orgLogoUrl?: string | null
-  orgName?:    string
+  collapsed:       boolean
+  onToggle:        () => void
+  orgLogoUrl?:     string | null
+  orgName?:        string
+  // Nome da FILIAL atual (Organization) — não confundir com `orgName`
+  // acima (identidade visual única do sistema inteiro, Configurações →
+  // Identidade da Empresa). Resolvido no servidor por
+  // app/(dashboard)/layout.tsx (Server Component), não buscado aqui: numa
+  // tela pesada como o Cronograma, buscar isso via fetch/useEffect no
+  // cliente competia com dezenas de outras chamadas simultâneas e podia
+  // nunca resolver a tempo — o selo simplesmente não aparecia.
+  currentOrgName?: string | null
 }
 
-export function Sidebar({ collapsed, onToggle, orgLogoUrl, orgName = "PLANNER" }: SidebarProps) {
+export function Sidebar({ collapsed, onToggle, orgLogoUrl, orgName = "PLANNER", currentOrgName = null }: SidebarProps) {
   const pathname      = usePathname()
   const { data: session } = useSession()
 
@@ -184,6 +192,25 @@ export function Sidebar({ collapsed, onToggle, orgLogoUrl, orgName = "PLANNER" }
         </div>
 
       </nav>
+
+      {/* Filial atual — sempre visível (menu lateral aparece em toda tela,
+          diferente do Header, que algumas telas com cabeçalho próprio não
+          usam), pra nunca ficar sem saber em qual filial se está depois de
+          trocar. */}
+      {currentOrgName && (
+        <div className="relative z-10 px-3 pt-2" title={collapsed ? currentOrgName : undefined}>
+          <div
+            className={cn(
+              "flex items-center gap-1.5 rounded-lg font-bold uppercase tracking-wide",
+              collapsed ? "justify-center px-0 py-1.5 text-[8px]" : "px-2.5 py-1.5 text-[9px]"
+            )}
+            style={{ background: "rgba(123,47,190,0.08)", color: "#7B2FBE", border: "1px solid rgba(123,47,190,0.16)" }}
+          >
+            <Building2 className="w-3 h-3 shrink-0" />
+            {!collapsed && <span className="truncate">{currentOrgName}</span>}
+          </div>
+        </div>
+      )}
 
       {/* Perfil do usuário */}
       <div
