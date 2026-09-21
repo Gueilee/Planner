@@ -78,6 +78,19 @@ export function PeoplePicker({
   const inputElRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
+    // `search` nasce igual a `defaultValue` (o nome já atribuído, quando
+    // existe) — sem o guard de `dropdownOpen`, todo campo já preenchido
+    // (ex.: Responsável de uma atividade que já tem alguém definido) disparava
+    // uma busca no Graph sozinho, assim que montava, mesmo sem ninguém
+    // interagir. Numa tela com muitas linhas já atribuídas (Cronograma real,
+    // ~79 itens), isso vira uma rajada de dezenas de buscas simultâneas no
+    // carregamento da página — estourava o limite de taxa do Microsoft Graph
+    // pra $search, e a busca seguinte (inclusive a de "Responsável em lote" na
+    // barra de ferramentas, digitada logo depois) voltava vazia em silêncio
+    // (o catch abaixo engole qualquer erro), parecendo que o campo "não
+    // funciona". Só busca de verdade quando o campo está aberto (foco/digitação
+    // reais), nunca só por ter um valor pré-preenchido.
+    if (!dropdownOpen) return
     const term = debouncedSearch.trim()
     if (term.length < 2) { setResults([]); return }
     let cancelled = false
@@ -90,7 +103,7 @@ export function PeoplePicker({
       }
     })
     return () => { cancelled = true }
-  }, [debouncedSearch])
+  }, [debouncedSearch, dropdownOpen])
 
   async function pick(person: DirectoryUser) {
     if (!autoLink) {
