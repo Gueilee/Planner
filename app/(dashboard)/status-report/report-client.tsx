@@ -680,7 +680,7 @@ export function ProjectSlide({data,index,total,mode="interno"}:{data:ProjectSlid
             aparecia na rota pública/impressão; pedido do usuário: "abaixo
             da fase" e sempre visível (não muda entre Interno/Cliente — já
             é uma seleção manual, então já é adequado pros dois públicos). */}
-        {data.macroMilestones.length>0 && (
+        {data.macroMilestones.length>0 ? (
           <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:8}}>
             <Milestone style={{width:11,height:11,color:"rgba(192,132,252,0.55)",flexShrink:0}}/>
             {data.macroMilestones.map((m,i)=>(
@@ -693,6 +693,20 @@ export function ProjectSlide({data,index,total,mode="interno"}:{data:ProjectSlid
               </span>
             ))}
           </div>
+        ) : (
+          // Só no modo Interno — é uma dica de "como fazer", não faz sentido
+          // pro cliente ver. Sem nenhuma atividade marcada com a estrela
+          // ("Macro Cronograma") no Cronograma deste projeto ainda, deixa
+          // claro ONDE marcar (dúvida real relatada: "onde eu seleciono
+          // isso?").
+          !isClientMode && (
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+              <Milestone style={{width:11,height:11,color:"rgba(148,185,255,0.30)",flexShrink:0}}/>
+              <span style={{fontSize:10.5,color:"rgba(148,185,255,0.40)",fontStyle:"italic"}}>
+                Nenhum marco marcado ainda — no Cronograma deste projeto, clique na estrela ⭐ de uma atividade pra ela aparecer aqui.
+              </span>
+            </div>
+          )
         )}
 
         <div className="flex items-start gap-3">
