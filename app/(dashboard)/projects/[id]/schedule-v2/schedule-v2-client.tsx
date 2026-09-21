@@ -337,6 +337,31 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
     [projectProgress, plannedPct, riskThresholdPct]
   )
 
+  // Data de Go Live — não é um campo próprio do projeto, é derivada da
+  // atividade "Go Live" do próprio Cronograma (convenção de nomenclatura já
+  // usada em todos os modelos padrão, ver DEFAULT_TEMPLATES em
+  // lib/actions/templates.ts). Recalculada a cada `data.items` mudar, então
+  // acompanha sozinha qualquer reagendamento (edição manual, predecessor,
+  // cascata) sem precisar de nenhum campo extra gravado no banco. Havendo
+  // mais de uma atividade cujo título bate (ex.: "Go Live" e "Go Live /
+  // Ramp-up" no mesmo cronograma), prioriza marcos (duração 0) e, entre
+  // eles, o de início mais tardio — o Go Live "de verdade" tende a ser o
+  // último desses marcos no cronograma.
+  const goLiveDate = useMemo(() => {
+    const normalize = (s: string) => s.toLowerCase().replace(/[\s-]/g, "")
+    const candidates = data.items.filter((i) => normalize(i.title).includes("golive"))
+    if (candidates.length === 0) return null
+    const milestones = candidates.filter((i) => i.duracaoDiasUteis === 0)
+    const pool = milestones.length > 0 ? milestones : candidates
+    const best = pool.reduce<ItemV2 | null>((latest, cur) => {
+      const curDate = cur.inicioEstimado ?? cur.terminoEstimado
+      if (!curDate) return latest
+      const latestDate = latest ? (latest.inicioEstimado ?? latest.terminoEstimado) : null
+      return !latestDate || curDate > latestDate ? cur : latest
+    }, null)
+    return best ? (best.inicioEstimado ?? best.terminoEstimado) : null
+  }, [data.items])
+
   // Custo do projeto — soma direta das colunas Custo Orçado/Custo Real de
   // TODAS as linhas (grupo nunca tem valor próprio nesses dois campos, ver
   // updateItemV2 em lib/actions/schedule-v2.ts, então somar sem filtrar
@@ -652,19 +677,6 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
     el?.select()
   }
 
-  function handleMove(item: ItemV2, dir: -1 | 1) {
-    const sibs = siblingsOf(data.items, item.parentId)
-    const idx = sibs.findIndex((s) => s.id === item.id)
-    const swapIdx = idx + dir
-    if (swapIdx < 0 || swapIdx >= sibs.length) return
-    const reordered = [...sibs]
-    ;[reordered[idx], reordered[swapIdx]] = [reordered[swapIdx]!, reordered[idx]!]
-    runMutation(async () => {
-      await reorderItemsV2(projectId, reordered.map((s) => s.id))
-      await refreshData()
-    })
-  }
-
   // Move o BLOCO inteiro de linhas marcadas (não só uma) — cada grupo de
   // irmãos (mesmo parentId) é reordenado à parte. Cada item marcado troca de
   // posição com seu vizinho atual na direção do movimento; processado de
@@ -827,6 +839,11 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
         <Stat label="Início" value={fmtDateLong(data.projectStartDate)} />
         <Stat label="Término" value={fmtDateLong(data.projectEndDate)} />
         <Stat label="Conflitos" value={data.conflicts.length} color={data.conflicts.length > 0 ? "#D97706" : undefined} />
+        <Stat
+          label="Go Live"
+          value={fmtDateLong(goLiveDate)}
+          color={goLiveDate ? "#7B2FBE" : undefined}
+        />
         <div className="ml-auto flex items-center gap-4">
           <div className="w-32">
             <div className="flex justify-between text-[9px] mb-1">
