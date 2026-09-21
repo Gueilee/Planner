@@ -14,9 +14,10 @@ import {
   DollarSign, Target, RefreshCw, Activity, MapPin,
   Shield, Milestone, ChevronRight as ChevRight,
   Lock, History, X, Loader2, AlertCircle, Link2, Copy, Check,
+  Eye, Building2,
 } from "lucide-react"
 import { UserAvatar } from "@/components/ui/user-avatar"
-import { LineChart, Line, XAxis, YAxis, ReferenceLine, ResponsiveContainer } from "recharts"
+import { ComposedChart, Line, Area, XAxis, YAxis, ReferenceLine, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 import { closeMonthlyStatusReports, getStatusReportHistory, type StatusReportHistoryItem } from "@/lib/actions/status-report"
 import { getOrCreatePublicStatusToken, revokePublicStatusToken } from "@/lib/actions/public-links"
 import { computeWeightedIdp } from "@/lib/utils/weighted-idp"
@@ -37,7 +38,7 @@ export type ProjectSlideData = {
   }
   risks: {
     critical: number; high: number
-    items: { level: string; description: string; mitigation: string | null; owner: string | null }[]
+    items: { level: string; description: string; mitigation: string | null; owner: string | null; presentToClient: boolean }[]
   }
   team: number; members: { name: string; role: string | null; image: string | null }[]
   daysLeft: number | null; economy: number | null; budget: number | null
@@ -50,7 +51,7 @@ export type ProjectSlideData = {
     date: string; daysLate: number; responsible: string | null
     startDate: string | null; endDate: string | null
   }[]
-  wbsAreas: { name: string; color: string | null; total: number; done: number; pct: number }[]
+  wbsAreas: { name: string; color: string | null; total: number; done: number; pct: number; start: string | null; end: string | null }[]
   dates: { start: string | null; end: string | null; goLive: string | null }
   reportStatus: {
     cost: "GREEN" | "YELLOW" | "RED"; schedule: "GREEN" | "YELLOW" | "RED"
@@ -529,53 +530,140 @@ function AnimProgressBar({ value, color }: { value: number; color: string }) {
 // PROJECT SLIDE  — 3 COLUNAS COMPLETAS
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// Bolinha só no último ponto com dado real (o "endpoint" emphasized) — o
+// resto da linha realizado fica sem marcador (mark-spec do skill de
+// dataviz: marcador só onde carrega informação nova, não em todo ponto).
+// Componente próprio (não uma function declaration dentro de MiniSCurve)
+// pra não recriar identidade de componente a cada render.
+function SCurveEndDot(props: {cx?:number;cy?:number;index?:number;lastRealIdx:number}) {
+  const {cx,cy,index,lastRealIdx} = props
+  if (index !== lastRealIdx || cx === undefined || cy === undefined) return <g/>
+  return (
+    <g>
+      <circle cx={cx} cy={cy} r={7} fill="#34D399" fillOpacity={0.18}/>
+      <circle cx={cx} cy={cy} r={3.5} fill="#34D399" stroke="#0a0a1a" strokeWidth={1.5}/>
+    </g>
+  )
+}
+function sCurveTickFmt(iso:string) {
+  const d = new Date(iso)
+  return d.toLocaleString('pt-BR',{month:'short'}).replace('.','') + '/' + d.getFullYear().toString().slice(2)
+}
+function SCurveTooltip({active,payload,label}:{active?:boolean;payload?:{value:number;dataKey:string}[];label?:string}) {
+  if (!active || !payload || payload.length === 0) return null
+  const planned  = payload.find(p=>p.dataKey==="planned")?.value
+  const realized = payload.find(p=>p.dataKey==="realized")?.value
+  return (
+    <div style={{background:"rgba(8,12,26,0.95)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:8,padding:"7px 10px",backdropFilter:"blur(6px)"}}>
+      <p style={{fontSize:10,fontWeight:800,color:"rgba(200,220,255,0.60)",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.06em"}}>{label?sCurveTickFmt(label):""}</p>
+      {typeof planned==="number" && <p style={{fontSize:11.5,color:"#93C5FD",fontWeight:700,margin:0}}>Planejado: {planned}%</p>}
+      {typeof realized==="number" && <p style={{fontSize:11.5,color:"#6EE7B7",fontWeight:700,margin:0}}>Realizado: {realized}%</p>}
+    </div>
+  )
+}
+
 function MiniSCurve({series}:{series:{date:string;planned:number;realized:number|null}[]}) {
   const todayTs = Date.now()
   const todayKey = series.length > 0
     ? series.reduce((c,s) => Math.abs(new Date(s.date).getTime()-todayTs) < Math.abs(new Date(c.date).getTime()-todayTs) ? s : c, series[0]).date
     : null
-  const step = Math.max(1, Math.floor(series.length / 5))
+  const lastRealIdx = series.reduce((acc,s,i) => s.realized !== null ? i : acc, -1)
+  const lastRealPct = lastRealIdx >= 0 ? series[lastRealIdx]!.realized : null
+  const step = Math.max(1, Math.floor(series.length / 6))
   const tickDates = series.filter((_,i) => i % step === 0 || i === series.length-1).map(s => s.date)
-  const fmtTick = (iso:string) => {
-    const d = new Date(iso)
-    return d.toLocaleString('pt-BR',{month:'short'}).replace('.','') + '/' + d.getFullYear().toString().slice(2)
-  }
   return (
-    <GCard style={{padding:"5px 10px 4px",height:"100%",display:"flex",flexDirection:"column"}}>
-      <div className="flex items-center justify-between shrink-0" style={{marginBottom:2}}>
-        <span style={{fontSize:8.5,fontWeight:800,color:"rgba(180,210,255,0.55)",textTransform:"uppercase",letterSpacing:"0.1em"}}>Curva S — Avanço Físico</span>
+    <GCard style={{padding:"8px 14px 6px",height:"100%",display:"flex",flexDirection:"column"}}>
+      <div className="flex items-center justify-between shrink-0" style={{marginBottom:4}}>
+        <span style={{fontSize:10.5,fontWeight:800,color:"rgba(190,215,255,0.65)",textTransform:"uppercase",letterSpacing:"0.1em"}}>📈 Curva S — Avanço Físico</span>
         <div className="flex items-center gap-4">
-          <span style={{fontSize:8,color:"#60A5FA",fontWeight:700}}>╌ Planejado</span>
-          <span style={{fontSize:8,color:"#34D399",fontWeight:700}}>— Realizado</span>
+          <span style={{fontSize:10,color:"#93C5FD",fontWeight:700,display:"flex",alignItems:"center",gap:5}}><span style={{width:14,height:0,borderTop:"2px dashed #60A5FA"}}/>Planejado</span>
+          <span style={{fontSize:10,color:"#6EE7B7",fontWeight:700,display:"flex",alignItems:"center",gap:5}}><span style={{width:14,height:2,background:"#34D399",borderRadius:2}}/>Realizado</span>
+          {lastRealPct !== null && (
+            <span style={{fontSize:10.5,fontWeight:900,color:"#34D399",background:"rgba(52,211,153,0.14)",padding:"2px 9px",borderRadius:20,border:"1px solid rgba(52,211,153,0.30)"}}>
+              hoje: {lastRealPct}%
+            </span>
+          )}
         </div>
       </div>
       <div style={{flex:1,minHeight:0}}>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={series} margin={{top:2,right:4,bottom:0,left:-20}}>
-            <XAxis dataKey="date" ticks={tickDates} tickFormatter={fmtTick}
-              tick={{fontSize:7.5,fill:"rgba(180,210,255,0.40)",fontWeight:600}}
-              axisLine={{stroke:"rgba(255,255,255,0.06)"}} tickLine={false}/>
+          <ComposedChart data={series} margin={{top:6,right:10,bottom:0,left:-16}}>
+            <defs>
+              <linearGradient id="sCurveRealizedFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#34D399" stopOpacity={0.32}/>
+                <stop offset="100%" stopColor="#34D399" stopOpacity={0}/>
+              </linearGradient>
+            </defs>
+            <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.06)"/>
+            <XAxis dataKey="date" ticks={tickDates} tickFormatter={sCurveTickFmt}
+              tick={{fontSize:9.5,fill:"rgba(180,210,255,0.45)",fontWeight:600}}
+              axisLine={{stroke:"rgba(255,255,255,0.08)"}} tickLine={false}/>
             <YAxis domain={[0,100]} ticks={[0,25,50,75,100]}
-              tick={{fontSize:7,fill:"rgba(180,210,255,0.35)"}}
+              tick={{fontSize:9,fill:"rgba(180,210,255,0.40)"}}
               axisLine={false} tickLine={false}
-              tickFormatter={(v:number)=>`${v}`}/>
-            {todayKey&&<ReferenceLine x={todayKey} stroke="rgba(255,255,255,0.22)" strokeDasharray="3 3" label={false}/>}
-            <Line type="monotone" dataKey="planned" stroke="#60A5FA" strokeWidth={1.5} strokeDasharray="5 3" dot={false} isAnimationActive={false}/>
-            <Line type="monotone" dataKey="realized" stroke="#34D399" strokeWidth={2} dot={false} isAnimationActive={false}/>
-          </LineChart>
+              tickFormatter={(v:number)=>`${v}%`} width={34}/>
+            <Tooltip content={<SCurveTooltip/>} cursor={{stroke:"rgba(255,255,255,0.15)",strokeWidth:1}}/>
+            {todayKey&&<ReferenceLine x={todayKey} stroke="rgba(255,255,255,0.28)" strokeDasharray="3 3"
+              label={{value:"Hoje",position:"insideTopRight",fill:"rgba(220,235,255,0.45)",fontSize:9,fontWeight:700}}/>}
+            <Area type="monotone" dataKey="realized" stroke="none" fill="url(#sCurveRealizedFill)" isAnimationActive={false}/>
+            <Line type="monotone" dataKey="planned" stroke="#60A5FA" strokeWidth={2} strokeDasharray="6 4" dot={false} isAnimationActive={false}/>
+            <Line type="monotone" dataKey="realized" stroke="#34D399" strokeWidth={2.5}
+              dot={(dotProps: {cx?:number;cy?:number;index?:number}) => <SCurveEndDot key={dotProps.index} {...dotProps} lastRealIdx={lastRealIdx}/>}
+              isAnimationActive={false}/>
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
     </GCard>
   )
 }
 
-export function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:number;total:number}) {
+// ─── Progresso por área (modo Cliente) ─────────────────────────────────────────
+// Substitui as listas de atividade linha a linha (Em Andamento/Atraso/
+// Próximas) quando o público é externo: a área do WBS (ex.: "Infraestrutura")
+// já resume os filhos-folha dela — mesma regra de rollup do motor de
+// cronograma (início/término = min/max dos filhos, §3.7), calculada em
+// lib/utils/status-report-slide.ts.
+function WbsAreasPanel({areas,accent}:{areas:ProjectSlideData["wbsAreas"];accent:string}) {
+  return (
+    <GCard style={{padding:"10px 13px",flex:1,minHeight:0,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+      <SL right={<span style={{fontSize:12,color:accent,fontWeight:800,background:`${accent}20`,padding:"2px 9px",borderRadius:20,border:`1px solid ${accent}40`}}>{areas.length}</span>}>📦 Progresso por Área</SL>
+      {areas.length>0?(
+        <div style={{display:"flex",flexDirection:"column",flex:1,minHeight:0,overflow:"auto",gap:10}}>
+          {areas.map((a,i)=>(
+            <div key={i} style={{flexShrink:0}}>
+              <div className="flex items-center justify-between" style={{marginBottom:4}}>
+                <div className="flex items-center gap-2 min-w-0">
+                  <span style={{width:8,height:8,borderRadius:3,background:a.color??accent,flexShrink:0}}/>
+                  <p style={{fontSize:13,color:"rgba(225,238,255,0.92)",fontWeight:700,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{a.name}</p>
+                </div>
+                <span style={{fontSize:12,fontWeight:900,color:accent,flexShrink:0}}>{a.pct}%</span>
+              </div>
+              <div style={{height:5,background:"rgba(255,255,255,0.07)",borderRadius:4,overflow:"hidden",marginBottom:4}}>
+                <div style={{height:"100%",width:`${a.pct}%`,background:a.color??accent,borderRadius:4,transition:"width 1s ease"}}/>
+              </div>
+              <div className="flex items-center justify-between">
+                <span style={{fontSize:10.5,color:"rgba(165,200,255,0.55)"}}>{a.done}/{a.total} concluídas</span>
+                {(a.start||a.end)&&<span style={{fontSize:10.5,color:"rgba(148,185,255,0.55)"}}>📅 {fmt(a.start)} → {fmt(a.end)}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      ):(
+        <p style={{fontSize:12,color:"rgba(148,185,255,0.45)",fontStyle:"italic"}}>Nenhuma área do WBS com atividades cadastradas</p>
+      )}
+    </GCard>
+  )
+}
+
+export function ProjectSlide({data,index,total,mode="interno"}:{data:ProjectSlideData;index:number;total:number;mode?:ReportMode}) {
   const status=STATUS_CFG[data.status]??{label:data.status,color:"#94A3B8",bg:"rgba(148,163,184,0.12)",icon:"📋"}
   const costL=toTL(data.reportStatus.cost); const schL=toTL(data.reportStatus.schedule)
   const resL=toTL(data.reportStatus.resources); const ovL=toTL(data.reportStatus.overall)
   const td=data.taskDetails
   const daysStr=data.daysLeft===null?null:data.daysLeft<0?`${Math.abs(data.daysLeft)}d atrasado`:data.daysLeft===0?"Vence hoje":`${data.daysLeft}d restantes`
   const hasActivities=td.recentlyCompleted.length>0||td.inProgress.length>0||td.delayed.length>0||td.upcoming.length>0
+  const isClientMode=mode==="cliente"
+  const visibleRisks=isClientMode?data.risks.items.filter((r)=>r.presentToClient):data.risks.items
 
   return (
     <div className="relative flex flex-col h-full select-none overflow-hidden">
@@ -586,6 +674,27 @@ export function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:num
       <div className="relative z-10 shrink-0 px-6 pt-3 pb-1.5">
         {/* Phase bar — full width, always labeled */}
         <div style={{marginBottom:8}}><PhaseBar status={data.status} color={status.color}/></div>
+
+        {/* Marcos do projeto — itens marcados com a estrela no Cronograma
+            ("Macro Cronograma"), a mesma curadoria que já existia mas só
+            aparecia na rota pública/impressão; pedido do usuário: "abaixo
+            da fase" e sempre visível (não muda entre Interno/Cliente — já
+            é uma seleção manual, então já é adequado pros dois públicos). */}
+        {data.macroMilestones.length>0 && (
+          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:8}}>
+            <Milestone style={{width:11,height:11,color:"rgba(192,132,252,0.55)",flexShrink:0}}/>
+            {data.macroMilestones.map((m,i)=>(
+              <span key={i} style={{
+                fontSize:10.5,fontWeight:700,padding:"3px 10px",borderRadius:20,whiteSpace:"nowrap",
+                background:"rgba(192,132,252,0.09)",border:"1px solid rgba(192,132,252,0.22)",color:"rgba(225,215,255,0.85)",
+              }}>
+                {m.title}
+                {m.terminoEstimado && <span style={{color:"#C084FC",fontWeight:900}}> · {fmt(m.terminoEstimado)}</span>}
+              </span>
+            ))}
+          </div>
+        )}
+
         <div className="flex items-start gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1.5">
@@ -683,8 +792,11 @@ export function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:num
           )}
         </div>
 
-        {/* ════ COL 2: Atividades ════ */}
+        {/* ════ COL 2: Atividades (Interno) ou Áreas (Cliente) ════ */}
         <div className="flex flex-col gap-2 min-h-0 overflow-hidden">
+        {isClientMode ? (
+          <WbsAreasPanel areas={data.wbsAreas} accent={status.color}/>
+        ) : (<>
 
           {/* Em andamento */}
           <GCard style={{padding:"10px 13px",flexShrink:0}}>
@@ -756,6 +868,7 @@ export function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:num
               <p style={{fontSize:12,color:"rgba(148,185,255,0.45)",fontStyle:"italic"}}>Sem atividades previstas próximas</p>
             )}
           </GCard>
+        </>)}
         </div>
 
         {/* ════ COL 3: Progresso + Riscos ════ */}
@@ -824,21 +937,30 @@ export function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:num
             )}
           </GCard>
 
-          {/* Riscos com mitigação */}
+          {/* Riscos com mitigação — no modo Cliente, só os marcados "Apresentar
+              ao cliente" (Risk.presentToClient); contadores do cabeçalho
+              recontados sobre a mesma lista filtrada, pra nunca mostrar um
+              número que não bate com o que está listado abaixo. */}
           <GCard style={{padding:"10px 12px",flex:1,minHeight:0,overflow:"hidden",display:"flex",flexDirection:"column"}}>
-            <SL right={
-              <div className="flex gap-1.5">
-                {data.risks.critical>0&&<span style={{fontSize:11,fontWeight:800,padding:"2px 7px",borderRadius:10,background:"rgba(239,68,68,0.15)",color:"#FCA5A5"}}>⚠ {data.risks.critical} crít.</span>}
-                {data.risks.high>0&&<span style={{fontSize:11,fontWeight:800,padding:"2px 7px",borderRadius:10,background:"rgba(245,158,11,0.12)",color:"#FCD34D"}}>{data.risks.high} alto{data.risks.high>1?"s":""}</span>}
-              </div>
-            }>🛡️ Riscos & Issues</SL>
-            {data.risks.items.length>0?(
+            {(() => {
+              const critCount=visibleRisks.filter((r)=>r.level==="CRITICAL").length
+              const highCount=visibleRisks.filter((r)=>r.level==="HIGH").length
+              return (
+                <SL right={
+                  <div className="flex gap-1.5">
+                    {critCount>0&&<span style={{fontSize:11,fontWeight:800,padding:"2px 7px",borderRadius:10,background:"rgba(239,68,68,0.15)",color:"#FCA5A5"}}>⚠ {critCount} crít.</span>}
+                    {highCount>0&&<span style={{fontSize:11,fontWeight:800,padding:"2px 7px",borderRadius:10,background:"rgba(245,158,11,0.12)",color:"#FCD34D"}}>{highCount} alto{highCount>1?"s":""}</span>}
+                  </div>
+                }>🛡️ Riscos & Issues{isClientMode&&<span style={{fontSize:9,fontWeight:700,color:"rgba(192,132,252,0.65)",marginLeft:6,textTransform:"none",letterSpacing:0}}>· para o cliente</span>}</SL>
+              )
+            })()}
+            {visibleRisks.length>0?(
               <div style={{display:"flex",flexDirection:"column",flex:1,minHeight:0,overflow:"hidden",gap:0}}>
-                {data.risks.items.slice(0,4).map((r,i)=>{
+                {visibleRisks.slice(0,4).map((r,i)=>{
                   const rc:{[k:string]:{color:string;label:string}}={CRITICAL:{color:"#FCA5A5",label:"Crítico"},HIGH:{color:"#FCD34D",label:"Alto"},MEDIUM:{color:"#86EFAC",label:"Médio"},LOW:{color:"#94A3B8",label:"Baixo"}}
                   const {color,label}=rc[r.level]??{color:"#94A3B8",label:r.level}
                   return (
-                    <div key={i} style={{flex:1,minHeight:0,borderLeft:`3px solid ${color}`,paddingLeft:9,overflow:"hidden",paddingBottom:i<Math.min(data.risks.items.length,4)-1?6:0,borderBottom:i<Math.min(data.risks.items.length,4)-1?"1px solid rgba(255,255,255,0.07)":"none",marginBottom:i<Math.min(data.risks.items.length,4)-1?6:0}}>
+                    <div key={i} style={{flex:1,minHeight:0,borderLeft:`3px solid ${color}`,paddingLeft:9,overflow:"hidden",paddingBottom:i<Math.min(visibleRisks.length,4)-1?6:0,borderBottom:i<Math.min(visibleRisks.length,4)-1?"1px solid rgba(255,255,255,0.07)":"none",marginBottom:i<Math.min(visibleRisks.length,4)-1?6:0}}>
                       <div className="flex items-center gap-2" style={{marginBottom:3}}>
                         <span style={{fontSize:11,fontWeight:800,color,textTransform:"uppercase"}}>{label}</span>
                         {r.owner&&<span style={{fontSize:11,color:"rgba(180,210,255,0.55)"}}>· {r.owner}</span>}
@@ -850,14 +972,14 @@ export function ProjectSlide({data,index,total}:{data:ProjectSlideData;index:num
                 })}
               </div>
             ):(
-              <p style={{fontSize:13,color:"rgba(148,185,255,0.50)",fontStyle:"italic"}}>✅ Sem riscos registrados</p>
+              <p style={{fontSize:13,color:"rgba(148,185,255,0.50)",fontStyle:"italic"}}>{isClientMode?"✅ Nenhum risco marcado para apresentar ao cliente":"✅ Sem riscos registrados"}</p>
             )}
           </GCard>
 
         </div>
       </div>
       {data.sCurve && data.sCurve.series.length > 4 && (
-        <div className="shrink-0" style={{height:104}}>
+        <div className="shrink-0" style={{height:172}}>
           <MiniSCurve series={data.sCurve.series}/>
         </div>
       )}
@@ -1298,9 +1420,37 @@ function StatusPublicLinkModal({ token, loading, copied, onCopy, onRevoke, onClo
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
+// "Interno": tudo, sem curadoria (comportamento de sempre) — atividades
+// granulares do cronograma linha a linha, todos os riscos cadastrados.
+// "Cliente": pensado pra quem está do outro lado da mesa e não precisa saber
+// que "comprei uma bancada pra operação" — troca a lista de atividades
+// pela visão por área do WBS (ex.: "Infraestrutura: início X, término Y")
+// e só mostra riscos marcados "Apresentar ao cliente" (Risk.presentToClient,
+// já existia no cadastro de riscos, só não estava sendo usado aqui). Marcos
+// (estrela no Cronograma) aparecem nos dois modos — já são curadoria.
+// Lembrado no navegador (não é preferência do projeto, é de quem está
+// apresentando: a mesma pessoa pode alternar entre reunião interna e
+// externa no mesmo dia).
+type ReportMode = "interno" | "cliente"
+const REPORT_MODE_KEY = "status-report-mode"
+
 export function ReportClient({slides:allSlides,totalMeetings,canCloseMonth}:{slides:ProjectSlideData[];totalMeetings:number;canCloseMonth:boolean}) {
   const [started,setStarted]   =useState(false)
   const [activeSlides,setActive]=useState<ProjectSlideData[]>(allSlides)
+  const [mode,setMode]=useState<ReportMode>("interno")
+  useEffect(()=>{
+    try {
+      const saved=localStorage.getItem(REPORT_MODE_KEY)
+      if(saved==="interno"||saved==="cliente")setMode(saved)
+    } catch {}
+  },[])
+  function toggleMode(){
+    setMode((m)=>{
+      const next=m==="interno"?"cliente":"interno"
+      try{localStorage.setItem(REPORT_MODE_KEY,next)}catch{}
+      return next
+    })
+  }
   const [current,setCurrent]   =useState(0)
   const [dir,setDir]           =useState(1)
   const [isFullscreen,setIsFs] =useState(false)
@@ -1406,7 +1556,7 @@ export function ReportClient({slides:allSlides,totalMeetings,canCloseMonth}:{sli
           {slideType==="cover"   &&<CoverSlide   slides={activeSlides} date={date} totalMeetings={totalMeetings}/>}
           {slideType==="agenda"  &&<AgendaSlide  slides={activeSlides} date={date}/>}
           {slideType==="project" &&projectIdx>=0&&projectIdx<activeSlides.length&&(
-            <ProjectSlide data={activeSlides[projectIdx]} index={projectIdx+1} total={activeSlides.length}/>
+            <ProjectSlide data={activeSlides[projectIdx]} index={projectIdx+1} total={activeSlides.length} mode={mode}/>
           )}
           {slideType==="summary" &&<SummarySlide projects={activeSlides} totalMeetings={totalMeetings}/>}
           {slideType==="closing" &&<ClosingSlide slides={activeSlides} date={date}/>}
@@ -1437,6 +1587,20 @@ export function ReportClient({slides:allSlides,totalMeetings,canCloseMonth}:{sli
         </div>
         <div className="flex items-center gap-2">
           <span style={{fontSize:11,color:"rgba(148,185,255,0.22)"}}>{current+1}/{total} · F tela cheia</span>
+
+          <button onClick={toggleMode}
+            title={mode==="interno"
+              ? "Modo Interno — mostra atividades detalhadas do cronograma e todos os riscos. Clique para trocar para o modo Cliente (visão por área + só riscos marcados para apresentar)."
+              : "Modo Cliente — mostra progresso por área (ex.: Infraestrutura) e só riscos marcados \"Apresentar ao cliente\". Clique para voltar ao modo Interno (detalhado)."}
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+            style={{
+              color: mode==="cliente" ? "#C084FC" : "rgba(180,210,255,0.75)",
+              border: `1px solid ${mode==="cliente" ? "rgba(192,132,252,0.45)" : "rgba(148,185,255,0.22)"}`,
+              background: mode==="cliente" ? "rgba(192,132,252,0.12)" : "rgba(148,185,255,0.08)",
+            }}>
+            {mode==="cliente" ? <Building2 className="w-3.5 h-3.5"/> : <Eye className="w-3.5 h-3.5"/>}
+            {mode==="cliente" ? "Modo Cliente" : "Modo Interno"}
+          </button>
 
           {currentProject && (
             <button onClick={handleOpenPublicLink} title="Gerar um link público (sem login) com o Status Report deste projeto"

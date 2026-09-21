@@ -25,7 +25,7 @@ export const STATUS_REPORT_PROJECT_INCLUDE = {
     },
   },
   risks: {
-    select: { status: true, description: true, mitigation: true, owner: true },
+    select: { status: true, description: true, mitigation: true, owner: true, presentToClient: true },
     orderBy: { status: "asc" as const },
     take: 8,
   },
@@ -168,15 +168,27 @@ export function buildProjectSlideData(p: StatusReportProjectRow, today: Date): P
     const key = t.wbsAreaId ?? "__none__"
     leafTasksByArea.set(key, [...(leafTasksByArea.get(key) ?? []), t])
   }
+  // início/término da área = min/max entre os filhos-folha (mesma regra de
+  // rollup de grupo do motor de cronograma, §3.7) — usado no modo "Cliente"
+  // do Status Report pra mostrar "Infraestrutura: início X, término Y" em
+  // vez da lista de tarefas internas por trás dela.
   const wbsSummary = areas
     .map((a) => ({ ...a, tasks: leafTasksByArea.get(a.id) ?? [] }))
     .filter((a) => a.tasks.length > 0)
-    .map((a) => ({
-      name: a.name, color: a.color,
-      total: a.tasks.length,
-      done:  a.tasks.filter((t) => t.status === "COMPLETED").length,
-      pct:   Math.round((a.tasks.filter((t) => t.status === "COMPLETED").length / a.tasks.length) * 100),
-    }))
+    .map((a) => {
+      const starts = a.tasks.map((t) => t.startDate).filter((d): d is Date => d !== null)
+      const ends   = a.tasks.map((t) => t.endDate).filter((d): d is Date => d !== null)
+      const minStart = starts.length > 0 ? starts.reduce((m, d) => (d < m ? d : m), starts[0]!) : null
+      const maxEnd   = ends.length   > 0 ? ends.reduce((m, d) => (d > m ? d : m), ends[0]!)     : null
+      return {
+        name: a.name, color: a.color,
+        total: a.tasks.length,
+        done:  a.tasks.filter((t) => t.status === "COMPLETED").length,
+        pct:   Math.round((a.tasks.filter((t) => t.status === "COMPLETED").length / a.tasks.length) * 100),
+        start: minStart ? minStart.toISOString() : null,
+        end:   maxEnd   ? maxEnd.toISOString()   : null,
+      }
+    })
 
   // S-Curve: mesma matemática (lib/utils/s-curve-math.ts) da tela dedicada
   // de Curva S do projeto — planejado/realizado como média simples das
@@ -252,7 +264,7 @@ export function buildProjectSlideData(p: StatusReportProjectRow, today: Date): P
     risks: {
       critical: p.risks.filter((r) => r.status === "CRITICAL").length,
       high:     p.risks.filter((r) => r.status === "HIGH").length,
-      items:    p.risks.map((r) => ({ level: r.status, description: r.description, mitigation: r.mitigation ?? null, owner: r.owner ?? null })),
+      items:    p.risks.map((r) => ({ level: r.status, description: r.description, mitigation: r.mitigation ?? null, owner: r.owner ?? null, presentToClient: r.presentToClient })),
     },
     daysLeft, economy: p.economy, budget: p.budget,
     lastCheckpoint: lastMtg ? {
