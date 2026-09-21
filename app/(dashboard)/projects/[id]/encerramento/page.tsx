@@ -21,7 +21,7 @@ export default async function EncerramentoMeetingPage({ params }: { params: Prom
   const [project, projectParticipants, allUsers] = await Promise.all([
     getProjectClosureData(id),
     getProjectParticipants(id),
-    getAllActiveUsers(),
+    getAllActiveUsers(orgCheck.organizationId),
   ])
   if (!project) notFound()
 

@@ -12,8 +12,17 @@ export default async function NewProjectPage() {
   const session = await auth()
   if (!session?.user) redirect("/login")
 
+  // Elegível como sponsor: filial ativa OU acesso extra concedido a ela —
+  // mesmo raciocínio de app/(dashboard)/projects/[id]/page.tsx (o projeto
+  // novo vai nascer nesta filial).
   const users = await db.user.findMany({
-    where: { active: true, organizationId: session.user.organizationId },
+    where: {
+      active: true,
+      OR: [
+        { organizationId: session.user.organizationId },
+        { organizationAccess: { some: { organizationId: session.user.organizationId } } },
+      ],
+    },
     select: { id: true, name: true, department: true, role: true },
     orderBy: { name: "asc" },
   })

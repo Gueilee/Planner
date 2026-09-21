@@ -12,23 +12,27 @@ export default async function GoNoGoPage({ params }: { params: Promise<{ id: str
   const session = await auth()
   if (!session?.user) redirect("/login")
 
-  const [project, projectParticipants, allUsers] = await Promise.all([
-    db.project.findUnique({
-      where: { id },
-      include: {
-        sponsor: { select: { id: true, name: true, department: true } },
-        members: {
-          include: { user: { select: { id: true, name: true, department: true, role: true } } },
-        },
-        risks: { orderBy: { status: "asc" } },
+  // Projeto buscado ANTES do Promise.all (não junto) — getAllActiveUsers
+  // precisa da filial DELE (pode diferir da filial ativa de quem está
+  // vendo) pra incluir quem tem acesso concedido a ela, então precisa vir
+  // disponível antes de ser chamado, não em paralelo.
+  const project = await db.project.findUnique({
+    where: { id },
+    include: {
+      sponsor: { select: { id: true, name: true, department: true } },
+      members: {
+        include: { user: { select: { id: true, name: true, department: true, role: true } } },
       },
-    }),
-    getProjectParticipants(id),
-    getAllActiveUsers(),
-  ])
-
+      risks: { orderBy: { status: "asc" } },
+    },
+  })
   if (!project) notFound()
   if (!(await canAccessOrg(session, project.organizationId))) notFound()
+
+  const [projectParticipants, allUsers] = await Promise.all([
+    getProjectParticipants(id),
+    getAllActiveUsers(project.organizationId),
+  ])
 
   const projectData = {
     id: project.id, title: project.title, status: project.status,

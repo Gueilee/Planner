@@ -36,12 +36,25 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
 
   const [data, members, org, baselineByItem] = await Promise.all([
     getScheduleV2(id),
+    // Elegível como Responsável: filial DO PROJETO (não a filial ativa de
+    // quem está vendo — pode ser diferente, esta página permite ver
+    // projetos de outra filial via acesso concedido) OU acesso extra
+    // concedido àquela filial (UserOrganizationAccess) — antes só olhava a
+    // própria filial ativa da sessão, então quem tinha acesso concedido a
+    // outra filial nunca aparecia pra ser escolhido como responsável nela
+    // (relatado pela PMO).
     db.user.findMany({
-      where: { active: true, organizationId: session.user.organizationId },
+      where: {
+        active: true,
+        OR: [
+          { organizationId: project.organizationId },
+          { organizationAccess: { some: { organizationId: project.organizationId } } },
+        ],
+      },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
-    db.organization.findUnique({ where: { id: session.user.organizationId }, select: { riskThresholdPct: true } }),
+    db.organization.findUnique({ where: { id: project.organizationId }, select: { riskThresholdPct: true } }),
     getLatestBaselineByItem(id),
   ])
 

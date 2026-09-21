@@ -26,8 +26,18 @@ export default async function GanttPage({ params }: { params: Promise<{ id: stri
   const [data, workCalendar, members] = await Promise.all([
     getScheduleV2(id),
     getWorkCalendarV2(id),
+    // Mesmo escopo do Cronograma (schedule/page.tsx): filial do PROJETO
+    // (pode diferir da filial ativa de quem está vendo) + acesso extra
+    // concedido a ela — senão o nome de um responsável com acesso concedido
+    // (não filial principal) não resolve aqui.
     db.user.findMany({
-      where: { active: true, organizationId: session.user.organizationId },
+      where: {
+        active: true,
+        OR: [
+          { organizationId: project.organizationId },
+          { organizationAccess: { some: { organizationId: project.organizationId } } },
+        ],
+      },
       select: { id: true, name: true },
     }),
   ])

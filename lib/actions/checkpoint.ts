@@ -70,10 +70,13 @@ export async function saveCheckpoint(data: CheckpointInput) {
     select: { name: true },
   })
 
-  // Fetch participants names for ATA
+  // Fetch participants names for ATA — resolve só pelo ID (os IDs já vieram
+  // do picker de participantes do próprio projeto, que agora também aceita
+  // gente com acesso concedido a esta filial, não só à filial principal;
+  // filtrar de novo por organizationId aqui derrubava esses nomes da ATA).
   const participantUsers = data.attendeeIds.length
     ? await db.user.findMany({
-        where: { id: { in: data.attendeeIds }, organizationId: session.user.organizationId },
+        where: { id: { in: data.attendeeIds } },
         select: { name: true, department: true },
       })
     : []

@@ -121,8 +121,18 @@ export default async function ProjectDetailPage({
       _count: { select: { tasks: true, risks: true, meetings: true } },
     },
    }),
+   // Elegível pra virar membro do projeto: filial principal OU acesso extra
+   // concedido (UserOrganizationAccess) — antes só olhava a filial principal,
+   // então quem tinha acesso a outra filial via concessão extra nunca
+   // aparecia pra ser adicionado a um projeto dela (relatado pela PMO).
    db.user.findMany({
-     where: { active: true, organizationId: session?.user?.organizationId },
+     where: {
+       active: true,
+       OR: [
+         { organizationId: session?.user?.organizationId },
+         { organizationAccess: { some: { organizationId: session?.user?.organizationId } } },
+       ],
+     },
      select: { id: true, name: true, department: true, role: true },
      orderBy: { name: "asc" },
    }),

@@ -758,34 +758,66 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
     setDropTarget({ id: targetId, zone })
   }
 
+  // Ordem visual (topo-a-baixo) da árvore inteira, atravessando qualquer
+  // pai — usado só pra decidir em que ORDEM as linhas de um arraste em
+  // grupo entram no destino (preserva a ordem relativa entre elas mesmo
+  // vindo de pais diferentes); não é a ordem que fica salva (isso quem
+  // decide é reorderItemsV2 depois).
+  function visualOrderIds(items: ItemV2[]): string[] {
+    const result: string[] = []
+    function visit(parentId: string | null) {
+      for (const item of siblingsOf(items, parentId)) {
+        result.push(item.id)
+        visit(item.id)
+      }
+    }
+    visit(null)
+    return result
+  }
+
   function handleRowDrop(targetId: string) {
     const sourceId = dragRowId
     const target = dropTarget?.id === targetId ? dropTarget : null
     setDragRowId(null)
     setDropTarget(null)
     if (!sourceId || !target) return
-    if (isSelfOrDescendant(data.items, target.id, sourceId)) return
+
+    // Arrastar uma linha que faz parte da seleção múltipla (bolinha) move o
+    // GRUPO inteiro junto, preservando a ordem relativa entre elas — mesmo
+    // padrão de arrastar vários arquivos selecionados de uma vez. Arrastar
+    // uma linha que NÃO está selecionada continua movendo só ela (ignora a
+    // seleção), igual sempre foi.
+    const movingIds = selectedIds.has(sourceId) && selectedIds.size > 1
+      ? visualOrderIds(data.items).filter((id) => selectedIds.has(id))
+      : [sourceId]
+
+    // Se o alvo for uma das linhas em movimento, ou descendente de alguma
+    // delas, cancela a operação inteira (criaria ciclo) — mais seguro que
+    // mover só as linhas "válidas" e confundir quem arrastou o grupo.
+    if (movingIds.some((id) => id === target.id || isSelfOrDescendant(data.items, target.id, id))) return
 
     runMutation(async () => {
       if (target.zone === "inside") {
-        await updateItemV2(sourceId, projectId, { parentId: target.id })
-        const kidsAfter = siblingsOf(
-          data.items.map((i) => (i.id === sourceId ? { ...i, parentId: target.id } : i)),
-          target.id
-        )
-        await reorderItemsV2(projectId, kidsAfter.map((k) => k.id))
+        for (const id of movingIds) await updateItemV2(id, projectId, { parentId: target.id })
+        const projected = data.items.map((i) => (movingIds.includes(i.id) ? { ...i, parentId: target.id } : i))
+        const kidsAfter = siblingsOf(projected, target.id)
+        const alreadyChildren = kidsAfter.filter((k) => !movingIds.includes(k.id))
+        const movedOrdered = movingIds
+          .map((id) => kidsAfter.find((k) => k.id === id))
+          .filter((k): k is ItemV2 => !!k)
+        await reorderItemsV2(projectId, [...alreadyChildren.map((k) => k.id), ...movedOrdered.map((k) => k.id)])
         setExpanded((prev) => new Set(prev).add(target.id))
       } else {
         const targetItem = data.items.find((i) => i.id === target.id)
         const newParentId = targetItem ? targetItem.parentId : null
-        await updateItemV2(sourceId, projectId, { parentId: newParentId })
+        for (const id of movingIds) await updateItemV2(id, projectId, { parentId: newParentId })
         const projected = data.items
-          .map((i) => (i.id === sourceId ? { ...i, parentId: newParentId } : i))
-          .filter((i) => i.id !== sourceId)
+          .map((i) => (movingIds.includes(i.id) ? { ...i, parentId: newParentId } : i))
+          .filter((i) => !movingIds.includes(i.id))
         const sibs = siblingsOf(projected, newParentId)
         const idx = sibs.findIndex((s) => s.id === target.id)
         const insertAt = target.zone === "before" ? idx : idx + 1
-        const finalIds = [...sibs.slice(0, insertAt).map((s) => s.id), sourceId, ...sibs.slice(insertAt).map((s) => s.id)]
+        const finalIds = [...sibs.slice(0, insertAt).map((s) => s.id), ...movingIds, ...sibs.slice(insertAt).map((s) => s.id)]
         await reorderItemsV2(projectId, finalIds)
       }
       await refreshData()
@@ -1527,7 +1559,13 @@ function RowGroup({ item, depth, ...h }: { item: ItemV2; depth: number } & RowHa
 function Row({ item, depth, hasChildren, isOpen, ...h }: { item: ItemV2; depth: number; hasChildren: boolean; isOpen: boolean } & RowHandlers) {
   const conflict = h.conflictByItem.get(item.id)
   const selected = h.selectedIds.has(item.id)
-  const isDragging = h.dragRowId === item.id
+  // Arrastando um grupo selecionado (não só a linha sob o cursor): todas as
+  // linhas do grupo esmaecem junto, pra ficar claro que o bloco inteiro vai
+  // se mover — não só a que a mãozinha está tocando.
+  const isDragging = h.dragRowId !== null && (
+    h.dragRowId === item.id ||
+    (h.selectedIds.has(h.dragRowId) && h.selectedIds.size > 1 && selected)
+  )
   const dropHere = h.dropTarget?.id === item.id ? h.dropTarget.zone : null
 
   const rowBg = dropHere === "inside"

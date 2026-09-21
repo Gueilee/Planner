@@ -12,17 +12,20 @@ export default async function GoLivePage({ params }: { params: Promise<{ id: str
   const session = await auth()
   if (!session?.user) redirect("/login")
 
-  const [project, projectParticipants, allUsers] = await Promise.all([
-    db.project.findUnique({
-      where: { id },
-      select: { id: true, title: true, status: true, goLiveDate: true, postGoLiveEndDate: true, organizationId: true },
-    }),
-    getProjectParticipants(id),
-    getAllActiveUsers(),
-  ])
-
+  // Projeto buscado ANTES do Promise.all — getAllActiveUsers precisa da
+  // filial dele (pode diferir da filial ativa de quem está vendo) pra
+  // incluir quem tem acesso concedido a ela.
+  const project = await db.project.findUnique({
+    where: { id },
+    select: { id: true, title: true, status: true, goLiveDate: true, postGoLiveEndDate: true, organizationId: true },
+  })
   if (!project) notFound()
   if (!(await canAccessOrg(session, project.organizationId))) notFound()
+
+  const [projectParticipants, allUsers] = await Promise.all([
+    getProjectParticipants(id),
+    getAllActiveUsers(project.organizationId),
+  ])
 
   return (
     <GoLiveClient

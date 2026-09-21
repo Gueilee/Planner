@@ -28,7 +28,7 @@ export default async function KickOffPage({ params }: { params: Promise<{ id: st
 
   const [projectParticipants, allUsers, existing] = await Promise.all([
     getProjectParticipants(id),
-    getAllActiveUsers(),
+    getAllActiveUsers(project.organizationId),
     getKickOff(id),
   ])
 

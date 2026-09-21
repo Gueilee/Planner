@@ -57,13 +57,28 @@ export async function getProjectParticipants(projectId: string): Promise<Project
 }
 
 /**
- * Retorna todos os usuários ativos do sistema (para busca/adição).
+ * Retorna todos os usuários elegíveis pra participar de um projeto: filial
+ * dele (organizationId, quando informado — pode diferir da filial ativa de
+ * quem está chamando, já que ver/editar um projeto de outra filial via
+ * acesso concedido é permitido) OU acesso extra concedido a ela
+ * (UserOrganizationAccess). Sem organizationId, cai pra filial ativa da
+ * sessão (compatibilidade com qualquer chamador que ainda não a informe).
+ * Antes só olhava a filial ativa da sessão, então quem tinha acesso
+ * concedido a outra filial nunca aparecia pra ser adicionado num projeto
+ * dela (checkpoint, kickoff, go/no-go, go-live, encerramento).
  */
-export async function getAllActiveUsers(): Promise<ProjectParticipant[]> {
+export async function getAllActiveUsers(organizationId?: string): Promise<ProjectParticipant[]> {
   const session = await auth()
   if (!session?.user) return []
+  const targetOrgId = organizationId ?? session.user.organizationId
   const users = await db.user.findMany({
-    where:   { active: true, organizationId: session.user.organizationId },
+    where: {
+      active: true,
+      OR: [
+        { organizationId: targetOrgId },
+        { organizationAccess: { some: { organizationId: targetOrgId } } },
+      ],
+    },
     select:  { id: true, name: true, department: true, image: true },
     orderBy: { name: "asc" },
   })
