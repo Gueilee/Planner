@@ -21,7 +21,7 @@ import {
   ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, Milestone,
   Circle, CircleX, CirclePlus, Pencil, Undo2, Redo2, GripVertical, GripHorizontal, LayoutTemplate, FileSpreadsheet, BookmarkPlus, History,
   Link2, Copy, Check, X, Star, Columns3, CalendarDays, CalendarCheck2, CalendarClock, Flame,
-  Loader2, CircleCheck, CircleAlert, Wallet, Receipt, TrendingUp, TrendingDown, Minus,
+  Loader2, CircleCheck, CircleAlert, Wallet, Receipt, TrendingUp, TrendingDown, Minus, Save,
 } from "lucide-react"
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
@@ -317,7 +317,7 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
   // Status Report, Dashboard etc. (lib/utils/project-progress.ts), para
   // nunca divergir do que já é mostrado nas outras telas.
   const projectProgress = useMemo(
-    () => computeProjectProgress(data.items.map((i) => ({ id: i.id, progress: i.percentualCompleto, parentId: i.parentId }))),
+    () => computeProjectProgress(data.items.map((i) => ({ id: i.id, progress: i.percentualCompleto, parentId: i.parentId, startDate: i.inicioEstimado, endDate: i.terminoEstimado }))),
     [data.items]
   )
 
@@ -479,6 +479,22 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
         setSaveError({ message: extractErrorMessage(e), retry: () => runMutation(action) })
       }
     })
+  }
+
+  // Botão "Salvar" — pedido explícito da PMO por segurança visual. Cada
+  // campo já salva sozinho ao sair dele (onBlur), então isto não muda o
+  // comportamento por trás: só força o campo em edição no momento (se
+  // houver) a confirmar agora em vez de esperar o próximo clique em outro
+  // lugar, e sempre mostra "Tudo salvo" na volta — reforça que já estava
+  // tudo gravado, mesmo quando não havia nada pendente.
+  function handleManualSave() {
+    const active = document.activeElement
+    if (active instanceof HTMLElement && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.tagName === "SELECT")) {
+      active.blur()
+    }
+    if (savedTimeoutRef.current) clearTimeout(savedTimeoutRef.current)
+    setSaveStatus("saved")
+    savedTimeoutRef.current = setTimeout(() => setSaveStatus((s) => (s === "saved" ? "idle" : s)), 3000)
   }
 
   function handleUndo() {
@@ -977,9 +993,19 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
           </ToolbarBtn>
         </ToolbarGroup>
 
+        {/* Botão "Salvar" — segurança visual (pedido da PMO). Cada edição já
+            salva sozinha ao sair do campo; isto não muda esse comportamento,
+            só confirma na hora (ver handleManualSave). */}
+        <ToolbarGroup>
+          <ToolbarBtn ghost wide onClick={handleManualSave} title="Salvar — cada edição já salva sozinha ao sair do campo; isto só confirma agora">
+            <Save className="w-3.5 h-3.5" /> Salvar
+          </ToolbarBtn>
+        </ToolbarGroup>
+
         {/* Status de salvamento — cada edição salva sozinha ao sair do
-            campo (sem botão "Salvar"); isto garante que uma falha NUNCA
-            passa em silêncio (ver comentário em cima de `saveStatus`). */}
+            campo (sem exigir clicar em "Salvar" pra valer); isto garante que
+            uma falha NUNCA passa em silêncio (ver comentário em cima de
+            `saveStatus`). */}
         {saveStatus === "saving" && (
           <span className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 px-1">
             <Loader2 className="w-3.5 h-3.5 animate-spin" /> Salvando…

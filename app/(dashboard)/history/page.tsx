@@ -15,7 +15,7 @@ export default async function HistoryPage() {
     const total    = p.scheduleV2Items.length
     const done     = p.scheduleV2Items.filter((t) => t.status === "CONCLUIDO").length
     const progress = total > 0
-      ? computeProjectProgress(p.scheduleV2Items.map((t) => ({ id: t.id, progress: t.percentualCompleto, parentId: t.parentId })))
+      ? computeProjectProgress(p.scheduleV2Items.map((t) => ({ id: t.id, progress: t.percentualCompleto, parentId: t.parentId, startDate: t.inicioEstimado, endDate: t.terminoEstimado })))
       : p.status === "COMPLETED" ? 100 : 0
 
     return {

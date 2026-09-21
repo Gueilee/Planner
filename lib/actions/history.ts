@@ -22,7 +22,7 @@ export async function getAllProjectsSummary() {
       expectedStart: true, expectedEnd: true,
       createdAt: true, updatedAt: true,
       sponsor: { select: { name: true } },
-      scheduleV2Items: { select: { id: true, status: true, percentualCompleto: true, parentId: true } },
+      scheduleV2Items: { select: { id: true, status: true, percentualCompleto: true, parentId: true, inicioEstimado: true, terminoEstimado: true } },
       _count: { select: { meetings: true, risks: true, members: true } },
     },
   })

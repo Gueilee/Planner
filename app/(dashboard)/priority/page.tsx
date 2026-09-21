@@ -28,7 +28,7 @@ export default async function PriorityPage() {
         tasksDone:        p.scheduleV2Items.filter((t) => t.status === "CONCLUIDO").length,
         tasksTotal:       p.scheduleV2Items.length,
         progress:         computeProjectProgress(
-          p.scheduleV2Items.map((t) => ({ id: t.id, progress: t.percentualCompleto, parentId: t.parentId })),
+          p.scheduleV2Items.map((t) => ({ id: t.id, progress: t.percentualCompleto, parentId: t.parentId, startDate: t.inicioEstimado, endDate: t.terminoEstimado })),
         ),
       }))}
     />

@@ -219,7 +219,7 @@ export function buildProjectSlideData(p: StatusReportProjectRow, today: Date): P
     // hoje (mesma tarefa-folha usada no card "Progresso do Projeto" acima).
     const lastRealIdx = weeks.reduce((acc, _, i) => (realizedCurve[i] !== null ? i : acc), -1)
     const realizedTodayExact = computeProjectProgress(
-      tw.map((t) => ({ id: t.id, progress: t.progress, parentId: null }))
+      tw.map((t) => ({ id: t.id, progress: t.progress, parentId: null, startDate: t.startDate, endDate: t.endDate }))
     )
 
     const series = weeks.map((ws, i) => ({
