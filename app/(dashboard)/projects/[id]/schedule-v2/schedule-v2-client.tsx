@@ -665,6 +665,49 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
     })
   }
 
+  // Move o BLOCO inteiro de linhas marcadas (não só uma) — cada grupo de
+  // irmãos (mesmo parentId) é reordenado à parte. Cada item marcado troca de
+  // posição com seu vizinho atual na direção do movimento; processado de
+  // cima pra baixo ao subir (e de baixo pra cima ao descer) para que o bloco
+  // inteiro ande junto em vez de cada linha se embaralhar sozinha — e
+  // quando esse vizinho também está marcado, pula (ainda não abriu espaço:
+  // o bloco já está encostado na borda daquele lado, não tem pra onde ir).
+  function handleMoveSelection(dir: -1 | 1) {
+    if (selectedIds.size === 0) return
+    const byParent = new Map<string | null, Set<string>>()
+    for (const id of selectedIds) {
+      const item = data.items.find((i) => i.id === id)
+      if (!item) continue
+      const set = byParent.get(item.parentId) ?? new Set<string>()
+      set.add(id)
+      byParent.set(item.parentId, set)
+    }
+
+    const groupsToPersist: string[][] = []
+    for (const [parentId, selSet] of byParent) {
+      let order = siblingsOf(data.items, parentId).map((s) => s.id)
+      const positions = order.map((id, i) => ({ id, i })).filter((x) => selSet.has(x.id))
+      const processingOrder = dir === -1
+        ? positions.sort((a, b) => a.i - b.i)
+        : positions.sort((a, b) => b.i - a.i)
+      for (const { id } of processingOrder) {
+        const curIdx = order.indexOf(id)
+        const swapIdx = curIdx + dir
+        if (swapIdx < 0 || swapIdx >= order.length) continue
+        if (selSet.has(order[swapIdx]!)) continue
+        const next = [...order]
+        ;[next[curIdx], next[swapIdx]] = [next[swapIdx]!, next[curIdx]!]
+        order = next
+      }
+      groupsToPersist.push(order)
+    }
+
+    runMutation(async () => {
+      for (const orderedIds of groupsToPersist) await reorderItemsV2(projectId, orderedIds)
+      await refreshData()
+    })
+  }
+
   function handleIndent(item: ItemV2) {
     const sibs = siblingsOf(data.items, item.parentId)
     const idx = sibs.findIndex((s) => s.id === item.id)
@@ -973,8 +1016,8 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
                 ? <>Sel.: <span className="text-slate-600 normal-case">{selectedItem?.title}</span></>
                 : `${selectedIds.size} linhas selecionadas`}
           </span>
-          <ToolbarBtn ghost disabled={!selectedItem || sort.column !== null} onClick={() => selectedItem && handleMove(selectedItem, -1)} title={sort.column ? "Limpe a ordenação da coluna para reestruturar manualmente" : selectedIds.size > 1 ? "Mover exige exatamente 1 linha selecionada" : "Mover para cima"}><ArrowUp className="w-3.5 h-3.5" /></ToolbarBtn>
-          <ToolbarBtn ghost disabled={!selectedItem || sort.column !== null} onClick={() => selectedItem && handleMove(selectedItem, 1)} title={sort.column ? "Limpe a ordenação da coluna para reestruturar manualmente" : selectedIds.size > 1 ? "Mover exige exatamente 1 linha selecionada" : "Mover para baixo"}><ArrowDown className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn ghost disabled={selectedIds.size === 0 || sort.column !== null} onClick={() => handleMoveSelection(-1)} title={sort.column ? "Limpe a ordenação da coluna para reestruturar manualmente" : selectedIds.size > 1 ? "Mover as linhas selecionadas para cima" : "Mover para cima"}><ArrowUp className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn ghost disabled={selectedIds.size === 0 || sort.column !== null} onClick={() => handleMoveSelection(1)} title={sort.column ? "Limpe a ordenação da coluna para reestruturar manualmente" : selectedIds.size > 1 ? "Mover as linhas selecionadas para baixo" : "Mover para baixo"}><ArrowDown className="w-3.5 h-3.5" /></ToolbarBtn>
           <ToolbarBtn ghost disabled={!selectedItem || sort.column !== null} onClick={() => selectedItem && handleIndent(selectedItem)} title={sort.column ? "Limpe a ordenação da coluna para reestruturar manualmente" : selectedIds.size > 1 ? "Indentar exige exatamente 1 linha selecionada" : "Indentar (virar filho do anterior)"}><IndentIncrease className="w-3.5 h-3.5" /></ToolbarBtn>
           <ToolbarBtn ghost disabled={!selectedItem || selectedItem.parentId === null || sort.column !== null} onClick={() => selectedItem && handleOutdent(selectedItem)} title={sort.column ? "Limpe a ordenação da coluna para reestruturar manualmente" : selectedIds.size > 1 ? "Promover exige exatamente 1 linha selecionada" : "Promover (sair do grupo)"}><IndentDecrease className="w-3.5 h-3.5" /></ToolbarBtn>
         </ToolbarGroup>
