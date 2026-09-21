@@ -1384,39 +1384,32 @@ function ColResizeHandle({ width, onResize }: { width: number; onResize: (w: num
 
 // Menu do botão "+" da linha — igual ao Artia: duplicar, adicionar acima,
 // adicionar como última filha (qualquer linha pode virar grupo).
+// Antes era um <div className="absolute"> desenhado à mão — numa linha perto
+// do fim da grade (rolada até o fundo), o menu abria pra baixo e ficava
+// cortado pelo overflow do container rolável, sem espaço pra rolar mais e
+// revelar o resto (relatado pelo usuário: "abre as opções mas fica para
+// baixo da tela"). Trocado pelo DropdownMenu (base-ui) já usado no "Colunas"
+// da barra de ferramentas — ele renderiza num portal (fora do container
+// rolável) e já vira o menu pra cima sozinho quando não cabe embaixo.
 function AddMenuButton({ item, onDuplicate, onAddAbove, onAddChild }: {
   item: ItemV2
   onDuplicate: (item: ItemV2) => void
   onAddAbove: (item: ItemV2) => void
   onAddChild: (item: ItemV2) => void
 }) {
-  const [open, setOpen] = useState(false)
   return (
-    <div className="relative">
-      <button onClick={() => setOpen((v) => !v)} title="Adicionar / duplicar">
+    <DropdownMenu>
+      <DropdownMenuTrigger title="Adicionar / duplicar">
         <CirclePlus className="w-3.5 h-3.5 text-emerald-400 hover:text-emerald-600 transition-colors" />
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-5 z-50 w-64 bg-white rounded-xl border border-slate-200 py-1" style={{ boxShadow: "0 12px 32px rgba(15,23,42,0.14)" }}>
-            <MenuItem onClick={() => { setOpen(false); onDuplicate(item) }}>Duplicar linha</MenuItem>
-            <div className="h-px bg-slate-100 my-1 mx-2" />
-            <MenuItem onClick={() => { setOpen(false); onAddAbove(item) }}>Adicionar nova linha acima</MenuItem>
-            <div className="h-px bg-slate-100 my-1 mx-2" />
-            <MenuItem onClick={() => { setOpen(false); onAddChild(item) }}>Adicionar nova linha como última filha</MenuItem>
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
-
-function MenuItem({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
-  return (
-    <button onClick={onClick} className="w-full text-left px-3.5 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors">
-      {children}
-    </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-64">
+        <DropdownMenuItem onClick={() => onDuplicate(item)}>Duplicar linha</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => onAddAbove(item)}>Adicionar nova linha acima</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => onAddChild(item)}>Adicionar nova linha como última filha</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
