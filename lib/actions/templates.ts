@@ -371,6 +371,35 @@ function renumberTree(childrenOf: Map<string | null, string[]>): { wbsCode: Map<
   return { wbsCode, order }
 }
 
+// Remove/insere um nó em `childrenOf`/`parentIdOf` sem tocar no banco — usado
+// por toda operação que reposiciona uma atividade na árvore (criar acima/como
+// filha, duplicar, arrastar). Sempre em dois passos (remover, depois inserir)
+// porque os dois mexem no MESMO array (mesma referência em childrenOf), e
+// calcular o índice de destino antes de remover o nó de origem dá índice
+// errado quando origem e destino são irmãos.
+function removeNode(state: TreeState, nodeId: string): void {
+  const parentId = state.parentIdOf.get(nodeId) ?? null
+  const arr = state.childrenOf.get(parentId) ?? []
+  const idx = arr.indexOf(nodeId)
+  if (idx !== -1) arr.splice(idx, 1)
+  state.childrenOf.set(parentId, arr)
+}
+
+function insertNode(state: TreeState, nodeId: string, parentId: string | null, index: number): void {
+  state.parentIdOf.set(nodeId, parentId)
+  const arr = state.childrenOf.get(parentId) ?? []
+  const clamped = Math.max(0, Math.min(index, arr.length))
+  arr.splice(clamped, 0, nodeId)
+  state.childrenOf.set(parentId, arr)
+}
+
+// rootId é candidato a pai; recusa soltar um nó dentro de si mesmo ou de um
+// descendente seu (criaria ciclo na árvore).
+function subtreeContains(state: TreeState, rootId: string, targetId: string): boolean {
+  if (rootId === targetId) return true
+  return (state.childrenOf.get(rootId) ?? []).some((k) => subtreeContains(state, k, targetId))
+}
+
 // Grava o estado final (renumerado) da árvore — `deletedIds` (se houver)
 // vira DELETE em vez de UPDATE, e é filtrado de qualquer predecessorCodes
 // que ainda apontasse pra ele (mesma regra de "predecessor inexistente é
@@ -544,34 +573,85 @@ export async function duplicateTemplate(id: string): Promise<Template> {
 
 // ─── Template Tasks ───────────────────────────────────────────────────────────
 
-export async function addTemplateTask(templateId: string, data: {
-  wbsCode: string; parentCode?: string | null; title: string
-  estimatedEffort?: number | null; isMilestone?: boolean
-  predecessorCodes?: string[]; durationDays?: number
-}): Promise<TemplateTask> {
-  await assertTemplateEditable(templateId)
+// Cria uma linha em branco ("Nova atividade", 1 dia) — o wbsCode/parentCode
+// gravados aqui são só um placeholder único (nunca colide com um código real
+// tipo "1.2"); a posição de verdade é decidida em memória logo em seguida
+// (removeNode/insertNode) e só então a árvore inteira é renumerada e gravada
+// por persistTree. Mesmo padrão do "+ Nova atividade" do Cronograma v2 real
+// (createItemV2 já cria sem duração/data — aqui nasce com 1 dia porque
+// modelo não tem conceito de "item não agendado", só duração).
+async function createBlankTask(templateId: string): Promise<string> {
+  const created = await db.scheduleTemplateTask.create({
+    data: { templateId, wbsCode: `_new_${Date.now()}_${Math.random().toString(36).slice(2)}`, parentCode: null, title: "Nova atividade", durationDays: 1, order: 0 },
+  })
+  return created.id
+}
 
-  const count = await db.scheduleTemplateTask.count({ where: { templateId } })
-  const t = await db.scheduleTemplateTask.create({
+export async function addTemplateTaskRoot(templateId: string): Promise<{ id: string }> {
+  await assertTemplateEditable(templateId)
+  const id = await createBlankTask(templateId)
+  const state = await loadTreeState(templateId)
+  removeNode(state, id)
+  const rootKids = state.childrenOf.get(null) ?? []
+  insertNode(state, id, null, rootKids.length)
+  await persistTree(templateId, state)
+  return { id }
+}
+
+export async function addTemplateTaskAbove(templateId: string, refTaskId: string): Promise<{ id: string }> {
+  await assertTemplateEditable(templateId)
+  const id = await createBlankTask(templateId)
+  const state = await loadTreeState(templateId)
+  removeNode(state, id)
+  const refParentId = state.parentIdOf.get(refTaskId) ?? null
+  const siblings = state.childrenOf.get(refParentId) ?? []
+  const refIdx = siblings.indexOf(refTaskId)
+  insertNode(state, id, refParentId, refIdx === -1 ? siblings.length : refIdx)
+  await persistTree(templateId, state)
+  return { id }
+}
+
+export async function addTemplateTaskChild(templateId: string, parentTaskId: string): Promise<{ id: string }> {
+  await assertTemplateEditable(templateId)
+  const id = await createBlankTask(templateId)
+  const state = await loadTreeState(templateId)
+  removeNode(state, id)
+  const kids = state.childrenOf.get(parentTaskId) ?? []
+  insertNode(state, id, parentTaskId, kids.length)
+  await persistTree(templateId, state)
+  return { id }
+}
+
+// Duplica só a linha (não a subárvore) — mesmo escopo do "Duplicar linha" do
+// Cronograma v2 real (duplicateItemV2). Predecessoras são copiadas (fazem
+// sentido: continuam apontando pra OUTRAS atividades, não pra si mesma).
+export async function duplicateTemplateTask(templateId: string, taskId: string): Promise<{ id: string }> {
+  await assertTemplateEditable(templateId)
+  const source = await db.scheduleTemplateTask.findUnique({ where: { id: taskId } })
+  if (!source) throw new Error("Atividade não encontrada")
+
+  const created = await db.scheduleTemplateTask.create({
     data: {
       templateId,
-      wbsCode:          data.wbsCode,
-      parentCode:       data.parentCode ?? null,
-      title:            data.title,
-      estimatedEffort:  data.estimatedEffort ?? null,
-      isMilestone:      data.isMilestone ?? false,
-      predecessorCodes: data.predecessorCodes?.length ? JSON.stringify(data.predecessorCodes) : null,
-      durationDays:     data.durationDays ?? 1,
-      order:            count + 1,
+      wbsCode:          `_new_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      parentCode:       null,
+      title:            `${source.title} (cópia)`,
+      estimatedEffort:  source.estimatedEffort,
+      isMilestone:      source.isMilestone,
+      predecessorCodes: source.predecessorCodes,
+      durationDays:     source.durationDays,
+      order:            0,
     },
   })
-  revalidatePath("/templates")
-  return {
-    id: t.id, templateId: t.templateId, wbsCode: t.wbsCode, parentCode: t.parentCode,
-    title: t.title, estimatedEffort: t.estimatedEffort, isMilestone: t.isMilestone,
-    predecessorCodes: t.predecessorCodes ? JSON.parse(t.predecessorCodes) : [],
-    durationDays: t.durationDays, order: t.order,
-  }
+
+  const state = await loadTreeState(templateId)
+  removeNode(state, created.id)
+  const parentId = state.parentIdOf.get(taskId) ?? null
+  const siblings = state.childrenOf.get(parentId) ?? []
+  const srcIdx = siblings.indexOf(taskId)
+  insertNode(state, created.id, parentId, srcIdx === -1 ? siblings.length : srcIdx + 1)
+  await persistTree(templateId, state)
+  return { id: created.id }
 }
 
 export async function updateTemplateTask(id: string, data: {
@@ -619,74 +699,37 @@ export async function deleteTemplateTask(id: string): Promise<void> {
   await persistTree(task.templateId, state, new Set([id]))
 }
 
-// ─── Mover / indentar / promover (usa o mesmo motor de renumeração acima) ────
-
-export async function moveTemplateTaskUp(templateId: string, taskId: string): Promise<void> {
+// ─── Arrastar linha para encaixar (antes/depois/dentro) ──────────────────────
+// Mesma interação do Cronograma v2 real (handleRowDrop em
+// schedule-v2-client.tsx): a zona é decidida no cliente pela posição do
+// cursor dentro da linha-alvo (topo=before, meio=inside, base=after); aqui só
+// aplica a mudança na árvore em memória e renumera. Recusa (no-op) soltar uma
+// atividade dentro de si mesma ou de uma descendente sua — criaria ciclo.
+export async function moveTemplateTaskDrag(
+  templateId: string,
+  sourceTaskId: string,
+  targetTaskId: string,
+  zone: "before" | "after" | "inside"
+): Promise<void> {
   await assertTemplateEditable(templateId)
-  const state = await loadTreeState(templateId)
-  const parentId = state.parentIdOf.get(taskId) ?? null
-  const siblings = state.childrenOf.get(parentId) ?? []
-  const idx = siblings.indexOf(taskId)
-  if (idx > 0) {
-    ;[siblings[idx - 1], siblings[idx]] = [siblings[idx]!, siblings[idx - 1]!]
-    state.childrenOf.set(parentId, siblings)
-  }
-  await persistTree(templateId, state)
-}
+  if (sourceTaskId === targetTaskId) return
 
-export async function moveTemplateTaskDown(templateId: string, taskId: string): Promise<void> {
-  await assertTemplateEditable(templateId)
   const state = await loadTreeState(templateId)
-  const parentId = state.parentIdOf.get(taskId) ?? null
-  const siblings = state.childrenOf.get(parentId) ?? []
-  const idx = siblings.indexOf(taskId)
-  if (idx !== -1 && idx < siblings.length - 1) {
-    ;[siblings[idx], siblings[idx + 1]] = [siblings[idx + 1]!, siblings[idx]!]
-    state.childrenOf.set(parentId, siblings)
-  }
-  await persistTree(templateId, state)
-}
+  if (subtreeContains(state, sourceTaskId, targetTaskId)) return
 
-// Vira filha do irmão imediatamente anterior (mesmo comportamento do
-// Cronograma v2 real — handleIndent em schedule-v2-client.tsx).
-export async function indentTemplateTask(templateId: string, taskId: string): Promise<void> {
-  await assertTemplateEditable(templateId)
-  const state = await loadTreeState(templateId)
-  const parentId = state.parentIdOf.get(taskId) ?? null
-  const siblings = state.childrenOf.get(parentId) ?? []
-  const idx = siblings.indexOf(taskId)
-  if (idx > 0) {
-    const newParentId = siblings[idx - 1]!
-    siblings.splice(idx, 1)
-    state.childrenOf.set(parentId, siblings)
-    const newSiblings = state.childrenOf.get(newParentId) ?? []
-    newSiblings.push(taskId)
-    state.childrenOf.set(newParentId, newSiblings)
-    state.parentIdOf.set(taskId, newParentId)
-  }
-  await persistTree(templateId, state)
-}
+  removeNode(state, sourceTaskId)
 
-// Sai do grupo atual, virando irmã (logo depois) do próprio pai, dentro dos
-// filhos do avô — mesmo comportamento do Cronograma v2 real (handleOutdent).
-export async function outdentTemplateTask(templateId: string, taskId: string): Promise<void> {
-  await assertTemplateEditable(templateId)
-  const state = await loadTreeState(templateId)
-  const parentId = state.parentIdOf.get(taskId) ?? null
-  if (parentId !== null) {
-    const grandparentId = state.parentIdOf.get(parentId) ?? null
-    const oldSiblings = state.childrenOf.get(parentId) ?? []
-    const idx = oldSiblings.indexOf(taskId)
-    if (idx !== -1) oldSiblings.splice(idx, 1)
-    state.childrenOf.set(parentId, oldSiblings)
-
-    const newSiblings = state.childrenOf.get(grandparentId) ?? []
-    const parentIdx = newSiblings.indexOf(parentId)
-    if (parentIdx === -1) newSiblings.push(taskId)
-    else newSiblings.splice(parentIdx + 1, 0, taskId)
-    state.childrenOf.set(grandparentId, newSiblings)
-    state.parentIdOf.set(taskId, grandparentId)
+  if (zone === "inside") {
+    const kids = state.childrenOf.get(targetTaskId) ?? []
+    insertNode(state, sourceTaskId, targetTaskId, kids.length)
+  } else {
+    const targetParentId = state.parentIdOf.get(targetTaskId) ?? null
+    const siblings = state.childrenOf.get(targetParentId) ?? []
+    const idx = siblings.indexOf(targetTaskId)
+    const insertAt = idx === -1 ? siblings.length : zone === "before" ? idx : idx + 1
+    insertNode(state, sourceTaskId, targetParentId, insertAt)
   }
+
   await persistTree(templateId, state)
 }
 
