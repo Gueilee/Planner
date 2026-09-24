@@ -51,7 +51,7 @@ export function PeopleMultiPicker({
     let cancelled = false
     startSearch(async () => {
       try {
-        const found = await searchDirectoryUsers(term)
+        const found = await searchDirectoryUsers(term, organizationId)
         if (!cancelled) setResults(found)
       } catch {
         if (!cancelled) setResults([])
@@ -62,6 +62,15 @@ export function PeopleMultiPicker({
   }, [debouncedSearch, open])
 
   async function addLinked(person: DirectoryUser) {
+    // Resultado local já é um usuário Kronex — usa o id direto, sem passar
+    // pelo Azure (mesmo tratamento de components/kronex/people-picker.tsx).
+    if (person.source === "local") {
+      onPersonLinked({ id: person.id, name: person.name })
+      if (!linkedIds.includes(person.id)) onChange({ linkedIds: [...linkedIds, person.id], freeText })
+      setSearch("")
+      inputRef.current?.focus()
+      return
+    }
     setLinkingEmail(person.email)
     try {
       const linked = await getOrCreateUserFromDirectory(
@@ -174,7 +183,7 @@ export function PeopleMultiPicker({
                 <div className="mt-1 max-h-52 overflow-y-auto rounded-lg border border-slate-100">
                   {results.map((r) => (
                     <button
-                      key={r.azureId}
+                      key={`${r.source}:${r.source === "azure" ? r.azureId : r.id}`}
                       type="button"
                       onClick={() => addLinked(r)}
                       disabled={linkingEmail === r.email}
@@ -183,7 +192,7 @@ export function PeopleMultiPicker({
                       <UserAvatar name={r.name} size={24} />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-semibold text-[#0F172A] truncate">{r.name}</p>
-                        <p className="text-[10px] text-slate-400 truncate">{r.jobTitle ? `${r.jobTitle} · ` : ""}{r.email}</p>
+                        <p className="text-[10px] text-slate-400 truncate">{r.source === "local" ? "Cadastrado no Kronex · " : r.jobTitle ? `${r.jobTitle} · ` : ""}{r.email}</p>
                       </div>
                       {linkingEmail === r.email && <Loader2 className="w-3.5 h-3.5 text-[#7B2FBE] animate-spin shrink-0" />}
                     </button>

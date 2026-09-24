@@ -1,8 +1,11 @@
 "use server"
 
-// Busca de pessoas no diretório do Azure AD (Microsoft Graph) e criação/
-// vínculo automático de usuário local do Kronex a partir do resultado
-// escolhido — usado pelo componente PeoplePicker (components/kronex/
+// Busca de pessoas pra preencher campos como Responsável de atividade —
+// combina duas fontes: o diretório do Azure AD (colaboradores Vendemmia,
+// via Microsoft Graph) e os usuários já cadastrados localmente no Kronex
+// (ex.: contatos de CLIENTE, cadastrados manualmente em /users ou
+// Configurações → Usuários, que nunca vão aparecer no Azure AD da
+// Vendemmia). Usado pelo componente PeoplePicker (components/kronex/
 // people-picker.tsx) em qualquer campo que hoje só aceita nome digitado
 // (ex.: Responsável de atividade no Cronograma).
 
@@ -16,11 +19,63 @@ async function requireAccess() {
   return session
 }
 
-export type DirectoryUser = AzureDirectoryUser
+export type DirectoryUser =
+  | (AzureDirectoryUser & { source: "azure" })
+  | { source: "local"; id: string; azureId: null; name: string; email: string; jobTitle: string | null; department: string | null }
 
-export async function searchDirectoryUsers(query: string): Promise<DirectoryUser[]> {
-  await requireAccess()
-  return searchAzureUsers(query)
+const MIN_QUERY_LENGTH = 2
+const MAX_LOCAL_RESULTS = 8
+
+export async function searchDirectoryUsers(query: string, organizationId?: string): Promise<DirectoryUser[]> {
+  const session = await requireAccess()
+  const term = query.trim()
+  if (term.length < MIN_QUERY_LENGTH) return []
+
+  const targetOrgId = organizationId || session.user.organizationId
+
+  // Azure é uma integração externa (rede, rate limit) — se falhar, ainda
+  // devolve o que achar localmente, em vez de derrubar a busca inteira.
+  const [azureResults, localUsers] = await Promise.all([
+    searchAzureUsers(term).catch(() => [] as AzureDirectoryUser[]),
+    db.user.findMany({
+      where: {
+        active: true,
+        OR: [
+          { organizationId: targetOrgId },
+          { organizationAccess: { some: { organizationId: targetOrgId } } },
+        ],
+        AND: [
+          { OR: [
+            { name:  { contains: term, mode: "insensitive" } },
+            { email: { contains: term, mode: "insensitive" } },
+          ] },
+        ],
+      },
+      select: { id: true, name: true, email: true, department: true },
+      orderBy: { name: "asc" },
+      take: MAX_LOCAL_RESULTS,
+    }),
+  ])
+
+  const azureEmails = new Set(azureResults.map((u) => u.email.toLowerCase()))
+
+  const azure: DirectoryUser[] = azureResults.map((u) => ({ ...u, source: "azure" as const }))
+  // Um usuário local com o mesmo e-mail de um resultado do Azure não entra
+  // duplicado — escolher a entrada do Azure já resolve pro mesmo cadastro
+  // (getOrCreateUserFromDirectory casa por e-mail).
+  const local: DirectoryUser[] = localUsers
+    .filter((u) => !azureEmails.has(u.email.toLowerCase()))
+    .map((u) => ({
+      source: "local" as const,
+      id: u.id,
+      azureId: null,
+      name: u.name,
+      email: u.email,
+      jobTitle: null,
+      department: u.department,
+    }))
+
+  return [...azure, ...local]
 }
 
 export type LinkedUser = { id: string; name: string; email: string }

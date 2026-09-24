@@ -128,7 +128,7 @@ export async function getAllProjectsForKanban() {
       members:  { take: 5, include: { user: { select: { id: true, name: true, image: true } } } },
       _count:   { select: { members: true } },
       scheduleV2Items: {
-        select: { id: true, parentId: true, status: true, percentualCompleto: true, inicioEstimado: true, terminoEstimado: true },
+        select: { id: true, parentId: true, status: true, percentualCompleto: true, inicioEstimado: true, terminoEstimado: true, responsavelId: true },
       },
       risks:    { select: { status: true } },
     },
@@ -139,6 +139,11 @@ export async function getAllProjectsForKanban() {
     for (const it of p.scheduleV2Items) if (it.parentId) childCount.set(it.parentId, (childCount.get(it.parentId) ?? 0) + 1)
     return {
       ...p,
+      // Perfil CLIENTE só vê projeto em que é responsável por pelo menos
+      // uma atividade (app/(dashboard)/kanban/page.tsx aplica o filtro) —
+      // diferente do critério de "membro do projeto" usado pros demais
+      // perfis restritos (PROJECT_MEMBER/SPONSOR).
+      isResponsavel: p.scheduleV2Items.some((t) => t.responsavelId === session.user.id),
       tasks: p.scheduleV2Items.map((t) => ({
         id:        t.id,
         status:    V2_STATUS_TO_LEGACY[t.status] ?? "PLANNING",

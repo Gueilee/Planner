@@ -47,6 +47,7 @@ export type KanbanProject = {
   expectedStart: string | null
   sponsor: string
   daysLeft: number | null
+  isResponsavel: boolean
 }
 
 // ─── Area Config ──────────────────────────────────────────────────────────────
@@ -1022,7 +1023,8 @@ function ListView({ projects, onRowClick, riskThresholdPct }: { projects: Kanban
 
 // ─── Main Client ──────────────────────────────────────────────────────────────
 
-export function KanbanClient({ projects: initial, riskThresholdPct = DEFAULT_RISK_THRESHOLD_PCT }: { projects: KanbanProject[]; riskThresholdPct?: number }) {
+export function KanbanClient({ projects: initial, riskThresholdPct = DEFAULT_RISK_THRESHOLD_PCT, userRole }: { projects: KanbanProject[]; riskThresholdPct?: number; userRole?: string }) {
+  const hideOpenLink = userRole === "CLIENT"
   const [projects,      setProjects]      = useState<KanbanProject[]>(initial)
   const [activeId,      setActiveId]      = useState<string | null>(null)
   const [overId,        setOverId]        = useState<string | null>(null)
@@ -1320,7 +1322,7 @@ export function KanbanClient({ projects: initial, riskThresholdPct = DEFAULT_RIS
         </DndContext>
       )}
 
-      {selected && <ProjectTasksKanban project={selected} onClose={() => setSelected(null)} />}
+      {selected && <ProjectTasksKanban project={selected} onClose={() => setSelected(null)} hideOpenLink={hideOpenLink} />}
     </div>
   )
 }

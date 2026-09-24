@@ -53,17 +53,24 @@ export function Sidebar({ collapsed, onToggle, orgLogoUrl, orgName = "PLANNER", 
   // null enquanto carrega = mostra tudo (a proteção real é o redirect de cada
   // página); depois de resolvido, esconde as telas que o perfil não libera.
   const [visibleKeys, setVisibleKeys] = useState<string[] | null>(null)
+  const isClient = session?.user?.role === "CLIENT"
 
   useEffect(() => {
+    if (isClient) return
     fetch("/api/my-permissions")
       .then((r) => r.json() as Promise<{ visibleKeys?: string[] }>)
       .then((data) => setVisibleKeys(data.visibleKeys ?? []))
       .catch(() => {})
-  }, [])
+  }, [isClient])
 
-  const visibleNavItems = visibleKeys === null
-    ? NAV_ITEMS
-    : NAV_ITEMS.filter((item) => visibleKeys.includes(item.key))
+  // Perfil Cliente só acessa Kanban (auth.config.ts já bloqueia qualquer
+  // outra rota) — nem vale a pena buscar /api/my-permissions aqui, o menu
+  // já nasce só com essa opção, sem o item "Configurações" de Sistema.
+  const visibleNavItems = isClient
+    ? NAV_ITEMS.filter((item) => item.key === "kanban")
+    : visibleKeys === null
+      ? NAV_ITEMS
+      : NAV_ITEMS.filter((item) => visibleKeys.includes(item.key))
 
   const isActive = (href: string) =>
     href === "/dashboard" ? pathname === href : pathname.startsWith(href)
@@ -131,7 +138,7 @@ export function Sidebar({ collapsed, onToggle, orgLogoUrl, orgName = "PLANNER", 
     >
       {/* Logo */}
       <Link
-        href="/dashboard"
+        href={isClient ? "/kanban" : "/dashboard"}
         className={cn(
           "relative z-10 flex items-center justify-center h-16 transition-all duration-300 hover:opacity-80",
           collapsed ? "px-0" : "px-5"
@@ -180,16 +187,20 @@ export function Sidebar({ collapsed, onToggle, orgLogoUrl, orgName = "PLANNER", 
           {visibleNavItems.map((item) => <NavLink key={item.href} item={item} />)}
         </div>
 
-        <div className="my-4 mx-2" style={{ height: "1px", background: "rgba(0,0,0,0.06)" }} />
+        {!isClient && (
+          <>
+            <div className="my-4 mx-2" style={{ height: "1px", background: "rgba(0,0,0,0.06)" }} />
 
-        {!collapsed && (
-          <p className="px-3 mb-3 text-[9px] font-bold uppercase tracking-[0.15em] text-[#b0adc0]">
-            Sistema
-          </p>
+            {!collapsed && (
+              <p className="px-3 mb-3 text-[9px] font-bold uppercase tracking-[0.15em] text-[#b0adc0]">
+                Sistema
+              </p>
+            )}
+            <div className="space-y-0.5">
+              {SYSTEM_ITEMS.map((item) => <NavLink key={item.href} item={item} />)}
+            </div>
+          </>
         )}
-        <div className="space-y-0.5">
-          {SYSTEM_ITEMS.map((item) => <NavLink key={item.href} item={item} />)}
-        </div>
 
       </nav>
 

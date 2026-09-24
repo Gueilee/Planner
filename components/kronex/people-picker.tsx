@@ -96,7 +96,7 @@ export function PeoplePicker({
     let cancelled = false
     startSearch(async () => {
       try {
-        const found = await searchDirectoryUsers(term)
+        const found = await searchDirectoryUsers(term, organizationId)
         if (!cancelled) setResults(found)
       } catch {
         if (!cancelled) setResults([])
@@ -111,6 +111,15 @@ export function PeoplePicker({
       setSearch(person.name)
       setDropdownOpen(false)
       onPick?.(person)
+      return
+    }
+    // Resultado local já É um usuário Kronex — nada a criar/vincular no
+    // Azure, só usar o id que já existe.
+    if (person.source === "local") {
+      lastCommitted.current = person.name
+      setSearch(person.name)
+      setDropdownOpen(false)
+      onSelect?.({ id: person.id, name: person.name, email: person.email })
       return
     }
     setLinkingEmail(person.email)
@@ -177,7 +186,7 @@ export function PeoplePicker({
             >
               {showResults && results.map((r) => (
                 <button
-                  key={r.azureId}
+                  key={`${r.source}:${r.source === "azure" ? r.azureId : r.id}`}
                   type="button"
                   onMouseDown={() => pick(r)}
                   disabled={linkingEmail === r.email}
@@ -187,7 +196,7 @@ export function PeoplePicker({
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-[#0F172A] truncate">{r.name}</p>
                     <p className="text-[10px] text-slate-400 truncate">
-                      {r.jobTitle ? `${r.jobTitle} · ` : ""}{r.email}
+                      {r.source === "local" ? "Cadastrado no Kronex · " : r.jobTitle ? `${r.jobTitle} · ` : ""}{r.email}
                     </p>
                   </div>
                   {linkingEmail === r.email && <Loader2 className="w-3.5 h-3.5 text-[#7B2FBE] animate-spin shrink-0" />}

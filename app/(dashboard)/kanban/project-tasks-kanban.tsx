@@ -963,9 +963,13 @@ function TaskDetailPanel({
 export function ProjectTasksKanban({
   project,
   onClose,
+  hideOpenLink = false,
 }: {
   project: ProjectTasksKanbanTarget
   onClose: () => void
+  /** Perfil Cliente não tem `/projects/[id]` liberado (só Kanban, ver
+   * auth.config.ts) — sem isso o botão abriria e voltaria sozinho. */
+  hideOpenLink?: boolean
 }) {
   const [tasks,        setTasks]        = useState<TaskItem[]>([])
   const [loading,      setLoading]      = useState(true)
@@ -1098,11 +1102,13 @@ export function ProjectTasksKanban({
               ))}
             </div>
 
-            <Link href={`/projects/${project.id}`} onClick={onClose}
-              className="hidden sm:inline-flex items-center gap-2 px-4 h-9 text-xs font-bold rounded-xl text-white transition-all hover:opacity-90 shrink-0"
-              style={{ background: "linear-gradient(135deg,#2463FF,#8B2FFF)", boxShadow: "0 4px 16px rgba(36,99,255,0.30)" }}>
-              Abrir Projeto <ExternalLink className="w-3 h-3" />
-            </Link>
+            {!hideOpenLink && (
+              <Link href={`/projects/${project.id}`} onClick={onClose}
+                className="hidden sm:inline-flex items-center gap-2 px-4 h-9 text-xs font-bold rounded-xl text-white transition-all hover:opacity-90 shrink-0"
+                style={{ background: "linear-gradient(135deg,#2463FF,#8B2FFF)", boxShadow: "0 4px 16px rgba(36,99,255,0.30)" }}>
+                Abrir Projeto <ExternalLink className="w-3 h-3" />
+              </Link>
+            )}
 
             <button onClick={onClose}
               className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-all hover:bg-slate-100"

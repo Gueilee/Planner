@@ -26,6 +26,14 @@ export const getEffectivePermissions = cache(async (user: SessionUser | undefine
     return all
   }
 
+  // Cliente só pode acessar o Kanban — auth.config.ts (middleware) já
+  // bloqueia qualquer outra rota. Essa liberação não pode depender de um
+  // Perfil de Acesso configurado à parte: sem isso, um Cliente sem perfil
+  // vinculado cairia no fail-closed abaixo (nenhuma tela), requireScreenView
+  // ("kanban") mandaria pra /dashboard, e o middleware mandaria de volta pra
+  // /kanban — loop infinito de redirecionamento, login impossível.
+  if (user.role === "CLIENT") return { kanban: GRANTED }
+
   if (!user.profileId) return {}
 
   const profile = await db.accessProfile.findUnique({ where: { id: user.profileId } })

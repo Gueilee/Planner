@@ -87,13 +87,19 @@ export default async function KanbanPage() {
       expectedStart: effectiveStart?.toISOString() ?? null,
       sponsor:       p.sponsor?.name ?? "—",
       daysLeft,
+      isResponsavel: p.isResponsavel,
     }
   })
 
-  // Membros e sponsors veem apenas projetos em que participam
+  // Membros e sponsors veem apenas projetos em que participam; Cliente é
+  // mais restrito ainda — só projeto em que consta como RESPONSÁVEL de
+  // alguma atividade (não basta ser "membro"), pra nunca um cliente ver o
+  // projeto de outro cliente dentro da mesma filial.
   const visibleProjects = FULL_ACCESS_ROLES.has(userRole)
     ? projects
-    : projects.filter((p) => p.members.some((m) => m.id === userId))
+    : userRole === "CLIENT"
+      ? projects.filter((p) => p.isResponsavel)
+      : projects.filter((p) => p.members.some((m) => m.id === userId))
 
-  return <KanbanClient projects={visibleProjects} riskThresholdPct={riskThresholdPct} />
+  return <KanbanClient projects={visibleProjects} riskThresholdPct={riskThresholdPct} userRole={userRole} />
 }
