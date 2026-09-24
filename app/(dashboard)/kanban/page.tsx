@@ -41,8 +41,28 @@ export default async function KanbanPage() {
     const highRisks    = p.risks.filter((r) => r.status === "HIGH" || r.status === "CRITICAL").length
     const delayedTasks = leafTasks.filter((t) => t.status === "DELAYED").length
 
-    const daysLeft = p.expectedEnd
-      ? differenceInDays(p.expectedEnd, new Date())
+    // Prazo (daysLeft, e expectedStart/expectedEnd abaixo) prioriza o
+    // período do CRONOGRAMA DE VERDADE (min início/max término das
+    // tarefas) sobre Project.expectedStart/expectedEnd — esse par é só a
+    // estimativa inicial da solicitação do projeto, gravada ANTES de
+    // existir cronograma detalhado, e fica desatualizada assim que ele é
+    // montado (ex.: pedido pra terminar em 18/09, cronograma de verdade vai
+    // até 12/11 — urgência/dias restantes ficavam sempre "atrasado", mesmo
+    // com o projeto no meio do prazo real). Cai pro campo do projeto só
+    // quando nenhuma tarefa tem data ainda.
+    const scheduleDates = p.tasks.reduce(
+      (acc, t) => {
+        if (t.startDate && (!acc.start || t.startDate < acc.start)) acc.start = t.startDate
+        if (t.endDate && (!acc.end || t.endDate > acc.end)) acc.end = t.endDate
+        return acc
+      },
+      { start: null as Date | null, end: null as Date | null }
+    )
+    const effectiveStart = scheduleDates.start ?? p.expectedStart
+    const effectiveEnd   = scheduleDates.end   ?? p.expectedEnd
+
+    const daysLeft = effectiveEnd
+      ? differenceInDays(effectiveEnd, new Date())
       : null
 
     return {
@@ -63,8 +83,8 @@ export default async function KanbanPage() {
       delayedTasks,
       economy:       p.economy,
       budget:        p.budget,
-      expectedEnd:   p.expectedEnd?.toISOString() ?? null,
-      expectedStart: p.expectedStart?.toISOString() ?? null,
+      expectedEnd:   effectiveEnd?.toISOString() ?? null,
+      expectedStart: effectiveStart?.toISOString() ?? null,
       sponsor:       p.sponsor?.name ?? "—",
       daysLeft,
     }

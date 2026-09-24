@@ -12,25 +12,12 @@ import { ArrowLeft, TrendingUp, GanttChartSquare } from "lucide-react"
 export const dynamic = "force-dynamic"
 export const metadata = { title: "Cronograma" }
 
-// Defesa: Date.prototype.toISOString() lança RangeError para uma data já
-// corrompida no banco (ano com dígitos a mais — bug real que já derrubou
-// esta página). As bordas de escrita já validam antes de gravar; isto aqui
-// é só para uma data antiga/corrompida nunca mais quebrar a leitura.
-function safeDateStr(d: Date | null | undefined): string | null {
-  if (!d) return null
-  try {
-    return d.toISOString().slice(0, 10)
-  } catch {
-    return null
-  }
-}
-
 export default async function SchedulePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const session = await auth()
   if (!session?.user) redirect("/login")
 
-  const project = await db.project.findUnique({ where: { id }, select: { id: true, title: true, expectedStart: true, expectedEnd: true, publicScheduleToken: true, organizationId: true } })
+  const project = await db.project.findUnique({ where: { id }, select: { id: true, title: true, publicScheduleToken: true, organizationId: true } })
   if (!project) notFound()
   if (!(await canAccessOrg(session, project.organizationId))) notFound()
 
@@ -96,10 +83,6 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
           projectId={id}
           projectTitle={project.title}
           initial={data}
-          projectPlannedDates={{
-            expectedStart: safeDateStr(project.expectedStart),
-            expectedEnd: safeDateStr(project.expectedEnd),
-          }}
           members={members}
           riskThresholdPct={org?.riskThresholdPct ?? DEFAULT_RISK_THRESHOLD_PCT}
           initialBaselineByItem={baselineByItem}

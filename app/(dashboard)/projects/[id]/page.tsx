@@ -214,13 +214,31 @@ export default async function ProjectDetailPage({
   const leafTasksTotal = leafTasks.length
   const progress   = tasksTotal > 0 ? computeProjectProgress(legacyTasks) : (project.status === "COMPLETED" ? 100 : 0)
 
+  // Período do CRONOGRAMA DE VERDADE (min início/max término das tarefas) —
+  // usado abaixo em vez de project.expectedStart/expectedEnd (a estimativa
+  // inicial da solicitação, gravada ANTES de existir cronograma detalhado,
+  // que fica desatualizada assim que ele é montado: ex. pedido pra terminar
+  // em 18/09, cronograma de verdade vai até 12/11 — "Prazo"/IDP ficavam
+  // sempre travados em "atrasado", mesmo com o projeto no meio do prazo
+  // real). Cai pro campo do projeto só quando nenhuma tarefa tem data ainda.
+  const scheduleDates = legacyTasks.reduce(
+    (acc, t) => {
+      if (t.startDate && (!acc.start || t.startDate < acc.start)) acc.start = t.startDate
+      if (t.endDate && (!acc.end || t.endDate > acc.end)) acc.end = t.endDate
+      return acc
+    },
+    { start: null as Date | null, end: null as Date | null }
+  )
+  const effectivePlannedStart = scheduleDates.start ?? project.expectedStart
+  const effectivePlannedEnd   = scheduleDates.end   ?? project.expectedEnd
+
   // Situação de prazo (chip ao lado do badge de fase) — mesma cascata
   // canônica usada em Indicadores/Analytics, não o enum manual de status.
   const scheduleCascade = computeScheduleCascade(legacyTasks, topAreas, org?.riskThresholdPct ?? DEFAULT_RISK_THRESHOLD_PCT, new Date())
   const scheduleStatus  = resolveProjectScheduleStatus(project.status, scheduleCascade.scheduleStatus)
   const highRisks  = project.risks.filter((r) => ["HIGH", "CRITICAL"].includes(r.status)).length
-  const daysLeft   = project.expectedEnd
-    ? differenceInDays(project.expectedEnd, new Date())
+  const daysLeft   = effectivePlannedEnd
+    ? differenceInDays(effectivePlannedEnd, new Date())
     : null
 
   // Financial aggregates
@@ -233,9 +251,9 @@ export default async function ProjectDetailPage({
   )
   // VP — Valor Planejado (Planned Value): quanto deveria ter sido realizado até hoje pela linha do tempo
   const plannedValue: number | null = (() => {
-    if (!project.expectedStart || !project.expectedEnd || totalBudgetedCost <= 0) return null
-    const totalDays   = differenceInDays(project.expectedEnd, project.expectedStart)
-    const elapsedDays = differenceInDays(new Date(), project.expectedStart)
+    if (!effectivePlannedStart || !effectivePlannedEnd || totalBudgetedCost <= 0) return null
+    const totalDays   = differenceInDays(effectivePlannedEnd, effectivePlannedStart)
+    const elapsedDays = differenceInDays(new Date(), effectivePlannedStart)
     if (totalDays <= 0) return null
     const elapsedPct  = Math.max(0, Math.min(1, elapsedDays / totalDays))
     return totalBudgetedCost * elapsedPct

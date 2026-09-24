@@ -16,7 +16,16 @@ export function computeExpectedPct(
 ): number | null {
   if (!start || !end) return null
   const totalDays = differenceInDays(end, start)
-  if (totalDays <= 0) return null
+  if (totalDays < 0) return null // término antes do início — dado inconsistente
+  if (totalDays === 0) {
+    // Tarefa de 1 dia (início == término — duração inclusiva, regra do
+    // motor de cronograma) não dá pra dividir por zero dias. Vira um
+    // degrau: o dia ainda não chegou = 0%, chegou ou já passou = 100%.
+    // Sem este caso, TODA tarefa de 1 dia (a maioria de um cronograma
+    // típico) caía no `return null` acima e mostrava "—" na coluna de
+    // % Estimado, mesmo tendo datas planejadas válidas.
+    return differenceInDays(today, start) >= 0 ? 100 : 0
+  }
   const elapsedDays = differenceInDays(today, start)
   return Math.max(0, Math.min(100, Math.round((elapsedDays / totalDays) * 100)))
 }

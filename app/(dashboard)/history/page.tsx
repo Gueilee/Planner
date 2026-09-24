@@ -22,6 +22,23 @@ export default async function HistoryPage() {
       ? computeProjectProgress(p.scheduleV2Items.map((t) => ({ id: t.id, progress: t.percentualCompleto, parentId: t.parentId, startDate: t.inicioEstimado, endDate: t.terminoEstimado })))
       : p.status === "COMPLETED" ? 100 : 0
 
+    // Prazo (daysLeft) prioriza o período do CRONOGRAMA DE VERDADE (min
+    // início/max término das tarefas) sobre Project.expectedStart/
+    // expectedEnd — esse par é só a estimativa inicial da solicitação,
+    // gravada ANTES de existir cronograma detalhado, e fica desatualizada
+    // assim que ele é montado. Cai pro campo do projeto só quando nenhuma
+    // tarefa tem data ainda.
+    const scheduleDates = p.scheduleV2Items.reduce(
+      (acc, t) => {
+        if (t.inicioEstimado && (!acc.start || t.inicioEstimado < acc.start)) acc.start = t.inicioEstimado
+        if (t.terminoEstimado && (!acc.end || t.terminoEstimado > acc.end)) acc.end = t.terminoEstimado
+        return acc
+      },
+      { start: null as Date | null, end: null as Date | null }
+    )
+    const effectiveStart = scheduleDates.start ?? p.expectedStart
+    const effectiveEnd   = scheduleDates.end   ?? p.expectedEnd
+
     return {
       id:            p.id,
       title:         p.title,
@@ -41,10 +58,10 @@ export default async function HistoryPage() {
       budget:        p.budget,
       sponsor:       p.sponsor?.name ?? "—",
       projectCreatedAt: p.createdAt.toISOString(),
-      expectedStart: p.expectedStart?.toISOString() ?? null,
-      expectedEnd:   p.expectedEnd?.toISOString() ?? null,
-      daysLeft:      p.expectedEnd
-        ? differenceInDays(p.expectedEnd, new Date())
+      expectedStart: effectiveStart?.toISOString() ?? null,
+      expectedEnd:   effectiveEnd?.toISOString() ?? null,
+      daysLeft:      effectiveEnd
+        ? differenceInDays(effectiveEnd, new Date())
         : null,
     }
   })

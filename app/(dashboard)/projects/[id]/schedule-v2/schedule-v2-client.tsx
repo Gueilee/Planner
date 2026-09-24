@@ -203,16 +203,10 @@ function colPrefsKey(projectId: string) { return `sv2-columns-${projectId}` }
 
 // ─── Main ─────────────────────────────────────────────────────────────────
 
-export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlannedDates, members, riskThresholdPct = DEFAULT_RISK_THRESHOLD_PCT, initialBaselineByItem = {}, initialPublicScheduleToken = null }: {
+export function ScheduleV2Client({ projectId, projectTitle, initial, members, riskThresholdPct = DEFAULT_RISK_THRESHOLD_PCT, initialBaselineByItem = {}, initialPublicScheduleToken = null }: {
   projectId: string
   projectTitle: string
   initial: ScheduleV2Payload
-  // Datas "planejadas" do projeto (Project.expectedStart/expectedEnd) —
-  // linha de base oficial, editada na tela de detalhe do projeto, usada
-  // só para calcular o progresso ESPERADO (mesma base do Kanban/Status
-  // Report). O início/término exibidos nesta tela vêm do cronograma em si
-  // (ver projectStartDate/projectEndDate abaixo) — não deste prop.
-  projectPlannedDates: { expectedStart: string | null; expectedEnd: string | null }
   members: { id: string; name: string }[]
   riskThresholdPct?: number
   // Datas congeladas na última linha de base (ver lib/actions/baseline.ts),
@@ -321,16 +315,24 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, projectPlan
     [data.items]
   )
 
-  // Progresso esperado ("quanto deveria estar hoje") — mesma conta canônica
-  // usada em Analytics/Status Report (lib/utils/schedule-status.ts): tempo
-  // decorrido ÷ duração total do período planejado do projeto. Comparado
-  // com o progresso real acima para saber se está adiantado ou atrasado.
+  // Progresso esperado ("quanto deveria estar hoje") — tempo decorrido ÷
+  // duração total do período PLANEJADO DE VERDADE, ou seja, o próprio
+  // Início/Término do cronograma (data.projectStartDate/projectEndDate —
+  // os mesmos números já mostrados ali do lado, no cabeçalho). Antes usava
+  // projectPlannedDates (Project.expectedStart/expectedEnd) — uma
+  // estimativa inicial gravada na solicitação do projeto, ANTES de existir
+  // cronograma detalhado, que fica desatualizada assim que o Cronograma
+  // real é montado (ex.: projeto pedido pra terminar em 18/09, mas o
+  // cronograma de verdade vai até 12/11) — resultado: "Esperado" comparava
+  // hoje contra um prazo que já passou há muito, sempre travado em 100%
+  // (e "Atrasado -N pp" artificial), mesmo com o projeto no meio do
+  // caminho do prazo real.
   const plannedPct = useMemo(
     () => computeExpectedPct(
-      projectPlannedDates.expectedStart ? new Date(`${projectPlannedDates.expectedStart}T00:00:00.000Z`) : null,
-      projectPlannedDates.expectedEnd ? new Date(`${projectPlannedDates.expectedEnd}T00:00:00.000Z`) : null,
+      data.projectStartDate ? new Date(`${data.projectStartDate}T00:00:00.000Z`) : null,
+      data.projectEndDate ? new Date(`${data.projectEndDate}T00:00:00.000Z`) : null,
     ),
-    [projectPlannedDates.expectedStart, projectPlannedDates.expectedEnd]
+    [data.projectStartDate, data.projectEndDate]
   )
   const scheduleStatus: ScheduleStatus = useMemo(
     () => computeScheduleStatus(projectProgress, plannedPct, riskThresholdPct),

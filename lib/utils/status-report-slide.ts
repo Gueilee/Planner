@@ -68,12 +68,27 @@ export function buildProjectSlideData(p: StatusReportProjectRow, today: Date): P
   // Peso alternativo do IDP ponderado do portfólio (lib/utils/weighted-idp.ts).
   const tasksBudgetedCostSum = tasks.reduce((s, t) => s + (t.budgetedCost ?? 0), 0)
 
-  // IDP: usa expectedStart como linha de base (cronograma original, não data real de início)
-  // Isso garante que projetos que começaram atrasados não tenham IDP artificialmente inflado
+  // IDP/prazo: usa o período do CRONOGRAMA DE VERDADE (min início/max
+  // término entre as tarefas), não Project.expectedStart/expectedEnd — esse
+  // par é só a estimativa inicial gravada na solicitação do projeto, ANTES
+  // de existir cronograma detalhado, e fica desatualizada assim que ele é
+  // montado (ex.: pedido pra terminar em 18/09, cronograma de verdade vai
+  // até 12/11 — "Prazo decorrido"/IDP/dias restantes ficavam todos errados,
+  // sempre travados em 100%/atrasado, mesmo com o projeto no meio do prazo
+  // real). Cai pra expectedStart/suggestedStart só quando NENHUMA tarefa
+  // tem data ainda (projeto recém criado, cronograma vazio).
+  const scheduleDates = tasks.reduce(
+    (acc, t) => {
+      if (t.startDate && (!acc.start || t.startDate < acc.start)) acc.start = t.startDate
+      if (t.endDate && (!acc.end || t.endDate > acc.end)) acc.end = t.endDate
+      return acc
+    },
+    { start: null as Date | null, end: null as Date | null }
+  )
   let idp: number | null = null
   let timelineProgress: number | null = null
-  const pStart = p.expectedStart ?? p.suggestedStart
-  const pEnd   = p.expectedEnd   ?? p.suggestedEnd
+  const pStart = scheduleDates.start ?? p.expectedStart ?? p.suggestedStart
+  const pEnd   = scheduleDates.end   ?? p.expectedEnd   ?? p.suggestedEnd
   if (pStart && pEnd && p.status !== "PAUSED") {
     const totalDays   = differenceInDays(pEnd, pStart)
     const elapsedDays = differenceInDays(today, pStart)

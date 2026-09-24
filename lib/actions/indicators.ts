@@ -41,6 +41,26 @@ export async function getIndicatorsData(projectId: string) {
   const areas = areasFromV2(project.scheduleV2Items)
   const depsByTask = dependenciesById(deps)
 
+  // Prazo (daysRemaining, SPI/IDP, Gantt de módulos) prioriza o período do
+  // CRONOGRAMA DE VERDADE (min início/max término das tarefas) sobre
+  // Project.expectedStart/expectedEnd — esse par é só a estimativa inicial
+  // da solicitação do projeto, gravada ANTES de existir cronograma
+  // detalhado, e fica desatualizada assim que ele é montado (ex.: pedido
+  // pra terminar em 18/09, cronograma de verdade vai até 12/11 — os
+  // indicadores de prazo ficavam sempre travados em "atrasado", mesmo com
+  // o projeto no meio do prazo real). Cai pro campo do projeto só quando
+  // nenhuma tarefa tem data ainda.
+  const scheduleDates = legacyTasks.reduce(
+    (acc, t) => {
+      if (t.startDate && (!acc.start || t.startDate < acc.start)) acc.start = t.startDate
+      if (t.endDate && (!acc.end || t.endDate > acc.end)) acc.end = t.endDate
+      return acc
+    },
+    { start: null as Date | null, end: null as Date | null }
+  )
+  const effectiveExpectedStart = scheduleDates.start ?? project.expectedStart
+  const effectiveExpectedEnd   = scheduleDates.end   ?? project.expectedEnd
+
   const tasks = legacyTasks.map((t) => ({
     id:               t.id,
     title:            t.title,
@@ -72,8 +92,8 @@ export async function getIndicatorsData(projectId: string) {
       title:          project.title,
       status:         project.status as string,
       requestNumber:  project.requestNumber,
-      expectedStart:  project.expectedStart?.toISOString() ?? null,
-      expectedEnd:    project.expectedEnd?.toISOString() ?? null,
+      expectedStart:  effectiveExpectedStart?.toISOString() ?? null,
+      expectedEnd:    effectiveExpectedEnd?.toISOString() ?? null,
       actualStart:    project.actualStart?.toISOString() ?? null,
       actualEnd:      project.actualEnd?.toISOString() ?? null,
       budget:         project.budget,
