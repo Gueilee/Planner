@@ -6,6 +6,7 @@ import {
   hasUndoV2, hasRedoV2, undoLastChangeV2, redoLastChangeV2, applyTemplateV2, getChangeLogV2, bulkAssignResponsavelV2,
 } from "@/lib/actions/schedule-v2"
 import type { ScheduleV2Payload, ItemV2, ChangeLogEntryV2 } from "@/lib/actions/schedule-v2"
+import { computeProjectProgress } from "@/lib/utils/project-progress"
 import { computeExpectedPct, computeScheduleStatus, DEFAULT_RISK_THRESHOLD_PCT, type ScheduleStatus } from "@/lib/utils/schedule-status"
 import { exportScheduleToExcel } from "@/lib/export-schedule"
 import { getTemplates } from "@/lib/actions/templates"
@@ -306,43 +307,36 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, members, ri
 
   const conflictByItem = useMemo(() => new Map(data.conflicts.map((c) => [c.itemId, c])), [data.conflicts])
 
-  // Progresso do projeto = média das ATIVIDADES MÃE (itens de topo,
-  // parentId null) — cada uma já carrega seu próprio % Real corretamente
-  // ponderado pelos filhos dela (rollupProgress, calculado no servidor a
-  // cada recálculo, é o mesmo valor mostrado na coluna "% Real" da linha
-  // da atividade mãe). NÃO usa mais computeProjectProgress achatando
-  // direto nas tarefas-folha com peso por duração: uma única tarefa com
-  // data errada (ex.: término digitado 3 anos no futuro por engano) tinha
-  // peso (dias de duração) ordens de grandeza maior que as demais ~79
-  // tarefas somadas, e sozinha dominava o projeto inteiro (visto na
-  // prática: Real 91%/Esperado 3% com uma tarefa de 1097 dias, tudo mais
-  // sendo ≤23 dias). Com a média das ~9 atividades mãe, o estrago de uma
-  // tarefa com data ruim fica contido em, no máximo, 1/(nº de atividades
-  // mãe) do total — nunca mais que isso, e nunca a maioria.
-  const projectProgress = useMemo(() => {
-    const topLevel = data.items.filter((i) => i.parentId === null)
-    if (topLevel.length === 0) return 0
-    return Math.round(topLevel.reduce((s, i) => s + i.percentualCompleto, 0) / topLevel.length)
-  }, [data.items])
+  // Progresso do projeto — mesma função canônica usada em Analytics, Status
+  // Report, Dashboard etc. (lib/utils/project-progress.ts): média entre as
+  // ATIVIDADES MÃE (cada uma ponderada por duração só entre as próprias
+  // tarefas-folha), nunca achatando a árvore inteira num peso só — ver o
+  // comentário de computeProjectProgress pro incidente real que motivou
+  // essa mudança (uma tarefa com data errada dominando o projeto inteiro).
+  const projectProgress = useMemo(
+    () => computeProjectProgress(data.items.map((i) => ({ id: i.id, progress: i.percentualCompleto, parentId: i.parentId, startDate: i.inicioEstimado, endDate: i.terminoEstimado }))),
+    [data.items]
+  )
 
-  // Progresso esperado — mesmo raciocínio acima, mas usando o % Estimado já
-  // calculado por atividade mãe (computeExpectedPct sobre o início/término
-  // da PRÓPRIA atividade mãe, que já é o min/max dos filhos dela via
-  // rollupGroups — a mesma conta da coluna "% Estimado" da linha). Não
-  // agrega mais elapsed/total num único span (início mínimo/término máximo
-  // de TODO o projeto): esse span também ficava refém da mesma tarefa com
-  // data ruim, esticando o "término do projeto" pra 2029 e derrubando o
-  // esperado a quase zero mesmo com o projeto avançado de verdade.
+  // Progresso esperado — mesma árvore/agregação de computeProjectProgress
+  // acima (mesma função canônica), só substituindo `progress` de cada
+  // tarefa-folha pelo % Estimado dela (elapsed/total das PRÓPRIAS datas)
+  // antes de agregar — igual ao truque já usado em computeScheduleCascade
+  // (lib/utils/schedule-cascade.ts) pro "esperado" nunca divergir do "real"
+  // por usarem contas diferentes. Tarefa sem data ainda (não agendada) fica
+  // de fora do lado "esperado" (regra de domínio: item não agendado não
+  // entra no cálculo dos outros), mas continua contando no "real" acima.
   const plannedPct = useMemo(() => {
-    const topLevel = data.items.filter((i) => i.parentId === null)
-    const values = topLevel
-      .map((i) => computeExpectedPct(
-        i.inicioEstimado ? new Date(`${i.inicioEstimado}T00:00:00.000Z`) : null,
-        i.terminoEstimado ? new Date(`${i.terminoEstimado}T00:00:00.000Z`) : null,
-      ))
-      .filter((v): v is number => v !== null)
-    if (values.length === 0) return null
-    return Math.round(values.reduce((s, v) => s + v, 0) / values.length)
+    const withExpected = data.items
+      .map((i) => {
+        const est = computeExpectedPct(
+          i.inicioEstimado ? new Date(`${i.inicioEstimado}T00:00:00.000Z`) : null,
+          i.terminoEstimado ? new Date(`${i.terminoEstimado}T00:00:00.000Z`) : null,
+        )
+        return est === null ? null : { id: i.id, parentId: i.parentId, progress: est }
+      })
+      .filter((t): t is { id: string; parentId: string | null; progress: number } => t !== null)
+    return withExpected.length > 0 ? computeProjectProgress(withExpected) : null
   }, [data.items])
   const scheduleStatus: ScheduleStatus = useMemo(
     () => computeScheduleStatus(projectProgress, plannedPct, riskThresholdPct),

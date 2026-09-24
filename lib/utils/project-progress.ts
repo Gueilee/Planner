@@ -27,37 +27,72 @@ function taskWeight(t: TaskForProgress): number {
   return Number.isFinite(days) && days >= 1 ? days : 1
 }
 
+// Acha as tarefas-FOLHA (sem subtarefa) descendentes de um item — usada por
+// computeProjectProgress abaixo pra reduzir cada ATIVIDADE MÃE (item de
+// topo) a um único número antes de agregar ao projeto.
+function collectLeaves(id: string, byId: Map<string, TaskForProgress>, childrenOf: Map<string, TaskForProgress[]>): TaskForProgress[] {
+  const children = childrenOf.get(id) ?? []
+  if (children.length === 0) {
+    const self = byId.get(id)
+    return self ? [self] : []
+  }
+  return children.flatMap((c) => collectLeaves(c.id, byId, childrenOf))
+}
+
 /**
- * Progresso do projeto = média das tarefas-FOLHA (as que não têm subtarefa),
- * ponderada pela DURAÇÃO PLANEJADA de cada uma (taskWeight acima) — uma
- * tarefa de 10 dias pesa 10x mais que uma de 1 dia. Antes era média simples
- * (todas com peso igual); mudança de decisão (relatado pela PMO): uma
- * tarefa pequena concluída adiantada empurrava o % do projeto pra cima na
- * mesma proporção de uma tarefa grande em risco de atraso, escondendo esse
- * risco atrás de um número "bom".
+ * Progresso do projeto = MÉDIA SIMPLES entre as ATIVIDADES MÃE (itens de
+ * topo, parentId null) — cada uma reduzida antes a um único valor, ponderado
+ * pela DURAÇÃO PLANEJADA das suas próprias tarefas-folha (taskWeight acima:
+ * uma tarefa de 10 dias pesa 10x mais que uma de 1 dia, dentro da mesma
+ * atividade mãe). Não pondera mais por duração direto entre TODAS as
+ * tarefas-folha do projeto inteiro, achatando a árvore inteira num só
+ * cálculo — decisão revertida depois de um incidente real (projeto
+ * APTISSEN-CD2): uma única tarefa com término digitado errado (anos no
+ * futuro por engano) tinha, sozinha, peso de duração maior que as ~78
+ * tarefas restantes somadas, e dominou o projeto inteiro (91% mostrado,
+ * correto seria ~59%) — nenhuma quantidade de tarefas "normais" ao redor
+ * conseguia diluir esse peso. Com a média por atividade mãe, uma tarefa com
+ * data ruim fica contida em, no máximo, 1/(nº de atividades mãe) do total —
+ * nunca mais que isso, e nunca a maioria, mesmo no pior caso.
  *
- * Por que folha, e não as "Atividades" de topo: uma Atividade de topo com 1
- * tarefa (ex.: "Reunião de Encerramento") contava IGUAL a uma Atividade com 6
- * tarefas substanciais (ex.: "Teste") — a média por fase inflava ou derrubava
- * o % conforme o projeto tivesse mais ou menos fases "vazias", mascarando o
- * quanto de trabalho real já foi feito. Ponderar por duração no nível de
- * tarefa-folha já resolve isso automaticamente (uma fase com mais trabalho
- * pesa mais, sem precisar tratar fase separadamente).
+ * Efeito colateral aceito e intencional: dentro de UMA MESMA atividade mãe, a
+ * ponderação por duração continua valendo (tarefa grande pesa mais que
+ * pequena); entre atividades mãe DIFERENTES, cada uma vale o mesmo peso — uma
+ * atividade com 1 tarefa conta igual a uma com 20, igual à planilha de
+ * referência do PMO (Excel) nesse ponto específico. Itens sem nenhum
+ * agrupamento (todos com parentId null e sem filhos, ex.: cronograma
+ * pequeno/plano) caem no mesmo caso: cada um é sua própria "atividade mãe"
+ * de 1 tarefa só, com peso igual às demais.
  *
  * Esta é a função canônica: todo lugar que precisar do progresso do projeto
- * deve chamar esta função, nunca somar `.progress` na mão.
+ * deve chamar esta função (com `progress` = % real OU % esperado, ver
+ * computeScheduleCascade), nunca somar `.progress`/`.percentualCompleto` na
+ * mão nem fazer um segundo cálculo paralelo — a mesma chamada em telas
+ * diferentes (Cronograma, Status Report, Dashboard, Kanban, Analytics...)
+ * tem que devolver sempre o mesmo número.
  */
 export function computeProjectProgress(tasks: TaskForProgress[]): number {
   if (tasks.length === 0) return 0
 
-  const parentIds = new Set(
-    tasks.map((t) => t.parentId).filter((id): id is string => id !== null)
-  )
-  const leafTasks = tasks.filter((t) => !parentIds.has(t.id))
-  if (leafTasks.length === 0) return 0
+  const byId = new Map(tasks.map((t) => [t.id, t]))
+  const childrenOf = new Map<string, TaskForProgress[]>()
+  for (const t of tasks) {
+    if (t.parentId === null) continue
+    const arr = childrenOf.get(t.parentId) ?? []
+    arr.push(t)
+    childrenOf.set(t.parentId, arr)
+  }
 
-  const totalWeight = leafTasks.reduce((s, t) => s + taskWeight(t), 0)
-  if (totalWeight === 0) return 0
-  const weightedSum = leafTasks.reduce((s, t) => s + t.progress * taskWeight(t), 0)
-  return Math.round(weightedSum / totalWeight)
+  const topLevel = tasks.filter((t) => t.parentId === null)
+  if (topLevel.length === 0) return 0
+
+  const branchValues = topLevel.map((top) => {
+    const leaves = collectLeaves(top.id, byId, childrenOf)
+    if (leaves.length === 0) return top.progress
+    const totalWeight = leaves.reduce((s, t) => s + taskWeight(t), 0)
+    if (totalWeight === 0) return top.progress
+    return leaves.reduce((s, t) => s + t.progress * taskWeight(t), 0) / totalWeight
+  })
+
+  return Math.round(branchValues.reduce((s, v) => s + v, 0) / branchValues.length)
 }
