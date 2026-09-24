@@ -6,7 +6,6 @@ import {
   hasUndoV2, hasRedoV2, undoLastChangeV2, redoLastChangeV2, applyTemplateV2, getChangeLogV2, bulkAssignResponsavelV2,
 } from "@/lib/actions/schedule-v2"
 import type { ScheduleV2Payload, ItemV2, ChangeLogEntryV2 } from "@/lib/actions/schedule-v2"
-import { computeProjectProgress } from "@/lib/utils/project-progress"
 import { computeExpectedPct, computeScheduleStatus, DEFAULT_RISK_THRESHOLD_PCT, type ScheduleStatus } from "@/lib/utils/schedule-status"
 import { exportScheduleToExcel } from "@/lib/export-schedule"
 import { getTemplates } from "@/lib/actions/templates"
@@ -307,33 +306,44 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, members, ri
 
   const conflictByItem = useMemo(() => new Map(data.conflicts.map((c) => [c.itemId, c])), [data.conflicts])
 
-  // Progresso do projeto — mesma função canônica usada em Analytics,
-  // Status Report, Dashboard etc. (lib/utils/project-progress.ts), para
-  // nunca divergir do que já é mostrado nas outras telas.
-  const projectProgress = useMemo(
-    () => computeProjectProgress(data.items.map((i) => ({ id: i.id, progress: i.percentualCompleto, parentId: i.parentId, startDate: i.inicioEstimado, endDate: i.terminoEstimado }))),
-    [data.items]
-  )
+  // Progresso do projeto = média das ATIVIDADES MÃE (itens de topo,
+  // parentId null) — cada uma já carrega seu próprio % Real corretamente
+  // ponderado pelos filhos dela (rollupProgress, calculado no servidor a
+  // cada recálculo, é o mesmo valor mostrado na coluna "% Real" da linha
+  // da atividade mãe). NÃO usa mais computeProjectProgress achatando
+  // direto nas tarefas-folha com peso por duração: uma única tarefa com
+  // data errada (ex.: término digitado 3 anos no futuro por engano) tinha
+  // peso (dias de duração) ordens de grandeza maior que as demais ~79
+  // tarefas somadas, e sozinha dominava o projeto inteiro (visto na
+  // prática: Real 91%/Esperado 3% com uma tarefa de 1097 dias, tudo mais
+  // sendo ≤23 dias). Com a média das ~9 atividades mãe, o estrago de uma
+  // tarefa com data ruim fica contido em, no máximo, 1/(nº de atividades
+  // mãe) do total — nunca mais que isso, e nunca a maioria.
+  const projectProgress = useMemo(() => {
+    const topLevel = data.items.filter((i) => i.parentId === null)
+    if (topLevel.length === 0) return 0
+    return Math.round(topLevel.reduce((s, i) => s + i.percentualCompleto, 0) / topLevel.length)
+  }, [data.items])
 
-  // Progresso esperado ("quanto deveria estar hoje") — tempo decorrido ÷
-  // duração total do período PLANEJADO DE VERDADE, ou seja, o próprio
-  // Início/Término do cronograma (data.projectStartDate/projectEndDate —
-  // os mesmos números já mostrados ali do lado, no cabeçalho). Antes usava
-  // projectPlannedDates (Project.expectedStart/expectedEnd) — uma
-  // estimativa inicial gravada na solicitação do projeto, ANTES de existir
-  // cronograma detalhado, que fica desatualizada assim que o Cronograma
-  // real é montado (ex.: projeto pedido pra terminar em 18/09, mas o
-  // cronograma de verdade vai até 12/11) — resultado: "Esperado" comparava
-  // hoje contra um prazo que já passou há muito, sempre travado em 100%
-  // (e "Atrasado -N pp" artificial), mesmo com o projeto no meio do
-  // caminho do prazo real.
-  const plannedPct = useMemo(
-    () => computeExpectedPct(
-      data.projectStartDate ? new Date(`${data.projectStartDate}T00:00:00.000Z`) : null,
-      data.projectEndDate ? new Date(`${data.projectEndDate}T00:00:00.000Z`) : null,
-    ),
-    [data.projectStartDate, data.projectEndDate]
-  )
+  // Progresso esperado — mesmo raciocínio acima, mas usando o % Estimado já
+  // calculado por atividade mãe (computeExpectedPct sobre o início/término
+  // da PRÓPRIA atividade mãe, que já é o min/max dos filhos dela via
+  // rollupGroups — a mesma conta da coluna "% Estimado" da linha). Não
+  // agrega mais elapsed/total num único span (início mínimo/término máximo
+  // de TODO o projeto): esse span também ficava refém da mesma tarefa com
+  // data ruim, esticando o "término do projeto" pra 2029 e derrubando o
+  // esperado a quase zero mesmo com o projeto avançado de verdade.
+  const plannedPct = useMemo(() => {
+    const topLevel = data.items.filter((i) => i.parentId === null)
+    const values = topLevel
+      .map((i) => computeExpectedPct(
+        i.inicioEstimado ? new Date(`${i.inicioEstimado}T00:00:00.000Z`) : null,
+        i.terminoEstimado ? new Date(`${i.terminoEstimado}T00:00:00.000Z`) : null,
+      ))
+      .filter((v): v is number => v !== null)
+    if (values.length === 0) return null
+    return Math.round(values.reduce((s, v) => s + v, 0) / values.length)
+  }, [data.items])
   const scheduleStatus: ScheduleStatus = useMemo(
     () => computeScheduleStatus(projectProgress, plannedPct, riskThresholdPct),
     [projectProgress, plannedPct, riskThresholdPct]
