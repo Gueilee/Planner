@@ -457,12 +457,17 @@ function ProjectHistoryView({ data, del }: { data: NonNullable<FullHistory>; del
   const tasks       = toLegacyLikeTasks(p.scheduleV2Items)
   const areas       = areasFromV2(p.scheduleV2Items)
   const groupIds    = new Set(p.scheduleV2Items.filter((i) => i.parentId).map((i) => i.parentId as string))
-  const total       = tasks.length
-  const done        = tasks.filter((t) => t.status === "COMPLETED").length
-  const inProg      = tasks.filter((t) => t.status === "IN_PROGRESS").length
-  const delayed     = tasks.filter((t) => t.status === "DELAYED").length
+  // Contagens abaixo (total/done/inProg/delayed) são só de tarefas-folha —
+  // um grupo (seção do Cronograma) nunca vira card no Kanban, então contá-lo
+  // aqui divergia do que o Kanban mostra pro mesmo projeto (ex.: 79/31 aqui
+  // vs 68/30 no Kanban, quando havia grupos "concluídos" no meio).
+  const leafTasks   = tasks.filter((t) => !groupIds.has(t.id))
+  const total       = leafTasks.length
+  const done        = leafTasks.filter((t) => t.status === "COMPLETED").length
+  const inProg      = leafTasks.filter((t) => t.status === "IN_PROGRESS").length
+  const delayed     = leafTasks.filter((t) => t.status === "DELAYED").length
   const progress    = total > 0
-    ? computeProjectProgress(tasks.map((t) => ({ id: t.id, progress: t.progress, parentId: t.parentId, startDate: t.startDate, endDate: t.endDate })))
+    ? computeProjectProgress(leafTasks.map((t) => ({ id: t.id, progress: t.progress, parentId: t.parentId, startDate: t.startDate, endDate: t.endDate })))
     : p.status === "COMPLETED" ? 100 : 0
   const highRisks   = p.risks.filter((r) => r.status === "HIGH" || r.status === "CRITICAL").length
   const goodLessons = p.lessonsLearned.filter((l) => l.influence === "POSITIVE").length

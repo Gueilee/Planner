@@ -83,6 +83,14 @@ function projectProgress(p: ProjectRow): number {
   return computeProjectProgress(p.tasks)
 }
 
+// Só tarefas-folha (sem filhos) — um grupo/seção do Cronograma concluído
+// não deve contar como "tarefa concluída" na lista, senão diverge do que o
+// Kanban mostra pro mesmo projeto (que só lista folha).
+function leafTasksOf(p: ProjectRow): ProjectRow["tasks"] {
+  const groupIds = new Set(p.tasks.filter((t) => t.parentId).map((t) => t.parentId as string))
+  return p.tasks.filter((t) => !groupIds.has(t.id))
+}
+
 // ─── Area config ─────────────────────────────────────────────────────────────
 
 type AreaKey = "ALL" | "TECNOLOGIA" | "QUALIDADE" | "ESTRATEGICO" | "ARMAZEM"
@@ -324,9 +332,10 @@ export function ProjectsClient({ projects }: { projects: ProjectRow[] }) {
         ) : (
           <div className="divide-y divide-slate-50">
             {paginated.map((project) => {
-              const tasksDone  = project.tasks.filter((t) => t.status === "COMPLETED").length
-              const tasksTotal = project.tasks.length
-              const progress   = tasksTotal > 0
+              const leafTasks  = leafTasksOf(project)
+              const tasksDone  = leafTasks.filter((t) => t.status === "COMPLETED").length
+              const tasksTotal = leafTasks.length
+              const progress   = project.tasks.length > 0
                 ? computeProjectProgress(project.tasks)
                 : (project.status === "COMPLETED" ? 100 : project.status === "PLANNING" ? 0 : null)
 

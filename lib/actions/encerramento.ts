@@ -44,7 +44,7 @@ export async function getProjectsForClosure() {
       goLiveDate:   true,
       sponsor:      { select: { name: true } },
       members:      { select: { id: true } },
-      scheduleV2Items: { select: { id: true, status: true } },
+      scheduleV2Items: { select: { id: true, status: true, parentId: true } },
     },
   })
 }

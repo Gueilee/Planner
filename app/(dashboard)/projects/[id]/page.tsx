@@ -200,8 +200,18 @@ export default async function ProjectDetailPage({
   }
 
   const userRole   = session?.user?.role ?? ""
-  const tasksDone  = legacyTasks.filter((t) => t.status === "COMPLETED").length
-  const tasksTotal = legacyTasks.length
+  // tasksTotal conta TUDO (grupos + folhas) — correto pra "quantas linhas
+  // tem o Cronograma" (rótulo da aba, estado vazio da aba Cronograma), mas
+  // seria errado pra "quantas tarefas concluídas": um grupo (seção) rolar
+  // pra "Concluído" contaria aqui mas nunca aparece como card no Kanban
+  // (que só lista folha), gerando divergência real (79 tarefas/31
+  // concluídas aqui vs 68/30 no Kanban do mesmo projeto — 11 grupos, 1
+  // deles concluído). Os widgets de progresso abaixo usam
+  // leafTasksDone/leafTasksTotal, iguais ao Kanban e à função canônica de
+  // progresso.
+  const tasksTotal     = legacyTasks.length
+  const leafTasksDone  = leafTasks.filter((t) => t.status === "COMPLETED").length
+  const leafTasksTotal = leafTasks.length
   const progress   = tasksTotal > 0 ? computeProjectProgress(legacyTasks) : (project.status === "COMPLETED" ? 100 : 0)
 
   // Situação de prazo (chip ao lado do badge de fase) — mesma cascata
@@ -590,10 +600,10 @@ export default async function ProjectDetailPage({
               )}
 
               {/* Overall progress */}
-              {tasksTotal > 0 && (
+              {leafTasksTotal > 0 && (
                 <div className="mt-5 p-4 rounded-xl" style={{ background: "#F8FAFC", border: "1px solid #F1F5F9" }}>
                   <div className="flex justify-between text-xs mb-2">
-                    <span className="text-slate-400 font-medium">{tasksDone} de {tasksTotal} tarefas concluídas</span>
+                    <span className="text-slate-400 font-medium">{leafTasksDone} de {leafTasksTotal} tarefas concluídas</span>
                     <span className="font-black text-[#0F172A]">{progress}%</span>
                   </div>
                   <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
@@ -765,7 +775,7 @@ export default async function ProjectDetailPage({
                   ))}
 
                   {/* Progress ring visual */}
-                  {tasksTotal > 0 && (
+                  {leafTasksTotal > 0 && (
                     <div className="mt-4 pt-4 border-t border-slate-50 flex items-center gap-4">
                       <div className="relative w-16 h-16 shrink-0">
                         <svg className="w-16 h-16 -rotate-90" viewBox="0 0 64 64">
@@ -788,11 +798,11 @@ export default async function ProjectDetailPage({
                         </span>
                       </div>
                       <div>
-                        <p className="text-xs font-bold text-[#0F172A]">{tasksDone} concluídas</p>
-                        <p className="text-xs text-slate-400">de {tasksTotal} tarefas</p>
+                        <p className="text-xs font-bold text-[#0F172A]">{leafTasksDone} concluídas</p>
+                        <p className="text-xs text-slate-400">de {leafTasksTotal} tarefas</p>
                         <div className="mt-1 flex items-center gap-1 text-[10px] font-semibold text-emerald-600">
                           <TrendingUp className="w-3 h-3" />
-                          {tasksTotal > 0 ? Math.round((tasksDone / tasksTotal) * 100) : 0}% completo
+                          {leafTasksTotal > 0 ? Math.round((leafTasksDone / leafTasksTotal) * 100) : 0}% completo
                         </div>
                       </div>
                     </div>

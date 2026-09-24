@@ -12,8 +12,12 @@ export default async function HistoryPage() {
   const raw = await getAllProjectsSummary()
 
   const projects = raw.map((p) => {
-    const total    = p.scheduleV2Items.length
-    const done     = p.scheduleV2Items.filter((t) => t.status === "CONCLUIDO").length
+    // Só tarefas-folha — grupo/seção concluído não deve contar (senão
+    // diverge do Kanban, que só lista folha, pro mesmo projeto).
+    const groupIds  = new Set(p.scheduleV2Items.filter((t) => t.parentId).map((t) => t.parentId as string))
+    const leafItems = p.scheduleV2Items.filter((t) => !groupIds.has(t.id))
+    const total    = leafItems.length
+    const done     = leafItems.filter((t) => t.status === "CONCLUIDO").length
     const progress = total > 0
       ? computeProjectProgress(p.scheduleV2Items.map((t) => ({ id: t.id, progress: t.percentualCompleto, parentId: t.parentId, startDate: t.inicioEstimado, endDate: t.terminoEstimado })))
       : p.status === "COMPLETED" ? 100 : 0
