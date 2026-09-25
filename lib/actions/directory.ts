@@ -35,7 +35,7 @@ export async function searchDirectoryUsers(query: string, organizationId?: strin
 
   // Azure é uma integração externa (rede, rate limit) — se falhar, ainda
   // devolve o que achar localmente, em vez de derrubar a busca inteira.
-  const [azureResults, localUsers] = await Promise.all([
+  const [azureResults, localUsers, pendingInvites] = await Promise.all([
     searchAzureUsers(term).catch(() => [] as AzureDirectoryUser[]),
     db.user.findMany({
       where: {
@@ -55,9 +55,33 @@ export async function searchDirectoryUsers(query: string, organizationId?: strin
       orderBy: { name: "asc" },
       take: MAX_LOCAL_RESULTS,
     }),
+    // Convite ainda pendente (não aceito) cujo `User` nunca chegou a ser
+    // criado — cobre convites gerados ANTES de createInvitation passar a
+    // pré-criar o usuário (ver comentário lá), sem precisar de migração
+    // manual: a pessoa vira pesquisável na próxima vez que alguém digitar o
+    // nome dela aqui, current independente de ela nunca ter acessado o link.
+    db.invitation.findMany({
+      where: {
+        usedAt: null,
+        expiresAt: { gt: new Date() },
+        OR: [
+          { organizationId: targetOrgId },
+          { extraOrgIds: { contains: targetOrgId } },
+        ],
+        AND: [
+          { OR: [
+            { name:  { contains: term, mode: "insensitive" } },
+            { email: { contains: term, mode: "insensitive" } },
+          ] },
+        ],
+      },
+      select: { email: true, name: true, role: true, organizationId: true },
+      take: MAX_LOCAL_RESULTS,
+    }),
   ])
 
   const azureEmails = new Set(azureResults.map((u) => u.email.toLowerCase()))
+  const localEmails = new Set(localUsers.map((u) => u.email.toLowerCase()))
 
   const azure: DirectoryUser[] = azureResults.map((u) => ({ ...u, source: "azure" as const }))
   // Um usuário local com o mesmo e-mail de um resultado do Azure não entra
@@ -75,7 +99,33 @@ export async function searchDirectoryUsers(query: string, organizationId?: strin
       department: u.department,
     }))
 
-  return [...azure, ...local]
+  const missingInvites = pendingInvites.filter(
+    (inv) => !azureEmails.has(inv.email.toLowerCase()) && !localEmails.has(inv.email.toLowerCase())
+  )
+  const backfilled: DirectoryUser[] = []
+  if (missingInvites.length > 0) {
+    const bcrypt = (await import("bcryptjs")).default
+    for (const inv of missingInvites) {
+      const email = inv.email.trim().toLowerCase()
+      // Pode já ter sido criado por outra busca concorrente entre o
+      // findMany acima e agora — confere de novo antes de criar, pra nunca
+      // tentar duplicar o e-mail (único).
+      const already = await db.user.findUnique({ where: { email }, select: { id: true, name: true, email: true, department: true } })
+      if (already) {
+        backfilled.push({ source: "local", id: already.id, azureId: null, name: already.name, email: already.email, jobTitle: null, department: already.department })
+        continue
+      }
+      const randomPassword = crypto.randomUUID() + crypto.randomUUID()
+      const hash = await bcrypt.hash(randomPassword, 10)
+      const created = await db.user.create({
+        data: { name: inv.name, email, password: hash, role: inv.role, active: true, organizationId: inv.organizationId },
+        select: { id: true, name: true, email: true, department: true },
+      })
+      backfilled.push({ source: "local", id: created.id, azureId: null, name: created.name, email: created.email, jobTitle: null, department: created.department })
+    }
+  }
+
+  return [...azure, ...local, ...backfilled]
 }
 
 export type LinkedUser = { id: string; name: string; email: string }
