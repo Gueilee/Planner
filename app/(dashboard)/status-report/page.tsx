@@ -30,6 +30,11 @@ export default async function StatusReportPage() {
 
   const totalMeetings = slides.reduce((s, p) => s + p.meetingsCount, 0)
   const canCloseMonth = new Set(["ADMIN", "PROJECT_MANAGER", "SPONSOR"]).has(session.user.role ?? "")
+  // Indicadores da Diretoria (visão cross-filial) — só Diretor/Admin; mesmo
+  // gate de lib/actions/director-indicators.ts, checado de novo aqui só
+  // pra decidir se mostra a tela de escolha (a busca cross-org em si só
+  // acontece se a pessoa realmente clicar, via getDirectorIndicators).
+  const canSeeDirectorView = new Set(["DIRECTOR", "ADMIN"]).has(session.user.role ?? "")
 
-  return <ReportClient slides={slides} totalMeetings={totalMeetings} canCloseMonth={canCloseMonth} />
+  return <ReportClient slides={slides} totalMeetings={totalMeetings} canCloseMonth={canCloseMonth} canSeeDirectorView={canSeeDirectorView} />
 }

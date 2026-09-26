@@ -21,6 +21,7 @@ import { ComposedChart, Line, Area, XAxis, YAxis, ReferenceLine, CartesianGrid, 
 import { closeMonthlyStatusReports, getStatusReportHistory, type StatusReportHistoryItem } from "@/lib/actions/status-report"
 import { getOrCreatePublicStatusToken, revokePublicStatusToken } from "@/lib/actions/public-links"
 import { computeWeightedIdp } from "@/lib/utils/weighted-idp"
+import { DirectorIndicatorsView } from "./director-indicators-view"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1166,6 +1167,49 @@ function EmptyState() {
   )
 }
 
+// ─── Escolha de entrada (Diretor/Admin) ─────────────────────────────────────
+// Só aparece pra quem pode ver os Indicadores da Diretoria (cross-filial) —
+// ver canSeeDirectorView, calculado no Server Component a partir do role.
+// Quem não é Diretor/Admin nunca vê essa tela, vai direto pro fluxo de
+// sempre (ProjectSelector).
+function EntryChoice({ onSelectClient, onSelectDirector }: { onSelectClient: () => void; onSelectDirector: () => void }) {
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center gap-10 text-center px-12" style={{ background: "linear-gradient(145deg,#0B1D3A,#0F2550)" }}>
+      <style>{KF}</style>
+      <div>
+        <p style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: "rgba(147,197,253,0.55)", marginBottom: 10 }}>
+          Status Report
+        </p>
+        <h2 style={{ fontSize: "1.9rem", fontWeight: 900, color: "#fff" }}>O que você quer ver agora?</h2>
+      </div>
+      <div className="flex flex-wrap items-stretch justify-center gap-5" style={{ maxWidth: 780 }}>
+        <button onClick={onSelectClient} className="group text-left" style={{
+          width: 320, padding: "28px 26px", borderRadius: 20,
+          background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.10)",
+          transition: "all 0.2s",
+        }}>
+          <Users style={{ width: 28, height: 28, color: "#60A5FA", marginBottom: 14 }} />
+          <p style={{ fontSize: 15, fontWeight: 800, color: "#fff", marginBottom: 6 }}>Apresentação de Projeto</p>
+          <p style={{ fontSize: 12.5, color: "rgba(180,210,255,0.55)", lineHeight: 1.5 }}>
+            Escolher um ou mais projetos e apresentar — pra cliente ou reunião interna, como sempre.
+          </p>
+        </button>
+        <button onClick={onSelectDirector} className="group text-left" style={{
+          width: 320, padding: "28px 26px", borderRadius: 20,
+          background: "rgba(139,92,246,0.10)", border: "1px solid rgba(139,92,246,0.30)",
+          transition: "all 0.2s",
+        }}>
+          <BarChart3 style={{ width: 28, height: 28, color: "#A78BFA", marginBottom: 14 }} />
+          <p style={{ fontSize: 15, fontWeight: 800, color: "#fff", marginBottom: 6 }}>Indicadores da Diretoria</p>
+          <p style={{ fontSize: 12.5, color: "rgba(180,210,255,0.55)", lineHeight: 1.5 }}>
+            Visão executiva do portfólio inteiro — todas as filiais, antes de entrar projeto por projeto.
+          </p>
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ─── Fechar mês — histórico ────────────────────────────────────────────────────
 
 const RAG_DOT: Record<string, string> = { GREEN: "#10B981", YELLOW: "#F59E0B", RED: "#EF4444" }
@@ -1448,7 +1492,10 @@ function StatusPublicLinkModal({ token, loading, copied, onCopy, onRevoke, onClo
 type ReportMode = "interno" | "cliente"
 const REPORT_MODE_KEY = "status-report-mode"
 
-export function ReportClient({slides:allSlides,totalMeetings,canCloseMonth}:{slides:ProjectSlideData[];totalMeetings:number;canCloseMonth:boolean}) {
+export function ReportClient({slides:allSlides,totalMeetings,canCloseMonth,canSeeDirectorView}:{slides:ProjectSlideData[];totalMeetings:number;canCloseMonth:boolean;canSeeDirectorView:boolean}) {
+  // "pending" = ainda não escolheu (só acontece pra quem pode ver a visão
+  // de Diretoria); quem não pode, já nasce em "client" e nunca vê a escolha.
+  const [entryChoice,setEntryChoice]=useState<"pending"|"client"|"director">(canSeeDirectorView?"pending":"client")
   const [started,setStarted]   =useState(false)
   const [activeSlides,setActive]=useState<ProjectSlideData[]>(allSlides)
   const [mode,setMode]=useState<ReportMode>("interno")
@@ -1554,6 +1601,12 @@ export function ReportClient({slides:allSlides,totalMeetings,canCloseMonth}:{sli
     }
   }
 
+  if(entryChoice==="pending"){
+    return <EntryChoice onSelectClient={()=>setEntryChoice("client")} onSelectDirector={()=>setEntryChoice("director")}/>
+  }
+  if(entryChoice==="director"){
+    return <DirectorIndicatorsView onBack={()=>setEntryChoice(canSeeDirectorView?"pending":"client")}/>
+  }
   if(allSlides.length===0)return <EmptyState/>
   if(!started){
     return <ProjectSelector slides={allSlides} onStart={(chosen)=>{setActive(chosen);setCurrent(0);setStarted(true)}} canCloseMonth={canCloseMonth}/>
