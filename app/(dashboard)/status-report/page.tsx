@@ -1,18 +1,12 @@
 import { db } from "@/lib/db"
 import { requireScreenView } from "@/lib/permissions-guard"
-import { ProjectStatus } from "@/lib/generated/prisma/enums"
-import { STATUS_REPORT_PROJECT_INCLUDE, buildProjectSlideData } from "@/lib/utils/status-report-slide"
+import { ACTIVE_STATUSES, STATUS_REPORT_PROJECT_INCLUDE, buildProjectSlideData } from "@/lib/utils/status-report-slide"
 import { ReportClient } from "./report-client"
 
 // Garante que a página sempre busca dados frescos do banco (sem cache estático)
 export const dynamic = "force-dynamic"
 
 export const metadata = { title: "Status Report" }
-
-const ACTIVE_STATUSES: ProjectStatus[] = [
-  ProjectStatus.IN_PROGRESS, ProjectStatus.PILOT, ProjectStatus.RAMP_UP,
-  ProjectStatus.GO_LIVE, ProjectStatus.POST_GOLIVE,
-]
 
 export default async function StatusReportPage() {
   const { session } = await requireScreenView("status_report")

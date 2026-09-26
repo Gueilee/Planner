@@ -22,6 +22,7 @@ import { closeMonthlyStatusReports, getStatusReportHistory, type StatusReportHis
 import { getOrCreatePublicStatusToken, revokePublicStatusToken } from "@/lib/actions/public-links"
 import { computeWeightedIdp } from "@/lib/utils/weighted-idp"
 import { DirectorIndicatorsView } from "./director-indicators-view"
+import { getDirectorIndicators, getDirectorProjectSlides, type DirectorIndicatorsData } from "@/lib/actions/director-indicators"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1151,6 +1152,24 @@ function NavDots({total,current,goto}:{total:number;current:number;goto:(i:numbe
 
 // ─── Empty State ──────────────────────────────────────────────────────────────
 
+function LoadingState({ message }: { message?: string }) {
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center px-12" style={{background:"linear-gradient(145deg,#0B1D3A,#0F2550)"}}>
+      <Loader2 style={{width:32,height:32,color:"rgba(147,197,253,0.55)"}} className="animate-spin"/>
+      <p style={{fontSize:13,color:"rgba(180,210,255,0.55)"}}>{message ?? "Carregando projetos de todas as filiais…"}</p>
+    </div>
+  )
+}
+
+function ErrorState({ message }: { message: string }) {
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center px-12" style={{background:"linear-gradient(145deg,#0B1D3A,#0F2550)"}}>
+      <AlertCircle style={{width:32,height:32,color:"rgba(248,113,113,0.7)"}}/>
+      <p style={{fontSize:13,color:"rgba(252,165,165,0.8)"}}>{message}</p>
+    </div>
+  )
+}
+
 function EmptyState() {
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-6 text-center px-12" style={{background:"linear-gradient(145deg,#0B1D3A,#0F2550)"}}>
@@ -1526,24 +1545,53 @@ export function ReportClient({slides:allSlides,totalMeetings,canCloseMonth,canSe
   const idleTimer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined)
   const resetIdle=useCallback(()=>{setIdle(false);clearTimeout(idleTimer.current);idleTimer.current=setTimeout(()=>setIdle(true),4500)},[])
 
+  // Indicadores da Diretoria — quando esse modo é escolhido, a apresentação
+  // abre com esse slide ANTES de capa/agenda/projetos (pedido do usuário:
+  // "selecionar Diretoria, selecionar os projetos e já começar a
+  // apresentação sem precisar voltar" — não é mais uma tela separada).
+  // Busca antecipada assim que o modo é escolhido (ainda no Seletor de
+  // Projetos), pra já estar pronto quando a apresentação chegar nesse slide.
+  const [directorData,setDirectorData]=useState<DirectorIndicatorsData|null>(null)
+  const [directorError,setDirectorError]=useState<string|null>(null)
+  useEffect(()=>{
+    if(entryChoice!=="director"||directorData)return
+    getDirectorIndicators().then(setDirectorData).catch((e:unknown)=>setDirectorError(e instanceof Error?e.message:"Erro ao carregar indicadores"))
+  },[entryChoice,directorData])
+
+  // Seletor de Projetos no modo Diretoria: projetos ativos de TODAS as
+  // filiais (não só a filial ativa da sessão) — pedido do usuário, já que
+  // quem vê o portfólio inteiro no slide de indicadores precisa poder
+  // escolher projeto de qualquer filial pra apresentar em seguida.
+  const [directorSlides,setDirectorSlides]=useState<ProjectSlideData[]|null>(null)
+  const [directorSlidesError,setDirectorSlidesError]=useState<string|null>(null)
+  useEffect(()=>{
+    if(entryChoice!=="director"||directorSlides)return
+    getDirectorProjectSlides().then(setDirectorSlides).catch((e:unknown)=>setDirectorSlidesError(e instanceof Error?e.message:"Erro ao carregar projetos de todas as filiais"))
+  },[entryChoice,directorSlides])
+
+  const hasDirectorSlide=entryChoice==="director"
+  const leadingSlides=hasDirectorSlide?3:2 // (director+)cover+agenda
+
   const slideType=useMemo(()=>{
     const allList=[
+      ...(hasDirectorSlide?["director" as const]:[]),
       "cover" as const,"agenda" as const,
       ...activeSlides.map(()=>"project" as const),
       ...(activeSlides.length>1?["summary" as const]:[]),
       "closing" as const,
     ]
     return allList[current]
-  },[activeSlides,current])
+  },[activeSlides,current,hasDirectorSlide])
 
   // Slide list (mantido para compatibilidade com renders)
   const allList=useMemo(()=>[
+    ...(hasDirectorSlide?["director" as const]:[]),
     "cover" as const,
     "agenda" as const,
     ...activeSlides.map(()=>"project" as const),
     ...(activeSlides.length>1?["summary" as const]:[]),
     "closing" as const,
-  ],[activeSlides])
+  ],[activeSlides,hasDirectorSlide])
   const total=allList.length
 
   const go=useCallback((idx:number)=>{if(idx<0||idx>=total)return;setDir(idx>current?1:-1);setCurrent(idx);resetIdle()},[current,total,resetIdle])
@@ -1573,7 +1621,7 @@ export function ReportClient({slides:allSlides,totalMeetings,canCloseMonth,canSe
   }
 
   // project index: starts after cover + agenda
-  const projectIdx=current-2
+  const projectIdx=current-leadingSlides
   const currentProject=slideType==="project"?activeSlides[projectIdx]:undefined
   const currentToken=currentProject?publicTokens[currentProject.id]??null:null
   const date=format(new Date(),"dd 'de' MMMM 'de' yyyy",{locale:ptBR})
@@ -1604,8 +1652,15 @@ export function ReportClient({slides:allSlides,totalMeetings,canCloseMonth,canSe
   if(entryChoice==="pending"){
     return <EntryChoice onSelectClient={()=>setEntryChoice("client")} onSelectDirector={()=>setEntryChoice("director")}/>
   }
-  if(entryChoice==="director"){
-    return <DirectorIndicatorsView onBack={()=>setEntryChoice(canSeeDirectorView?"pending":"client")}/>
+
+  // Pool de projetos pro Seletor: modo Diretoria usa TODAS as filiais
+  // (directorSlides, buscado à parte); modo Cliente usa só a filial ativa
+  // da sessão (allSlides, vindo do Server Component), como sempre.
+  if(entryChoice==="director"&&!started){
+    if(directorSlidesError)return <ErrorState message={directorSlidesError}/>
+    if(!directorSlides)return <LoadingState/>
+    if(directorSlides.length===0)return <EmptyState/>
+    return <ProjectSelector slides={directorSlides} onStart={(chosen)=>{setActive(chosen);setCurrent(0);setStarted(true)}} canCloseMonth={canCloseMonth}/>
   }
   if(allSlides.length===0)return <EmptyState/>
   if(!started){
@@ -1620,6 +1675,7 @@ export function ReportClient({slides:allSlides,totalMeetings,canCloseMonth,canSe
       <AnimatePresence custom={dir} initial={false}>
         <motion.div key={current} custom={dir} variants={slideVariants} initial="enter" animate="center" exit="exit"
           className="absolute inset-0" style={{paddingBottom:58}}>
+          {slideType==="director"&&<DirectorIndicatorsView data={directorData} error={directorError}/>}
           {slideType==="cover"   &&<CoverSlide   slides={activeSlides} date={date} totalMeetings={totalMeetings}/>}
           {slideType==="agenda"  &&<AgendaSlide  slides={activeSlides} date={date}/>}
           {slideType==="project" &&projectIdx>=0&&projectIdx<activeSlides.length&&(

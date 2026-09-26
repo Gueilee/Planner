@@ -16,6 +16,8 @@ import { computeProjectProgress } from "@/lib/utils/project-progress"
 import { DEFAULT_RISK_THRESHOLD_PCT } from "@/lib/utils/schedule-status"
 import { computeScheduleCascade, SCHEDULE_STATUS_SKIP_STATUSES, resolveProjectScheduleStatus } from "@/lib/utils/schedule-cascade"
 import { toLegacyLikeTasks, areasFromV2 } from "@/lib/utils/schedule-v2-adapter"
+import { ACTIVE_STATUSES, STATUS_REPORT_PROJECT_INCLUDE, buildProjectSlideData } from "@/lib/utils/status-report-slide"
+import type { ProjectSlideData } from "@/app/(dashboard)/status-report/report-client"
 import { ProjectStatus } from "@/lib/generated/prisma/enums"
 
 // Só Diretor ou Admin — a única tela do sistema que agrega TODAS as
@@ -174,4 +176,32 @@ export async function getDirectorIndicators(): Promise<DirectorIndicatorsData> {
     byArea,
     generatedAt: new Date().toISOString(),
   }
+}
+
+// Projetos ativos de TODAS as filiais, prontos pro Seletor de Projetos do
+// Status Report — só no modo Diretoria (usuário pediu: quem enxerga o
+// portfólio inteiro no slide de indicadores tem que poder escolher
+// projeto de QUALQUER filial pra apresentar em seguida, não só a filial
+// ativa da sessão). Mesmo ACTIVE_STATUSES/include/buildProjectSlideData
+// do fluxo normal (app/(dashboard)/status-report/page.tsx) — só sem o
+// filtro de organizationId.
+export async function getDirectorProjectSlides(): Promise<ProjectSlideData[]> {
+  const session = await auth()
+  if (!session?.user || !CAN_VIEW_DIRECTOR_INDICATORS.has(session.user.role ?? "")) {
+    throw new Error("Acesso restrito à Diretoria")
+  }
+
+  const projects = await db.project.findMany({
+    where: {
+      status: { in: ACTIVE_STATUSES },
+      organization: { active: true },
+    },
+    orderBy: { createdAt: "asc" },
+    include: STATUS_REPORT_PROJECT_INCLUDE,
+  })
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  return projects.map((p) => buildProjectSlideData(p, today))
 }

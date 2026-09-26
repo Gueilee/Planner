@@ -5,11 +5,22 @@
 // escrita, nenhuma dependência de auth() aqui dentro (a rota pública não
 // pode chamar nada que exija sessão).
 import { Prisma } from "@/lib/generated/prisma/client"
+import { ProjectStatus } from "@/lib/generated/prisma/enums"
 import { differenceInDays, startOfWeek, eachWeekOfInterval, isAfter, isBefore, addWeeks } from "date-fns"
 import { computeProjectProgress } from "@/lib/utils/project-progress"
 import { computePlanned, computeRealized, type RawTask } from "@/lib/utils/s-curve-math"
 import { toLegacyLikeTasks, areasFromV2 } from "@/lib/utils/schedule-v2-adapter"
 import type { ProjectSlideData } from "@/app/(dashboard)/status-report/report-client"
+
+// Único lugar de verdade pra "projeto ativo o suficiente pra entrar no
+// Status Report" — usado por app/(dashboard)/status-report/page.tsx (só a
+// própria filial) e lib/actions/director-indicators.ts::getDirectorProjectSlides
+// (todas as filiais, modo Diretoria) — nunca a lista duplicada nos dois
+// lugares, pra nunca divergir sobre o que conta como "ativo".
+export const ACTIVE_STATUSES: ProjectStatus[] = [
+  ProjectStatus.IN_PROGRESS, ProjectStatus.PILOT, ProjectStatus.RAMP_UP,
+  ProjectStatus.GO_LIVE, ProjectStatus.POST_GOLIVE,
+]
 
 export const STATUS_REPORT_PROJECT_INCLUDE = {
   sponsor: { select: { name: true } },

@@ -1,17 +1,19 @@
 "use client"
 
 // Indicadores da Diretoria — visão executiva do portfólio inteiro (todas as
-// filiais), pedida pra abrir antes de entrar projeto por projeto no Status
-// Report. Sempre calculado na hora (lib/actions/director-indicators.ts) —
-// sem cache/snapshot, decisão do usuário: já nasce em dia sempre que a tela
-// abre, sem precisar de nenhum mecanismo de agendamento.
+// filiais). É o PRIMEIRO slide da apresentação quando o modo "Diretoria" é
+// escolhido (ver report-client.tsx: hasDirectorSlide/slideType) — não é
+// mais uma tela separada, entra na mesma sequência cover/agenda/projetos,
+// pra apresentar direto sem precisar voltar. Dado é buscado com
+// antecedência pelo ReportClient (ainda no Seletor de Projetos) e chega
+// pronto aqui via props — sempre calculado na hora
+// (lib/actions/director-indicators.ts), sem cache/snapshot.
 
-import { useEffect, useState } from "react"
 import {
-  ArrowLeft, Loader2, Briefcase, TrendingUp, CheckCircle2,
+  Loader2, Briefcase, TrendingUp, CheckCircle2,
   AlertTriangle, ShieldAlert, DollarSign, PiggyBank, Building2, LayoutGrid,
 } from "lucide-react"
-import { getDirectorIndicators, type DirectorIndicatorsData, type DirectorBreakdownRow } from "@/lib/actions/director-indicators"
+import type { DirectorIndicatorsData, DirectorBreakdownRow } from "@/lib/actions/director-indicators"
 
 function currency(v: number): string {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })
@@ -64,33 +66,20 @@ function BreakdownRow({ row, labelFmt }: { row: DirectorBreakdownRow; labelFmt?:
   )
 }
 
-export function DirectorIndicatorsView({ onBack }: { onBack: () => void }) {
-  const [data, setData] = useState<DirectorIndicatorsData | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    getDirectorIndicators()
-      .then(setData)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : "Erro ao carregar indicadores"))
-  }, [])
-
+export function DirectorIndicatorsView({ data, error }: { data: DirectorIndicatorsData | null; error: string | null }) {
   return (
     <div className="flex-1 overflow-y-auto" style={{ background: "linear-gradient(145deg,#0B1D3A,#0F2550)" }}>
-      <div style={{ maxWidth: 1080, margin: "0 auto", padding: "36px 28px 60px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
-          <button onClick={onBack} style={{ display: "flex", alignItems: "center", gap: 6, color: "rgba(180,210,255,0.6)", fontSize: 12.5, fontWeight: 700, background: "none", border: "none", cursor: "pointer" }}>
-            <ArrowLeft style={{ width: 14, height: 14 }} /> Voltar
-          </button>
+      <div style={{ maxWidth: 1080, margin: "0 auto", padding: "56px 28px 60px" }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 8 }}>
+          <p style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: "rgba(147,197,253,0.55)" }}>
+            Visão Executiva · Todas as Filiais
+          </p>
           {data && (
             <p style={{ fontSize: 11, color: "rgba(180,210,255,0.4)" }}>
               Atualizado agora — {new Date(data.generatedAt).toLocaleString("pt-BR")}
             </p>
           )}
         </div>
-
-        <p style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: "rgba(147,197,253,0.55)", marginBottom: 8 }}>
-          Visão Executiva · Todas as Filiais
-        </p>
         <h1 style={{ fontSize: "2rem", fontWeight: 900, color: "#fff", marginBottom: 32 }}>Indicadores da Diretoria</h1>
 
         {error && (
