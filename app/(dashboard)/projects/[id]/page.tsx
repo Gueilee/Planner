@@ -173,6 +173,7 @@ export default async function ProjectDetailPage({
       endDate:      t.endDate,
       budgetedCost: t.budgetedCost,
       actualCost:   t.actualCost,
+      cancelled:    t.cancelled,
     })),
     wbsAreas: topAreas.map(a => ({ id: a.id, weight: a.weight })),
     risks: project.risks.map(r => ({ status: r.status })),

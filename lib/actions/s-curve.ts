@@ -125,7 +125,7 @@ export async function getSCurveData(projectId: string): Promise<SCurvePayload | 
 
   if (leafTasks.length === 0) {
     const realizedNoDates = computeProjectProgress(
-      allLeafTasks.map((t) => ({ id: t.id, progress: t.progress, parentId: null, startDate: t.startDate, endDate: t.endDate })),
+      allLeafTasks.map((t) => ({ id: t.id, progress: t.progress, parentId: null, startDate: t.startDate, endDate: t.endDate, cancelled: t.cancelled })),
     )
     return {
       project: {
@@ -209,7 +209,7 @@ export async function getSCurveData(projectId: string): Promise<SCurvePayload | 
   // grade semanal/mensal do gráfico), para bater exatamente com o Cronograma
   // mesmo quando "hoje" cai entre dois pontos da grade (granularidade mensal).
   const realizedToday = computeProjectProgress(
-    allLeafTasks.map((t) => ({ id: t.id, progress: t.progress, parentId: null, startDate: t.startDate, endDate: t.endDate })),
+    allLeafTasks.map((t) => ({ id: t.id, progress: t.progress, parentId: null, startDate: t.startDate, endDate: t.endDate, cancelled: t.cancelled })),
   )
   const plannedToday  = computePlanned(leafTasks, [today])[0] ?? 0
 

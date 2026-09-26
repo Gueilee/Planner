@@ -81,7 +81,10 @@ export type StatusItem = { id: string; parentId: string | null; status: string }
 // último de propósito — como "nenhum status mais crítico" é o único jeito
 // de chegar até ele, o grupo só vira CONCLUIDO quando TODOS os filhos
 // estiverem CONCLUIDO, sem precisar de um caso especial separado.
-const STATUS_PRIORITY = ["ATRASADO", "PAUSADO", "EM_ANDAMENTO", "VALIDACAO", "A_INICIAR", "CONCLUIDO"] as const
+// CANCELADO por último de propósito — só vira status do grupo quando TODOS
+// os filhos diretos estão cancelados (nenhum dos outros valores aparece
+// entre eles); um só filho ativo já basta pro grupo não ser "cancelado".
+const STATUS_PRIORITY = ["ATRASADO", "PAUSADO", "EM_ANDAMENTO", "VALIDACAO", "A_INICIAR", "CONCLUIDO", "CANCELADO"] as const
 
 /**
  * Status de grupo = o mais crítico entre os filhos diretos, bottom-up
@@ -122,12 +125,15 @@ export function rollupStatus(items: readonly StatusItem[]): Map<string, string> 
   return result
 }
 
-export type ProgressItem = { id: string; parentId: string | null; percentualCompleto: number }
+export type ProgressItem = { id: string; parentId: string | null; percentualCompleto: number; cancelled?: boolean }
 
 /**
  * Progresso de grupo = média simples dos filhos DIRETOS, recursivo
  * bottom-up (mesmo padrão de propagateParentUp do motor atual — grupo sem
- * filhos fica com o próprio valor, nunca 0 por padrão).
+ * filhos fica com o próprio valor, nunca 0 por padrão). Filho CANCELADO
+ * fica de fora da média (nem 0% nem 100%) — se todos os filhos diretos
+ * estiverem cancelados, cai no mesmo fallback de "sem filhos" (valor
+ * próprio do grupo).
  */
 export function rollupProgress(items: readonly ProgressItem[]): Map<string, number> {
   const byId = new Map(items.map((i) => [i.id, i]))
@@ -145,7 +151,7 @@ export function rollupProgress(items: readonly ProgressItem[]): Map<string, numb
     const cached = result.get(id)
     if (cached !== undefined) return cached
 
-    const children = childrenOf.get(id) ?? []
+    const children = (childrenOf.get(id) ?? []).filter((c) => !c.cancelled)
     if (children.length === 0) {
       const value = byId.get(id)?.percentualCompleto ?? 0
       result.set(id, value)

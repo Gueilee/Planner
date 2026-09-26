@@ -125,7 +125,7 @@ export default async function AnalyticsPage() {
 
     const progress =
       tasks.length > 0
-        ? computeProjectProgress(tasks)
+        ? computeProjectProgress(tasks.map((t) => ({ ...t, cancelled: t.status === "CANCELLED" })))
         : p.status === "COMPLETED" ? 100 : 0
 
     // ── Desvio de prazo ───────────────────────────────────────────────────────

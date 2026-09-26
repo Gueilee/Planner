@@ -14,8 +14,7 @@ import type { Template } from "@/lib/actions/templates"
 import { createBaselineForProject, getLatestBaselineByItem } from "@/lib/actions/baseline"
 import { getOrCreatePublicScheduleToken, revokePublicScheduleToken } from "@/lib/actions/public-links"
 import { fmtDateLong, isValidDateStr } from "@/lib/date-utils"
-import { formatDistanceToNow } from "date-fns"
-import { ptBR } from "date-fns/locale"
+import { HistoryModal } from "@/components/kronex/history-modal"
 import {
   ChevronRight, ChevronDown, Plus, IndentIncrease, IndentDecrease,
   ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, Milestone,
@@ -131,6 +130,10 @@ const STATUS_OPTIONS = [
   { value: "CONCLUIDO", label: "Concluído", color: "#059669", bg: "#ECFDF5" },
   { value: "PAUSADO", label: "Pausado", color: "#D97706", bg: "#FFFBEB" },
   { value: "ATRASADO", label: "Atrasado", color: "#DC2626", bg: "#FEF2F2" },
+  // Não entra no % do projeto nem da atividade mãe (real ou esperado) —
+  // ver comentário do campo `cancelled` em TaskForProgress
+  // (lib/utils/project-progress.ts).
+  { value: "CANCELADO", label: "Cancelado", color: "#78716C", bg: "#F5F5F4" },
 ] as const
 
 // Real vs. esperado (comparação do cabeçalho) — mesmas 3 faixas usadas em
@@ -281,6 +284,15 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, members, ri
   const [historyEntries, setHistoryEntries] = useState<ChangeLogEntryV2[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
 
+  // Replanejamento vs. Linha de Base — pedido da analista: toda vez que
+  // Início/Término mudar de um jeito que diverge da última Linha de Base
+  // salva, abre um campo pra justificar antes de gravar (handleDateCommit
+  // abaixo decide se precisa perguntar; ReplanJustifyModal é só a UI).
+  const [pendingReplan, setPendingReplan] = useState<{
+    itemId: string; itemTitle: string
+    field: "inicioEstimado" | "terminoEstimado"; value: string | null
+  } | null>(null)
+
   // Link público (token permanente) — lib/actions/public-links.ts. Modal
   // só abre depois do token existir (gera na hora se ainda não tiver um).
   const [publicToken, setPublicToken] = useState(initialPublicScheduleToken)
@@ -314,7 +326,7 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, members, ri
   // comentário de computeProjectProgress pro incidente real que motivou
   // essa mudança (uma tarefa com data errada dominando o projeto inteiro).
   const projectProgress = useMemo(
-    () => computeProjectProgress(data.items.map((i) => ({ id: i.id, progress: i.percentualCompleto, parentId: i.parentId, startDate: i.inicioEstimado, endDate: i.terminoEstimado }))),
+    () => computeProjectProgress(data.items.map((i) => ({ id: i.id, progress: i.percentualCompleto, parentId: i.parentId, startDate: i.inicioEstimado, endDate: i.terminoEstimado, cancelled: i.status === "CANCELADO" }))),
     [data.items]
   )
 
@@ -333,9 +345,9 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, members, ri
           i.inicioEstimado ? new Date(`${i.inicioEstimado}T00:00:00.000Z`) : null,
           i.terminoEstimado ? new Date(`${i.terminoEstimado}T00:00:00.000Z`) : null,
         )
-        return est === null ? null : { id: i.id, parentId: i.parentId, progress: est }
+        return est === null ? null : { id: i.id, parentId: i.parentId, progress: est, cancelled: i.status === "CANCELADO" }
       })
-      .filter((t): t is { id: string; parentId: string | null; progress: number } => t !== null)
+      .filter((t): t is { id: string; parentId: string | null; progress: number; cancelled: boolean } => t !== null)
     return withExpected.length > 0 ? computeProjectProgress(withExpected) : null
   }, [data.items])
   const scheduleStatus: ScheduleStatus = useMemo(
@@ -559,6 +571,27 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, members, ri
       await updateItemV2(id, projectId, patch)
       await refreshData()
     })
+  }
+
+  // Início/Término planejados: só pergunta o motivo quando existe uma Linha
+  // de Base pra este item E a data nova diverge dela — replanejar algo que
+  // nunca teve baseline aprovada (ex.: projeto ainda não chegou nesse
+  // checkpoint) grava direto, sem perguntar nada.
+  function handleDateCommit(id: string, field: "inicioEstimado" | "terminoEstimado", value: string | null) {
+    const base = baselineByItem[id]
+    const baselineValue = field === "inicioEstimado" ? base?.plannedStart : base?.plannedEnd
+    if (baselineValue && value && value !== baselineValue) {
+      const item = data.items.find((i) => i.id === id)
+      setPendingReplan({ itemId: id, itemTitle: item?.title ?? "", field, value })
+      return
+    }
+    handleUpdate(id, { [field]: value })
+  }
+
+  function handleConfirmReplan(justification: string) {
+    if (!pendingReplan) return
+    handleUpdate(pendingReplan.itemId, { [pendingReplan.field]: pendingReplan.value, justification })
+    setPendingReplan(null)
   }
 
   function handleBulkAssignResponsavel(patch: { responsavelId: string | null; responsavelNome: string | null }, label: string) {
@@ -864,7 +897,7 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, members, ri
   }
 
   const rowHandlers: RowHandlers = {
-    data, expanded, onToggle: toggle, onUpdate: handleUpdate, onDeps: handleDeps, onDelete: handleDelete,
+    data, expanded, onToggle: toggle, onUpdate: handleUpdate, onRequestDateChange: handleDateCommit, onDeps: handleDeps, onDelete: handleDelete,
     onDuplicate: handleDuplicate, onAddAbove: handleAddAbove, onAddChild: handleAddChild, onEditTitle: handleEditTitle,
     selectedIds, onSelect: handleToggleSelect, sort, conflictByItem,
     colOrder: visibleColOrder, colWidths, titleWidth, members: allMembers, membersById, baselineByItem,
@@ -1227,6 +1260,21 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, members, ri
         <HistoryModal loading={historyLoading} entries={historyEntries} onClose={() => setHistoryOpen(false)} />
       )}
 
+      {pendingReplan && (
+        <ReplanJustifyModal
+          itemTitle={pendingReplan.itemTitle}
+          field={pendingReplan.field}
+          baselineValue={
+            pendingReplan.field === "inicioEstimado"
+              ? baselineByItem[pendingReplan.itemId]?.plannedStart ?? null
+              : baselineByItem[pendingReplan.itemId]?.plannedEnd ?? null
+          }
+          newValue={pendingReplan.value}
+          onConfirm={handleConfirmReplan}
+          onCancel={() => setPendingReplan(null)}
+        />
+      )}
+
       {publicLinkOpen && (
         <PublicLinkModal
           token={publicToken}
@@ -1247,54 +1295,60 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, members, ri
   )
 }
 
-// ─── Modal "Histórico" ────────────────────────────────────────────────────
-function HistoryModal({ loading, entries, onClose }: {
-  loading: boolean
-  entries: ChangeLogEntryV2[]
-  onClose: () => void
+// Modal "Histórico" — components/kronex/history-modal.tsx (compartilhado
+// com o Kanban, que grava no mesmo log via applyItemUpdatesV2).
+
+// ─── Modal "Justificar replanejamento" ─────────────────────────────────────
+// Só aparece quando a data nova diverge da Linha de Base salva (ver
+// handleDateCommit) — pedido da analista: toda alteração de data que sai do
+// que foi aprovado precisa de um motivo registrado, sem exigir tirar uma
+// Linha de Base nova a cada edição.
+function ReplanJustifyModal({
+  itemTitle, field, baselineValue, newValue, onConfirm, onCancel,
+}: {
+  itemTitle: string
+  field: "inicioEstimado" | "terminoEstimado"
+  baselineValue: string | null
+  newValue: string | null
+  onConfirm: (justification: string) => void
+  onCancel: () => void
 }) {
+  const [reason, setReason] = useState("")
+  const label = field === "inicioEstimado" ? "Início" : "Término"
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4" onClick={onCancel}>
       <div
-        className="w-full max-w-lg max-h-[80vh] flex flex-col rounded-2xl bg-white shadow-xl border border-slate-200 p-5"
+        className="w-full max-w-md rounded-2xl bg-white shadow-xl border border-slate-200 p-5"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-2 mb-1 shrink-0">
-          <History className="w-4 h-4 text-[#7B2FBE]" />
-          <h3 className="text-sm font-black text-slate-800">Histórico de alterações</h3>
+        <div className="flex items-center gap-2 mb-1">
+          <BookmarkPlus className="w-4 h-4 text-[#7B2FBE]" />
+          <h3 className="text-sm font-black text-slate-800">Justificar replanejamento</h3>
         </div>
-        <p className="text-xs text-slate-400 mb-4 shrink-0">
-          Quem mudou o quê e quando neste cronograma — mais recentes primeiro.
+        <p className="text-xs text-slate-500 mb-3">
+          <strong>{itemTitle}</strong> — {label} sai do aprovado na Linha de Base
+          ({baselineValue ? fmtDateLong(baselineValue) : "—"} → {newValue ? fmtDateLong(newValue) : "—"}).
+          Descreva o motivo — fica registrado no Histórico.
         </p>
-
-        <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1">
-          {loading ? (
-            <p className="text-xs text-slate-400 text-center py-6">Carregando…</p>
-          ) : entries.length === 0 ? (
-            <p className="text-xs text-slate-400 text-center py-6">Nenhuma alteração registrada ainda.</p>
-          ) : (
-            <ul className="space-y-2">
-              {entries.map((e) => (
-                <li key={e.id} className="text-xs border-b border-slate-100 pb-2">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="font-bold text-slate-700">{e.userName}</span>
-                    <span
-                      className="text-[10px] text-slate-400 shrink-0"
-                      title={new Date(e.createdAt).toLocaleString("pt-BR")}
-                    >
-                      {formatDistanceToNow(new Date(e.createdAt), { addSuffix: true, locale: ptBR })}
-                    </span>
-                  </div>
-                  <p className="text-slate-600 mt-0.5">{e.description}</p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="flex items-center justify-end gap-2 mt-4 shrink-0">
-          <button onClick={onClose} className="px-3.5 py-2 rounded-lg text-xs font-bold text-slate-500 hover:bg-slate-100 transition-colors">
-            Fechar
+        <textarea
+          autoFocus
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="Ex.: fornecedor atrasou a entrega do equipamento…"
+          rows={3}
+          className="w-full text-xs rounded-lg border border-slate-200 px-3 py-2 outline-none focus:border-[#7B2FBE] focus:ring-2 focus:ring-violet-50 resize-none"
+        />
+        <div className="flex items-center justify-end gap-2 mt-4">
+          <button onClick={onCancel} className="px-3.5 py-2 rounded-lg text-xs font-bold text-slate-500 hover:bg-slate-100 transition-colors">
+            Cancelar alteração
+          </button>
+          <button
+            onClick={() => onConfirm(reason.trim())}
+            disabled={reason.trim().length === 0}
+            className="px-3.5 py-2 rounded-lg text-xs font-bold text-white bg-[#7B2FBE] hover:opacity-90 disabled:opacity-40 transition-all"
+          >
+            Confirmar replanejamento
           </button>
         </div>
       </div>
@@ -1544,6 +1598,12 @@ type RowHandlers = {
   expanded: Set<string>
   onToggle: (id: string) => void
   onUpdate: (id: string, patch: Parameters<typeof updateItemV2>[2]) => void
+  // Início/Término planejados passam por aqui em vez de onUpdate direto —
+  // se a nova data diferir da Linha de Base salva para o item, abre o
+  // modal pedindo o motivo do replanejamento antes de gravar (ver
+  // handleDateCommit/ReplanJustifyModal). Sem baseline pra comparar (ou
+  // data igual à baseline), grava direto, sem perguntar nada.
+  onRequestDateChange: (id: string, field: "inicioEstimado" | "terminoEstimado", value: string | null) => void
   onDeps: (id: string, raw: string) => void
   onDelete: (id: string) => void
   onDuplicate: (item: ItemV2) => void
@@ -1847,7 +1907,7 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
                 ? "Data controlada pelo predecessor — um valor digitado aqui é descartado ao salvar"
                 : "Início planejado"
           }
-          onCommit={(v) => h.onUpdate(item.id, { inicioEstimado: v })}
+          onCommit={(v) => h.onRequestDateChange(item.id, "inicioEstimado", v)}
         />
       )
 
@@ -1857,7 +1917,7 @@ function renderCell(col: ColKey, item: ItemV2, hasChildren: boolean, h: RowHandl
           value={item.terminoEstimado}
           kind="planned"
           title={hasChildren ? "Data de grupo — as subatividades definem o período; um valor digitado aqui é descartado ao salvar" : "Editar aqui recalcula a duração (início fica fixo)"}
-          onCommit={(v) => h.onUpdate(item.id, { terminoEstimado: v })}
+          onCommit={(v) => h.onRequestDateChange(item.id, "terminoEstimado", v)}
         />
       )
 

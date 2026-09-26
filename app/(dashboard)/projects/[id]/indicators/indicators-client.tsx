@@ -89,7 +89,7 @@ function computeMetrics(tasks: Task[], project: Project, today: Date) {
   // tarefas-folha do recorte filtrado, ponderada pela duração planejada.
   const avgProgress = total > 0
     ? computeProjectProgress(
-        tasks.map((t) => ({ id: t.id, progress: t.progress, parentId: t.parentId, startDate: t.startDate, endDate: t.endDate })),
+        tasks.map((t) => ({ id: t.id, progress: t.progress, parentId: t.parentId, startDate: t.startDate, endDate: t.endDate, cancelled: t.status === "CANCELLED" })),
       )
     : 0
 

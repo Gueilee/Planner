@@ -8,6 +8,12 @@ export type TaskForProgress = {
   // (média simples) para esse item específico.
   startDate?: Date | string | null
   endDate?:   Date | string | null
+  // Atividade CANCELADA não conta no progresso do projeto — nem como 0%
+  // (puxaria pra baixo indevidamente) nem como 100% (infla artificialmente).
+  // Fica de fora do cálculo inteiro (numerador e denominador), igual a um
+  // item "não agendado" (CLAUDE.md §3.10) — quem passa o status já traduz
+  // pro vocabulário certo (v2 "CANCELADO" ou legado "CANCELLED").
+  cancelled?: boolean
 }
 
 // Mantido por compatibilidade de import — não é mais usado por
@@ -71,7 +77,10 @@ function collectLeaves(id: string, byId: Map<string, TaskForProgress>, childrenO
  * diferentes (Cronograma, Status Report, Dashboard, Kanban, Analytics...)
  * tem que devolver sempre o mesmo número.
  */
-export function computeProjectProgress(tasks: TaskForProgress[]): number {
+export function computeProjectProgress(allTasks: TaskForProgress[]): number {
+  // Cancelada (e toda a subárvore dela) fica de fora inteira — ver comentário
+  // do campo `cancelled` em TaskForProgress.
+  const tasks = allTasks.filter((t) => !t.cancelled)
   if (tasks.length === 0) return 0
 
   const byId = new Map(tasks.map((t) => [t.id, t]))

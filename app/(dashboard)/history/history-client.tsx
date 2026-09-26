@@ -467,7 +467,7 @@ function ProjectHistoryView({ data, del }: { data: NonNullable<FullHistory>; del
   const inProg      = leafTasks.filter((t) => t.status === "IN_PROGRESS").length
   const delayed     = leafTasks.filter((t) => t.status === "DELAYED").length
   const progress    = total > 0
-    ? computeProjectProgress(leafTasks.map((t) => ({ id: t.id, progress: t.progress, parentId: t.parentId, startDate: t.startDate, endDate: t.endDate })))
+    ? computeProjectProgress(leafTasks.map((t) => ({ id: t.id, progress: t.progress, parentId: t.parentId, startDate: t.startDate, endDate: t.endDate, cancelled: t.status === "CANCELLED" })))
     : p.status === "COMPLETED" ? 100 : 0
   const highRisks   = p.risks.filter((r) => r.status === "HIGH" || r.status === "CRITICAL").length
   const goodLessons = p.lessonsLearned.filter((l) => l.influence === "POSITIVE").length

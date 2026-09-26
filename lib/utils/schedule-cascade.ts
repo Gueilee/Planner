@@ -11,6 +11,10 @@ export type CascadeTask = {
   progress:  number
   startDate: Date | null
   endDate:   Date | null
+  // Atividade CANCELADA não conta no progresso do projeto (nem real, nem
+  // esperado) — ver comentário do mesmo campo em TaskForProgress
+  // (lib/utils/project-progress.ts).
+  cancelled?: boolean
 }
 
 export type TaskCascadeResult = {
@@ -115,7 +119,7 @@ export function computeScheduleCascade(
 
   const tasksWithExpected = tasks
     .filter((t) => expectedById.get(t.id) !== null && expectedById.get(t.id) !== undefined)
-    .map((t) => ({ id: t.id, parentId: t.parentId, startDate: t.startDate, endDate: t.endDate, progress: expectedById.get(t.id) as number }))
+    .map((t) => ({ id: t.id, parentId: t.parentId, startDate: t.startDate, endDate: t.endDate, progress: expectedById.get(t.id) as number, cancelled: t.cancelled }))
 
   const projectExpectedPct = tasksWithExpected.length > 0
     ? computeProjectProgress(tasksWithExpected)

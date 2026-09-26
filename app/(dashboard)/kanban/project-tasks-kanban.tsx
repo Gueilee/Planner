@@ -14,7 +14,7 @@ import { parseDateStr } from "@/lib/date-utils"
 import {
   X, LayoutGrid, List, Loader2, ExternalLink,
   Clock, Layers, CheckCircle2, PauseCircle, ClipboardCheck,
-  ChevronRight, AlertTriangle,
+  ChevronRight, AlertTriangle, XCircle, History,
   Play, Pause, Send, Paperclip, Maximize2, CalendarDays, Timer,
   MessageSquare, CheckCheck,
 } from "lucide-react"
@@ -24,6 +24,8 @@ import {
   getProjectTasksForKanban, updateTaskStatusKanban,
   getTaskDetail, updateTaskKanban, addTaskComment, addTaskAttachmentKanban,
 } from "@/lib/actions/kanban"
+import { getChangeLogV2, type ChangeLogEntryV2 } from "@/lib/actions/schedule-v2"
+import { HistoryModal } from "@/components/kronex/history-modal"
 import { todayStr } from "@/lib/date-utils"
 import { computeProjectProgress } from "@/lib/utils/project-progress"
 import { UserAvatar } from "@/components/ui/user-avatar"
@@ -58,6 +60,7 @@ const TASK_COLS = [
   { id: "VALIDATION",  label: "Em Validação",  color: "#8B5CF6", glow: "rgba(139,92,246,0.25)",  gradient: "linear-gradient(135deg,#8B5CF6,#C4B5FD)", icon: ClipboardCheck },
   { id: "COMPLETED",   label: "Concluída",     color: "#059669", glow: "rgba(5,150,105,0.25)",   gradient: "linear-gradient(135deg,#059669,#34D399)", icon: CheckCircle2 },
   { id: "ON_HOLD",     label: "Pausada",       color: "#F59E0B", glow: "rgba(245,158,11,0.25)",  gradient: "linear-gradient(135deg,#D97706,#F59E0B)", icon: PauseCircle },
+  { id: "CANCELLED",   label: "Cancelada",     color: "#78716C", glow: "rgba(120,113,108,0.25)", gradient: "linear-gradient(135deg,#57534E,#A8A29E)", icon: XCircle },
 ] as const
 
 type ColId = typeof TASK_COLS[number]["id"]
@@ -978,8 +981,24 @@ export function ProjectTasksKanban({
   const [overId,       setOverId]       = useState<string | null>(null)
   const [saving,       setSaving]       = useState<string | null>(null)
   const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null)
+  // Histórico de alterações — mesmo log do Cronograma (ScheduleV2ChangeLog,
+  // escrito por applyItemUpdatesV2, usado pelas ações deste board também);
+  // só não tinha como ver por aqui antes.
+  const [historyOpen,    setHistoryOpen]    = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyEntries, setHistoryEntries] = useState<ChangeLogEntryV2[]>([])
   const [, startTransition] = useTransition()
   const prevStatuses = useRef<Record<string, string>>({})
+
+  function handleOpenHistory() {
+    setHistoryOpen(true)
+    setHistoryLoading(true)
+    startTransition(async () => {
+      const entries = await getChangeLogV2(project.id)
+      setHistoryEntries(entries)
+      setHistoryLoading(false)
+    })
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -1033,7 +1052,7 @@ export function ProjectTasksKanban({
   // nunca divergir de tela para tela. Usa todas as tarefas (não só as visíveis
   // no board), pois a função já filtra/pondera por tarefa-folha internamente.
   const progress = computeProjectProgress(
-    tasks.map((t) => ({ id: t.id, progress: t.progress, parentId: t.parentId, startDate: t.startDate, endDate: t.endDate })),
+    tasks.map((t) => ({ id: t.id, progress: t.progress, parentId: t.parentId, startDate: t.startDate, endDate: t.endDate, cancelled: t.status === "CANCELLED" })),
   )
   const done     = visibleTasks.filter((t) => t.status === "COMPLETED").length
 
@@ -1101,6 +1120,12 @@ export function ProjectTasksKanban({
                 </button>
               ))}
             </div>
+
+            <button onClick={handleOpenHistory} title="Ver quem alterou o quê e quando neste projeto"
+              className="hidden sm:inline-flex items-center gap-1.5 px-3.5 h-9 text-xs font-bold rounded-xl text-slate-500 transition-all hover:bg-slate-100 shrink-0"
+              style={{ border: "1px solid rgba(15,23,42,0.09)" }}>
+              <History className="w-3.5 h-3.5" /> Histórico
+            </button>
 
             {!hideOpenLink && (
               <Link href={`/projects/${project.id}`} onClick={onClose}
@@ -1186,6 +1211,10 @@ export function ProjectTasksKanban({
             setSelectedTask((t) => t ? { ...t, ...updates } : null)
           }}
         />
+      )}
+
+      {historyOpen && (
+        <HistoryModal loading={historyLoading} entries={historyEntries} onClose={() => setHistoryOpen(false)} />
       )}
     </>
   )

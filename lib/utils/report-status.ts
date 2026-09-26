@@ -21,6 +21,7 @@ type ProjectSnapshot = {
     endDate:      Date | null
     budgetedCost: number | null
     actualCost:   number | null
+    cancelled?:   boolean
   }[]
   wbsAreas: { id: string; weight: number | null }[]
   risks: { status: string }[]

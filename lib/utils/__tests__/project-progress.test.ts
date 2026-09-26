@@ -73,4 +73,27 @@ describe("computeProjectProgress — média entre atividades mãe, ponderada por
   it("lista vazia devolve 0", () => {
     expect(computeProjectProgress([])).toBe(0)
   })
+
+  it("tarefa cancelada não conta no % da atividade mãe (nem como 0%, nem como 100%)", () => {
+    const tasks: TaskForProgress[] = [
+      { id: "mae", progress: 0, parentId: null },
+      { id: "ativa", progress: 60, parentId: "mae", startDate: "2026-01-01", endDate: "2026-01-10" },
+      { id: "cancelada", progress: 0, parentId: "mae", startDate: "2026-01-01", endDate: "2026-01-10", cancelled: true },
+    ]
+    // Se a cancelada contasse como 0%, daria (60+0)/2=30 — ela precisa ficar
+    // de fora inteira, sobrando só "ativa" (60%).
+    expect(computeProjectProgress(tasks)).toBe(60)
+  })
+
+  it("atividade mãe inteira cancelada não entra na média do projeto", () => {
+    const tasks: TaskForProgress[] = [
+      { id: "mae-ativa",     progress: 0, parentId: null },
+      { id: "t1", progress: 80, parentId: "mae-ativa", startDate: "2026-01-01", endDate: "2026-01-05" },
+      { id: "mae-cancelada", progress: 0, parentId: null, cancelled: true },
+      { id: "t2", progress: 100, parentId: "mae-cancelada", startDate: "2026-01-01", endDate: "2026-01-05" },
+    ]
+    // Só "mae-ativa" deveria contar (80%) — a mãe cancelada e tudo dentro
+    // dela ficam fora da média do projeto.
+    expect(computeProjectProgress(tasks)).toBe(80)
+  })
 })

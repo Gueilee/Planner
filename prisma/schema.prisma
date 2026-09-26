@@ -43,6 +43,7 @@ enum TaskStatus {
   COMPLETED
   ON_HOLD
   DELAYED
+  CANCELLED
 }
 
 enum RiskLevel {
@@ -224,6 +225,7 @@ model Organization {
   invitations    Invitation[]
   userAccesses   UserOrganizationAccess[]
   accessProfiles AccessProfile[]
+  holidays       OrganizationHoliday[]
 }
 
 model AccessProfile {
@@ -1138,6 +1140,26 @@ model HolidayV2 {
 
   @@unique([calendarId, dia])
   @@index([calendarId])
+}
+
+// Feriados extras por FILIAL (estadual/municipal) — cadastrados uma vez em
+// Configurações → Feriados, e somados aos feriados nacionais (já
+// auto-semeados por projeto, ver ensureCalendarSeeded em
+// lib/actions/schedule-v2.ts) no cálculo de dias úteis de TODOS os
+// projetos daquela filial, sem precisar reconfigurar calendário projeto a
+// projeto. Complementa HolidayV2 (esse continua existindo por projeto,
+// pra um feriado específico de um cliente/obra pontual), nunca substitui.
+model OrganizationHoliday {
+  id             String   @id @default(cuid())
+  organizationId String
+  dia            DateTime @db.Date
+  descricao      String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, dia])
+  @@index([organizationId])
 }
 
 // Desfazer de 1 nível ("Voltar", igual ao Ctrl+Z) — guarda o estado

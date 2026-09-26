@@ -58,7 +58,7 @@ export function buildProjectSlideData(p: StatusReportProjectRow, today: Date): P
   )
   const planning   = leafTasks.filter((t) => t.status === "PLANNING")
   const avgProgress = tasks.length > 0
-    ? computeProjectProgress(tasks)
+    ? computeProjectProgress(tasks.map((t) => ({ ...t, cancelled: t.status === "CANCELLED" })))
     : (p.status === "COMPLETED" ? 100 : 0)
 
   // IDC
@@ -234,7 +234,7 @@ export function buildProjectSlideData(p: StatusReportProjectRow, today: Date): P
     // hoje (mesma tarefa-folha usada no card "Progresso do Projeto" acima).
     const lastRealIdx = weeks.reduce((acc, _, i) => (realizedCurve[i] !== null ? i : acc), -1)
     const realizedTodayExact = computeProjectProgress(
-      tw.map((t) => ({ id: t.id, progress: t.progress, parentId: null, startDate: t.startDate, endDate: t.endDate }))
+      tw.map((t) => ({ id: t.id, progress: t.progress, parentId: null, startDate: t.startDate, endDate: t.endDate, cancelled: t.status === "CANCELLED" }))
     )
 
     const series = weeks.map((ws, i) => ({

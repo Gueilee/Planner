@@ -42,6 +42,7 @@ export const V2_STATUS_TO_LEGACY: Record<string, string> = {
   CONCLUIDO: "COMPLETED",
   PAUSADO: "ON_HOLD",
   ATRASADO: "DELAYED",
+  CANCELADO: "CANCELLED",
 }
 
 // Inverso — 1:1 com o legado (nenhuma perda de granularidade). Mesma tabela
@@ -54,6 +55,7 @@ export const LEGACY_STATUS_TO_V2: Record<string, string> = {
   COMPLETED: "CONCLUIDO",
   ON_HOLD: "PAUSADO",
   DELAYED: "ATRASADO",
+  CANCELLED: "CANCELADO",
 }
 
 export type V2ItemRow = {
@@ -82,6 +84,11 @@ export type LegacyLikeTask = {
   id: string
   title: string
   status: string
+  // Atalho pra "status === CANCELLED" — computado uma vez aqui pra todo
+  // consumidor (computeProjectProgress/computeScheduleCascade) excluir a
+  // atividade cancelada do progresso do projeto sem precisar repetir essa
+  // comparação em cada tela.
+  cancelled: boolean
   progress: number
   riskStatus: string
   wbsAreaId: string | null
@@ -131,6 +138,7 @@ export function toLegacyLikeTasks(rows: V2ItemRow[]): LegacyLikeTask[] {
       id: r.id,
       title: r.title,
       status: V2_STATUS_TO_LEGACY[r.status] ?? "PLANNING",
+      cancelled: r.status === "CANCELADO",
       progress: r.percentualCompleto,
       riskStatus: deriveRiskStatus(r.status),
       wbsAreaId: areaId,

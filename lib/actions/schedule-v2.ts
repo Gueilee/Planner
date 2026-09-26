@@ -152,11 +152,31 @@ function toDependency(d: DepRow): Dependency {
 }
 
 async function loadCalendar(projectId: string): Promise<WorkCalendar> {
-  const cal = await db.workCalendarV2.findUnique({ where: { projectId }, include: { holidays: true } })
-  if (!cal) return { diasUteis: [1, 2, 3, 4, 5], holidays: [] }
+  const [cal, project] = await Promise.all([
+    db.workCalendarV2.findUnique({ where: { projectId }, include: { holidays: true } }),
+    db.project.findUnique({ where: { id: projectId }, select: { organizationId: true } }),
+  ])
+
+  // Feriados da FILIAL (estadual/municipal, cadastrados em Configurações →
+  // Feriados) somam-se aos do calendário do projeto (nacionais, já
+  // auto-semeados por ensureCalendarSeeded) — assim um feriado cadastrado
+  // uma vez na filial já vale pra todos os projetos dela, sem precisar
+  // reconfigurar calendário projeto a projeto. Deduplicado por data: um
+  // feriado já lançado no projeto (ex.: exceção pontual de um cliente) não
+  // duplica se a filial também tiver a mesma data.
+  const orgHolidays = project?.organizationId
+    ? await db.organizationHoliday.findMany({ where: { organizationId: project.organizationId } })
+    : []
+
+  const projectHolidays = (cal?.holidays ?? []).map((h) => ({ date: dstr(h.dia)!, name: h.descricao ?? undefined }))
+  const seenDates = new Set(projectHolidays.map((h) => h.date))
+  const extraHolidays = orgHolidays
+    .map((h) => ({ date: dstr(h.dia)!, name: h.descricao }))
+    .filter((h) => !seenDates.has(h.date))
+
   return {
-    diasUteis: cal.diasUteis,
-    holidays: cal.holidays.map((h) => ({ date: dstr(h.dia)!, name: h.descricao ?? undefined })),
+    diasUteis: cal?.diasUteis ?? [1, 2, 3, 4, 5],
+    holidays: [...projectHolidays, ...extraHolidays],
   }
 }
 
@@ -442,7 +462,7 @@ async function recomputeAndPersist(
       : toSchedItem(r)
   })
   const rolledDates = rollupGroups(merged)
-  const rolledProgress = rollupProgress(rows.map((r) => ({ id: r.id, parentId: r.parentId, percentualCompleto: r.percentualCompleto })))
+  const rolledProgress = rollupProgress(rows.map((r) => ({ id: r.id, parentId: r.parentId, percentualCompleto: r.percentualCompleto, cancelled: r.status === "CANCELADO" })))
   // Status de grupo = o mais crítico entre os filhos diretos (ATRASADO >
   // PAUSADO > EM_ANDAMENTO/VALIDACAO > A_INICIAR), só chegando a CONCLUIDO
   // quando TODOS os filhos estão CONCLUIDO — regra confirmada com o time
@@ -792,6 +812,14 @@ export type UpdateItemV2Input = Partial<{
   parentId: string | null
   order: number
   isMacroMilestone: boolean
+  // Motivo do replanejamento — só preenchido quando a UI detecta que a
+  // nova data (início/término) difere da última Linha de Base salva pra
+  // este item (ver handleCommitDate em schedule-v2-client.tsx). Não é um
+  // campo do item em si — só entra no texto do Histórico, pra documentar
+  // POR QUE a data mudou em relação ao que foi aprovado, sem criar uma
+  // Linha de Base nova a cada edição (essa continua sendo um checkpoint
+  // manual e deliberado, ver lib/actions/baseline.ts).
+  justification: string
 }>
 
 export async function updateItemV2(
@@ -802,7 +830,7 @@ export async function updateItemV2(
   await requireAccess(projectId)
   await saveSnapshot(projectId)
 
-  const current = await db.scheduleV2Item.findUnique({ where: { id }, select: { id: true, title: true, inicioEstimado: true } })
+  const current = await db.scheduleV2Item.findUnique({ where: { id }, select: { id: true, title: true, inicioEstimado: true, terminoEstimado: true } })
   if (!current) throw new Error("Item não encontrado")
 
   const hasChildren = (await db.scheduleV2Item.count({ where: { parentId: id } })) > 0
@@ -890,8 +918,16 @@ export async function updateItemV2(
   // responsável, título, estrutura).
   const changed: string[] = []
   if (data.title !== undefined) changed.push(`título para "${data.title}"`)
-  if (!hasChildren && data.inicioEstimado !== undefined) changed.push(`Início para ${data.inicioEstimado ?? "vazio"}`)
-  if (!hasChildren && (data.terminoEstimado !== undefined || duracaoFromTermino !== undefined)) changed.push("Término")
+  // Início/Término: de/para (não só "mudou algo") — mesmo padrão de
+  // applyItemUpdatesV2, pra Histórico e a auditoria de replanejamento
+  // (ver justification acima) sempre mostrarem o valor anterior.
+  if (!hasChildren && data.inicioEstimado !== undefined) {
+    changed.push(`Início de ${dstr(current.inicioEstimado) ?? "vazio"} para ${data.inicioEstimado ?? "vazio"}`)
+  }
+  if (!hasChildren && (data.terminoEstimado !== undefined || duracaoFromTermino !== undefined)) {
+    const novoTermino = data.terminoEstimado !== undefined ? (data.terminoEstimado ?? "vazio") : "recalculado"
+    changed.push(`Término de ${dstr(current.terminoEstimado) ?? "vazio"} para ${novoTermino}`)
+  }
   if (data.inicioReal !== undefined) changed.push(`Início Real para ${data.inicioReal ?? "vazio"}`)
   if (data.terminoReal !== undefined) changed.push(`Término Real para ${data.terminoReal ?? "vazio"}`)
   if (!hasChildren && data.percentualCompleto !== undefined) changed.push(`% Completo para ${data.percentualCompleto}%`)
@@ -902,7 +938,9 @@ export async function updateItemV2(
   if (data.participantes !== undefined || data.participanteIds !== undefined) changed.push("Participantes")
   if (data.parentId !== undefined) changed.push("reestruturou (mudou de grupo)")
   if (changed.length > 0) {
-    await logChange(projectId, id, data.title ?? current.title, "editou", `alterou ${changed.join(", ")}`)
+    const motivo = data.justification?.trim()
+    const desc = `alterou ${changed.join(", ")}` + (motivo ? ` — motivo do replanejamento: ${motivo}` : "")
+    await logChange(projectId, id, data.title ?? current.title, "editou", desc)
   }
 
   return result
@@ -1103,9 +1141,16 @@ export async function applyItemUpdatesV2(projectId: string, updates: ItemFieldUp
   const ids = updates.map((u) => u.itemId)
   const children = await db.scheduleV2Item.findMany({ where: { parentId: { in: ids } }, select: { parentId: true } })
   const hasChildrenSet = new Set(children.map((c) => c.parentId as string))
-  const titleById = new Map(
-    (await db.scheduleV2Item.findMany({ where: { id: { in: ids } }, select: { id: true, title: true } })).map((r) => [r.id, r.title])
+  // Datas planejadas ANTES da mudança — só pra registrar "de X para Y" no
+  // histórico (ver loop de logChange abaixo); nada aqui participa do
+  // recálculo em si.
+  const beforeById = new Map(
+    (await db.scheduleV2Item.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, title: true, inicioEstimado: true, terminoEstimado: true },
+    })).map((r) => [r.id, r])
   )
+  const titleById = new Map(Array.from(beforeById.values()).map((r) => [r.id, r.title]))
 
   const needsCalendar = updates.some((u) => u.inicioEstimado !== undefined || u.terminoEstimado !== undefined)
   const cal = needsCalendar ? await loadCalendar(projectId) : null
@@ -1150,7 +1195,18 @@ export async function applyItemUpdatesV2(projectId: string, updates: ItemFieldUp
     if (u.percentualCompleto !== undefined) changed.push(`% Completo para ${u.percentualCompleto}%`)
     if (u.inicioReal !== undefined) changed.push(`Início Real para ${u.inicioReal ?? "vazio"}`)
     if (u.terminoReal !== undefined) changed.push(`Término Real para ${u.terminoReal ?? "vazio"}`)
-    if (u.inicioEstimado !== undefined || u.terminoEstimado !== undefined) changed.push("datas planejadas")
+    // Replanejamento (datas PLANEJADAS) registra de/para — não só "mudou
+    // algo" —, pra auditoria de verdade conseguir ver o que era antes sem
+    // precisar comparar com outra fonte. before* vem de ANTES desta mesma
+    // chamada (beforeById acima), nunca do valor já atualizado.
+    if (u.inicioEstimado !== undefined || u.terminoEstimado !== undefined) {
+      const before = beforeById.get(u.itemId)
+      const antesInicio  = dstr(before?.inicioEstimado) ?? "vazio"
+      const antesTermino = dstr(before?.terminoEstimado) ?? "vazio"
+      const depoisInicio  = u.inicioEstimado ?? antesInicio
+      const depoisTermino = u.terminoEstimado ?? antesTermino
+      changed.push(`datas planejadas de ${antesInicio}–${antesTermino} para ${depoisInicio}–${depoisTermino}`)
+    }
     if (u.budgetedCost !== undefined) changed.push("custo orçado")
     if (u.actualCost !== undefined) changed.push("custo real")
     if (changed.length === 0) continue

@@ -80,7 +80,7 @@ function projectProgress(p: ProjectRow): number {
     if (p.status === "PLANNING")  return 0
     return -1
   }
-  return computeProjectProgress(p.tasks)
+  return computeProjectProgress(p.tasks.map((t) => ({ ...t, cancelled: t.status === "CANCELLED" })))
 }
 
 // Só tarefas-folha (sem filhos) — um grupo/seção do Cronograma concluído
@@ -336,7 +336,7 @@ export function ProjectsClient({ projects }: { projects: ProjectRow[] }) {
               const tasksDone  = leafTasks.filter((t) => t.status === "COMPLETED").length
               const tasksTotal = leafTasks.length
               const progress   = project.tasks.length > 0
-                ? computeProjectProgress(project.tasks)
+                ? computeProjectProgress(project.tasks.map((t) => ({ ...t, cancelled: t.status === "CANCELLED" })))
                 : (project.status === "COMPLETED" ? 100 : project.status === "PLANNING" ? 0 : null)
 
               return (

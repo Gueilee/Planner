@@ -33,7 +33,7 @@ export default async function PriorityPage() {
           tasksDone:        leafItems.filter((t) => t.status === "CONCLUIDO").length,
           tasksTotal:       leafItems.length,
           progress:         computeProjectProgress(
-            p.scheduleV2Items.map((t) => ({ id: t.id, progress: t.percentualCompleto, parentId: t.parentId, startDate: t.inicioEstimado, endDate: t.terminoEstimado })),
+            p.scheduleV2Items.map((t) => ({ id: t.id, progress: t.percentualCompleto, parentId: t.parentId, startDate: t.inicioEstimado, endDate: t.terminoEstimado, cancelled: t.status === "CANCELADO" })),
           ),
         }
       })}

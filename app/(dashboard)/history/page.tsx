@@ -19,7 +19,7 @@ export default async function HistoryPage() {
     const total    = leafItems.length
     const done     = leafItems.filter((t) => t.status === "CONCLUIDO").length
     const progress = total > 0
-      ? computeProjectProgress(p.scheduleV2Items.map((t) => ({ id: t.id, progress: t.percentualCompleto, parentId: t.parentId, startDate: t.inicioEstimado, endDate: t.terminoEstimado })))
+      ? computeProjectProgress(p.scheduleV2Items.map((t) => ({ id: t.id, progress: t.percentualCompleto, parentId: t.parentId, startDate: t.inicioEstimado, endDate: t.terminoEstimado, cancelled: t.status === "CANCELADO" })))
       : p.status === "COMPLETED" ? 100 : 0
 
     // Prazo (daysLeft) prioriza o período do CRONOGRAMA DE VERDADE (min

@@ -81,6 +81,24 @@ describe("rollup — progresso de grupo (média dos filhos diretos)", () => {
     expect(rolled.get("G2")).toBe(0)
     expect(rolled.get("P")).toBe(50) // média de G1(100) e G2(0), não das folhas direto
   })
+
+  it("filho cancelado fica fora da média do grupo", () => {
+    const items: ProgressItem[] = [
+      { id: "G1", parentId: null, percentualCompleto: 0 },
+      { id: "T1", parentId: "G1", percentualCompleto: 60 },
+      { id: "T2", parentId: "G1", percentualCompleto: 0, cancelled: true },
+    ]
+    // Se contasse o cancelado como 0%, daria (60+0)/2=30 — precisa ser só T1.
+    expect(rollupProgress(items).get("G1")).toBe(60)
+  })
+
+  it("todos os filhos cancelados ⇒ grupo cai no fallback (próprio valor)", () => {
+    const items: ProgressItem[] = [
+      { id: "G1", parentId: null, percentualCompleto: 42 },
+      { id: "T1", parentId: "G1", percentualCompleto: 0, cancelled: true },
+    ]
+    expect(rollupProgress(items).get("G1")).toBe(42)
+  })
 })
 
 describe("projectEndDate", () => {
@@ -169,6 +187,24 @@ describe("rollupStatus — grupo herda o status mais crítico dos filhos diretos
   it("folha mantém o próprio status (nunca sobrescrita por rollup)", () => {
     const items: StatusItem[] = [st({ id: "T1", status: "PAUSADO" })]
     expect(rollupStatus(items).get("T1")).toBe("PAUSADO")
+  })
+
+  it("um filho ativo entre cancelados ⇒ grupo NÃO fica Cancelado (só o ativo importa)", () => {
+    const items: StatusItem[] = [
+      st({ id: "G1" }),
+      st({ id: "T1", parentId: "G1", status: "CANCELADO" }),
+      st({ id: "T2", parentId: "G1", status: "EM_ANDAMENTO" }),
+    ]
+    expect(rollupStatus(items).get("G1")).toBe("EM_ANDAMENTO")
+  })
+
+  it("todos os filhos Cancelado ⇒ grupo Cancelado", () => {
+    const items: StatusItem[] = [
+      st({ id: "G1" }),
+      st({ id: "T1", parentId: "G1", status: "CANCELADO" }),
+      st({ id: "T2", parentId: "G1", status: "CANCELADO" }),
+    ]
+    expect(rollupStatus(items).get("G1")).toBe("CANCELADO")
   })
 
   it("recursivo: grupo de grupos usa o status já resolvido dos filhos diretos", () => {

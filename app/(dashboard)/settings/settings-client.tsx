@@ -3,7 +3,7 @@
 import { useState } from "react"
 import {
   User, Bell, Building2, Users, ChevronRight,
-  FileText, Network, Settings2, Shield, ShieldCheck,
+  FileText, Network, Settings2, Shield, ShieldCheck, CalendarDays,
 } from "lucide-react"
 import { ProfileTab }          from "./profile-tab"
 import { NotificationsTab }    from "./notifications-tab"
@@ -11,6 +11,7 @@ import { OrganizationTab }     from "./organization-tab"
 import { DocsTab }             from "./docs-tab"
 import { FiliaisTab }          from "./filiais-tab"
 import { AccessProfilesTab }   from "./access-profiles-tab"
+import { HolidaysTab }         from "./holidays-tab"
 import { GlobalUsersView }     from "@/app/(dashboard)/organizations/global-users-view"
 import type { NotificationPreferenceData } from "@/lib/actions/notification-preferences"
 import type { OrgConfigData }              from "@/lib/types/org-config"
@@ -54,7 +55,7 @@ type Props = {
 
 // ─── Tab config ───────────────────────────────────────────────────────────────
 
-type TabId = "profile" | "notifications" | "empresa" | "usuarios" | "perfis" | "documentos" | "filiais"
+type TabId = "profile" | "notifications" | "empresa" | "usuarios" | "perfis" | "feriados" | "documentos" | "filiais"
 
 type TabSection = {
   label:   string
@@ -112,6 +113,13 @@ const SECTIONS: TabSection[] = [
         label:       "Perfis de Acesso",
         description: "Permissões por funcionalidade",
         icon:        ShieldCheck,
+        adminOnly:   true,
+      },
+      {
+        id:          "feriados",
+        label:       "Feriados",
+        description: "Feriados estaduais/municipais da filial",
+        icon:        CalendarDays,
         adminOnly:   true,
       },
     ],
@@ -199,7 +207,7 @@ export function SettingsClient({
 }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>("profile")
 
-  const isWide = activeTab === "usuarios" || activeTab === "filiais" || activeTab === "documentos" || activeTab === "perfis"
+  const isWide = activeTab === "usuarios" || activeTab === "filiais" || activeTab === "documentos" || activeTab === "perfis" || activeTab === "feriados"
 
   const visibleSections = SECTIONS
     .map((section) => ({
@@ -302,6 +310,9 @@ export function SettingsClient({
             )}
             {activeTab === "perfis" && isAdmin && (
               <AccessProfilesTab initialProfiles={initialProfiles} />
+            )}
+            {activeTab === "feriados" && isAdmin && (
+              <HolidaysTab orgs={initialOrgs} isGlobalAdmin={isRootAdmin} currentOrgId={currentOrgId} />
             )}
             {activeTab === "documentos" && isAdmin && (
               <DocsTab />
