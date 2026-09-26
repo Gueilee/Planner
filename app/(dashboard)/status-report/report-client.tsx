@@ -811,7 +811,16 @@ export function ProjectSlide({data,index,total,mode="interno"}:{data:ProjectSlid
         </div>
 
         {/* Corpo — Atividades/Áreas (esquerda) + Riscos (direita) */}
-        <div className="flex-1 grid gap-2.5 min-h-0" style={{gridTemplateColumns:"58% 42%"}}>
+        {/* gridTemplateRows:minmax(0,1fr) é o que impede o bug relatado: sem
+            isso, uma grid de 1 linha "auto" cresce pro tamanho do CONTEÚDO
+            (não do espaço disponível), então com dados reais (mais tarefas
+            atrasadas, riscos com texto mais longo) a linha estourava a
+            altura do slide inteiro e empurrava a Curva S pra baixo do
+            rodapé, sem nenhuma rolagem possível pra ver o resto ("tudo
+            travado"). Com a linha travada no espaço disponível, cada card
+            interno agora rola por conta própria (overflow-y:auto) em vez de
+            cortar conteúdo escondido sem aviso. */}
+        <div className="flex-1 grid gap-2.5 min-h-0" style={{gridTemplateColumns:"58% 42%",gridTemplateRows:"minmax(0,1fr)"}}>
 
           {/* Atividades (Interno) ou Áreas do WBS (Cliente) */}
           <div className="flex flex-col gap-2.5 min-h-0 overflow-hidden">
@@ -819,13 +828,17 @@ export function ProjectSlide({data,index,total,mode="interno"}:{data:ProjectSlid
             <WbsAreasPanel areas={data.wbsAreas} accent={status.color}/>
           ) : (<>
 
-            {/* Em atraso — primeiro, é o que pede decisão/ação */}
-            <GCard style={{padding:"11px 15px",flexShrink:0,...(td.delayed.length>0?{border:"1px solid rgba(239,68,68,0.25)"}:{})}}>
+            {/* Em atraso — primeiro, é o que pede decisão/ação. flex:1 (em
+                vez de flexShrink:0) pra dividir o espaço em partes iguais
+                com os outros dois cards abaixo, e rolar por conta própria se
+                não couber, em vez de tomar todo o espaço e sufocar os
+                outros. */}
+            <GCard style={{padding:"11px 15px",flex:1,minHeight:0,overflow:"hidden",display:"flex",flexDirection:"column",...(td.delayed.length>0?{border:"1px solid rgba(239,68,68,0.25)"}:{})}}>
               <SL right={<span style={{fontSize:12.5,color:"#EF4444",fontWeight:800,background:"rgba(239,68,68,0.12)",padding:"2px 10px",borderRadius:20,border:"1px solid rgba(239,68,68,0.25)"}}>{data.tasks.delayed}</span>}>🔴 Em Atraso</SL>
               {td.delayed.length>0?(
-                <div className="flex flex-col" style={{gap:8}}>
-                  {td.delayed.slice(0,3).map((t,i)=>(
-                    <div key={i} style={{paddingBottom:i<Math.min(td.delayed.length,3)-1?8:0,borderBottom:i<Math.min(td.delayed.length,3)-1?"1px solid rgba(255,255,255,0.07)":"none"}}>
+                <div className="flex flex-col scrollbar-thin" style={{gap:8,flex:1,minHeight:0,overflowY:"auto"}}>
+                  {td.delayed.map((t,i)=>(
+                    <div key={i} style={{paddingBottom:i<td.delayed.length-1?8:0,borderBottom:i<td.delayed.length-1?"1px solid rgba(255,255,255,0.07)":"none"}}>
                       <div className="flex items-start justify-between gap-2">
                         <p style={{fontSize:14,color:"rgba(255,195,195,0.95)",fontWeight:700,flex:1,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const,marginBottom:2}}>{t.title}</p>
                         <span style={{fontSize:12.5,fontWeight:800,color:"#FCA5A5",flexShrink:0,background:"rgba(239,68,68,0.18)",padding:"2px 9px",borderRadius:8}}>{t.daysLate}d</span>
@@ -843,12 +856,12 @@ export function ProjectSlide({data,index,total,mode="interno"}:{data:ProjectSlid
             </GCard>
 
             {/* Em andamento */}
-            <GCard style={{padding:"11px 15px",flexShrink:0}}>
+            <GCard style={{padding:"11px 15px",flex:1,minHeight:0,overflow:"hidden",display:"flex",flexDirection:"column"}}>
               <SL right={<span style={{fontSize:12.5,color:"#60A5FA",fontWeight:800,background:"rgba(96,165,250,0.12)",padding:"2px 10px",borderRadius:20,border:"1px solid rgba(96,165,250,0.25)"}}>{data.tasks.inProgress}</span>}>🔵 Em Andamento</SL>
               {td.inProgress.length>0?(
-                <div className="flex flex-col" style={{gap:8}}>
-                  {td.inProgress.slice(0,3).map((t,i)=>(
-                    <div key={i} style={{paddingBottom:i<Math.min(td.inProgress.length,3)-1?8:0,borderBottom:i<Math.min(td.inProgress.length,3)-1?"1px solid rgba(255,255,255,0.07)":"none"}}>
+                <div className="flex flex-col scrollbar-thin" style={{gap:8,flex:1,minHeight:0,overflowY:"auto"}}>
+                  {td.inProgress.map((t,i)=>(
+                    <div key={i} style={{paddingBottom:i<td.inProgress.length-1?8:0,borderBottom:i<td.inProgress.length-1?"1px solid rgba(255,255,255,0.07)":"none"}}>
                       <p style={{fontSize:14,color:"rgba(225,240,255,0.95)",fontWeight:600,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const,marginBottom:2}}>{t.title}</p>
                       <div className="flex items-center gap-3 flex-wrap">
                         {t.responsible&&<span style={{fontSize:12,color:"rgba(165,200,255,0.72)"}}>👤 {t.responsible}</span>}
@@ -862,15 +875,15 @@ export function ProjectSlide({data,index,total,mode="interno"}:{data:ProjectSlid
               )}
             </GCard>
 
-            {/* Próximas atividades — flex:1 → sempre preenche o espaço restante */}
+            {/* Próximas atividades */}
             <GCard style={{padding:"11px 15px",flex:1,minHeight:0,overflow:"hidden",display:"flex",flexDirection:"column"}}>
               <SL right={<span style={{fontSize:12.5,color:"#FCD34D",fontWeight:800,background:"rgba(245,158,11,0.10)",padding:"2px 10px",borderRadius:20,border:"1px solid rgba(245,158,11,0.25)"}}>{td.upcoming.length}</span>}>📅 Próximas Atividades</SL>
               {td.upcoming.length>0?(
-                <div style={{display:"flex",flexDirection:"column",flex:1,minHeight:0,overflow:"hidden",gap:0}}>
-                  {td.upcoming.slice(0,5).map((t,i)=>{
-                    const totalUp=Math.min(td.upcoming.length,5)
+                <div className="scrollbar-thin" style={{display:"flex",flexDirection:"column",flex:1,minHeight:0,overflowY:"auto",gap:0}}>
+                  {td.upcoming.map((t,i)=>{
+                    const totalUp=td.upcoming.length
                     return (
-                      <div key={i} style={{flex:1,minHeight:0,overflow:"hidden",paddingBottom:i<totalUp-1?7:0,borderBottom:i<totalUp-1?"1px solid rgba(255,255,255,0.06)":"none",marginBottom:i<totalUp-1?7:0}}>
+                      <div key={i} style={{paddingBottom:i<totalUp-1?7:0,borderBottom:i<totalUp-1?"1px solid rgba(255,255,255,0.06)":"none",marginBottom:i<totalUp-1?7:0,flexShrink:0}}>
                         <div className="flex items-start justify-between gap-2">
                           <p style={{fontSize:14,color:"rgba(225,240,255,0.92)",fontWeight:600,flex:1,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as const,marginBottom:2}}>{t.title}</p>
                           <span style={{fontSize:12,fontWeight:800,flexShrink:0,color:t.daysUntil===0?"#FCA5A5":t.daysUntil<=3?"#FCD34D":"#86EFAC",background:t.daysUntil===0?"rgba(239,68,68,0.12)":t.daysUntil<=3?"rgba(245,158,11,0.12)":"rgba(16,185,129,0.10)",padding:"2px 9px",borderRadius:8}}>
@@ -895,8 +908,10 @@ export function ProjectSlide({data,index,total,mode="interno"}:{data:ProjectSlid
           {/* Riscos & Issues — no modo Cliente, só os marcados "Apresentar ao
               cliente" (Risk.presentToClient); contadores recontados sobre a
               mesma lista filtrada, pra nunca mostrar número que não bate com
-              o que está listado abaixo. */}
-          <GCard style={{padding:"13px 16px",display:"flex",flexDirection:"column",minHeight:0}}>
+              o que está listado abaixo. Lista rola por conta própria
+              (scrollbar-thin) em vez de cortar riscos escondidos sem aviso
+              quando há mais do que cabe na tela. */}
+          <GCard style={{padding:"13px 16px",display:"flex",flexDirection:"column",minHeight:0,overflow:"hidden"}}>
             {(() => {
               const critCount=visibleRisks.filter((r)=>r.level==="CRITICAL").length
               const highCount=visibleRisks.filter((r)=>r.level==="HIGH").length
@@ -910,13 +925,13 @@ export function ProjectSlide({data,index,total,mode="interno"}:{data:ProjectSlid
               )
             })()}
             {visibleRisks.length>0?(
-              <div style={{display:"flex",flexDirection:"column",flex:1,minHeight:0,overflow:"hidden",gap:0}}>
-                {visibleRisks.slice(0,5).map((r,i)=>{
+              <div className="scrollbar-thin" style={{display:"flex",flexDirection:"column",flex:1,minHeight:0,overflowY:"auto",gap:0}}>
+                {visibleRisks.map((r,i)=>{
                   const rc:{[k:string]:{color:string;label:string}}={CRITICAL:{color:"#FCA5A5",label:"Crítico"},HIGH:{color:"#FCD34D",label:"Alto"},MEDIUM:{color:"#86EFAC",label:"Médio"},LOW:{color:"#94A3B8",label:"Baixo"}}
                   const {color,label}=rc[r.level]??{color:"#94A3B8",label:r.level}
-                  const totalR=Math.min(visibleRisks.length,5)
+                  const totalR=visibleRisks.length
                   return (
-                    <div key={i} style={{flex:1,minHeight:0,borderLeft:`3px solid ${color}`,paddingLeft:11,overflow:"hidden",paddingBottom:i<totalR-1?9:0,borderBottom:i<totalR-1?"1px solid rgba(255,255,255,0.07)":"none",marginBottom:i<totalR-1?9:0}}>
+                    <div key={i} style={{borderLeft:`3px solid ${color}`,paddingLeft:11,flexShrink:0,paddingBottom:i<totalR-1?9:0,borderBottom:i<totalR-1?"1px solid rgba(255,255,255,0.07)":"none",marginBottom:i<totalR-1?9:0}}>
                       <div className="flex items-center gap-2" style={{marginBottom:3}}>
                         <span style={{fontSize:12,fontWeight:800,color,textTransform:"uppercase"}}>{label}</span>
                         {r.owner&&<span style={{fontSize:12,color:"rgba(180,210,255,0.55)"}}>· {r.owner}</span>}
