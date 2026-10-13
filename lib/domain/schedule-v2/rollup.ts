@@ -116,7 +116,13 @@ export function rollupStatus(items: readonly StatusItem[]): Map<string, string> 
     }
 
     const childStatuses = children.map((c) => resolve(c.id))
-    const winner = STATUS_PRIORITY.find((s) => childStatuses.includes(s)) ?? "A_INICIAR"
+    // Nenhum dos 7 valores fixos bate só quando TODOS os filhos diretos
+    // estão numa coluna de Kanban CUSTOMIZADA (lib/actions/kanban-columns.ts
+    // grava um status fora desse vocabulário, prefixo "CUSTOM_") — nesse
+    // caso "A_INICIAR" mentiria que nada começou; EM_ANDAMENTO é a leitura
+    // honesta (claramente HÁ trabalho em algum estágio, só não um dos 7
+    // conhecidos).
+    const winner = STATUS_PRIORITY.find((s) => childStatuses.includes(s)) ?? "EM_ANDAMENTO"
     result.set(id, winner)
     return winner
   }

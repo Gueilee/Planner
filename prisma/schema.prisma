@@ -441,6 +441,7 @@ model Project {
   scheduleV2Calendar  WorkCalendarV2?
   scheduleV2Snapshots ScheduleV2Snapshot[]
   scheduleV2ChangeLogs ScheduleV2ChangeLog[]
+  kanbanColumns       KanbanColumn[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1115,6 +1116,30 @@ model ScheduleV2Dependency {
   @@unique([successorId, predecessorId])
   @@index([successorId])
   @@index([predecessorId])
+}
+
+// Colunas de Kanban customizadas, por projeto — botão "+" no Kanban de
+// Tarefas (ProjectTasksKanban) pra criar uma coluna de status nova que só
+// aparece no projeto onde foi criada, nunca vira padrão global. As 7
+// colunas fixas (A Fazer/Em Andamento/Atrasada/Em Validação/Concluída/
+// Pausada/Cancelada — TASK_COLS em project-tasks-kanban.tsx) continuam
+// hardcoded; esta tabela só guarda as EXTRAS que cada projeto adiciona.
+// `statusValue` é gravado direto em ScheduleV2Item.status (mesmo campo
+// String livre do motor v2), sempre prefixado "CUSTOM_" na criação pra
+// nunca colidir com o vocabulário fixo (A_INICIAR/EM_ANDAMENTO/...).
+model KanbanColumn {
+  id          String   @id @default(cuid())
+  projectId   String
+  statusValue String
+  label       String
+  color       String   @default("#8B5CF6")
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, statusValue])
+  @@index([projectId])
 }
 
 model WorkCalendarV2 {

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition, useEffect, useRef } from "react"
+import { useState, useTransition, useEffect, useRef, useMemo } from "react"
 import {
   DndContext, DragOverlay, closestCorners,
   PointerSensor, useSensor, useSensors,
@@ -16,7 +16,7 @@ import {
   Clock, Layers, CheckCircle2, PauseCircle, ClipboardCheck,
   ChevronRight, AlertTriangle, XCircle, History,
   Play, Pause, Send, Paperclip, Maximize2, CalendarDays, Timer,
-  MessageSquare, CheckCheck,
+  MessageSquare, CheckCheck, Plus, Tag, Trash2,
 } from "lucide-react"
 import Link from "next/link"
 import { WorkingDayPicker } from "@/components/working-day-picker"
@@ -24,12 +24,15 @@ import {
   getProjectTasksForKanban, updateTaskStatusKanban,
   getTaskDetail, updateTaskKanban, addTaskComment, addTaskAttachmentKanban,
 } from "@/lib/actions/kanban"
+import {
+  getProjectKanbanColumns, createKanbanColumn, deleteKanbanColumn,
+  type KanbanColumnDTO,
+} from "@/lib/actions/kanban-columns"
 import { getChangeLogV2, type ChangeLogEntryV2 } from "@/lib/actions/schedule-v2"
 import { HistoryModal } from "@/components/kronex/history-modal"
 import { todayStr } from "@/lib/date-utils"
 import { computeProjectProgress } from "@/lib/utils/project-progress"
 import { UserAvatar } from "@/components/ui/user-avatar"
-import { TaskStatus } from "@/lib/generated/prisma/enums"
 import type { KanbanProject } from "./kanban-client"
 
 export type ProjectTasksKanbanTarget = Pick<KanbanProject, "id" | "title">
@@ -53,7 +56,25 @@ export type TaskItem = {
 
 // ─── Column Config ────────────────────────────────────────────────────────────
 
-const TASK_COLS = [
+// As 7 colunas fixas (universais, sempre presentes) + as colunas
+// customizadas que cada projeto adiciona (ColDef é o tipo comum aos dois —
+// ver KanbanColumn, lib/actions/kanban-columns.ts) viram UMA lista só
+// (`allCols`, montada em ProjectTasksKanban) pra renderizar board/status
+// bar/detalhe sem duplicar lógica entre "fixo" e "customizado".
+type ColDef = {
+  id:       string
+  label:    string
+  color:    string
+  glow:     string
+  gradient: string
+  icon:     React.ElementType
+  /** true só para colunas vindas do banco (KanbanColumn) — habilita o botão de remover. */
+  isCustom?:  boolean
+  /** id da linha no banco (KanbanColumn.id) — só presente quando isCustom. */
+  columnId?:  string
+}
+
+const TASK_COLS: ColDef[] = [
   { id: "PLANNING",    label: "A Fazer",       color: "#64748B", glow: "rgba(100,116,139,0.25)", gradient: "linear-gradient(135deg,#64748B,#94A3B8)", icon: Clock },
   { id: "IN_PROGRESS", label: "Em Andamento",  color: "#2463FF", glow: "rgba(36,99,255,0.25)",   gradient: "linear-gradient(135deg,#2463FF,#60A5FA)", icon: Layers },
   { id: "DELAYED",     label: "Atrasada",      color: "#EF4444", glow: "rgba(239,68,68,0.25)",   gradient: "linear-gradient(135deg,#EF4444,#F87171)", icon: AlertTriangle },
@@ -61,14 +82,39 @@ const TASK_COLS = [
   { id: "COMPLETED",   label: "Concluída",     color: "#059669", glow: "rgba(5,150,105,0.25)",   gradient: "linear-gradient(135deg,#059669,#34D399)", icon: CheckCircle2 },
   { id: "ON_HOLD",     label: "Pausada",       color: "#F59E0B", glow: "rgba(245,158,11,0.25)",  gradient: "linear-gradient(135deg,#D97706,#F59E0B)", icon: PauseCircle },
   { id: "CANCELLED",   label: "Cancelada",     color: "#78716C", glow: "rgba(120,113,108,0.25)", gradient: "linear-gradient(135deg,#57534E,#A8A29E)", icon: XCircle },
-] as const
-
-type ColId = typeof TASK_COLS[number]["id"]
-const COL_BY_ID = Object.fromEntries(TASK_COLS.map((c) => [c.id, c])) as Record<string, typeof TASK_COLS[number]>
+]
 
 const STATUS_REMAP: Record<string, string> = { INITIATIVE: "PLANNING" }
 function resolveColId(status: string): string {
   return STATUS_REMAP[status] ?? status
+}
+
+// Clareia uma cor hex pra montar o gradiente das colunas customizadas (mesmo
+// visual das 7 fixas: tom base -> tom claro, 135deg).
+function lightenHex(hex: string, amount: number): string {
+  const clean = hex.replace("#", "")
+  const full  = clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean
+  const num   = parseInt(full, 16)
+  if (Number.isNaN(num)) return hex
+  const r = Math.min(255, (num >> 16) + amount)
+  const g = Math.min(255, ((num >> 8) & 0xff) + amount)
+  const b = Math.min(255, (num & 0xff) + amount)
+  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`
+}
+
+const CUSTOM_COLUMN_COLORS = ["#8B5CF6", "#2463FF", "#059669", "#F59E0B", "#EF4444", "#EC4899", "#06B6D4", "#78716C"]
+
+function customColToColDef(c: KanbanColumnDTO): ColDef {
+  return {
+    id:       c.statusValue,
+    label:    c.label,
+    color:    c.color,
+    glow:     `${c.color}25`,
+    gradient: `linear-gradient(135deg,${c.color},${lightenHex(c.color, 60)})`,
+    icon:     Tag,
+    isCustom: true,
+    columnId: c.id,
+  }
 }
 
 // ─── Task Card ────────────────────────────────────────────────────────────────
@@ -77,12 +123,14 @@ function TaskCard({
   task,
   isDragOverlay = false,
   onCardClick,
+  colById,
 }: {
   task: TaskItem
   isDragOverlay?: boolean
   onCardClick?: () => void
+  colById: Record<string, ColDef>
 }) {
-  const col = COL_BY_ID[resolveColId(task.status)] ?? TASK_COLS[0]
+  const col = colById[resolveColId(task.status)] ?? TASK_COLS[0]
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id:       task.id,
     data:     { status: task.status },
@@ -238,19 +286,21 @@ function TaskCard({
 // ─── Task Column ──────────────────────────────────────────────────────────────
 
 function TaskColumn({
-  col, tasks, isOver, onTaskClick,
+  col, tasks, isOver, onTaskClick, onDeleteColumn, colById,
 }: {
-  col: typeof TASK_COLS[number]
+  col: ColDef
   tasks: TaskItem[]
   isOver: boolean
   onTaskClick: (t: TaskItem) => void
+  onDeleteColumn?: (col: ColDef) => void
+  colById: Record<string, ColDef>
 }) {
   const { setNodeRef } = useDroppable({ id: col.id })
   const Icon = col.icon
 
   return (
     <div
-      className="flex flex-col rounded-xl overflow-hidden shrink-0"
+      className="flex flex-col rounded-xl overflow-hidden shrink-0 group"
       style={{
         width:      "210px",
         background: isOver ? `${col.color}08` : "#F8FAFC",
@@ -268,6 +318,16 @@ function TaskColumn({
             <Icon className="w-3 h-3" style={{ color: col.color }} />
           </div>
           <span className="text-[11px] font-bold flex-1 truncate" style={{ color: "#1E293B" }}>{col.label}</span>
+          {col.isCustom && onDeleteColumn && (
+            <button
+              onClick={() => onDeleteColumn(col)}
+              title="Remover esta coluna (só deste projeto)"
+              className="w-5 h-5 rounded-md flex items-center justify-center shrink-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/5"
+              style={{ color: col.color }}
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          )}
           <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full shrink-0"
             style={{ background: `${col.color}15`, color: col.color }}>
             {tasks.length}
@@ -278,7 +338,7 @@ function TaskColumn({
       <div ref={setNodeRef} className="flex-1 overflow-y-auto p-2.5 space-y-2"
         style={{ scrollbarWidth: "thin", scrollbarColor: `${col.color}20 transparent` }}>
         {tasks.map((t) => (
-          <TaskCard key={t.id} task={t} onCardClick={() => onTaskClick(t)} />
+          <TaskCard key={t.id} task={t} onCardClick={() => onTaskClick(t)} colById={colById} />
         ))}
         {tasks.length === 0 && (
           <div className="flex items-center justify-center py-8 rounded-xl"
@@ -291,9 +351,104 @@ function TaskColumn({
   )
 }
 
+// ─── Add Column Tile ──────────────────────────────────────────────────────────
+
+function AddColumnTile({
+  projectId, onCreated,
+}: {
+  projectId: string
+  onCreated: (col: KanbanColumnDTO) => void
+}) {
+  const [open,    setOpen]    = useState(false)
+  const [label,   setLabel]   = useState("")
+  const [color,   setColor]   = useState(CUSTOM_COLUMN_COLORS[0])
+  const [saving,  setSaving]  = useState(false)
+  const [error,   setError]   = useState<string | null>(null)
+
+  async function handleCreate() {
+    const trimmed = label.trim()
+    if (!trimmed || saving) return
+    setSaving(true)
+    setError(null)
+    try {
+      const col = await createKanbanColumn(projectId, trimmed, color)
+      onCreated(col)
+      setLabel("")
+      setColor(CUSTOM_COLUMN_COLORS[0])
+      setOpen(false)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Não foi possível criar a coluna")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        title="Criar uma nova coluna de status (aparece só neste projeto)"
+        className="shrink-0 h-11 self-start mt-0 rounded-xl flex items-center justify-center gap-2 px-4 text-xs font-bold transition-all hover:bg-slate-50"
+        style={{ width: "210px", border: "1.5px dashed rgba(15,23,42,0.18)", color: "#94A3B8" }}
+      >
+        <Plus className="w-4 h-4" /> Nova coluna
+      </button>
+    )
+  }
+
+  return (
+    <div className="shrink-0 rounded-xl p-3 space-y-2.5" style={{ width: "210px", background: "#F8FAFC", border: "1.5px solid rgba(15,23,42,0.10)" }}>
+      <input
+        autoFocus
+        value={label}
+        onChange={(e) => setLabel(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter") handleCreate(); if (e.key === "Escape") setOpen(false) }}
+        placeholder="Nome da coluna"
+        maxLength={40}
+        className="w-full text-xs font-semibold px-2.5 py-2 rounded-lg outline-none"
+        style={{ border: "1px solid rgba(15,23,42,0.14)" }}
+      />
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {CUSTOM_COLUMN_COLORS.map((c) => (
+          <button
+            key={c}
+            onClick={() => setColor(c)}
+            aria-label={`Cor ${c}`}
+            className="w-5 h-5 rounded-full shrink-0 transition-transform"
+            style={{
+              background:     c,
+              outline:        color === c ? "2px solid #1E293B" : "none",
+              outlineOffset:  2,
+              transform:      color === c ? "scale(1.12)" : "scale(1)",
+            }}
+          />
+        ))}
+      </div>
+      {error && <p className="text-[10px] font-semibold text-red-500 leading-snug">{error}</p>}
+      <div className="flex items-center gap-1.5">
+        <button
+          onClick={handleCreate}
+          disabled={!label.trim() || saving}
+          className="flex-1 h-8 rounded-lg text-xs font-bold text-white transition-opacity disabled:opacity-50"
+          style={{ background: "linear-gradient(135deg,#2463FF,#8B2FFF)" }}
+        >
+          {saving ? "Criando…" : "Criar"}
+        </button>
+        <button
+          onClick={() => { setOpen(false); setError(null); setLabel("") }}
+          className="h-8 px-3 rounded-lg text-xs font-bold text-slate-400 hover:bg-slate-100"
+        >
+          Cancelar
+        </button>
+      </div>
+      <p className="text-[9px] text-slate-400 leading-snug">Essa coluna só aparece neste projeto.</p>
+    </div>
+  )
+}
+
 // ─── List View ────────────────────────────────────────────────────────────────
 
-function TaskListView({ tasks, onTaskClick }: { tasks: TaskItem[]; onTaskClick: (t: TaskItem) => void }) {
+function TaskListView({ tasks, onTaskClick, colById }: { tasks: TaskItem[]; onTaskClick: (t: TaskItem) => void; colById: Record<string, ColDef> }) {
   const byWbs: Record<string, { label: string; color: string | null; items: TaskItem[] }> = {}
   for (const t of tasks) {
     const key   = t.wbsArea?.name ?? "__sem_area"
@@ -332,7 +487,7 @@ function TaskListView({ tasks, onTaskClick }: { tasks: TaskItem[]; onTaskClick: 
           <div className="rounded-xl overflow-hidden bg-white"
             style={{ border: "1px solid rgba(15,23,42,0.07)", boxShadow: "0 1px 4px rgba(15,23,42,0.04)" }}>
             {items.map((t, i) => {
-              const col       = COL_BY_ID[resolveColId(t.status)] ?? TASK_COLS[0]
+              const col       = colById[resolveColId(t.status)] ?? TASK_COLS[0]
               const isDelayed = t.endDate && new Date(t.endDate) < new Date() && t.status !== "COMPLETED"
               const isPlaying = t.status === "IN_PROGRESS"
               return (
@@ -397,11 +552,13 @@ function TaskDetailPanel({
   projectId,
   onClose,
   onUpdated,
+  colById,
 }: {
   task: TaskItem
   projectId: string
   onClose: () => void
   onUpdated: (updates: Partial<TaskItem>) => void
+  colById: Record<string, ColDef>
 }) {
   const [detail,        setDetail]        = useState<TaskDetailData>(null)
   const [loadingDetail, setLoadingDetail] = useState(true)
@@ -431,7 +588,7 @@ function TaskDetailPanel({
     })
   }, [initTask.id])
 
-  const col     = COL_BY_ID[resolveColId(localStatus)] ?? TASK_COLS[0]
+  const col     = colById[resolveColId(localStatus)] ?? TASK_COLS[0]
   const canPlay = localStatus !== "IN_PROGRESS" && localStatus !== "COMPLETED"
   const isCompleted = localStatus === "COMPLETED"
 
@@ -987,6 +1144,12 @@ export function ProjectTasksKanban({
   const [historyOpen,    setHistoryOpen]    = useState(false)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyEntries, setHistoryEntries] = useState<ChangeLogEntryV2[]>([])
+  // Colunas customizadas deste projeto (botão "+") — carregadas junto com as
+  // tarefas, escopadas por projectId (KanbanColumn.projectId), então uma
+  // coluna criada aqui nunca aparece ao abrir este mesmo board noutro
+  // projeto.
+  const [customCols,     setCustomCols]     = useState<KanbanColumnDTO[]>([])
+  const [confirmDeleteCol, setConfirmDeleteCol] = useState<ColDef | null>(null)
   const [, startTransition] = useTransition()
   const prevStatuses = useRef<Record<string, string>>({})
 
@@ -1006,14 +1169,54 @@ export function ProjectTasksKanban({
 
   useEffect(() => {
     setLoading(true)
-    getProjectTasksForKanban(project.id).then((data) => {
+    Promise.all([
+      getProjectTasksForKanban(project.id),
+      getProjectKanbanColumns(project.id),
+    ]).then(([data, cols]) => {
       setTasks(data)
+      setCustomCols(cols)
       setLoading(false)
     })
   }, [project.id])
 
+  // Fixas + customizadas do projeto, nessa ordem — as customizadas sempre
+  // aparecem depois das 7 fixas, na ordem em que foram criadas.
+  const allCols = useMemo<ColDef[]>(
+    () => [...TASK_COLS, ...customCols.map(customColToColDef)],
+    [customCols],
+  )
+  const colById = useMemo(
+    () => Object.fromEntries(allCols.map((c) => [c.id, c])) as Record<string, ColDef>,
+    [allCols],
+  )
+
   const visibleTasks = tasks.filter((t) => t.childCount === 0)
   const activeTask   = activeId ? visibleTasks.find((t) => t.id === activeId) ?? null : null
+
+  function handleDeleteColumn(col: ColDef) {
+    setConfirmDeleteCol(col)
+  }
+
+  function confirmColumnDeletion() {
+    const col = confirmDeleteCol
+    if (!col?.columnId) { setConfirmDeleteCol(null); return }
+    setConfirmDeleteCol(null)
+    // Otimista: coluna some e os cards que estavam nela voltam pra "A Fazer"
+    // (mesmo destino que o servidor vai aplicar de verdade, ver
+    // deleteKanbanColumn em lib/actions/kanban-columns.ts).
+    setCustomCols((cs) => cs.filter((c) => c.id !== col.columnId))
+    setTasks((ts) => ts.map((t) => resolveColId(t.status) === col.id ? { ...t, status: "PLANNING" } : t))
+    startTransition(async () => {
+      try {
+        await deleteKanbanColumn(col.columnId!)
+      } catch {
+        // Falhou — resincroniza do servidor em vez de deixar a UI mentir.
+        const [data, cols] = await Promise.all([getProjectTasksForKanban(project.id), getProjectKanbanColumns(project.id)])
+        setTasks(data)
+        setCustomCols(cols)
+      }
+    })
+  }
 
   function handleDragStart(e: DragStartEvent) {
     const id = e.active.id as string
@@ -1026,10 +1229,10 @@ export function ProjectTasksKanban({
     setActiveId(null); setOverId(null)
     if (!over) return
     const taskId    = active.id as string
-    const colId     = over.id as ColId
-    const targetCol = COL_BY_ID[colId]
+    const colId     = over.id as string
+    const targetCol = colById[colId]
     if (!targetCol) return
-    const newStatus = targetCol.id as TaskStatus
+    const newStatus = targetCol.id
     const prev      = prevStatuses.current[taskId]
     if (prev === newStatus) return
     setTasks((ts) => ts.map((t) => t.id === taskId
@@ -1145,7 +1348,7 @@ export function ProjectTasksKanban({
           {/* Status bar */}
           <div className="flex items-center gap-2 px-5 py-2 overflow-x-auto"
             style={{ borderTop: "1px solid rgba(15,23,42,0.05)", scrollbarWidth: "none" }}>
-            {TASK_COLS.map((col) => {
+            {allCols.map((col) => {
               const count = visibleTasks.filter((t) => resolveColId(t.status) === col.id).length
               return (
                 <div key={col.id}
@@ -1171,24 +1374,27 @@ export function ProjectTasksKanban({
             </div>
           </div>
         ) : view === "list" ? (
-          <TaskListView tasks={visibleTasks} onTaskClick={setSelectedTask} />
+          <TaskListView tasks={visibleTasks} onTaskClick={setSelectedTask} colById={colById} />
         ) : (
           <DndContext sensors={sensors} collisionDetection={closestCorners}
             onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
             <div className="flex-1 overflow-x-auto"
               style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(15,23,42,0.12) transparent" }}>
               <div className="flex gap-3 p-4 h-full" style={{ minWidth: "max-content", minHeight: "100%" }}>
-                {TASK_COLS.map((col) => (
+                {allCols.map((col) => (
                   <TaskColumn key={col.id} col={col}
                     tasks={visibleTasks.filter((t) => resolveColId(t.status) === col.id)}
                     isOver={overId === col.id}
                     onTaskClick={setSelectedTask}
+                    onDeleteColumn={col.isCustom ? handleDeleteColumn : undefined}
+                    colById={colById}
                   />
                 ))}
+                <AddColumnTile projectId={project.id} onCreated={(col) => setCustomCols((cs) => [...cs, col])} />
               </div>
             </div>
             <DragOverlay dropAnimation={{ duration: 180, easing: "cubic-bezier(0.22,1,0.36,1)" }}>
-              {activeTask && <TaskCard task={activeTask} isDragOverlay />}
+              {activeTask && <TaskCard task={activeTask} isDragOverlay colById={colById} />}
             </DragOverlay>
           </DndContext>
         )}
@@ -1210,12 +1416,42 @@ export function ProjectTasksKanban({
             setTasks((ts) => ts.map((t) => t.id === selectedTask.id ? { ...t, ...updates } : t))
             setSelectedTask((t) => t ? { ...t, ...updates } : null)
           }}
+          colById={colById}
         />
       )}
 
       {historyOpen && (
         <HistoryModal loading={historyLoading} entries={historyEntries} onClose={() => setHistoryOpen(false)} />
       )}
+
+      {confirmDeleteCol && (() => {
+        const hasCards = visibleTasks.some((t) => resolveColId(t.status) === confirmDeleteCol.id)
+        return (
+          <>
+            <div className="fixed inset-0 z-[80]" style={{ background: "rgba(7,3,26,0.55)" }}
+              onClick={() => setConfirmDeleteCol(null)} />
+            <div className="fixed z-[90] top-1/2 left-1/2 rounded-2xl p-5"
+              style={{ width: 360, transform: "translate(-50%,-50%)", background: "#ffffff", boxShadow: "0 32px 80px rgba(0,0,0,0.30)" }}>
+              <p className="text-sm font-bold text-slate-800 mb-1.5">Remover a coluna &ldquo;{confirmDeleteCol.label}&rdquo;?</p>
+              <p className="text-xs text-slate-500 leading-relaxed mb-4">
+                {hasCards ? "Os cards que estão nela voltam para “A Fazer”. " : ""}
+                A coluna some só deste projeto — não afeta nenhum outro.
+              </p>
+              <div className="flex gap-2 justify-end">
+                <button onClick={() => setConfirmDeleteCol(null)}
+                  className="px-3.5 h-9 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100 transition-colors">
+                  Cancelar
+                </button>
+                <button onClick={confirmColumnDeletion}
+                  className="px-3.5 h-9 rounded-xl text-xs font-bold text-white transition-opacity hover:opacity-90"
+                  style={{ background: "#EF4444" }}>
+                  Remover
+                </button>
+              </div>
+            </div>
+          </>
+        )
+      })()}
     </>
   )
 }

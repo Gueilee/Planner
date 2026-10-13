@@ -4,7 +4,7 @@ import { db } from "@/lib/db"
 import { auth } from "@/auth"
 import { assertProjectAccess } from "@/lib/actions/project-access"
 import { revalidatePath } from "next/cache"
-import { ProjectStatus, TaskStatus } from "@/lib/generated/prisma/enums"
+import { ProjectStatus } from "@/lib/generated/prisma/enums"
 import { V2_STATUS_TO_LEGACY, LEGACY_STATUS_TO_V2, topLevelAncestorId } from "@/lib/utils/schedule-v2-adapter"
 import { applyItemUpdatesV2 } from "@/lib/actions/schedule-v2"
 
@@ -15,6 +15,12 @@ import { applyItemUpdatesV2 } from "@/lib/actions/schedule-v2"
 // decisão do time) — V2_STATUS_TO_LEGACY/LEGACY_STATUS_TO_V2 traduzem nas
 // duas pontas para o Kanban (e o resto do app) não precisar mudar de
 // vocabulário.
+//
+// Colunas customizadas (lib/actions/kanban-columns.ts) gravam um status
+// FORA desse vocabulário (prefixo "CUSTOM_") — por isso os fallbacks de
+// tradução abaixo usam o PRÓPRIO valor (identidade) em vez de um valor fixo
+// tipo "PLANNING": um status customizado precisa passar incólume pelos dois
+// sentidos da tradução, não virar silenciosamente "A Fazer".
 
 export async function getProjectTasksForKanban(projectId: string) {
   await assertProjectAccess(projectId)
@@ -45,7 +51,7 @@ export async function getProjectTasksForKanban(projectId: string) {
     return {
       id:             t.id,
       title:          t.title,
-      status:         V2_STATUS_TO_LEGACY[t.status] ?? "PLANNING",
+      status:         V2_STATUS_TO_LEGACY[t.status] ?? t.status,
       progress:       t.percentualCompleto,
       startDate:      t.inicioEstimado?.toISOString()  ?? null,
       endDate:        t.terminoEstimado?.toISOString() ?? null,
@@ -61,7 +67,12 @@ export async function getProjectTasksForKanban(projectId: string) {
   })
 }
 
-export async function updateTaskStatusKanban(taskId: string, status: TaskStatus) {
+// `status` recebe um valor legado (TaskStatus, ex. "IN_PROGRESS") quando o
+// card é solto numa das 7 colunas fixas, OU o statusValue de uma coluna
+// customizada (ex. "CUSTOM_AGUARDANDO_CLIENTE") quando solto numa coluna
+// criada pelo usuário — por isso o parâmetro é string, não o enum TaskStatus
+// (ver KanbanColumn, lib/actions/kanban-columns.ts).
+export async function updateTaskStatusKanban(taskId: string, status: string) {
   const item = await db.scheduleV2Item.findUnique({
     where:  { id: taskId },
     select: { projectId: true, parentId: true },
@@ -69,7 +80,7 @@ export async function updateTaskStatusKanban(taskId: string, status: TaskStatus)
   if (!item) return
   await assertProjectAccess(item.projectId)
 
-  const v2Status = LEGACY_STATUS_TO_V2[status] ?? "A_INICIAR"
+  const v2Status = LEGACY_STATUS_TO_V2[status] ?? status
   await applyItemUpdatesV2(item.projectId, [{
     itemId: taskId,
     status: v2Status,
@@ -146,7 +157,7 @@ export async function getAllProjectsForKanban() {
       isResponsavel: p.scheduleV2Items.some((t) => t.responsavelId === session.user.id),
       tasks: p.scheduleV2Items.map((t) => ({
         id:        t.id,
-        status:    V2_STATUS_TO_LEGACY[t.status] ?? "PLANNING",
+        status:    V2_STATUS_TO_LEGACY[t.status] ?? t.status,
         progress:  t.percentualCompleto,
         parentId:  t.parentId,
         startDate: t.inicioEstimado,
@@ -191,7 +202,7 @@ export async function getTaskDetail(taskId: string) {
     actualStart:  item.inicioReal?.toISOString()  ?? null,
     actualEnd:    item.terminoReal?.toISOString() ?? null,
     progress:     item.percentualCompleto,
-    status:       V2_STATUS_TO_LEGACY[item.status] ?? "PLANNING",
+    status:       V2_STATUS_TO_LEGACY[item.status] ?? item.status,
     comments:     item.comments.map((c) => ({ ...c, createdAt: c.createdAt.toISOString() })),
     attachments:  item.attachments,
     budgetedCost: item.budgetedCost,
@@ -213,7 +224,7 @@ export async function updateTaskKanban(
 ) {
   await assertProjectAccess(projectId)
 
-  const v2Status = data.status !== undefined ? (LEGACY_STATUS_TO_V2[data.status] ?? "A_INICIAR") : undefined
+  const v2Status = data.status !== undefined ? (LEGACY_STATUS_TO_V2[data.status] ?? data.status) : undefined
 
   await applyItemUpdatesV2(projectId, [{
     itemId: taskId,
