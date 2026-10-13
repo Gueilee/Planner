@@ -10,7 +10,7 @@ import { ProjectEditModal } from "./project-edit-modal"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
   ArrowLeft, Users, Calendar, AlertTriangle, CheckCircle2,
-  Clock, BarChart3, Layers, TrendingUp, Timer, CalendarDays,
+  Clock, BarChart3, Layers, TrendingUp, Timer, CalendarDays, RefreshCw,
   Rocket, FileDown, BookOpen, Shield, Gem, GanttChartSquare,
 } from "lucide-react"
 import { DeleteProjectButton } from "./delete-project-button"
@@ -61,6 +61,18 @@ function formatDate(d: Date | null) {
 function avg(arr: number[]) {
   return arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0
 }
+
+// Checkpoint foi ocultado de TODA a navegação em 2026-09-13 (commit
+// b3a564c, Fase E da especificação 11.09 da Millena) — a rota
+// /projects/[id]/checkpoint e os dados continuaram intactos, só sumiu o
+// botão de entrada. Pedido novo (2026-10-13): o time de "Projetos do
+// Analytics" voltou a precisar da ferramenta pra reuniões de checkpoint;
+// as outras filiais continuam sem. Sem sistema de feature flag por
+// filial hoje — como é um pedido de UMA filial específica, o mais simples
+// é checar o id direto (mesmo padrão de "org_vendemmia" já hardcoded em
+// vários lugares do app) em vez de criar uma tabela de configuração nova
+// pra uma única chave.
+const CHECKPOINT_ENABLED_ORG_IDS = new Set(["cmrarg0g6000001qsleypaojz"]) // "Projetos do Analytics"
 
 export default async function ProjectDetailPage({
   params,
@@ -460,6 +472,18 @@ export default async function ProjectDetailPage({
                       (ajustes, melhorias) com as mesmas ferramentas, até encerrar manualmente. */}
                   {["IN_PROGRESS", "PILOT", "RAMP_UP", "GO_LIVE", "POST_GOLIVE"].includes(project.status) && (
                     <>
+                      {/* Checkpoint — só pra "Projetos do Analytics" (ver
+                          CHECKPOINT_ENABLED_ORG_IDS no topo do arquivo) */}
+                      {CHECKPOINT_ENABLED_ORG_IDS.has(project.organizationId) && (
+                        <Link
+                          href={`/projects/${id}/checkpoint`}
+                          className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl transition-all hover:opacity-90 active:scale-[0.98]"
+                          style={{ background: "linear-gradient(135deg, #2463FF, #8B2FFF)", boxShadow: "0 4px 20px rgba(36,99,255,0.30)", color: "white" }}
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          Checkpoint
+                        </Link>
+                      )}
                       <Link
                         href={`/projects/${id}/schedule`}
                         className="inline-flex items-center gap-2 px-4 h-9 text-sm font-semibold rounded-xl transition-all hover:opacity-90 active:scale-[0.98]"
