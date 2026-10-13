@@ -16,7 +16,7 @@ import {
   Clock, Layers, CheckCircle2, PauseCircle, ClipboardCheck,
   ChevronRight, AlertTriangle, XCircle, History,
   Play, Pause, Send, Paperclip, Maximize2, CalendarDays, Timer,
-  MessageSquare, CheckCheck, Plus, Tag, Trash2,
+  MessageSquare, CheckCheck, Plus, Tag, Trash2, Search,
 } from "lucide-react"
 import Link from "next/link"
 import { WorkingDayPicker } from "@/components/working-day-picker"
@@ -87,6 +87,20 @@ const TASK_COLS: ColDef[] = [
 const STATUS_REMAP: Record<string, string> = { INITIATIVE: "PLANNING" }
 function resolveColId(status: string): string {
   return STATUS_REMAP[status] ?? status
+}
+
+// Chave estável pro filtro de Responsável — responsible.id vem vazio quando
+// é um nome digitado livremente (responsavelNome, sem cadastro no sistema;
+// ver getProjectTasksForKanban em lib/actions/kanban.ts), então cair só no
+// id faria dois nomes livres diferentes colidirem num "" só.
+const NO_RESPONSIBLE = "__none__"
+const NO_AREA = "__none__"
+function responsibleKey(r: TaskItem["responsible"]): string {
+  if (!r) return NO_RESPONSIBLE
+  return r.id ? `id:${r.id}` : `name:${r.name}`
+}
+function isTaskDelayed(t: TaskItem): boolean {
+  return !!(t.endDate && new Date(t.endDate) < new Date() && t.status !== "COMPLETED")
 }
 
 // Clareia uma cor hex pra montar o gradiente das colunas customizadas (mesmo
@@ -1150,6 +1164,14 @@ export function ProjectTasksKanban({
   // projeto.
   const [customCols,     setCustomCols]     = useState<KanbanColumnDTO[]>([])
   const [confirmDeleteCol, setConfirmDeleteCol] = useState<ColDef | null>(null)
+  // Filtros do board — só afetam o que aparece nas colunas/lista e as
+  // contagens da barra de status; o "X% concluído"/"Y/Z tarefas" do topo
+  // continua sendo o total REAL do projeto, sem filtro (pra não parecer que
+  // o progresso do projeto mudou quando é só a visão que encolheu).
+  const [filterSearch,        setFilterSearch]        = useState("")
+  const [filterResponsible,   setFilterResponsible]   = useState("") // "" = todos; "__none__" = sem responsável; senão, responsibleKey()
+  const [filterArea,          setFilterArea]          = useState("") // "" = todas; "__none__" = sem área; senão, nome da área
+  const [filterDelayedOnly,   setFilterDelayedOnly]   = useState(false)
   const [, startTransition] = useTransition()
   const prevStatuses = useRef<Record<string, string>>({})
 
@@ -1191,7 +1213,37 @@ export function ProjectTasksKanban({
   )
 
   const visibleTasks = tasks.filter((t) => t.childCount === 0)
-  const activeTask   = activeId ? visibleTasks.find((t) => t.id === activeId) ?? null : null
+
+  // Opções dos filtros — derivadas das tarefas do próprio projeto (não é uma
+  // lista fixa), então só mostram responsáveis/áreas que existem de fato
+  // aqui.
+  const responsibleOptions = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const t of visibleTasks) if (t.responsible) map.set(responsibleKey(t.responsible), t.responsible.name)
+    return Array.from(map.entries())
+      .map(([key, name]) => ({ key, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
+  }, [visibleTasks])
+  const areaOptions = useMemo(() => {
+    const set = new Set<string>()
+    for (const t of visibleTasks) if (t.wbsArea) set.add(t.wbsArea.name)
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR"))
+  }, [visibleTasks])
+
+  const hasActiveFilters = !!(filterSearch.trim() || filterResponsible || filterArea || filterDelayedOnly)
+  function clearFilters() {
+    setFilterSearch(""); setFilterResponsible(""); setFilterArea(""); setFilterDelayedOnly(false)
+  }
+
+  const filteredTasks = visibleTasks.filter((t) => {
+    if (filterSearch.trim() && !t.title.toLowerCase().includes(filterSearch.trim().toLowerCase())) return false
+    if (filterResponsible && responsibleKey(t.responsible) !== filterResponsible) return false
+    if (filterArea && (t.wbsArea?.name ?? NO_AREA) !== filterArea) return false
+    if (filterDelayedOnly && !isTaskDelayed(t)) return false
+    return true
+  })
+
+  const activeTask = activeId ? filteredTasks.find((t) => t.id === activeId) ?? null : null
 
   function handleDeleteColumn(col: ColDef) {
     setConfirmDeleteCol(col)
@@ -1221,7 +1273,7 @@ export function ProjectTasksKanban({
   function handleDragStart(e: DragStartEvent) {
     const id = e.active.id as string
     setActiveId(id)
-    prevStatuses.current[id] = visibleTasks.find((t) => t.id === id)?.status ?? ""
+    prevStatuses.current[id] = filteredTasks.find((t) => t.id === id)?.status ?? ""
   }
   function handleDragOver(e: DragOverEvent) { setOverId((e.over?.id as string) ?? null) }
   function handleDragEnd(e: DragEndEvent) {
@@ -1349,7 +1401,7 @@ export function ProjectTasksKanban({
           <div className="flex items-center gap-2 px-5 py-2 overflow-x-auto"
             style={{ borderTop: "1px solid rgba(15,23,42,0.05)", scrollbarWidth: "none" }}>
             {allCols.map((col) => {
-              const count = visibleTasks.filter((t) => resolveColId(t.status) === col.id).length
+              const count = filteredTasks.filter((t) => resolveColId(t.status) === col.id).length
               return (
                 <div key={col.id}
                   className="flex items-center gap-1.5 px-2.5 h-6 rounded-full text-[10px] font-bold shrink-0"
@@ -1363,6 +1415,73 @@ export function ProjectTasksKanban({
               Clique em um card para ver detalhes
             </span>
           </div>
+
+          {/* Filtros — responsável, área, só atrasadas, busca por título.
+              Opções vêm das próprias tarefas do projeto (useMemo acima); só
+              afeta o que aparece nas colunas/lista, nunca o "X% concluído" do
+              topo (esse é o total real do projeto, sempre). */}
+          <div className="flex items-center gap-2 px-5 py-2 flex-wrap"
+            style={{ borderTop: "1px solid rgba(15,23,42,0.05)" }}>
+            <div className="relative shrink-0">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-300" />
+              <input
+                value={filterSearch}
+                onChange={(e) => setFilterSearch(e.target.value)}
+                placeholder="Buscar por título..."
+                className="h-8 pl-8 pr-3 rounded-lg text-xs font-medium outline-none text-slate-700 placeholder:text-slate-300"
+                style={{ border: "1px solid rgba(15,23,42,0.10)", width: 190 }}
+              />
+            </div>
+
+            <select
+              value={filterResponsible}
+              onChange={(e) => setFilterResponsible(e.target.value)}
+              className="h-8 px-2.5 rounded-lg text-xs font-semibold outline-none bg-white text-slate-600 shrink-0"
+              style={{ border: "1px solid rgba(15,23,42,0.10)", maxWidth: 170 }}
+            >
+              <option value="">Responsável: Todos</option>
+              <option value={NO_RESPONSIBLE}>Sem responsável</option>
+              {responsibleOptions.map((r) => <option key={r.key} value={r.key}>{r.name}</option>)}
+            </select>
+
+            {areaOptions.length > 0 && (
+              <select
+                value={filterArea}
+                onChange={(e) => setFilterArea(e.target.value)}
+                className="h-8 px-2.5 rounded-lg text-xs font-semibold outline-none bg-white text-slate-600 shrink-0"
+                style={{ border: "1px solid rgba(15,23,42,0.10)", maxWidth: 170 }}
+              >
+                <option value="">Área: Todas</option>
+                <option value={NO_AREA}>Sem área</option>
+                {areaOptions.map((a) => <option key={a} value={a}>{a}</option>)}
+              </select>
+            )}
+
+            <button
+              onClick={() => setFilterDelayedOnly((v) => !v)}
+              className="h-8 px-3 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors shrink-0"
+              style={{
+                background: filterDelayedOnly ? "rgba(239,68,68,0.10)" : "#ffffff",
+                color:      filterDelayedOnly ? "#EF4444" : "#94A3B8",
+                border:     `1px solid ${filterDelayedOnly ? "rgba(239,68,68,0.30)" : "rgba(15,23,42,0.10)"}`,
+              }}
+            >
+              <AlertTriangle className="w-3 h-3" /> Só atrasadas
+            </button>
+
+            {hasActiveFilters && (
+              <button onClick={clearFilters}
+                className="h-8 px-3 rounded-lg text-xs font-bold text-slate-400 hover:bg-slate-100 transition-colors shrink-0">
+                Limpar filtros
+              </button>
+            )}
+
+            {hasActiveFilters && (
+              <span className="ml-auto text-[10px] text-slate-400 font-semibold shrink-0">
+                {filteredTasks.length} de {visibleTasks.length} tarefas
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Body */}
@@ -1374,7 +1493,7 @@ export function ProjectTasksKanban({
             </div>
           </div>
         ) : view === "list" ? (
-          <TaskListView tasks={visibleTasks} onTaskClick={setSelectedTask} colById={colById} />
+          <TaskListView tasks={filteredTasks} onTaskClick={setSelectedTask} colById={colById} />
         ) : (
           <DndContext sensors={sensors} collisionDetection={closestCorners}
             onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
@@ -1383,7 +1502,7 @@ export function ProjectTasksKanban({
               <div className="flex gap-3 p-4 h-full" style={{ minWidth: "max-content", minHeight: "100%" }}>
                 {allCols.map((col) => (
                   <TaskColumn key={col.id} col={col}
-                    tasks={visibleTasks.filter((t) => resolveColId(t.status) === col.id)}
+                    tasks={filteredTasks.filter((t) => resolveColId(t.status) === col.id)}
                     isOver={overId === col.id}
                     onTaskClick={setSelectedTask}
                     onDeleteColumn={col.isCustom ? handleDeleteColumn : undefined}
