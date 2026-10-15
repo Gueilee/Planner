@@ -3,6 +3,7 @@
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
 import { assertProjectAccess } from "@/lib/actions/project-access"
+import { requireScreenAction } from "@/lib/permissions-guard"
 import { revalidatePath } from "next/cache"
 
 export async function getAllProjectsSummary() {
@@ -82,7 +83,7 @@ export async function deleteMeeting(meetingId: string) {
     where:  { id: meetingId },
     select: { projectId: true },
   })
-  if (meeting?.projectId) await assertProjectAccess(meeting.projectId)
+  if (meeting?.projectId) await requireScreenAction(meeting.projectId, "history", "delete")
 
   await db.meeting.delete({ where: { id: meetingId } })
 
@@ -106,7 +107,7 @@ export async function deleteAttachment(attachmentId: string) {
     select: { fileUrl: true, projectId: true, taskId: true },
   })
   if (!att) throw new Error("Anexo não encontrado")
-  if (att.projectId) await assertProjectAccess(att.projectId)
+  if (att.projectId) await requireScreenAction(att.projectId, "history", "delete")
 
   await db.attachment.delete({ where: { id: attachmentId } })
 

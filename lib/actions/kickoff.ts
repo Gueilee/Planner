@@ -1,13 +1,13 @@
 "use server"
 
 import { db } from "@/lib/db"
-import { auth } from "@/auth"
 import { revalidatePath } from "next/cache"
 import { DocumentType } from "@/lib/generated/prisma/enums"
 import { format } from "date-fns"
 import type { KickOffData, ExternalAttendee } from "@/lib/types/kickoff"
 import { generateMeetingATA } from "@/lib/actions/ata"
 import { assertProjectAccess } from "@/lib/actions/project-access"
+import { requireScreenAction } from "@/lib/permissions-guard"
 import bcrypt from "bcryptjs"
 
 async function syncExternalAttendees(projectId: string, externalAttendees: ExternalAttendee[], organizationId: string) {
@@ -49,7 +49,7 @@ export async function getKickOff(projectId: string) {
 }
 
 export async function saveKickOff(data: KickOffData) {
-  const session = await assertProjectAccess(data.projectId)
+  const session = await requireScreenAction(data.projectId, "projects", "edit")
 
   const content = JSON.stringify({
     meetingDate: data.meetingDate,
@@ -92,7 +92,7 @@ export async function saveKickOff(data: KickOffData) {
 }
 
 export async function registerKickOff(data: KickOffData) {
-  const session = await assertProjectAccess(data.projectId)
+  const session = await requireScreenAction(data.projectId, "projects", "edit")
 
   const meetingDate = data.meetingDate ? new Date(data.meetingDate) : new Date()
   const registeredAt = new Date().toISOString()

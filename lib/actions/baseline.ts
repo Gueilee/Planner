@@ -8,6 +8,7 @@
 // dois (Curva S e o botão "Salvar Linha de Base" do Cronograma).
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
+import { requireScreenAction } from "@/lib/permissions-guard"
 
 // "use server" só pode exportar funções async — fica privado do módulo.
 const CAN_MANAGE_BASELINE = new Set(["ADMIN", "PROJECT_MANAGER", "SPONSOR"])
@@ -20,6 +21,13 @@ export async function createBaselineForProject(
   if (!session?.user) return { error: "Unauthorized" }
   if (!CAN_MANAGE_BASELINE.has(session.user.role ?? "")) {
     return { error: "Apenas Administradores, Gerentes de Projeto e Sponsors podem aprovar um baseline." }
+  }
+  // Antes não conferia nem filial nem Perfil de Acesso (só o papel acima) —
+  // requireScreenAction confere as duas.
+  try {
+    await requireScreenAction(projectId, "projects", "create")
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Seu perfil de acesso não permite esta ação." }
   }
 
   const items = await db.scheduleV2Item.findMany({

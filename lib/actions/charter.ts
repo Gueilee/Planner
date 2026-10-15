@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
+import { requireScreenAction } from "@/lib/permissions-guard"
 import { revalidatePath } from "next/cache"
 import { format } from "date-fns"
 
@@ -39,8 +40,10 @@ export async function getProjectForCharter(projectId: string) {
 // dos dados atuais do projeto (não é um editor de texto livre) — regerar
 // substitui a versão salva anterior, igual a um upsert por projeto.
 export async function generateCharterDocument(projectId: string): Promise<{ id: string }> {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  // Chamada a partir da tela "Consulta de Projetos" (history-client.tsx) —
+  // tela = "history", não "projects". Sem checagem de filial nenhuma antes
+  // disto (brecha à parte, corrigida junto).
+  const session = await requireScreenAction(projectId, "history", "create")
 
   const project = await getProjectForCharter(projectId)
   if (!project) throw new Error("Projeto não encontrado")

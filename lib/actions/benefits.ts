@@ -3,6 +3,7 @@
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
 import { assertProjectAccess } from "@/lib/actions/project-access"
+import { requireScreenAction } from "@/lib/permissions-guard"
 import { revalidatePath } from "next/cache"
 import type {
   BenefitFormData, MeasurementFormData, BenefitItem,
@@ -239,7 +240,7 @@ export async function getPortfolioBenefits(filters?: {
 
 // ── CRUD ──────────────────────────────────────────────────────────────────────
 export async function createBenefit(projectId: string, data: BenefitFormData) {
-  const session = await assertProjectAccess(projectId)
+  const session = await requireScreenAction(projectId, "benefits", "create")
   if (!CAN_MANAGE.has(session.user.role ?? "")) throw new Error("Forbidden")
 
   // Derive plannedValue and strategicWeight from impactLevel when provided
@@ -304,7 +305,7 @@ export async function updateBenefit(benefitId: string, data: Partial<BenefitForm
     select: { projectId: true, plannedValue: true, realizedValue: true, status: true, category: true },
   })
   if (!existing) throw new Error("Not found")
-  const session = await assertProjectAccess(existing.projectId)
+  const session = await requireScreenAction(existing.projectId, "benefits", "edit")
   if (!CAN_MANAGE.has(session.user.role ?? "")) throw new Error("Forbidden")
 
   // Derive plannedValue and strategicWeight from impactLevel when provided
@@ -351,7 +352,7 @@ export async function updateBenefit(benefitId: string, data: Partial<BenefitForm
 export async function deleteBenefit(benefitId: string) {
   const benefit = await db.projectBenefit.findUnique({ where: { id: benefitId }, select: { projectId: true } })
   if (!benefit) throw new Error("Not found")
-  const session = await assertProjectAccess(benefit.projectId)
+  const session = await requireScreenAction(benefit.projectId, "benefits", "delete")
   if (!CAN_MANAGE.has(session.user.role ?? "")) throw new Error("Forbidden")
 
   await db.projectBenefit.delete({ where: { id: benefitId } })
@@ -362,7 +363,7 @@ export async function deleteBenefit(benefitId: string) {
 
 // ── Investment ────────────────────────────────────────────────────────────────
 export async function updateProjectInvestment(projectId: string, investment: number) {
-  const session = await assertProjectAccess(projectId)
+  const session = await requireScreenAction(projectId, "benefits", "edit")
   if (!CAN_MANAGE.has(session.user.role ?? "")) throw new Error("Forbidden")
 
   await db.project.update({ where: { id: projectId }, data: { investment } })
@@ -375,7 +376,7 @@ export async function updateProjectInvestment(projectId: string, investment: num
 export async function addMeasurement(benefitId: string, data: MeasurementFormData) {
   const benefit = await db.projectBenefit.findUnique({ where: { id: benefitId }, select: { projectId: true } })
   if (!benefit) throw new Error("Not found")
-  const session = await assertProjectAccess(benefit.projectId)
+  const session = await requireScreenAction(benefit.projectId, "benefits", "create")
   if (!CAN_MANAGE.has(session.user.role ?? "")) throw new Error("Forbidden")
 
   await db.benefitMeasurement.create({
@@ -406,7 +407,7 @@ export async function deleteMeasurement(measurementId: string) {
     select: { benefit: { select: { projectId: true } } },
   })
   if (!measurement) return
-  const session = await assertProjectAccess(measurement.benefit.projectId)
+  const session = await requireScreenAction(measurement.benefit.projectId, "benefits", "delete")
   if (!CAN_MANAGE.has(session.user.role ?? "")) throw new Error("Forbidden")
 
   await db.benefitMeasurement.delete({ where: { id: measurementId } })
@@ -419,7 +420,7 @@ export async function addBenefitAttachment(
 ) {
   const benefit = await db.projectBenefit.findUnique({ where: { id: benefitId }, select: { projectId: true } })
   if (!benefit) throw new Error("Not found")
-  await assertProjectAccess(benefit.projectId)
+  await requireScreenAction(benefit.projectId, "benefits", "create")
 
   await db.attachment.create({
     data: { benefitId, fileName: file.fileName, fileUrl: file.fileUrl, fileType: file.fileType, fileSize: file.fileSize },
@@ -429,7 +430,7 @@ export async function addBenefitAttachment(
 }
 
 export async function deleteBenefitAttachment(attachmentId: string, projectId: string) {
-  await assertProjectAccess(projectId)
+  await requireScreenAction(projectId, "benefits", "delete")
 
   await db.attachment.delete({ where: { id: attachmentId } })
   revalidatePath(`/projects/${projectId}/benefits`)

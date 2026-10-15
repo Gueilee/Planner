@@ -3,8 +3,14 @@
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
 import { assertProjectAccess } from "@/lib/actions/project-access"
+import { requireScreenAction } from "@/lib/permissions-guard"
 import { revalidatePath } from "next/cache"
 import { ProjectStatus } from "@/lib/generated/prisma/enums"
+
+// Tela "Kanban" no Perfil de Acesso — mesma correção de requireScreenAction
+// do Cronograma (lib/actions/schedule-v2.ts): mutações passam a checar
+// Criar/Editar/Excluir de verdade, não só a filial.
+const KANBAN_SCREEN_KEY = "kanban"
 import { V2_STATUS_TO_LEGACY, LEGACY_STATUS_TO_V2, topLevelAncestorId } from "@/lib/utils/schedule-v2-adapter"
 import { applyItemUpdatesV2 } from "@/lib/actions/schedule-v2"
 
@@ -78,7 +84,7 @@ export async function updateTaskStatusKanban(taskId: string, status: string) {
     select: { projectId: true, parentId: true },
   })
   if (!item) return
-  await assertProjectAccess(item.projectId)
+  await requireScreenAction(item.projectId, KANBAN_SCREEN_KEY, "edit")
 
   const v2Status = LEGACY_STATUS_TO_V2[status] ?? status
   await applyItemUpdatesV2(item.projectId, [{
@@ -222,7 +228,7 @@ export async function updateTaskKanban(
     actualCost?:   number | null
   },
 ) {
-  await assertProjectAccess(projectId)
+  await requireScreenAction(projectId, KANBAN_SCREEN_KEY, "edit")
 
   const v2Status = data.status !== undefined ? (LEGACY_STATUS_TO_V2[data.status] ?? data.status) : undefined
 
@@ -289,7 +295,7 @@ export async function updateProjectStatusKanban(
   projectId: string,
   newStatus: string,
 ) {
-  await assertProjectAccess(projectId)
+  await requireScreenAction(projectId, KANBAN_SCREEN_KEY, "edit")
 
   await db.project.update({
     where: { id: projectId },

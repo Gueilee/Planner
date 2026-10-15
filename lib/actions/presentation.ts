@@ -1,14 +1,13 @@
 "use server"
 
 import { db } from "@/lib/db"
-import { auth } from "@/auth"
+import { requireScreenAction } from "@/lib/permissions-guard"
 import { revalidatePath } from "next/cache"
 import { DocumentType } from "@/lib/generated/prisma/enums"
 import type { Presentation } from "@/lib/types/presentation"
 
 export async function savePresentation(data: Presentation & { projectId: string }) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  const session = await requireScreenAction(data.projectId, "projects", "edit")
 
   const content = JSON.stringify({
     theme: data.theme,
@@ -67,8 +66,7 @@ export async function getPresentation(projectId: string) {
 }
 
 export async function deletePresentation(id: string, projectId: string) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  await requireScreenAction(projectId, "projects", "delete")
   await db.projectDocument.delete({ where: { id } })
   revalidatePath(`/projects/${projectId}`)
 }

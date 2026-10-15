@@ -9,6 +9,7 @@
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
 import { assertProjectAccess } from "@/lib/actions/project-access"
+import { requireScreenAction } from "@/lib/permissions-guard"
 import { revalidatePath } from "next/cache"
 import { recalcular } from "@/lib/domain/schedule-v2/scheduler"
 import { computeCriticalPath } from "@/lib/domain/schedule-v2/critical-path"
@@ -35,6 +36,14 @@ import type { Dependency, LinkType, SchedItem, SchedulingMode, WorkCalendar } fr
 async function requireAccess(projectId: string) {
   return assertProjectAccess(projectId)
 }
+
+// Tela "Projetos" no Perfil de Acesso (Configurações › Perfis de Acesso)
+// cobre também o Cronograma — não existe uma chave separada "cronograma"
+// na matriz (ver lib/constants/features.ts). Mutações passam a checar
+// Criar/Editar/Excluir de verdade (requireScreenAction), não só a filial —
+// reportado: perfil "só visualizar" conseguia editar datas/responsável à
+// vontade, porque só a filial era checada antes disto.
+const SCHEDULE_SCREEN_KEY = "projects"
 
 // ─── Datas: Date (Prisma) <-> string "yyyy-MM-dd" (domínio) ─────────────────
 // isValidDateStr (lib/date-utils.ts) exige ano com EXATAMENTE 4 dígitos —
@@ -373,7 +382,7 @@ export async function hasRedoV2(projectId: string): Promise<boolean> {
 }
 
 export async function undoLastChangeV2(projectId: string): Promise<{ ok: boolean; message?: string }> {
-  await requireAccess(projectId)
+  await requireScreenAction(projectId, SCHEDULE_SCREEN_KEY, "edit")
 
   const snap = await db.scheduleV2Snapshot.findUnique({ where: { projectId_kind: { projectId, kind: "undo" } } })
   if (!snap) return { ok: false, message: "Nada para desfazer." }
@@ -396,7 +405,7 @@ export async function undoLastChangeV2(projectId: string): Promise<{ ok: boolean
 }
 
 export async function redoLastChangeV2(projectId: string): Promise<{ ok: boolean; message?: string }> {
-  await requireAccess(projectId)
+  await requireScreenAction(projectId, SCHEDULE_SCREEN_KEY, "edit")
 
   const snap = await db.scheduleV2Snapshot.findUnique({ where: { projectId_kind: { projectId, kind: "redo" } } })
   if (!snap) return { ok: false, message: "Nada para avançar." }
@@ -666,7 +675,7 @@ export type CreateItemV2Input = {
 }
 
 export async function createItemV2(input: CreateItemV2Input): Promise<ItemV2> {
-  await requireAccess(input.projectId)
+  await requireScreenAction(input.projectId, SCHEDULE_SCREEN_KEY, "create")
   await saveSnapshot(input.projectId)
 
   const [maxOrder, code] = await Promise.all([
@@ -726,7 +735,7 @@ export async function createItemV2(input: CreateItemV2Input): Promise<ItemV2> {
 // original, no mesmo nível.
 
 export async function duplicateItemV2(id: string, projectId: string): Promise<{ newId: string }> {
-  await requireAccess(projectId)
+  await requireScreenAction(projectId, SCHEDULE_SCREEN_KEY, "create")
   await saveSnapshot(projectId)
 
   const [source, sourceDeps, code] = await Promise.all([
@@ -827,7 +836,7 @@ export async function updateItemV2(
   projectId: string,
   data: UpdateItemV2Input
 ): Promise<{ conflicts: ConflictV2[]; cycleItemIds: string[] }> {
-  await requireAccess(projectId)
+  await requireScreenAction(projectId, SCHEDULE_SCREEN_KEY, "edit")
   await saveSnapshot(projectId)
 
   const current = await db.scheduleV2Item.findUnique({ where: { id }, select: { id: true, title: true, inicioEstimado: true, terminoEstimado: true } })
@@ -960,7 +969,7 @@ export async function bulkAssignResponsavelV2(
   data: { responsavelId: string | null; responsavelNome: string | null },
   label: string
 ): Promise<{ conflicts: ConflictV2[]; cycleItemIds: string[] }> {
-  await requireAccess(projectId)
+  await requireScreenAction(projectId, SCHEDULE_SCREEN_KEY, "edit")
   if (itemIds.length === 0) throw new Error("Nenhum item selecionado")
   await saveSnapshot(projectId)
 
@@ -993,7 +1002,7 @@ export async function bulkAssignResponsavelV2(
 // ─── Excluir ──────────────────────────────────────────────────────────────
 
 export async function deleteItemV2(id: string, projectId: string): Promise<{ deletedIds: string[] }> {
-  await requireAccess(projectId)
+  await requireScreenAction(projectId, SCHEDULE_SCREEN_KEY, "delete")
   await saveSnapshot(projectId)
 
   const target = await db.scheduleV2Item.findUnique({ where: { id }, select: { title: true } })
@@ -1041,7 +1050,7 @@ export async function deleteItemV2(id: string, projectId: string): Promise<{ del
 // ─── Reordenar ────────────────────────────────────────────────────────────
 
 export async function reorderItemsV2(projectId: string, orderedIds: string[]): Promise<void> {
-  await requireAccess(projectId)
+  await requireScreenAction(projectId, SCHEDULE_SCREEN_KEY, "edit")
   await saveSnapshot(projectId)
   await db.$transaction(orderedIds.map((id, i) => db.scheduleV2Item.update({ where: { id }, data: { order: i } })))
   revalidatePath(`/projects/${projectId}/schedule`)
@@ -1054,7 +1063,7 @@ export async function setDependenciesV2(
   projectId: string,
   raw: string
 ): Promise<{ accepted: number; rejected: number; conflicts: ConflictV2[]; cycleItemIds: string[] }> {
-  await requireAccess(projectId)
+  await requireScreenAction(projectId, SCHEDULE_SCREEN_KEY, "edit")
   await saveSnapshot(projectId)
 
   const rows = await db.scheduleV2Item.findMany({ where: { projectId }, select: { id: true, code: true, title: true } })
@@ -1228,7 +1237,7 @@ export async function applyTemplateV2(
   templateId: string,
   startDate: string
 ): Promise<{ count: number }> {
-  await requireAccess(projectId)
+  await requireScreenAction(projectId, SCHEDULE_SCREEN_KEY, "create")
   await saveSnapshot(projectId)
   await ensureCalendarSeeded(projectId)
 

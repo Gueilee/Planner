@@ -3,6 +3,7 @@
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
 import { assertProjectAccess } from "@/lib/actions/project-access"
+import { requireScreenPermission } from "@/lib/permissions-guard"
 import { revalidatePath } from "next/cache"
 import { startOfMonth, endOfMonth } from "date-fns"
 import { notifyProjectMembers } from "@/lib/notify"
@@ -48,6 +49,11 @@ export async function closeMonthlyStatusReports(
   if (!session?.user) return { success: false, error: "Não autorizado" }
   if (!CAN_CLOSE.has(session.user.role ?? "")) {
     return { success: false, error: "Apenas Administradores, Gerentes de Projeto e Sponsors podem fechar o Status Report do mês." }
+  }
+  try {
+    await requireScreenPermission("status_report", "edit")
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "Seu perfil de acesso não permite esta ação." }
   }
   if (snapshots.length === 0) return { success: true, count: 0 }
 

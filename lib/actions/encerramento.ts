@@ -3,6 +3,7 @@
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
 import { assertProjectAccess } from "@/lib/actions/project-access"
+import { requireScreenAction } from "@/lib/permissions-guard"
 import { revalidatePath } from "next/cache"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -86,9 +87,9 @@ export async function getProjectClosureData(projectId: string) {
 // ─── Mutations ────────────────────────────────────────────────────────────────
 
 export async function registerClosureMeeting(data: ClosureMeetingInput) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
-
+  // Antes só conferia sessão — nem a filial do projeto era checada (brecha
+  // à parte, corrigida junto: requireScreenAction já confere as duas).
+  const session = await requireScreenAction(data.projectId, "closure", "create")
   const meetingDate = new Date(data.date + "T12:00:00")
   const now         = new Date()
 

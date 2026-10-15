@@ -2,14 +2,18 @@
 
 // Colunas de Kanban customizadas, por projeto — botão "+" no Kanban de
 // Tarefas (ProjectTasksKanban). Gate de acesso é o mesmo das demais ações
-// do Kanban (assertProjectAccess, lib/actions/kanban.ts): qualquer pessoa
-// que já pode abrir/mover cards naquele projeto também pode criar/apagar
-// uma coluna dele — não é uma ação restrita a ADMIN.
+// de EDIÇÃO do Kanban (requireScreenAction "kanban"/"edit", igual
+// updateTaskStatusKanban em lib/actions/kanban.ts): criar/apagar uma
+// coluna é parte de editar o board, não uma permissão à parte — quem
+// pode mover card também pode criar/apagar coluna; quem só pode VER, não.
 
 import { db } from "@/lib/db"
 import { assertProjectAccess } from "@/lib/actions/project-access"
+import { requireScreenAction } from "@/lib/permissions-guard"
 import { applyItemUpdatesV2 } from "@/lib/actions/schedule-v2"
 import { revalidatePath } from "next/cache"
+
+const KANBAN_SCREEN_KEY = "kanban"
 
 export type KanbanColumnDTO = {
   id:          string
@@ -39,7 +43,7 @@ function slugify(label: string): string {
 }
 
 export async function createKanbanColumn(projectId: string, label: string, color: string) {
-  await assertProjectAccess(projectId)
+  await requireScreenAction(projectId, KANBAN_SCREEN_KEY, "edit")
   const trimmed = label.trim()
   if (!trimmed) throw new Error("Dê um nome para a coluna")
   if (trimmed.length > 40) throw new Error("Nome muito longo (máx. 40 caracteres)")
@@ -89,7 +93,7 @@ export async function deleteKanbanColumn(columnId: string) {
     select: { projectId: true, statusValue: true },
   })
   if (!column) return
-  await assertProjectAccess(column.projectId)
+  await requireScreenAction(column.projectId, KANBAN_SCREEN_KEY, "edit")
 
   // Apagar a coluna nunca apaga trabalho: cards que ainda estão nela voltam
   // pra "A Fazer" (A_INICIAR) antes da coluna sumir.

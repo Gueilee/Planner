@@ -1,7 +1,7 @@
 "use server"
 
 import { db } from "@/lib/db"
-import { auth } from "@/auth"
+import { requireScreenAction } from "@/lib/permissions-guard"
 import { revalidatePath } from "next/cache"
 import { addDays, format } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -21,8 +21,9 @@ export type GoLiveInput = {
 }
 
 export async function registerGoLive(data: GoLiveInput) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  // Antes só conferia sessão — nem a filial do projeto era checada (brecha
+  // à parte, corrigida junto: requireScreenAction já confere as duas).
+  const session = await requireScreenAction(data.projectId, "projects", "edit")
 
   const glDate      = new Date(data.goLiveDate + "T12:00:00")
   const postEndDate = addDays(glDate, data.postGoLiveDays)
@@ -77,8 +78,7 @@ export async function registerGoLive(data: GoLiveInput) {
 }
 
 export async function closeProject(projectId: string, closingNotes?: string) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  const session = await requireScreenAction(projectId, "projects", "edit")
 
   const now = new Date()
 

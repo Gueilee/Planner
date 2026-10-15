@@ -3,6 +3,7 @@
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
 import { assertProjectAccess } from "@/lib/actions/project-access"
+import { requireScreenAction } from "@/lib/permissions-guard"
 import { revalidatePath } from "next/cache"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -496,7 +497,7 @@ export async function generateMeetingATA(meetingId: string) {
     },
   })
   if (!meeting) throw new Error("Reunião não encontrada")
-  const session = await assertProjectAccess(meeting.project.id)
+  const session = await requireScreenAction(meeting.project.id, "projects", "edit")
 
   const projectTitle = meeting.project.title
   const participants = meeting.participants.map((p) => ({

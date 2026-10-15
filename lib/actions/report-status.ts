@@ -1,7 +1,7 @@
 "use server"
 
 import { db } from "@/lib/db"
-import { auth } from "@/auth"
+import { requireScreenAction } from "@/lib/permissions-guard"
 import { revalidatePath } from "next/cache"
 
 export type ReportStatusInput = {
@@ -14,8 +14,7 @@ export type ReportStatusInput = {
 }
 
 export async function updateReportStatus(data: ReportStatusInput) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  await requireScreenAction(data.projectId, "projects", "edit")
 
   await db.project.update({
     where: { id: data.projectId },
@@ -34,8 +33,7 @@ export async function updateReportStatus(data: ReportStatusInput) {
 }
 
 export async function resetReportStatusToAuto(projectId: string) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  await requireScreenAction(projectId, "projects", "edit")
 
   await db.project.update({
     where: { id: projectId },

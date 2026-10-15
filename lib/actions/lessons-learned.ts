@@ -1,7 +1,7 @@
 "use server"
 
 import { db } from "@/lib/db"
-import { auth } from "@/auth"
+import { requireScreenAction } from "@/lib/permissions-guard"
 import { revalidatePath } from "next/cache"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -25,8 +25,7 @@ export type LessonsLearnedInput = {
 }
 
 export async function saveLessonsLearned(data: LessonsLearnedInput) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  const session = await requireScreenAction(data.projectId, "projects", "create")
 
   const meetingDate = new Date(data.date + "T12:00:00")
   const goodCount   = data.lessons.filter((l) => l.type === "GOOD_PRACTICE").length

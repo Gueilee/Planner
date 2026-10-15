@@ -1,7 +1,7 @@
 "use server"
 
 import { db } from "@/lib/db"
-import { auth } from "@/auth"
+import { requireScreenAction } from "@/lib/permissions-guard"
 import { revalidatePath } from "next/cache"
 import { ProjectPhase, LessonInfluence, LessonImpact } from "@/lib/generated/prisma/enums"
 
@@ -49,8 +49,7 @@ const INCLUDE = {
 } as const
 
 export async function createLesson(data: LessonInput) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  const session = await requireScreenAction(data.projectId, "projects", "create")
 
   const lesson = await db.lessonLearned.create({
     data: {
@@ -76,8 +75,7 @@ export async function createLesson(data: LessonInput) {
 }
 
 export async function updateLesson(id: string, projectId: string, data: Partial<LessonInput>) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  await requireScreenAction(projectId, "projects", "edit")
 
   const lesson = await db.lessonLearned.update({
     where: { id },
@@ -102,8 +100,7 @@ export async function updateLesson(id: string, projectId: string, data: Partial<
 }
 
 export async function deleteLesson(id: string, projectId: string) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  await requireScreenAction(projectId, "projects", "delete")
   await db.lessonLearned.delete({ where: { id } })
   revalidatePath(`/projects/${projectId}/lessons`)
   revalidatePath(`/projects/${projectId}`)

@@ -1,7 +1,7 @@
 "use server"
 
 import { db } from "@/lib/db"
-import { auth } from "@/auth"
+import { requireScreenPermission } from "@/lib/permissions-guard"
 import { revalidatePath } from "next/cache"
 import { addMonths } from "date-fns"
 import { ProjectStatus } from "@/lib/generated/prisma/enums"
@@ -25,8 +25,7 @@ export async function createProjectRequest(data: {
   expectedDurationMonths?: number
   files: Array<{ id?: string; name: string; url: string; size: number }>
 }) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  const session = await requireScreenPermission("projects", "create")
 
   const memberIds = [session.user.id]
   if (data.sponsorId !== session.user.id) memberIds.push(data.sponsorId)

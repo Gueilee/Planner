@@ -1,7 +1,7 @@
 "use server"
 
 import { db } from "@/lib/db"
-import { auth } from "@/auth"
+import { requireScreenAction } from "@/lib/permissions-guard"
 import { revalidatePath } from "next/cache"
 import { ProjectStatus, MeetingType } from "@/lib/generated/prisma/enums"
 import { generateMeetingATA } from "@/lib/actions/ata"
@@ -14,8 +14,7 @@ export async function saveGoNoGoDecision(data: {
   attendeeIds: string[]
   meetingDate: string
 }) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  const session = await requireScreenAction(data.projectId, "projects", "edit")
 
   const uniqueIds = [...new Set(data.attendeeIds)]
 

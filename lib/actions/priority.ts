@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
+import { requireScreenPermission } from "@/lib/permissions-guard"
 import { revalidatePath } from "next/cache"
 import { ProjectStatus } from "@/lib/generated/prisma/enums"
 
@@ -13,8 +14,7 @@ export type PriorityItem = {
 }
 
 export async function savePriorities(items: PriorityItem[]) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  await requireScreenPermission("priority", "edit")
 
   const now = new Date()
   await db.$transaction(

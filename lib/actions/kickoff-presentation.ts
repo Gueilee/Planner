@@ -1,14 +1,14 @@
 "use server"
 
 import { db } from "@/lib/db"
-import { auth } from "@/auth"
 import { assertProjectAccess } from "@/lib/actions/project-access"
+import { requireScreenAction } from "@/lib/permissions-guard"
 import { revalidatePath } from "next/cache"
 import { DocumentType } from "@/lib/generated/prisma/enums"
 import type { KOPresentation } from "@/lib/types/kickoff-presentation"
 
 export async function saveKickOffPresentation(data: KOPresentation & { projectId: string }) {
-  const session = await assertProjectAccess(data.projectId)
+  const session = await requireScreenAction(data.projectId, "projects", "edit")
 
   const content = JSON.stringify({ slides: data.slides })
 

@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db"
 import { auth } from "@/auth"
+import { requireScreenPermission } from "@/lib/permissions-guard"
 import { revalidatePath } from "next/cache"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -495,8 +496,7 @@ export async function getTemplate(id: string): Promise<Template | null> {
 export async function createTemplate(data: {
   name: string; description?: string; projectType: string; color?: string
 }): Promise<Template> {
-  const session = await auth()
-  if (!session?.user?.id) throw new Error("Não autenticado")
+  const session = await requireScreenPermission("templates", "create")
 
   const t = await db.scheduleTemplate.create({
     data: {
@@ -516,6 +516,7 @@ export async function createTemplate(data: {
 export async function updateTemplate(id: string, data: {
   name?: string; description?: string; projectType?: string; color?: string
 }): Promise<void> {
+  await requireScreenPermission("templates", "edit")
   await assertTemplateEditable(id)
 
   await db.scheduleTemplate.update({ where: { id }, data })
@@ -523,6 +524,7 @@ export async function updateTemplate(id: string, data: {
 }
 
 export async function deleteTemplate(id: string): Promise<void> {
+  await requireScreenPermission("templates", "delete")
   await assertTemplateEditable(id)
 
   await db.scheduleTemplate.delete({ where: { id } })
@@ -535,8 +537,7 @@ export async function deleteTemplate(id: string): Promise<void> {
 // são referências internas ao próprio modelo, continuam válidas na cópia),
 // pronta pra editar sem afetar o original nem quem mais o usa.
 export async function duplicateTemplate(id: string): Promise<Template> {
-  const session = await auth()
-  if (!session?.user?.id) throw new Error("Não autenticado")
+  const session = await requireScreenPermission("templates", "create")
 
   const source = await db.scheduleTemplate.findUnique({
     where: { id },
@@ -588,6 +589,7 @@ async function createBlankTask(templateId: string): Promise<string> {
 }
 
 export async function addTemplateTaskRoot(templateId: string): Promise<{ id: string }> {
+  await requireScreenPermission("templates", "create")
   await assertTemplateEditable(templateId)
   const id = await createBlankTask(templateId)
   const state = await loadTreeState(templateId)
@@ -599,6 +601,7 @@ export async function addTemplateTaskRoot(templateId: string): Promise<{ id: str
 }
 
 export async function addTemplateTaskAbove(templateId: string, refTaskId: string): Promise<{ id: string }> {
+  await requireScreenPermission("templates", "create")
   await assertTemplateEditable(templateId)
   const id = await createBlankTask(templateId)
   const state = await loadTreeState(templateId)
@@ -612,6 +615,7 @@ export async function addTemplateTaskAbove(templateId: string, refTaskId: string
 }
 
 export async function addTemplateTaskChild(templateId: string, parentTaskId: string): Promise<{ id: string }> {
+  await requireScreenPermission("templates", "create")
   await assertTemplateEditable(templateId)
   const id = await createBlankTask(templateId)
   const state = await loadTreeState(templateId)
@@ -626,6 +630,7 @@ export async function addTemplateTaskChild(templateId: string, parentTaskId: str
 // Cronograma v2 real (duplicateItemV2). Predecessoras são copiadas (fazem
 // sentido: continuam apontando pra OUTRAS atividades, não pra si mesma).
 export async function duplicateTemplateTask(templateId: string, taskId: string): Promise<{ id: string }> {
+  await requireScreenPermission("templates", "create")
   await assertTemplateEditable(templateId)
   const source = await db.scheduleTemplateTask.findUnique({ where: { id: taskId } })
   if (!source) throw new Error("Atividade não encontrada")
@@ -660,6 +665,7 @@ export async function updateTemplateTask(id: string, data: {
 }): Promise<void> {
   const task = await db.scheduleTemplateTask.findUnique({ where: { id }, select: { templateId: true } })
   if (!task) throw new Error("Atividade não encontrada")
+  await requireScreenPermission("templates", "edit")
   await assertTemplateEditable(task.templateId)
 
   await db.scheduleTemplateTask.update({
@@ -682,6 +688,7 @@ export async function updateTemplateTask(id: string, data: {
 export async function deleteTemplateTask(id: string): Promise<void> {
   const task = await db.scheduleTemplateTask.findUnique({ where: { id }, select: { templateId: true } })
   if (!task) return
+  await requireScreenPermission("templates", "delete")
   await assertTemplateEditable(task.templateId)
 
   const state = await loadTreeState(task.templateId)
@@ -711,6 +718,7 @@ export async function moveTemplateTaskDrag(
   targetTaskId: string,
   zone: "before" | "after" | "inside"
 ): Promise<void> {
+  await requireScreenPermission("templates", "edit")
   await assertTemplateEditable(templateId)
   if (sourceTaskId === targetTaskId) return
 

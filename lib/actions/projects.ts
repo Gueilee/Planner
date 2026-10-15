@@ -1,8 +1,7 @@
 "use server"
 
 import { db } from "@/lib/db"
-import { auth } from "@/auth"
-import { assertProjectAccess } from "@/lib/actions/project-access"
+import { requireScreenAction, requireScreenPermission } from "@/lib/permissions-guard"
 import { revalidatePath } from "next/cache"
 import { ProjectStatus } from "@/lib/generated/prisma/enums"
 import { notifyProjectMembers } from "@/lib/notify"
@@ -18,8 +17,7 @@ export async function createProject(data: {
   roadmapYear?: number
   roadmapQuarter?: number
 }) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Não autorizado")
+  const session = await requireScreenPermission("projects", "create")
 
   const project = await db.project.create({
     data: {
@@ -36,7 +34,7 @@ export async function createProject(data: {
 }
 
 export async function updateProjectStatus(id: string, status: ProjectStatus) {
-  await assertProjectAccess(id)
+  await requireScreenAction(id, "projects", "edit")
 
   const data: Record<string, unknown> = { status }
   if (status === "IN_PROGRESS") data.actualStart = new Date()
@@ -68,7 +66,7 @@ export async function updateProjectDetails(id: string, data: {
   roadmapYear?:    number
   roadmapQuarter?: number
 }) {
-  await assertProjectAccess(id)
+  await requireScreenAction(id, "projects", "edit")
 
   // Exige ano com exatamente 4 dígitos — <input type="date"> do navegador
   // deixa digitar mais (ex.: "092026"), o que gera um Date cujo
@@ -106,11 +104,11 @@ export async function updateProjectDetails(id: string, data: {
 }
 
 export async function deleteProject(id: string) {
-  const session = await assertProjectAccess(id)
+  const session = await requireScreenAction(id, "projects", "delete")
   // Excluir projeto é ação de administrador — não basta "ter acesso à
-  // filial" (ver os outros usos de assertProjectAccess neste arquivo);
-  // qualquer PROJECT_MEMBER/CLIENT da própria filial conseguia apagar
-  // projeto alheio antes desta checagem.
+  // filial" nem só o perfil de acesso (ver os outros usos de
+  // requireScreenAction neste arquivo); qualquer PROJECT_MEMBER/CLIENT da
+  // própria filial conseguia apagar projeto alheio antes desta checagem.
   if (session.user.role !== "ADMIN" && session.user.role !== "PROJECT_MANAGER") {
     throw new Error("Você não tem permissão para excluir projetos")
   }
@@ -123,7 +121,7 @@ export async function updateSuggestedDates(id: string, data: {
   suggestedStart: string | null
   suggestedEnd: string | null
 }) {
-  await assertProjectAccess(id)
+  await requireScreenAction(id, "projects", "edit")
 
   const toDate = (v: string | null) => (v && isValidDateStr(v)) ? new Date(`${v}T00:00:00.000Z`) : null
 
@@ -141,7 +139,7 @@ export async function updateSuggestedDates(id: string, data: {
 // ─── WBS Areas ─────────────────────────────────────────────────────────────
 
 export async function createWbsArea(projectId: string, name: string, color: string) {
-  await assertProjectAccess(projectId)
+  await requireScreenAction(projectId, "projects", "create")
 
   const max = await db.wbsArea.aggregate({ where: { projectId }, _max: { order: true } })
   await db.wbsArea.create({
@@ -153,7 +151,7 @@ export async function createWbsArea(projectId: string, name: string, color: stri
 export async function updateWbsArea(id: string, data: { name?: string; color?: string }) {
   const area = await db.wbsArea.findUnique({ where: { id }, select: { projectId: true } })
   if (!area) return
-  await assertProjectAccess(area.projectId)
+  await requireScreenAction(area.projectId, "projects", "edit")
 
   await db.wbsArea.update({ where: { id }, data })
   revalidatePath(`/projects/${area.projectId}`)
@@ -162,7 +160,7 @@ export async function updateWbsArea(id: string, data: { name?: string; color?: s
 export async function deleteWbsArea(id: string) {
   const area = await db.wbsArea.findUnique({ where: { id }, select: { projectId: true } })
   if (!area) return
-  await assertProjectAccess(area.projectId)
+  await requireScreenAction(area.projectId, "projects", "delete")
 
   await db.wbsArea.delete({ where: { id } })
   revalidatePath(`/projects/${area.projectId}`)
@@ -176,7 +174,7 @@ export async function deleteWbsArea(id: string) {
 // ─── Team Members ──────────────────────────────────────────────────────────
 
 export async function addProjectMember(projectId: string, userId: string, role: string) {
-  await assertProjectAccess(projectId)
+  await requireScreenAction(projectId, "projects", "edit")
 
   await db.projectMember.upsert({
     where: { projectId_userId: { projectId, userId } },
@@ -187,7 +185,7 @@ export async function addProjectMember(projectId: string, userId: string, role: 
 }
 
 export async function removeProjectMember(projectId: string, userId: string) {
-  await assertProjectAccess(projectId)
+  await requireScreenAction(projectId, "projects", "edit")
 
   await db.projectMember.delete({
     where: { projectId_userId: { projectId, userId } },
@@ -207,7 +205,7 @@ export async function createRisk(projectId: string, data: {
   presentToClient?: boolean
   responsibleId?: string | null
 }) {
-  await assertProjectAccess(projectId)
+  await requireScreenAction(projectId, "projects", "create")
 
   const riskGrade = computeRiskGrade(data.consequenceLevel, data.probabilityLevel)
   const status = computeRiskStatus(riskGrade)
@@ -258,7 +256,7 @@ export async function updateRisk(id: string, data: {
 }) {
   const risk = await db.risk.findUnique({ where: { id }, select: { projectId: true, consequenceLevel: true, probabilityLevel: true } })
   if (!risk) return
-  await assertProjectAccess(risk.projectId)
+  await requireScreenAction(risk.projectId, "projects", "edit")
 
   const consequenceLevel = data.consequenceLevel ?? risk.consequenceLevel
   const probabilityLevel = data.probabilityLevel ?? risk.probabilityLevel
@@ -285,7 +283,7 @@ export async function updateRisk(id: string, data: {
 export async function deleteRisk(id: string) {
   const risk = await db.risk.findUnique({ where: { id }, select: { projectId: true } })
   if (!risk) return
-  await assertProjectAccess(risk.projectId)
+  await requireScreenAction(risk.projectId, "projects", "delete")
 
   await db.risk.delete({ where: { id } })
   revalidatePath(`/projects/${risk.projectId}`)
