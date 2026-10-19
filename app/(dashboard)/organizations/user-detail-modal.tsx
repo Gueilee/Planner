@@ -8,8 +8,9 @@
 // os formulários inline que existiam em cada uma delas.
 
 import { useEffect, useRef, useState, useTransition } from "react"
-import { X, Camera, KeyRound, Check, AlertCircle, Eye, ShieldCheck, UserX, UserCheck, Building2 } from "lucide-react"
-import { updateUserById, resetUserPassword, toggleUserActive } from "@/lib/actions/profile"
+import { X, Camera, Mail, Check, AlertCircle, Eye, ShieldCheck, UserX, UserCheck, Building2 } from "lucide-react"
+import { updateUserById, toggleUserActive } from "@/lib/actions/profile"
+import { sendResetToUser } from "@/lib/actions/password-reset"
 import { listAccessProfilesForOrg, type ProfileRow } from "@/lib/actions/access-profiles"
 import { getUserOrgAccess, setUserOrgAccess } from "@/lib/actions/user-org-access"
 import { SCREEN_GROUPS } from "@/lib/constants/features"
@@ -64,8 +65,7 @@ export function UserDetailModal({
   const [extraOrgIds, setExtraOrgIds] = useState<string[] | null>(null)
   const [active, setActive] = useState(user.active)
 
-  const [resetPwdValue, setResetPwdValue] = useState("")
-  const [resetPwdDone, setResetPwdDone] = useState(false)
+  const [resendDone, setResendDone] = useState(false)
 
   const [error, setError] = useState<string | null>(null)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
@@ -117,15 +117,14 @@ export function UserDetailModal({
     })
   }
 
-  function handleResetPassword() {
-    if (resetPwdValue.length < 6) return
+  function handleResendAccess() {
     startTransition(async () => {
       try {
-        await resetUserPassword(user.id, resetPwdValue)
-        setResetPwdDone(true)
-        setResetPwdValue("")
-        setTimeout(() => setResetPwdDone(false), 2500)
-      } catch (e: unknown) { setError(e instanceof Error ? e.message : "Erro ao redefinir senha") }
+        const res = await sendResetToUser(user.id)
+        if ("error" in res && res.error) { setError(res.error); return }
+        setResendDone(true)
+        setTimeout(() => setResendDone(false), 4000)
+      } catch (e: unknown) { setError(e instanceof Error ? e.message : "Erro ao enviar e-mail") }
     })
   }
 
@@ -287,19 +286,29 @@ export function UserDetailModal({
             )}
           </section>
 
-          {/* Segurança */}
+          {/* Acesso por e-mail */}
           <section className="space-y-2">
             <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
-              <KeyRound className="w-3 h-3" /> Segurança
+              <Mail className="w-3 h-3" /> Acesso
             </h3>
-            <div className="flex items-center gap-2">
-              <input value={resetPwdValue} onChange={(e) => setResetPwdValue(e.target.value)}
-                placeholder="Nova senha (mín. 6 caracteres)" type="text" className={inputCls} />
-              <button onClick={handleResetPassword} disabled={isPending || resetPwdValue.length < 6}
-                className="shrink-0 flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-xs px-3 py-2 rounded-lg transition-colors">
-                {resetPwdDone ? <Check size={13} /> : <KeyRound size={13} />} Redefinir
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Envia um e-mail com link para o usuário definir a própria senha. O link expira em 24 horas.
+            </p>
+            {resendDone ? (
+              <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-700 font-semibold">
+                <Check className="w-3.5 h-3.5" /> E-mail enviado com sucesso!
+              </div>
+            ) : (
+              <button
+                onClick={handleResendAccess}
+                disabled={isPending}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90 disabled:opacity-50"
+                style={{ background: "linear-gradient(135deg, #2563EB, #3B82F6)" }}
+              >
+                <Mail className="w-3.5 h-3.5" />
+                Reenviar convite / acesso por e-mail
               </button>
-            </div>
+            )}
           </section>
 
           {/* Zona de risco */}
