@@ -590,7 +590,21 @@ export function ScheduleV2Client({ projectId, projectTitle, initial, members, ri
 
   function handleConfirmReplan(justification: string) {
     if (!pendingReplan) return
-    handleUpdate(pendingReplan.itemId, { [pendingReplan.field]: pendingReplan.value, justification })
+    // Bug real reportado: confirmar o replanejamento parecia não gravar —
+    // a data voltava "ao normal" ao reabrir o Cronograma/Kanban. Causa: o
+    // item seguia em scheduling_mode "auto", e como tem predecessor, o
+    // motor recalculava a data a partir DELE no mesmo recompute que roda
+    // logo depois de qualquer edição (regra §6: vínculo move item auto) —
+    // sobrescrevendo silenciosamente o que acabou de ser digitado e
+    // justificado. Um replanejamento confirmado (com motivo) É a pessoa
+    // deliberadamente assumindo o controle da data — por isso também muda
+    // para "manual" aqui: daí em diante o vínculo só sinaliza divergência,
+    // não move mais o item (mesma regra §6, agora aplicada de propósito).
+    handleUpdate(pendingReplan.itemId, {
+      [pendingReplan.field]: pendingReplan.value,
+      justification,
+      schedulingMode: "manual",
+    })
     setPendingReplan(null)
   }
 

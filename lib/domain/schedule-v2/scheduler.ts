@@ -103,12 +103,19 @@ function agendarItem(
   const finalTermino = item.duracaoDiasUteis !== null ? somarDuracao(finalStart, item.duracaoDiasUteis, cal) : null
 
   if (item.schedulingMode === "manual") {
-    // regra §6: vínculo não move item manual, só sinaliza divergência.
-    const conflict = finalStart !== item.inicioEstimado || finalTermino !== item.terminoEstimado
+    // regra §6: vínculo não move item manual, só sinaliza divergência — mas
+    // término do item manual AINDA segue o próprio início+duração dele
+    // (nunca os candidatos do vínculo, que são só o "sugerido" abaixo).
+    // Bug real: usar item.terminoEstimado direto aqui ignorava qualquer
+    // duração nova (editar duração, ou término — que widget vira duração
+    // internamente, ver updateItemV2) de um item manual; término ficava
+    // congelado no valor antigo para sempre, mesmo com a duração mudando.
+    const manualTermino = deriveTermino(item, cal)
+    const conflict = finalStart !== item.inicioEstimado || finalTermino !== manualTermino
     return {
       itemId: item.id,
       inicioEstimado: item.inicioEstimado,
-      terminoEstimado: item.terminoEstimado,
+      terminoEstimado: manualTermino,
       conflict,
       suggestedInicio: conflict ? finalStart : undefined,
       suggestedTermino: conflict ? finalTermino : undefined,
