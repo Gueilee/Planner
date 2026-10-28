@@ -2,7 +2,15 @@ import nodemailer from 'nodemailer'
 
 const BASE_URL = (process.env.NEXTAUTH_URL ?? 'http://localhost:3000').replace(/\/$/, '')
 
-const MAILER_DSN  = process.env.MAILER_DSN  || ''
+// MAILER_URL é o nome real usado pelo pipeline de deploy em produção
+// (preenchido pelo Portainer antes de publicar, nunca commitado — ver
+// docker-compose.yml). MAILER_DSN fica como alias por compatibilidade,
+// caso algum ambiente antigo/local ainda use esse nome. Até aqui o código
+// só lia MAILER_DSN — como produção nunca setou essa variável (só
+// MAILER_URL), o servidor sempre caiu em DEV_MODE (só loga no console,
+// nunca envia de verdade) sem nenhum erro aparente: nenhum convite/e-mail
+// de redefinição de senha jamais saiu de verdade em produção até agora.
+const MAILER_DSN  = process.env.MAILER_URL || process.env.MAILER_DSN || ''
 const MAILER_FROM = process.env.MAILER_FROM || ''
 
 let smtpHost   = ''

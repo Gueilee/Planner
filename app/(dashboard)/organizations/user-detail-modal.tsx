@@ -8,7 +8,7 @@
 // os formulários inline que existiam em cada uma delas.
 
 import { useEffect, useRef, useState, useTransition } from "react"
-import { X, Camera, Mail, Check, AlertCircle, Eye, ShieldCheck, UserX, UserCheck, Building2 } from "lucide-react"
+import { X, Camera, Mail, Check, AlertCircle, Eye, ShieldCheck, UserX, UserCheck, Building2, Copy } from "lucide-react"
 import { updateUserById, toggleUserActive } from "@/lib/actions/profile"
 import { sendResetToUser } from "@/lib/actions/password-reset"
 import { listAccessProfilesForOrg, type ProfileRow } from "@/lib/actions/access-profiles"
@@ -65,7 +65,14 @@ export function UserDetailModal({
   const [extraOrgIds, setExtraOrgIds] = useState<string[] | null>(null)
   const [active, setActive] = useState(user.active)
 
-  const [resendDone, setResendDone] = useState(false)
+  // Resultado honesto do "Reenviar acesso" — antes a tela sempre mostrava
+  // "E-mail enviado com sucesso!" mesmo quando nenhum SMTP está configurado
+  // no servidor (sendResetToUser nunca lançava erro nesse caso, só
+  // simulava no console). Agora guarda se o e-mail realmente saiu e o link
+  // (pra copiar e mandar na mão quando não saiu) — mesmo padrão já usado
+  // no convite de usuário novo (global-users-view.tsx).
+  const [resendResult, setResendResult] = useState<{ emailSent: boolean; link: string } | null>(null)
+  const [linkCopied, setLinkCopied] = useState(false)
 
   const [error, setError] = useState<string | null>(null)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
@@ -118,13 +125,21 @@ export function UserDetailModal({
   }
 
   function handleResendAccess() {
+    setError(null)
     startTransition(async () => {
       try {
         const res = await sendResetToUser(user.id)
-        if ("error" in res && res.error) { setError(res.error); return }
-        setResendDone(true)
-        setTimeout(() => setResendDone(false), 4000)
+        if ("error" in res) { setError(res.error); return }
+        setResendResult({ emailSent: res.emailSent, link: `${window.location.origin}/reset/${res.token}` })
       } catch (e: unknown) { setError(e instanceof Error ? e.message : "Erro ao enviar e-mail") }
+    })
+  }
+
+  function handleCopyResendLink() {
+    if (!resendResult) return
+    navigator.clipboard.writeText(resendResult.link).then(() => {
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 2000)
     })
   }
 
@@ -294,9 +309,30 @@ export function UserDetailModal({
             <p className="text-xs text-slate-400 leading-relaxed">
               Envia um e-mail com link para o usuário definir a própria senha. O link expira em 24 horas.
             </p>
-            {resendDone ? (
-              <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-700 font-semibold">
-                <Check className="w-3.5 h-3.5" /> E-mail enviado com sucesso!
+            {resendResult ? (
+              <div className="space-y-2">
+                <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-semibold ${
+                  resendResult.emailSent
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                    : "bg-amber-50 border-amber-200 text-amber-700"
+                }`}>
+                  {resendResult.emailSent ? <Check className="w-3.5 h-3.5 shrink-0" /> : <AlertCircle className="w-3.5 h-3.5 shrink-0" />}
+                  {resendResult.emailSent
+                    ? "E-mail enviado com sucesso!"
+                    : "Não foi possível confirmar o envio do e-mail — copie o link e envie manualmente:"}
+                </div>
+                {!resendResult.emailSent && (
+                  <div className="flex items-center gap-2">
+                    <input readOnly value={resendResult.link} className={`${inputCls} bg-gray-50 text-gray-500 text-xs`} onFocus={(e) => e.target.select()} />
+                    <button onClick={handleCopyResendLink}
+                      className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-2 rounded-lg transition-colors shrink-0">
+                      {linkCopied ? <Check size={14} /> : <Copy size={14} />} {linkCopied ? "Copiado" : "Copiar"}
+                    </button>
+                  </div>
+                )}
+                <button onClick={() => setResendResult(null)} className="text-xs text-blue-600 hover:text-blue-700">
+                  {resendResult.emailSent ? "Enviar de novo" : "Tentar de novo"}
+                </button>
               </div>
             ) : (
               <button

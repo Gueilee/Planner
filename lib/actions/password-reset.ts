@@ -33,7 +33,7 @@ export async function requestPasswordReset(email: string) {
 
 // ── Admin: send reset email to an existing user ───────────────────────────────
 
-export async function sendResetToUser(userId: string) {
+export async function sendResetToUser(userId: string): Promise<{ error: string } | { success: true; emailSent: boolean; token: string }> {
   const session = await auth()
   if (!session?.user || session.user.role !== "ADMIN") {
     return { error: "Sem permissão" }
@@ -50,14 +50,24 @@ export async function sendResetToUser(userId: string) {
     data: { userId: user.id, token, expiresAt },
   })
 
+  // sendPasswordResetEmail devolve false (sem lançar erro) quando nenhum
+  // SMTP está configurado no servidor — lib/email.ts loga no console e
+  // segue em frente ("modo dev"). Antes este `catch` só pegava uma falha
+  // que LANÇASSE exceção; um SMTP ausente/mal configurado nunca lança,
+  // então a função sempre devolvia {success:true} e a tela sempre mostrava
+  // "E-mail enviado com sucesso!" mesmo quando nada foi enviado de verdade
+  // — exatamente o caso relatado (convite "reenviado" que nunca chega).
+  // Devolve o token também, pelo mesmo motivo do createInvitation: se o
+  // e-mail não saiu, quem administra ainda precisa de um jeito de entregar
+  // o link na mão (Teams, WhatsApp etc.).
+  let emailSent = false
   try {
-    await sendPasswordResetEmail(user.email, user.name, token)
+    emailSent = await sendPasswordResetEmail(user.email, user.name, token)
   } catch (err) {
     console.error("[password-reset] Falha ao enviar e-mail:", err)
-    return { error: "Falha ao enviar e-mail. Verifique as configurações SMTP." }
   }
 
-  return { success: true }
+  return { success: true, emailSent, token }
 }
 
 // ── Validate token ────────────────────────────────────────────────────────────
