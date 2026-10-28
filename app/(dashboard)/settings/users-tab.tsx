@@ -3,7 +3,7 @@
 import { useState, useEffect, useTransition, useRef } from "react"
 import {
   Plus, Search, Pencil, Power, Trash2,
-  X, Save, Loader2, Check, AlertCircle, Camera,
+  X, Save, Loader2, Check, AlertCircle, Camera, Copy,
   Users, UserCheck, UserX, Shield, ChevronDown, Mail,
 } from "lucide-react"
 import {
@@ -575,7 +575,8 @@ function InviteForm({ orgs, onClose }: { orgs: OrgRow[]; onClose: () => void }) 
 // ─── Send Reset Email Modal ───────────────────────────────────────────────────
 
 function SendResetEmailModal({ user, orgs, onClose }: { user: User; orgs: OrgRow[]; onClose: () => void }) {
-  const [done,           setDone]           = useState(false)
+  const [result,         setResult]         = useState<{ emailSent: boolean; link: string } | null>(null)
+  const [linkCopied,     setLinkCopied]     = useState(false)
   const [error,          setError]          = useState<string | null>(null)
   const [selectedOrgIds, setSelectedOrgIds] = useState<string[]>([])
   const [isPending,      start]             = useTransition()
@@ -590,9 +591,21 @@ function SendResetEmailModal({ user, orgs, onClose }: { user: User; orgs: OrgRow
     start(async () => {
       if (orgs.length) await setUserOrgAccess(user.id, selectedOrgIds).catch(() => {})
       const res = await sendResetToUser(user.id)
-      if ("error" in res && res.error) { setError(res.error); return }
-      setDone(true)
-      setTimeout(onClose, 2000)
+      if ("error" in res) { setError(res.error); return }
+      // mesma correção do user-detail-modal.tsx: `sendResetToUser` já diz a
+      // verdade (emailSent), mas este modal (tela Configurações > Usuários)
+      // é uma segunda implementação da mesma ação que nunca tinha sido
+      // corrigida — mostrava "enviado com sucesso" sempre, ignorando o
+      // retorno, e não oferecia o link manual de fallback.
+      setResult({ emailSent: res.emailSent, link: `${window.location.origin}/reset/${res.token}` })
+    })
+  }
+
+  function handleCopyLink() {
+    if (!result) return
+    navigator.clipboard.writeText(result.link).then(() => {
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 2000)
     })
   }
 
@@ -609,9 +622,32 @@ function SendResetEmailModal({ user, orgs, onClose }: { user: User; orgs: OrgRow
           </div>
         </div>
 
-        {done ? (
-          <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-sm text-emerald-700 font-semibold">
-            <Check className="w-4 h-4" /> E-mail enviado com sucesso!
+        {result ? (
+          <div className="space-y-3">
+            <div className={`flex items-center gap-2 px-4 py-3 rounded-xl border text-sm font-semibold ${
+              result.emailSent
+                ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                : "bg-amber-50 border-amber-200 text-amber-700"
+            }`}>
+              {result.emailSent ? <Check className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+              {result.emailSent
+                ? "E-mail enviado com sucesso!"
+                : "Não foi possível confirmar o envio do e-mail — copie o link e envie manualmente:"}
+            </div>
+            {result.emailSent && (
+              <p className="text-[11px] text-slate-400 leading-snug">
+                O servidor aceitou o envio, mas isso não garante que chegou na caixa de entrada (pode cair em spam ou ser bloqueado pelo Exchange). Se não chegar, use o link abaixo:
+              </p>
+            )}
+            <div className="flex items-center gap-2">
+              <input readOnly value={result.link} onFocus={(e) => e.target.select()}
+                className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-slate-500 text-xs" />
+              <button onClick={handleCopyLink}
+                className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-2 rounded-lg transition-colors shrink-0">
+                {linkCopied ? <Check size={14} /> : <Copy size={14} />} {linkCopied ? "Copiado" : "Copiar"}
+              </button>
+            </div>
+            <button type="button" onClick={onClose} className="w-full py-2.5 rounded-xl text-xs font-semibold text-slate-500 bg-slate-50 border border-slate-200 hover:bg-slate-100">Fechar</button>
           </div>
         ) : (
           <div className="space-y-4">

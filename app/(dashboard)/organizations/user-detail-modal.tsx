@@ -321,15 +321,25 @@ export function UserDetailModal({
                     ? "E-mail enviado com sucesso!"
                     : "Não foi possível confirmar o envio do e-mail — copie o link e envie manualmente:"}
                 </div>
-                {!resendResult.emailSent && (
-                  <div className="flex items-center gap-2">
+                {/* O servidor SMTP aceitar a mensagem (emailSent=true) não
+                    garante que ela chegou na caixa do destinatário — spam,
+                    regra do Exchange/O365, domínio bloqueado etc. ficam fora
+                    do alcance do Kronex (caso real: e-mail "enviado com
+                    sucesso" que nunca chegou). O link manual fica sempre
+                    disponível, não só quando o envio falha — mesmo padrão já
+                    usado no convite de usuário novo (global-users-view.tsx). */}
+                {resendResult.emailSent && (
+                  <p className="text-[10px] text-slate-400 leading-snug">
+                    O servidor aceitou o envio, mas isso não garante que chegou na caixa de entrada (pode cair em spam ou ser bloqueado pelo Exchange). Se não chegar, use o link abaixo:
+                  </p>
+                )}
+                <div className="flex items-center gap-2">
                     <input readOnly value={resendResult.link} className={`${inputCls} bg-gray-50 text-gray-500 text-xs`} onFocus={(e) => e.target.select()} />
                     <button onClick={handleCopyResendLink}
                       className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-2 rounded-lg transition-colors shrink-0">
                       {linkCopied ? <Check size={14} /> : <Copy size={14} />} {linkCopied ? "Copiado" : "Copiar"}
                     </button>
                   </div>
-                )}
                 <button onClick={() => setResendResult(null)} className="text-xs text-blue-600 hover:text-blue-700">
                   {resendResult.emailSent ? "Enviar de novo" : "Tentar de novo"}
                 </button>
